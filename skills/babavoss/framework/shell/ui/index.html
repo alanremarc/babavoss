@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>babavoss</title>
+    <script>
+      ;(() => {
+        let p = {}
+        try {
+          p = JSON.parse(localStorage.getItem("babavoss.appearance") || "{}") || {}
+        } catch {}
+        const mode = p.mode === "dark" || (p.mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"
+        document.documentElement.classList.toggle("dark", mode === "dark")
+        document.documentElement.dataset.theme = p.themes?.[mode] || "neutral"
+        document.documentElement.style.colorScheme = mode
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

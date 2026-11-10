@@ -1,0 +1,4 @@
+# Codex sessions in this repository: shell commands keep the workspace-write sandbox, with the network open so the
+# apps' clis reach their session runtimes over loopback. Loaded once the checkout is trusted in Codex.
+[sandbox_workspace_write]
+network_access = true

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 536" width="960" height="536" role="img">
+<title>What you see and what the agent reads, over one surface</title>
+<style>
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; fill: #1f2328; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+  .h { font-size: 11px; font-weight: 600; letter-spacing: 1.2px; fill: #656d76; }
+  .b { font-weight: 600; }
+  .mut { fill: #656d76; }
+  .sm { font-size: 11px; }
+  .bg { fill: #ffffff; stroke: #d0d7de; }
+  .card { fill: #f6f8fa; stroke: #d0d7de; }
+  .soft { fill: #eaeef2; stroke: #d0d7de; }
+  .ln { stroke: #8c959f; fill: none; stroke-width: 1.4; }
+  .ag { stroke: #0969da; fill: none; stroke-width: 1.6; }
+  .pe { stroke: #bc4c00; fill: none; stroke-width: 1.6; }
+  .agf { fill: #0969da; } .pef { fill: #bc4c00; } .lnf { fill: #8c959f; }
+  .agt { fill: #0969da; } .pet { fill: #bc4c00; }
+  .agc { fill: #ddf4ff; stroke: #0969da; } .pec { fill: #fff1e5; stroke: #bc4c00; }
+  .ok { fill: #0969da; } .un { fill: #bc4c00; } .track { fill: #d8dee4; }
+  .num { fill: #ffffff; font-size: 10px; font-weight: 700; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6edf3; }
+    .h, .mut { fill: #9198a1; }
+    .bg { fill: #0d1117; stroke: #30363d; }
+    .card { fill: #161b22; stroke: #3d444d; }
+    .soft { fill: #21262d; stroke: #3d444d; }
+    .ln { stroke: #6e7681; } .lnf { fill: #6e7681; }
+    .ag { stroke: #4493f8; } .agf, .agt, .ok { fill: #4493f8; }
+    .pe { stroke: #f0883e; } .pef, .pet, .un { fill: #f0883e; }
+    .agc { fill: #0d2238; stroke: #4493f8; } .pec { fill: #2e1a0a; stroke: #f0883e; }
+    .track { fill: #30363d; } .num { fill: #0d1117; }
+  }
+</style>
+<defs>
+  <marker id="a-ln" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="lnf"/></marker>
+  <marker id="a-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="agf"/></marker>
+  <marker id="a-pe" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="pef"/></marker>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="535" rx="10" class="bg"/>
+<rect x="205" y="30" width="90" height="40" rx="20" class="pec"/><text x="250" y="55" text-anchor="middle" class="b" xml:space="preserve">you</text>
+<rect x="645" y="30" width="110" height="40" rx="20" class="agc"/><text x="700" y="55" text-anchor="middle" class="b" xml:space="preserve">agent</text>
+<line x1="297" y1="50" x2="643" y2="50" class="pe" marker-end="url(#a-pe)"/>
+<text x="475" y="38" text-anchor="middle" class="" xml:space="preserve">“Match March's payments to our invoices.”</text>
+<text x="475" y="68" text-anchor="middle" class="sm mut" xml:space="preserve">you say what you want; the agent is the interface</text>
+<line x1="250" y1="72" x2="250" y2="108" class="pe" marker-end="url(#a-pe)" marker-start="url(#a-pe)"/><text x="261" y="95" text-anchor="start" class="sm pet" xml:space="preserve">watch, decide</text>
+<line x1="700" y1="72" x2="700" y2="108" class="ag" marker-end="url(#a-ag)" marker-start="url(#a-ag)"/><text x="711" y="95" text-anchor="start" class="sm agt" xml:space="preserve">reads, acts</text>
+
+<rect x="40" y="110" width="420" height="334" rx="8" class="card"/>
+<text x="56" y="134" text-anchor="start" class="h" xml:space="preserve">WHAT YOU SEE</text><text x="444" y="134" text-anchor="end" class="sm mut" xml:space="preserve">the page</text><text x="56" y="160" text-anchor="start" class="b" xml:space="preserve">March</text><text x="100" y="160" text-anchor="start" class="sm mut" xml:space="preserve">12 payments</text><rect x="56" y="172" width="388" height="8" rx="4" class="un"/><rect x="56" y="172" width="226" height="8" rx="4" class="ok"/><rect x="278" y="172" width="4" height="8" class="ok"/><text x="56" y="198" text-anchor="start" class="sm agt" xml:space="preserve">7 matched</text><text x="444" y="198" text-anchor="end" class="sm pet" xml:space="preserve">5 unsure</text><rect x="56" y="212" width="388" height="28" rx="5" class="soft"/><text x="66" y="230" text-anchor="start" class="sm b" xml:space="preserve">ACME refund</text><text x="232" y="230" text-anchor="end" class="sm" xml:space="preserve">-1240.00</text><text x="242" y="230" text-anchor="start" class="sm mut" xml:space="preserve">invoice I8?</text><rect x="312" y="218" width="30" height="16" rx="8" class="pec"/><text x="327" y="230" text-anchor="middle" class="sm" xml:space="preserve">Yes</text><rect x="348" y="218" width="52" height="16" rx="8" class="card"/><text x="374" y="230" text-anchor="middle" class="sm" xml:space="preserve">Other…</text><text x="436" y="230" text-anchor="end" class="sm mut" xml:space="preserve">Leave</text><rect x="56" y="246" width="388" height="28" rx="5" class="soft"/><text x="66" y="264" text-anchor="start" class="sm b" xml:space="preserve">Stripe payout</text><text x="232" y="264" text-anchor="end" class="sm" xml:space="preserve">8912.40</text><text x="242" y="264" text-anchor="start" class="sm mut" xml:space="preserve">no reference</text><rect x="348" y="252" width="52" height="16" rx="8" class="card"/><text x="374" y="264" text-anchor="middle" class="sm" xml:space="preserve">Invoice…</text><text x="436" y="264" text-anchor="end" class="sm mut" xml:space="preserve">Leave</text><rect x="56" y="280" width="388" height="28" rx="5" class="soft"/><text x="66" y="298" text-anchor="start" class="sm b" xml:space="preserve">Wire no reference</text><text x="232" y="298" text-anchor="end" class="sm" xml:space="preserve">310.00</text><text x="242" y="298" text-anchor="start" class="sm mut" xml:space="preserve">no reference</text><rect x="348" y="286" width="52" height="16" rx="8" class="card"/><text x="374" y="298" text-anchor="middle" class="sm" xml:space="preserve">Invoice…</text><text x="436" y="298" text-anchor="end" class="sm mut" xml:space="preserve">Leave</text><rect x="56" y="314" width="388" height="28" rx="5" class="soft"/><text x="66" y="332" text-anchor="start" class="sm b" xml:space="preserve">Two invoices</text><text x="232" y="332" text-anchor="end" class="sm" xml:space="preserve">1900.00</text><text x="242" y="332" text-anchor="start" class="sm mut" xml:space="preserve">invoice I9?</text><rect x="312" y="320" width="30" height="16" rx="8" class="pec"/><text x="327" y="332" text-anchor="middle" class="sm" xml:space="preserve">Yes</text><rect x="348" y="320" width="52" height="16" rx="8" class="card"/><text x="374" y="332" text-anchor="middle" class="sm" xml:space="preserve">Other…</text><text x="436" y="332" text-anchor="end" class="sm mut" xml:space="preserve">Leave</text><rect x="56" y="348" width="388" height="28" rx="5" class="soft"/><text x="66" y="366" text-anchor="start" class="sm b" xml:space="preserve">Unknown</text><text x="232" y="366" text-anchor="end" class="sm" xml:space="preserve">50.00</text><text x="242" y="366" text-anchor="start" class="sm mut" xml:space="preserve">no reference</text><rect x="348" y="354" width="52" height="16" rx="8" class="card"/><text x="374" y="366" text-anchor="middle" class="sm" xml:space="preserve">Invoice…</text><text x="436" y="366" text-anchor="end" class="sm mut" xml:space="preserve">Leave</text><text x="56" y="408" text-anchor="start" class="b" xml:space="preserve">Rules</text><text x="56" y="426" text-anchor="start" class="sm mut" xml:space="preserve">No rules yet. Ask the agent what your corrections teach.</text>
+<rect x="480" y="110" width="440" height="334" rx="8" class="card"/>
+<text x="496" y="134" text-anchor="start" class="h" xml:space="preserve">WHAT THE AGENT READS</text><text x="904" y="134" text-anchor="end" class="sm mut" xml:space="preserve">its command's answer</text><text x="496" y="162" text-anchor="start" class="mono b" xml:space="preserve">$ payments /months/March/unsure</text><text x="496" y="179" text-anchor="start" class="mono " xml:space="preserve">payments.0.payer: &quot;ACME refund&quot;</text><text x="496" y="196" text-anchor="start" class="mono " xml:space="preserve">payments.0.amount: &quot;-1240.00&quot;</text><text x="496" y="213" text-anchor="start" class="mono " xml:space="preserve">payments.0.guess: &quot;I8&quot;</text><text x="496" y="230" text-anchor="start" class="mono agt" xml:space="preserve">payments.0.guessInvoice: payments /months/March/unsure</text><text x="496" y="247" text-anchor="start" class="mono agt" xml:space="preserve">  guess month=&quot;March&quot; id=&quot;p8&quot; invoice=string</text><text x="496" y="264" text-anchor="start" class="mono agt" xml:space="preserve">  Propose one of the open invoices for this payment,</text><text x="496" y="281" text-anchor="start" class="mono agt" xml:space="preserve">  without matching it</text><text x="496" y="298" text-anchor="start" class="mono mut" xml:space="preserve">…</text><text x="496" y="315" text-anchor="start" class="mono " xml:space="preserve">openInvoices: number  customer  amount</text><text x="496" y="332" text-anchor="start" class="mono " xml:space="preserve">&quot;I8&quot;  &quot;Customer 8&quot;  &quot;800.00&quot;</text><text x="496" y="349" text-anchor="start" class="mono mut" xml:space="preserve">…</text><text x="496" y="366" text-anchor="start" class="mono b" xml:space="preserve">$ payments wait</text><text x="496" y="383" text-anchor="start" class="mono pet" xml:space="preserve">changed:</text><text x="496" y="400" text-anchor="start" class="mono pet" xml:space="preserve">months.0.matched: 7 → 8</text><text x="496" y="417" text-anchor="start" class="mono pet" xml:space="preserve">months.0.unsure: 5 → 4</text><text x="904" y="366" text-anchor="end" class="sm pet" xml:space="preserve">after your Yes on the page</text>
+
+<line x1="250" y1="446" x2="250" y2="474" class="ln"/><line x1="700" y1="446" x2="700" y2="474" class="ln"/>
+<rect x="40" y="476" width="880" height="46" rx="8" class="soft"/>
+<text x="480" y="496" text-anchor="middle" class="h" xml:space="preserve">ONE SURFACE</text>
+<text x="480" y="513" text-anchor="middle" class="sm" xml:space="preserve">what is true now and what can be done now: the same for both, made for the agent first</text>
+
+</svg>

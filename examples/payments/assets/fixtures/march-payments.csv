@@ -1,0 +1,13 @@
+id,date,payer,amount,reference
+p1,2026-03-01,Customer 1,10000,I1
+p2,2026-03-02,Customer 2,20000,I2
+p3,2026-03-03,Customer 3,30000,I3
+p4,2026-03-04,Customer 4,40000,I4
+p5,2026-03-05,Customer 5,50000,I5
+p6,2026-03-06,Customer 6,60000,I6
+p7,2026-03-07,Customer 7,70000,I7
+p8,2026-03-08,ACME refund,-124000,I8
+p9,2026-03-09,Stripe payout,891240,
+p10,2026-03-10,Wire no reference,31000,
+p11,2026-03-11,Two invoices,190000,I9 I10
+p12,2026-03-12,Unknown,5000,
