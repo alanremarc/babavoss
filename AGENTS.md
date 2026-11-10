@@ -24,7 +24,7 @@ spec/{core,shell,app}/      the product's specs, mirroring its code
 spec/support/notes/         the small app the framework's specs use
 examples/payments/          an example app, with its own spec/, scenarios/ and assets/
 docs/DESIGN.md              the design
-site/                       babavoss.org: one page, its favicon and llms.txt, served as they are
+site/                       babavoss.org: one page, its favicon and llms.txt, published as they are by the Pages workflow
 .claude/skills/  .agents/skills/   links to skills/babavoss: a harness started here runs this checkout
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
