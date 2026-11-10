@@ -1,0 +1,23 @@
+# Baba Voss
+
+> A framework for agent-first apps. An agent operates the app through a command, and the person follows along and decides on a page. An app is one skill: a directory with a SKILL.md, the app's code and the framework it runs on.
+
+This file is for an agent asked to install babavoss.
+
+## Install
+
+babavoss needs Bun 1.4 or later. If `bun` is missing, tell the person to install it with `curl -fsSL https://bun.sh/install | bash`.
+
+Ask the person whether they want babavoss in every project or only in the current one, then run one of these, with the name of the harness you run in (`claude-code` or `codex`):
+
+    bunx skills add alanremarc/babavoss -g -y -a claude-code    # for the person, in every project
+    bunx skills add alanremarc/babavoss -y -a claude-code       # for the current project, run from its directory
+
+A new session of the harness finds the skill. Tell the person it is installed and that they can ask for an app, for example:
+
+    /babavoss I want an app that matches each month's payments to our invoices.
+
+## Links
+
+- Source: https://github.com/alanremarc/babavoss
+- Design: https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md

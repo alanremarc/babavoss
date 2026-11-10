@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#231D1A">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ECE4D8">
+<title>Baba Voss</title>
+<meta name="description" content="Baba Voss is a framework for agent-first apps. Your agent operates the app, and you get a page to follow along and decide.">
+<meta property="og:title" content="Baba Voss">
+<meta property="og:description" content="A framework for agent-first apps. Your agent operates the app, and you get a page to follow along and decide.">
+<meta property="og:url" content="https://babavoss.org/">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+  /* The Alan Remarc palette, walnut and linen, as on alanremarc.com: one family, told apart by the symbol. */
+  :root{
+    color-scheme: dark light;
+    --surface:#231D1A; --ink:#C2A47C; --text:#E3DACF; --muted:#A09485; --soft:#2E2723;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --surface:#ECE4D8; --ink:#634A38; --text:#332922; --muted:#6F6356; --soft:#E0D5C5; color-scheme:light }
+  }
+  :root[data-theme="light"]{ --surface:#ECE4D8; --ink:#634A38; --text:#332922; --muted:#6F6356; --soft:#E0D5C5; color-scheme:light }
+  :root[data-theme="dark"]{ --surface:#231D1A; --ink:#C2A47C; --text:#E3DACF; --muted:#A09485; --soft:#2E2723; color-scheme:dark }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--surface); color:var(--text);
+    font-family:'IBM Plex Serif',Georgia,serif; font-size:18px; line-height:1.65;
+    min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+    padding:48px 0;
+    transition:background-color .2s ease,color .2s ease;
+  }
+  .wrap{width:100%; max-width:38rem; margin:0 auto; padding:0 24px}
+
+  header{padding:0 0 28px}
+  header .wrap{display:flex; align-items:center; justify-content:space-between}
+  .brand{display:flex; align-items:center; gap:9px; color:var(--ink); text-decoration:none; font:600 20px/1 'IBM Plex Mono',monospace}
+  .brand svg{height:20px; width:20px; display:block}
+
+  .theme{width:28px; height:28px; border:0; background:transparent; color:var(--muted); cursor:pointer; display:grid; place-items:center; padding:0; border-radius:6px; margin-right:-6px}
+  .theme:hover{color:var(--ink)}
+  .theme:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+  .theme svg{width:16px; height:16px; display:none}
+  .theme .sun{display:block}
+  :root[data-theme="light"] .theme .sun{display:none}
+  :root[data-theme="light"] .theme .moon{display:block}
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]) .theme .sun{display:none}
+    :root:not([data-theme="dark"]) .theme .moon{display:block}
+  }
+
+  main{padding:0}
+  article p{margin:0 0 24px; font-size:20px; line-height:1.7}
+  article p:last-child{margin-bottom:0}
+
+  .links{margin-top:32px; display:flex; flex-direction:column; gap:8px}
+  .card{display:block; font-family:'IBM Plex Mono',monospace; background:var(--soft); border-radius:8px; padding:14px 16px; margin:0 -16px; color:inherit; text-decoration:none; transition:background-color .15s ease}
+  a.card:hover{background:color-mix(in srgb, var(--soft), var(--muted) 12%)}
+  .card-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; font-size:14px; margin:0 0 4px}
+  .card-head b{font-weight:600}
+  .card-head .go{margin-left:auto; color:var(--ink); font-size:13px}
+  .card p{margin:0; font-size:13px; line-height:1.6; color:var(--muted); overflow-wrap:anywhere}
+
+  footer{padding:36px 0 0}
+  footer .wrap{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted)}
+  footer a{color:inherit; text-decoration:none}
+  footer a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Baba Voss">
+      <!-- The symbol: two eyes, one larger, glancing right, knocked out of a circle of ink. -->
+      <svg viewBox="0 0 100 100" aria-hidden="true"><mask id="eyes"><rect width="100" height="100" fill="#fff"/><circle cx="39.772" cy="50" r="18" fill="#000"/><circle cx="77.5" cy="50" r="12.728" fill="#000"/></mask><circle cx="50" cy="50" r="50" fill="currentColor" mask="url(#eyes)"/></svg>
+      <span>Baba Voss</span>
+    </a>
+    <button class="theme" id="theme" type="button" aria-label="Switch to light theme" title="Theme">
+      <svg class="sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      <svg class="moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <article class="wrap">
+    <p><strong>Baba Voss</strong> is a framework for agent-first apps. Your agent operates the app, and you get a page to follow along and decide.</p>
+  </article>
+
+  <section class="wrap links">
+    <a class="card" href="https://github.com/alanremarc/babavoss">
+      <div class="card-head"><b>Source</b><span class="go">github.com/alanremarc/babavoss →</span></div>
+      <p>Open source, Apache 2.0. For Claude Code and Codex, on macOS.</p>
+    </a>
+    <div class="card">
+      <div class="card-head"><b>Install</b></div>
+      <p>bunx skills add alanremarc/babavoss -g</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap"><a href="https://alanremarc.com">alanremarc.com</a></div>
+</footer>
+
+<script>
+(function(){
+  var btn=document.getElementById("theme"), root=document.documentElement, mq=matchMedia("(prefers-color-scheme: light)");
+  function current(){ return root.dataset.theme || (mq.matches?"light":"dark"); }
+  function label(){ btn.setAttribute("aria-label", current()==="dark" ? "Switch to light theme" : "Switch to dark theme"); }
+  btn.addEventListener("click", function(){
+    var next = current()==="dark" ? "light" : "dark";
+    if ((next==="light")===mq.matches) { delete root.dataset.theme; try{localStorage.removeItem("theme")}catch(e){} }
+    else { root.dataset.theme = next; try{localStorage.setItem("theme", next)}catch(e){} }
+    label();
+  });
+  mq.addEventListener("change", label);
+  label();
+})();
+</script>
+</body>
+</html>

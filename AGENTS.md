@@ -7,7 +7,7 @@ A TypeScript framework for software that agents operate. An app is one skill: it
 - Read docs/DESIGN.md before a change. Design leads code: use its vocabulary and name any divergence.
 - A change to docs/DESIGN.md needs proposed wording and a reason, then the person's approval, before it is written.
 - Before each commit run `bun check && bun test`. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
-- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, app, payments.
+- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, app, payments, site.
 - Every file and concept earns its keep.
 
 ## Layout
@@ -24,6 +24,7 @@ spec/{core,shell,app}/      the product's specs, mirroring its code
 spec/support/notes/         the small app the framework's specs use
 examples/payments/          an example app, with its own spec/, scenarios/ and assets/
 docs/DESIGN.md              the design
+site/                       babavoss.org: one page, its favicon and llms.txt, served as they are
 .claude/skills/  .agents/skills/   links to skills/babavoss: a harness started here runs this checkout
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
