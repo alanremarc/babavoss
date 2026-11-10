@@ -7,7 +7,7 @@ A TypeScript framework for software that agents operate. An app is one skill: it
 - Read docs/DESIGN.md before a change. Design leads code: use its vocabulary and name any divergence.
 - A change to docs/DESIGN.md needs proposed wording and a reason, then the person's approval, before it is written.
 - Before each commit run `bun check && bun test`. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
-- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, app, payments, site.
+- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, app, payments, site. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
 - Every file and concept earns its keep.
 
 ## Layout
