@@ -38,7 +38,27 @@ export function changes(onChange: (change: Change) => void, onConnected?: (up: b
     onChange(JSON.parse((event as MessageEvent<string>).data) as Change)
     onConnected?.(true)
   })
-  source.onerror = () => onConnected?.(false)
+  // The page's own code changed: only a fresh page has it.
+  source.addEventListener("page", () => location.reload())
+  source.onerror = () => {
+    onConnected?.(false)
+    // The browser retries a stream that dropped, and gives up on one that is refused: the runtime at this address is a new
+    // instance, with a token this page does not hold. A fresh page is given it.
+    if (source.readyState === EventSource.CLOSED) renew()
+  }
 
   return () => source.close()
+}
+
+const RENEWED = "babavoss-renewed"
+const RENEW_MS = 10_000
+
+/** Loads the page again, at most once in RENEW_MS, so a runtime that keeps refusing does not spin the tab. */
+function renew() {
+  const last = Number(sessionStorage.getItem(RENEWED) ?? 0)
+  const wait = last + RENEW_MS - Date.now()
+
+  if (wait > 0) return void setTimeout(renew, wait)
+  sessionStorage.setItem(RENEWED, String(Date.now()))
+  location.reload()
 }

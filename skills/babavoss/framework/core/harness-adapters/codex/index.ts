@@ -3,7 +3,7 @@ export const codex = {
   name: "codex",
   bin: "codex",
   /** The version these primitives were verified against; the harnesses skill says where to re-verify. */
-  verified: "0.167.0",
+  verified: "0.167.1",
   docs: { config: "https://learn.chatgpt.com/docs/config-file/config-reference", cli: "https://learn.chatgpt.com/docs/developer-commands?surface=cli" },
 } as const
 

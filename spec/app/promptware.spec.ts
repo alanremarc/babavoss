@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
 import { run } from "#babavoss/core/index.ts"
-import { agentConfigPorts, agentConfigSurface, frontmatter, readPromptware, runOpen, size } from "../../skills/babavoss/src/utils/agent-config/index.ts"
+import { promptwarePorts, promptwareSurface, frontmatter, readPromptware, runOpen, size } from "../../skills/babavoss/src/utils/promptware/index.ts"
 
 const dirs: string[] = []
 const scratch = () => {
@@ -69,7 +69,7 @@ writeFileSync(at + "/service.json", JSON.stringify({ pid: child.pid, token: "t",
 console.log(JSON.stringify({ pid: child.pid, state: process.env.BABAVOSS_HOME, home: process.env.BABAVOSS_HOME, bin: process.env.BABAVOSS_BIN }))`
   )
 
-  const before = readdirSync(tmpdir()).filter((n) => n.startsWith("agent-config-"))
+  const before = readdirSync(tmpdir()).filter((n) => n.startsWith("promptware-"))
   const result = await runOpen(dir, new AbortController().signal)
 
   expect(result.status).toBe("ready")
@@ -82,10 +82,10 @@ console.log(JSON.stringify({ pid: child.pid, state: process.env.BABAVOSS_HOME, h
   expect(bin).toBe(join(dirname(state), "bin"))
   expect(existsSync(bin)).toBe(false)
   expect(() => process.kill(pid, 0)).toThrow()
-  expect(readdirSync(tmpdir()).filter((n) => n.startsWith("agent-config-"))).toEqual(before)
+  expect(readdirSync(tmpdir()).filter((n) => n.startsWith("promptware-"))).toEqual(before)
 })
 it("computes the notes app's actual door answer and removes its scratch session", async () => {
-  const before = readdirSync(tmpdir()).filter((name) => name.startsWith("agent-config-"))
+  const before = readdirSync(tmpdir()).filter((name) => name.startsWith("promptware-"))
   const result = await runOpen(notesApp(join(scratch(), "notes")), new AbortController().signal)
 
   expect(result.status).toBe("ready")
@@ -93,7 +93,7 @@ it("computes the notes app's actual door answer and removes its scratch session"
   expect(result.text).toContain("page:")
   expect(result.text).toContain("bv is now a command on this machine")
   expect(result.tookMs).toBeGreaterThan(0)
-  expect(readdirSync(tmpdir()).filter((name) => name.startsWith("agent-config-"))).toEqual(before)
+  expect(readdirSync(tmpdir()).filter((name) => name.startsWith("promptware-"))).toEqual(before)
 })
 it("shows a failing CLI's stdout and stderr as failure output", async () => {
   const dir = scratch()
@@ -108,7 +108,7 @@ it("lists apps, selects one, exposes exact promptware and reference text, refres
   app(join(project, "b"))
   write(join(project, "a/references/a.md"), "Reference A")
 
-  const r = run(agentConfigSurface(agentConfigPorts(project)), memory())
+  const r = run(promptwareSurface(promptwarePorts(project)), memory())
 
   try {
     await until(() => r.read("/", agent), { app: null, apps: [{ id: "a" }, { id: "b" }] })
@@ -116,10 +116,15 @@ it("lists apps, selects one, exposes exact promptware and reference text, refres
     await r.call("/", "select", { app: "a" }, agent)
     await until(() => r.read("/open", agent), { status: "ready", text: "Hello agent\n", chars: 12, tokens: 3, tookMs: expect.any(Number) })
     expect(r.read("/", agent)).toMatchObject({
-      description: { text: "Keep notes", chars: 10, tokens: 3 },
-      skill: { text: "Open the app.\n", chars: 14, tokens: 4 },
+      description: { at: "/description", chars: 10, tokens: 3 },
+      skill: { at: "/skill", chars: 14, tokens: 4 },
       references: [{ name: "a.md", chars: 11, tokens: 3 }],
+      answer: { at: "/open", status: "ready", chars: 12 },
     })
+    // / lists the texts with their sizes; each text is read at its own path.
+    expect(JSON.stringify(r.read("/", agent))).not.toContain("Hello agent")
+    expect(r.read("/description", agent)).toMatchObject({ text: "Keep notes" })
+    expect(r.read("/skill", agent)).toMatchObject({ text: "Open the app.\n" })
     expect(r.read("/references/a.md", agent)).toMatchObject({ text: "Reference A", chars: 11 })
     write(join(project, "a/scripts/open.ts"), 'console.log("Fresh")')
     await r.call("/", "refresh", {}, agent)
@@ -135,7 +140,7 @@ it("opens the sole app automatically, with no references", async () => {
 
   app(project)
 
-  const r = run(agentConfigSurface(agentConfigPorts(project)), memory())
+  const r = run(promptwareSurface(promptwarePorts(project)), memory())
 
   try {
     await until(() => r.read("/", agent), { app: { name: "demo" }, references: [], answer: { status: "ready" } })
@@ -149,7 +154,7 @@ it("stops superseded computation and drops late answers on refresh", async () =>
 
   app(project)
 
-  const ports = agentConfigPorts(project)
+  const ports = promptwarePorts(project)
   const waiting: { signal: AbortSignal; release: (value: Awaited<ReturnType<typeof runOpen>>) => void }[] = []
 
   ports.open = (_dir, signal) =>
@@ -157,7 +162,7 @@ it("stops superseded computation and drops late answers on refresh", async () =>
       waiting.push({ signal, release: resolve })
     })
 
-  const r = run(agentConfigSurface(ports), memory())
+  const r = run(promptwareSurface(ports), memory())
 
   try {
     await poll(() => waiting.length).toBe(1)

@@ -84,15 +84,39 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     root,
     diff,
     changed: () => (before === undefined ? [...textLines(root(), "", new Map(), "/", command).values()] : diff(before, root())),
-    answer(lines: string[], whole = false, shown?: Json) {
+    /** `path` is where the answer's lines were read or called: what / says of that same path, in the same words, is not said again. */
+    answer(lines: string[], whole = false, shown?: Json, path?: string) {
       const now = root()
+      const flat = flatten(now)
+      // The objects of / that name the answered path under `at`, as key prefixes: a shell's tab, a list's item.
+      const here = path && path !== "/" ? [...flat].filter(([k, v]) => /(^|\.)at$/.test(k) && v === JSON.stringify(path)).map(([k]) => k.slice(0, -2)) : []
+      const parts = (line: string) => {
+        const [, mark = "", key = "", rest = ""] = /^([+-] )?([^:\s]+)(.*)$/.exec(line) ?? []
+
+        return { mark, key, rest }
+      }
+      const repeated = (line: string) => {
+        const said = parts(line)
+        const prefix = here.find((h) => said.key.startsWith(h))
+
+        if (prefix === undefined) return false
+
+        const key = said.key.slice(prefix.length)
+        const same = (k: string) => key === k || key.endsWith(`.${k}`)
+
+        return (
+          lines.some((l) => parts(l).mark === said.mark && parts(l).rest === said.rest && same(parts(l).key)) ||
+          [...flatten(shown)].some(([k, v]) => same(k) && said.mark !== "- " && flat.get(said.key) === v)
+        )
+      }
       const extra = whole
         ? []
         : (before === undefined ? [...textLines(now, "", new Map(), "/", command).values()] : diff(before, now)).filter(
             (line) =>
               !lines.includes(line) &&
               !lines.includes(line.replace(/^\+ /, "")) &&
-              ![...flatten(shown)].some(([k, v]) => (line === `+ ${k}: ${v}` || line.startsWith(`${k}: `)) && flatten(now).get(k) === v)
+              ![...flatten(shown)].some(([k, v]) => (line === `+ ${k}: ${v}` || line.startsWith(`${k}: `)) && flat.get(k) === v) &&
+              !repeated(line)
           )
 
       told(now)

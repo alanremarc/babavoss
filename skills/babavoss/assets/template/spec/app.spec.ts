@@ -1,29 +1,55 @@
-// The app's first spec, a story: actors see views, call what those views offer and are told what changed.
+// The app's first spec, as stories: actors see views, call what those views offer and are told what changed.
 // Nothing here reads the model. Write one test per rule of the app, in the words the person would use for it.
 import { expect, test } from "bun:test"
 import { story } from "#babavoss/core/index.ts"
 import app from "../src/app.ts"
+import { greeting } from "../src/surface.ts"
 
-test("the agent sets the greeting, and the person is told", async () => {
-  const { agent, person } = story(app.surface)
+test("the agent proposes a greeting, and only the person is offered the decision", async () => {
+  const { agent, person } = story(greeting)
 
   // Given what both are shown at the start
   expect(agent.sees()).toMatchObject({ greeting: "hello" })
-  expect(agent.offered()).toEqual(["greet"])
-  person.told()
+  expect(agent.offered()).toEqual(["propose"])
 
-  // When the agent sets it
-  expect(await agent.call("/", "greet", { text: "good morning" })).toMatchObject({ outcome: "written" })
+  // When the agent proposes
+  expect(await agent.call("/", "propose", { text: "good morning" })).toMatchObject({ outcome: "written" })
 
-  // Then the person sees it, and is told of it once
-  expect(person.sees()).toMatchObject({ greeting: "good morning" })
-  expect(person.told()).toEqual(['greeting: "hello" → "good morning"'])
-  expect(person.told()).toEqual([])
+  // Then both see the proposal and what is waited for, and the person alone may decide
+  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning", waiting: expect.stringContaining("the person") })
+  expect(agent.offered()).toEqual(["propose"])
+  expect(person.offered()).toEqual(["accept", "decline", "propose"])
+  expect(await agent.call("/", "accept", {})).toMatchObject({ outcome: "refused" })
+})
+
+test("the agent is told what the person decided", async () => {
+  const { agent, person } = story(greeting)
+
+  await agent.call("/", "propose", { text: "good morning" })
+  agent.told()
+  await person.call("/", "accept", {})
+  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- waiting"])
+
+  await agent.call("/", "propose", { text: "hi" })
+  agent.told()
+  await person.call("/", "decline", {})
+  expect(agent.sees()).toMatchObject({ greeting: "good morning" })
+  expect(agent.told()).toEqual(["- proposed", "- waiting"])
 })
 
 test("a greeting without text is refused, and nothing changes", async () => {
-  const { agent } = story(app.surface)
+  const { agent } = story(greeting)
 
-  expect(await agent.call("/", "greet", { text: " " })).toEqual({ outcome: "refused", reason: "A greeting needs text" })
-  expect(agent.sees()).toMatchObject({ greeting: "hello" })
+  expect(await agent.call("/", "propose", { text: " " })).toEqual({ outcome: "refused", reason: "A greeting needs text" })
+  expect(agent.sees()).not.toHaveProperty("proposed")
+})
+
+test("the app opens on its one tab, and the agent is told at / what changes in it", async () => {
+  const { agent, person } = story(app.surface)
+
+  expect(agent.sees()).toMatchObject({ tabs: [{ at: "/tabs/1", util: "greeting", facts: { greeting: "hello" } }] })
+  await agent.call("/tabs/1", "propose", { text: "good morning" })
+  agent.told()
+  await person.call("/tabs/1", "accept", {})
+  expect(agent.told()).toContain('tabs.0.facts.greeting: "hello" → "good morning"')
 })

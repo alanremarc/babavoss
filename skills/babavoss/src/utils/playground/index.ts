@@ -23,7 +23,7 @@ import {
   type ScenarioUser,
 } from "#babavoss/core/index.ts"
 import { util } from "#babavoss/shell/index.ts"
-import { readPromptware } from "../agent-config/promptware.ts"
+import { readPromptware } from "../promptware/promptware.ts"
 import { discoverApps } from "./apps.ts"
 import { EMPTY, loadScenario, PRESETS_DIR, scanScenarios } from "./scenarios.ts"
 import { playgroundSurface, type PlaygroundPorts } from "./surface.ts"

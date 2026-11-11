@@ -89,19 +89,33 @@ const tokenOf = (req: IncomingMessage, port: number): string | undefined => {
   return new RegExp(`(?:^|;\\s*)${cookieName(port)}=([^;]+)`).exec(req.headers.cookie ?? "")?.[1]
 }
 
-export function door<M>(running: Running<M>, options: DoorOptions): { server: Server; close(): Promise<void> } {
-  const uiDir = typeof options.ui === "function" ? undefined : typeof options.ui === "string" ? options.ui : fileURLToPath(options.ui)
-  const hosting = typeof options.ui === "function" ? options.ui : undefined
+export type Door = {
+  server: Server
+  close(): Promise<void>
+  /** The app's code was loaded again: its ui, as it is defined now, takes the place of the one served. */
+  replace(ui: Ui): Promise<void>
+  /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
+  refresh(file: string): Promise<void>
+}
+
+export function door<M>(running: Running<M>, options: DoorOptions): Door {
+  let ui = options.ui
+  const uiDir = () => (typeof ui === "function" ? undefined : typeof ui === "string" ? ui : fileURLToPath(ui))
+  const hosting = () => (typeof ui === "function" ? ui : undefined)
   let hosted: ReturnType<UiHosting> | undefined
-  const host = () => (hosted ??= hosting!(server))
+  /** The page as the hosting last gave it: what the open pages hold. */
+  let served: string | undefined
+  const host = () => (hosted ??= hosting()!(server))
   /** The page's html, or why there is none: a hosting that cannot start, as when the page's dependencies are not installed. */
   const page = async (path: string): Promise<{ html: string } | { error: string }> => {
     try {
-      const html = hosting
+      const html = hosting()
         ? await (await host()).page(path)
-        : existsSync(join(uiDir!, "index.html"))
-          ? readFileSync(join(uiDir!, "index.html"), "utf8")
+        : existsSync(join(uiDir()!, "index.html"))
+          ? readFileSync(join(uiDir()!, "index.html"), "utf8")
           : undefined
+
+      if (html !== undefined) served = html
 
       return html === undefined ? { error: "the app's ui has no index.html" } : { html }
     } catch (error) {
@@ -111,9 +125,11 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
     }
   }
   const escaped = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-  const about = Object.entries(options.about ?? {})
-    .map(([key, value]) => `<meta name="babavoss:${escaped(key)}" content="${escaped(value)}">`)
-    .join("")
+  // Read at each page: the version is the code's, and the code may have been loaded again.
+  const about = () =>
+    Object.entries(options.about ?? {})
+      .map(([key, value]) => `<meta name="babavoss:${escaped(key)}" content="${escaped(value)}">`)
+      .join("")
   const actorText = `agent:${options.about?.session ?? "session"}`
   const text = textSession(running, options.identity.dir, actorText, options.command ?? "bv app")
   const streams = new Set<ServerResponse>()
@@ -177,7 +193,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
           const lines = view === undefined ? [`nothing at ${path}`] : [...textLines(view, "", new Map(), path, options.command ?? "bv app").values()]
           const use = open ? [`${options.about?.app} ${options.about?.version}`] : []
 
-          return reply(view === undefined ? 404 : 200, text.answer([...use, ...lines], open, view))
+          return reply(view === undefined ? 404 : 200, text.answer([...use, ...lines], open, view, path))
         }
         if (req.method === "POST") {
           const call = JSON.parse(await body(req))
@@ -192,7 +208,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
           for (const stream of streams) stream.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
           if (answer.outcome === "refused") return reply(409, `refused: ${answer.reason}`)
 
-          const result = text.answer(text.diff(before, answer.view))
+          const result = text.answer(text.diff(before, answer.view), false, undefined, path)
 
           return reply(200, result || "nothing changed")
         }
@@ -203,11 +219,12 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
       }
     }
     if (path.startsWith("/_/")) {
-      if (hosting) return (await host()).assets(req, res, () => json(res, 404, { error: `nothing at ${path}` }))
+      if (hosting()) return (await host()).assets(req, res, () => json(res, 404, { error: `nothing at ${path}` }))
 
-      const file = uiDir && normalize(join(uiDir, path.slice(3)))
+      const dir = uiDir()
+      const file = dir && normalize(join(dir, path.slice(3)))
 
-      if (!file || !file.startsWith(uiDir!) || !existsSync(file)) return json(res, 404, { error: `nothing at ${path}` })
+      if (!file || !file.startsWith(dir!) || !existsSync(file)) return json(res, 404, { error: `nothing at ${path}` })
       res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" })
 
       return res.end(readFileSync(file))
@@ -224,7 +241,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
       }
       res.writeHead(200, { "content-type": "text/html", "set-cookie": `${cookieName(port)}=${options.identity.token}; Path=/; SameSite=Strict; HttpOnly` })
 
-      return res.end(served.html.replaceAll("%TOKEN%", options.identity.token).replace("</head>", `${about}</head>`))
+      return res.end(served.html.replaceAll("%TOKEN%", options.identity.token).replace("</head>", `${about()}</head>`))
     }
     if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
 
@@ -268,8 +285,30 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
     return json(res, 405, { error: `${req.method} is not a door` })
   })
 
+  const ended = async (held: ReturnType<UiHosting> | undefined) => {
+    if (held) await Promise.race([held.then((h) => h.close()).catch(() => {}), new Promise<void>((done) => setTimeout(done, 3000).unref())])
+  }
+
   return {
     server,
+    async replace(next) {
+      const held = hosted
+
+      hosted = undefined
+      ui = next
+      await ended(held)
+    },
+    async refresh(file) {
+      if (!streams.size || served === undefined) return
+
+      const before = served
+      const dir = uiDir()
+      // A hosting says by its page whether it changed; a directory of files is the page, so a change in it is one.
+      // A page that does not build is not told of: the open pages go on with the one they hold.
+      const differs = hosting() ? !("error" in (await page("/"))) && served !== before : !!dir && file.startsWith(dir)
+
+      if (differs) for (const res of streams) res.write("event: page\ndata: {}\n\n")
+    },
     // Streams and keep-alive connections are cut first, or a browser that reconnects keeps the server open forever.
     close: async () => {
       for (const res of streams) res.end()
@@ -279,7 +318,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): { server: Se
 
       server.closeAllConnections()
       await closed
-      if (hosted) await Promise.race([(await hosted).close(), new Promise<void>((done) => setTimeout(done, 3000).unref())])
+      await ended(hosted)
     },
   }
 }

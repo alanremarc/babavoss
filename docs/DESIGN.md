@@ -43,6 +43,10 @@ Shell
   document     What a workbench util works on, one at a time, in the strip of open ones; tools find, the document shows.
   scope        What a util with several opens first, a project or a repository; the welcome page lists them.
 
+Authoring
+  brief        What an app is to be, agreed before it is written: its job, the agent's part, the person's part, the open questions
+               and the steps of building it.
+
 Playground
   preset       What a workspace starts from: files in the app's repository, with a short description.
   workspace    A place made from a preset for one app: the agent's files, the harness's home and the app's state, in one directory.
@@ -72,6 +76,8 @@ Turn
 
 ```text
 Authoring
+  start   → the person says what they want → the agent writes the brief and asks what it cannot decide → the person approves it
+            on the page → the app is made from the template, and its page is handed over before the first step is built
   change  → the person says what they want → the agent edits the app → a scenario runs it in the playground
   look    → the same run for both: the person at the trace and the app's page, the agent at the trace through its handles
 ```
@@ -154,8 +160,10 @@ The model commits before publication. Independent domain state is another surfac
 
 ```text
 process:   one per session and app; one surface, addressed by the app's directory within the session's, owned exclusively
-lifetime:  woken by bv when a request finds none up; exits when idle or told to close; drains before exit
-address:   a new instance has a new address; its first answer names it, and the agent passes it on to the person
+lifetime:  woken by bv when a request finds none up; exits when idle or told to close; drains before exit; a change in its code is
+           loaded into the running process once nothing runs, so its address and its open pages stay
+address:   an instance takes the address its session last had, where that is free; the first answer names a new one, and the agent
+           passes it on to the person
 directory: started in the directory open was run in, and kept for the session
 doors:     the app's door, scripts/open.ts, opens it in a session and puts its word in place: a link to bv, the one program
            behind every word. A view prints each handle as the command that calls it, under the app's word. Where the word is
@@ -169,14 +177,17 @@ http:      the surface's paths are the URLs; GET reads the view, POST calls a ha
            plain text for the agent, JSON for a program, the app's page for a browser; /_/ is the page's own;
            only this machine's clients, by token
 ui:        the framework serves a page and owns none; what a page is, is the shell's
-page:      the session's; the agent hands its address to the person, and again when it changes; no browser is opened for them
+page:      the session's; the agent hands its address to the person, and again when it changes; an open page finds a new instance
+           at its address by itself, and loads again when the page's own code changes; no browser is opened for them
 ```
 
 ## Shell
 
 ```text
 is:        the preset ui layer and application structure over the primitives; an app is built on the framework alone or on the shell
-surface:   a shell of utils in tabs: home at / lists the utils and the open tabs; a util opens as a tab at /tabs/N, its surface under it
+surface:   a shell of utils in tabs: home at / lists the utils and the open tabs, each tab with its util's facts at /, so what changes
+           in a tab is in the agent's present; a util opens as a tab at /tabs/N, its surface under it, and the paths its views name
+           under `at` are given whole; a util that is always open has one tab, from the start
 page:      the shell page, with its design language and theming; a util brings its component and its icon
 layouts:   every layout has the header, a menu bar with the util's menus and the layout's own controls;
            the workbench, toolbars of tools the person arranges around the open documents;
@@ -188,13 +199,18 @@ layouts:   every layout has the header, a menu bar with the util's menus and the
 
 ```text
 app:       babavoss, built on the shell; opened in the project where an app is being written
-utils:     agent-config, an app's promptware as the agent gets it; the playground
+utils:     build, the app's brief and the steps of building it, always open; promptware, an app's promptware as the agent gets it;
+           the playground
+brief:     the agent writes it and records what the person answers; approving it is an ask; a change to it after that is approved
+           again; kept in the app's directory
 promptware: an app's promptware is its skill: the description, in context from the start where the skill shows it; the text, when opened;
-           what open answers with. agent-config shows each, with its size in characters and an estimate in tokens, the last computed by running the app's door
-later:     the surface as a map in agent-config; primitives for an app's settings page, where the person tunes its promptware the way
+           what open answers with. The promptware util shows each, with its size in characters and an estimate in tokens, the last computed by running the app's door
+later:     the surface as a map in the promptware util; primitives for an app's settings page, where the person tunes its promptware the way
            the app intends, and the app nudges
 skill:     one, with references: what an app is, and to start, design its surface and its page, try, diagnose and contribute
-template:  the app a new one starts from, its first spec a story
+place:     a project's own apps live in skills/NAME and are installed in that project by links to them from the harness's skill
+           folders, .claude/skills and .agents/skills; build makes the directory and the links
+template:  the app a new one starts from: a shell of one util, always open, its page showing and offering a decision; its first spec a story
 order:     each next babavoss is built and tried through the previous one, in its playground
 ```
 

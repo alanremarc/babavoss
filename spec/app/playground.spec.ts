@@ -51,10 +51,15 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-/** An app's root skill and optional package version. */
-const app = (dir: string, metadata: { name?: string; description?: string; version?: string }) => {
+/** A skill's root text and optional package version. */
+const skill = (dir: string, metadata: { name?: string; description?: string; version?: string }) => {
   write(join(dir, "SKILL.md"), `---\nname: ${metadata.name}\ndescription: ${metadata.description ?? ""}\n---\nOpen this app.\n`)
   write(join(dir, "package.json"), JSON.stringify({ version: metadata.version }))
+}
+/** An app: a skill with its door. */
+const app = (dir: string, metadata: { name?: string; description?: string; version?: string }) => {
+  skill(dir, metadata)
+  write(join(dir, "scripts", "open.ts"), "")
 }
 
 describe("apps", () => {
@@ -70,10 +75,21 @@ describe("apps", () => {
     app(join(project, "examples", "notes", "inner"), { name: "inner" })
     app(join(project, "tools"), { name: "tools" })
     write(join(project, "half", "package.json"), "{}")
+    // A skill with no door is a skill of some other kind: not listed, and looked into for an app further down.
+    skill(join(project, "docs", "writing"), { name: "writing" })
+    app(join(project, "docs", "writing", "helper"), { name: "helper" })
     for (const skipped of ["node_modules/x", "framework/x", ".git/x", ".claude/worktrees/x", ".local/x", ".state/x", "pkg/template", ".babavoss/installed"])
       app(join(project, skipped), { name: skipped })
 
     expect(discoverApps(project)).toEqual([
+      {
+        id: "docs-writing-helper",
+        name: "helper",
+        dir: "docs/writing/helper",
+        path: join(project, "docs", "writing", "helper"),
+        scenarios: 0,
+        presets: 0,
+      },
       {
         id: "examples-notes",
         name: "notes",

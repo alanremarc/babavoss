@@ -19,6 +19,17 @@ export const REQUEST_MS = 30_000
 
 export const endpointFile = (dir: string) => join(dir, "service.json")
 export const logFile = (dir: string) => join(dir, "service.log")
+/** Where the session's runtime last listened: kept when it ends, so the next instance asks for the same address. */
+export const portFile = (dir: string) => join(dir, "port")
+export const lastPort = (dir: string): number | undefined => {
+  try {
+    const port = Number(readFileSync(portFile(dir), "utf8"))
+
+    return Number.isInteger(port) && port > 0 && port < 65536 ? port : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * The environment refuses what a runtime requires: a resident process, a file lock, loopback. Not a fault to retry: the
@@ -75,6 +86,7 @@ export function ownService(dir: string) {
       try {
         writeFileSync(temporary, JSON.stringify({ ...identity, port }), { mode: 0o600 })
         renameSync(temporary, endpointFile(dir))
+        writeFileSync(portFile(dir), String(port), { mode: 0o600 })
       } finally {
         rmSync(temporary, { force: true })
       }
@@ -126,7 +138,8 @@ export function wakeService(dir: string, entry: string | URL, session: string, e
   const recorded = sessionCwd(dir)
 
   try {
-    const child = spawn(process.execPath, [typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
+    // Under bun's hot reload: a change in the app's code is loaded into the runtime, which stays up at its address.
+    const child = spawn(process.execPath, ["--hot", typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
       detached: true,
       stdio: ["ignore", "ignore", log],
       env,

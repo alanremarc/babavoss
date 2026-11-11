@@ -41,7 +41,8 @@ it("opens notes, carries changes after calls, and reports a person's change in t
   const start = cli()
 
   expect(start.status, start.err).toBe(0)
-  expect(start.out).toContain("demo 0.1.0")
+  // The fixture carries the product's package, and so its version.
+  expect(start.out).toContain(`demo ${(await Bun.file("skills/babavoss/package.json").json()).version}`)
   expect(start.out).toContain("notes.count: 0")
   expect(start.out).toContain("page: http://127.0.0.1:")
 

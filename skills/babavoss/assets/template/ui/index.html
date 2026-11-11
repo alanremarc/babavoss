@@ -2,56 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>my-app</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        font:
-          16px/1.5 system-ui,
-          sans-serif;
-      }
-      body {
-        margin: 2rem auto;
-        max-width: 32rem;
-        padding: 0 1rem;
-      }
-      form {
-        display: flex;
-        gap: 0.5rem;
-      }
-      input {
-        flex: 1;
-      }
-    </style>
+    <script>
+      ;(() => {
+        let p = {}
+        try {
+          const m = document.cookie.match(/(?:^|; )babavoss\.appearance=([^;]*)/)
+          p = JSON.parse(decodeURIComponent(m ? m[1] : "") || "{}") || {}
+        } catch {}
+        const mode = p.mode === "dark" || (p.mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"
+        document.documentElement.classList.toggle("dark", mode === "dark")
+        document.documentElement.dataset.theme = p.themes?.[mode] || "neutral"
+        document.documentElement.style.colorScheme = mode
+      })()
+    </script>
   </head>
   <body>
-    <!-- The page: the view at / as the person sees it, and its handle as a form. The runtime serves it with the session's cookie. -->
-    <h1 id="greeting"></h1>
-    <form id="greet">
-      <input name="text" placeholder="A new greeting" aria-label="Greeting" required />
-      <button>Set</button>
-    </form>
-    <p id="refused" role="alert"></p>
-    <script type="module">
-      const headers = { accept: "application/json", "content-type": "application/json" }
-      const show = async () => {
-        const view = await (await fetch("/", { headers })).json()
-
-        document.getElementById("greeting").textContent = view.greeting
-      }
-
-      document.getElementById("greet").addEventListener("submit", async (event) => {
-        event.preventDefault()
-
-        const text = new FormData(event.target).get("text")
-        const answer = await (await fetch("/", { method: "POST", headers, body: JSON.stringify({ handle: "greet", args: { text } }) })).json()
-
-        document.getElementById("refused").textContent = answer.outcome === "refused" ? answer.reason : ""
-        if (answer.outcome === "written") event.target.reset()
-      })
-      // Every change of the model, the agent's included, re-reads the view.
-      new EventSource("/").addEventListener("change", show)
-    </script>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

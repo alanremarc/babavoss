@@ -24,7 +24,14 @@ test("a new app, made from the template and the framework, starts with a passing
   const result = spawnSync(process.execPath, ["test", "spec"], { cwd: app, encoding: "utf8" })
 
   expect(result.status, result.stderr).toBe(0)
-  expect(result.stderr).toContain("3 pass")
+  expect(result.stderr).toContain("5 pass")
+})
+
+test("the template is a shell app: it carries the packages the shell's page is built with", () => {
+  const packages = JSON.parse(readFileSync(join(product, "framework/shell/packages.json"), "utf8")) as Record<string, string>
+  const template = JSON.parse(readFileSync(join(product, "assets/template/package.json"), "utf8")) as { devDependencies: Record<string, string> }
+
+  expect(template.devDependencies).toMatchObject(packages)
 })
 
 test("every app's skill opens the same way and says the same about operating it: the template's words, kept as they are", () => {

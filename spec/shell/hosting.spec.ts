@@ -96,7 +96,8 @@ for (const app of ["skills/babavoss", "spec/support/notes"]) {
       const assets = [...html.matchAll(/(?:src|href)="([^" ]+\.(?:js|css))"/g)].map((match) => match[1]!)
 
       expect(assets.some((asset) => asset.endsWith(".js"))).toBe(true)
-      expect(assets.some((asset) => asset.endsWith(".css"))).toBe(true)
+      // One stylesheet: the app's, which imports the shell's, so no rule is there twice to override the other.
+      expect(assets.filter((asset) => asset.endsWith(".css"))).toHaveLength(1)
 
       let scripts = ""
       let styles = ""
@@ -248,4 +249,17 @@ it("does not install missing packages for a built page", async () => {
   } finally {
     await hosted.close()
   }
+})
+
+it("refuses to build a shell page that imports no stylesheet, and says what to import", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
+
+  dirs.push(dir)
+  for (const name of ["ui", "src"]) cpSync(resolve("skills/babavoss", name), join(dir, name), { recursive: true })
+  cpSync(resolve("skills/babavoss/package.json"), join(dir, "package.json"))
+  symlinkSync(resolve("skills/babavoss/framework"), join(dir, "framework"))
+  symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
+  writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
+
+  expect(buildUi(join(dir, "ui"), join(dir, "out"))).rejects.toThrow("the page has no stylesheet")
 })

@@ -1,12 +1,14 @@
 // The standalone client and app door, exercised with isolated machine, bin and state directories.
 import { notesApp } from "../support/notes.ts"
+import { poll } from "../support/poll.ts"
 import { spawnSync } from "node:child_process"
 import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../skills/babavoss/framework/core/bv/bv.ts"
+import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION, reloads } from "../../skills/babavoss/framework/core/bv/bv.ts"
 import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../skills/babavoss/framework/core/runtime/service.ts"
+import { installedIn, SKILL_FOLDERS } from "../../skills/babavoss/framework/core/skill-folders.ts"
 
 const client = resolve("skills/babavoss/framework/core/bv/bv.ts")
 const roots: string[] = []
@@ -161,22 +163,73 @@ it("wait is released by a person's call", async () => {
   expect(await new Response(waiting.stdout).text()).toContain("person")
   expect(await waiting.exited).toBe(0)
 })
-it("close then call wakes and announces once", async () => {
+it("close then call, at once, wakes the runtime at the address the session had, so nothing is announced", async () => {
   const s = setup()
 
   s.open()
+
+  const port = s.endpoint().port
+
   expect(s.run(["close"]).out).not.toContain("page:")
-  await Bun.sleep(150)
-  expect(s.run(["/"]).out).toContain("a new address: give it to the person")
-  expect(s.run(["/"]).out).not.toContain("page:")
+  // No pause: the runtime before it may still be letting go of the session, and the call waits that out.
+  expect(s.run(["/"])).toMatchObject({ status: 0, out: expect.not.stringContaining("page:") })
+  expect(s.endpoint().port).toBe(port)
 })
-it("wakes after an unannounced runtime death", async () => {
+it("keeps its address after an unannounced runtime death", async () => {
   const s = setup()
 
   s.open()
+
+  const port = s.endpoint().port
+
   process.kill(s.endpoint().pid, "SIGKILL")
   await Bun.sleep(100)
-  expect(s.run(["/"]).out).toContain("a new address")
+  expect(s.run(["/"]).out).not.toContain("a new address")
+  expect(s.endpoint().port).toBe(port)
+})
+it("loads an edit of the app's code into the running runtime: the same process and address, the notes kept, the new code answering", async () => {
+  const s = setup()
+
+  s.open()
+  s.run(["/", "add", "text=Pharmacy"])
+
+  const before = s.endpoint()
+  const source = join(s.root, "app/src/app.ts")
+
+  writeFileSync(source, readFileSync(source, "utf8").replace('description: "Keep a note"', 'description: "Keep a note, as edited"'))
+  await poll(() => s.run(["/"]).out, { timeout: 10_000 }).toContain("Keep a note, as edited")
+  expect(s.endpoint()).toEqual(before)
+  expect(s.run(["/"]).out).toContain("Pharmacy")
+  expect(s.run(["/"]).out).not.toContain("page:")
+})
+it("an open names the page each time, and calls it new only once", () => {
+  const s = setup()
+
+  expect(s.open().out).toContain("a new address: give it to the person")
+
+  const again = s.open().out
+
+  expect(again).toContain(`page: http://127.0.0.1:${s.endpoint().port}\n`)
+  expect(again).not.toContain("a new address")
+})
+it("takes another address where the session's last one is taken, and announces it", async () => {
+  const s = setup()
+
+  s.open()
+
+  const port = s.endpoint().port
+
+  s.run(["close"])
+  await Bun.sleep(150)
+
+  const squatter = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } })
+
+  try {
+    expect(s.run(["/"]).out).toContain("a new address: give it to the person")
+    expect(s.endpoint().port).not.toBe(port)
+  } finally {
+    squatter.stop(true)
+  }
 })
 it("runs a loop of calls", () => {
   const s = setup()
@@ -513,3 +566,36 @@ for (const location of ["personal", "project"])
       s.close()
     }
   })
+
+it("tells the project an app is installed in by the harness skill folder that holds it", () => {
+  expect(installedIn("/work/shop/.agents/skills/payments")).toBe("/work/shop")
+  expect(installedIn("/work/shop/.claude/skills/payments/scripts")).toBe("/work/shop")
+  expect(installedIn("/work/shop/.codex/skills/payments")).toBe("/work/shop")
+  // The innermost project, where one sits inside a folder that is itself among skills.
+  expect(installedIn("/home/.agents/skills/outer/.claude/skills/inner")).toBe("/home/.agents/skills/outer")
+  expect(installedIn("/work/shop/skills/payments")).toBeUndefined()
+  expect(SKILL_FOLDERS.filter((folder) => folder.linked).map((folder) => folder.project)).toEqual([".agents/skills", ".claude/skills"])
+})
+
+it("wakes an app under hot reload only where its framework loads changed code in place, from 0.2.0", () => {
+  const root = mkdtempSync(join(tmpdir(), "bv-spec-"))
+
+  roots.push(root)
+
+  const held = (version?: string) => {
+    const app = join(root, version ?? "none")
+
+    mkdirSync(join(app, "scripts"), { recursive: true })
+    if (version) {
+      mkdirSync(join(app, "framework"))
+      writeFileSync(join(app, "framework/VERSION"), `${version}\n`)
+    }
+
+    return join(app, "scripts/open.ts")
+  }
+
+  expect(reloads(held("0.2.0"))).toBe(true)
+  expect(reloads(held("1.0.0"))).toBe(true)
+  expect(reloads(held("0.1.0"))).toBe(false)
+  expect(reloads(held())).toBe(false)
+})

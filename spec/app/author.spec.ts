@@ -34,7 +34,7 @@ afterEach(() => {
   }
 })
 
-it("presents its utils, opens agent-config as a tab through its command, and reads what the agents load", async () => {
+it("opens on the build tab, presents its utils, opens promptware as a tab through its command, and reads what the agents load", async () => {
   const state = mkdtempSync(join(tmpdir(), "author-"))
 
   dirs.push(state)
@@ -42,20 +42,24 @@ it("presents its utils, opens agent-config as a tab through its command, and rea
   const start = run("scripts/open.ts", ["--session", "S"], "", state)
 
   expect(start.status, start.err).toBe(0)
-  expect(start.out).toContain("babavoss 0.1.0")
-  expect(start.out).toContain('"agent-config"\t')
-  expect(start.out).toContain('utils.0.open: babavoss / open util="agent-config"')
+  expect(start.out).toContain("babavoss 0.2.0")
+  expect(start.out).toContain('"promptware"\t')
+  expect(start.out).toContain('utils.1.open: babavoss / open util="promptware"')
   expect(start.out).toContain('"playground"\t')
-  expect(start.out).not.toContain("utils.2.")
+  expect(start.out).not.toContain("utils.3.")
   expect(start.out).toContain("page: http://127.0.0.1:")
+  // Build is always open: its tab is there from the start, never offered to open, and says what to do first.
+  expect(start.out).not.toContain("utils.0.open")
+  expect(start.out).toContain('tabs.0.util: "build"')
+  await poll(() => run("scripts/open.ts", ["--session", "S", "/"], "", state).out + start.out, { timeout: 15_000 }).toContain("before any code")
 
-  const opened = run("scripts/open.ts", ["--session", "S", "/", "open", "util=agent-config"], "", state)
+  const opened = run("scripts/open.ts", ["--session", "S", "/", "open", "util=promptware"], "", state)
 
   expect(opened.status, opened.err).toBe(0)
-  expect(opened.out).toContain('"/tabs/1"')
-  expect(opened.out).toContain('"agent-config"')
+  expect(opened.out).toContain('"/tabs/2"')
+  expect(opened.out).toContain('"promptware"')
   // The repository's apps are its scopes, listed until one is selected.
-  await poll(() => run("scripts/open.ts", ["--session", "S", "/tabs/1"], "", state).out, { timeout: 15_000 }).toContain('"payments"')
+  await poll(() => run("scripts/open.ts", ["--session", "S", "/tabs/2"], "", state).out, { timeout: 15_000 }).toContain('"payments"')
 })
 
 it("works on the session's directory, whoever wakes its runtime and from wherever: a subagent's worktree, its command there", async () => {
@@ -78,7 +82,7 @@ it("works on the session's directory, whoever wakes its runtime and from whereve
   const subagent = run("scripts/open.ts", ["--session", "S"], "", state, worktree)
 
   expect(subagent.status, subagent.err).toBe(0)
-  expect(subagent.out).toContain("babavoss 0.1.0")
+  expect(subagent.out).toContain("babavoss 0.2.0")
   await restart()
 
   const cli = (...args: string[]) => run("scripts/open.ts", ["--session", "S", ...args], "", state, worktree).out

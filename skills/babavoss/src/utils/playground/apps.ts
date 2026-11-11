@@ -1,7 +1,8 @@
-// Discover apps by their root skill, reading metadata without importing their code.
+// Discover apps by their root skill and their door, reading metadata without importing their code. A skill with no door
+// is a skill of some other kind, and no app.
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join, relative } from "node:path"
-import { frontmatter } from "../agent-config/promptware.ts"
+import { frontmatter } from "../promptware/promptware.ts"
 import { PRESETS_DIR, SCENARIOS_DIR, EMPTY } from "./scenarios.ts"
 
 /** An app as the playground names it: `id` is url-safe, from `dir`, its directory relative to the project ("." for the project itself). */
@@ -12,7 +13,7 @@ export type FoundApp = AppRef & { path: string; description?: string; scenarios:
 /** Dependencies, installed apps, state and templates are outside discovery. */
 const SKIPPED = new Set(["node_modules", "framework", ".git", ".babavoss", ".claude", ".codex", ".agents", ".local", ".state", "template"])
 const skipped = (name: string) => SKIPPED.has(name)
-const isApp = (dir: string) => existsSync(join(dir, "SKILL.md"))
+const isApp = (dir: string) => existsSync(join(dir, "SKILL.md")) && existsSync(join(dir, "scripts", "open.ts"))
 
 const count = (dir: string, keep: (entry: { name: string; isDirectory(): boolean }) => boolean) =>
   existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter(keep).length : 0

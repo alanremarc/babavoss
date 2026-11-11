@@ -25,6 +25,7 @@
     "src",
     "spec",
     "ui",
-    "scenarios"
+    "scenarios",
+    "framework/shell/ui/css.d.ts"
   ]
 }

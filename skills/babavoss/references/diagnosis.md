@@ -12,4 +12,4 @@ Separate these failures:
 - Unexpected state: check the relevant view. Agents sharing a session share what it was last answered.
 - Person acted but nothing changed: distinguish a surface call from page navigation or a private draft.
 
-Inspect the skill and computed open answer with agent-config when instructions or initial facts look wrong. Reproduce the task in the playground and compare the trace with what the person expected. State what you observed, what failed and what remains unverified.
+Inspect the skill and computed open answer in the promptware util when instructions or initial facts look wrong. Reproduce the task in the playground and compare the trace with what the person expected. State what you observed, what failed and what remains unverified.

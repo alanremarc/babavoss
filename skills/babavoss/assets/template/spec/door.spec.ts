@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "bun:test"
 
-test("the door opens the app and bv sets its greeting", () => {
+test("the door opens the app on its tab and bv proposes a greeting there", () => {
   const root = mkdtempSync(join(tmpdir(), "app-door-"))
   const env = { ...process.env, BABAVOSS_HOME: root, BABAVOSS_BIN: root, CLAUDE_CODE_SESSION_ID: "spec", CODEX_THREAD_ID: "" }
   const run = (file: string, args: string[] = []) => {
@@ -18,9 +18,9 @@ test("the door opens the app and bv sets its greeting", () => {
   const client = join(root, "bv")
 
   try {
-    expect(run(new URL("../scripts/open.ts", import.meta.url).pathname)).toContain('greeting: "hello"')
-    run(client, ["/", "greet", "text=good morning"])
-    expect(run(client, ["/"])).toContain('greeting: "good morning"')
+    expect(run(new URL("../scripts/open.ts", import.meta.url).pathname)).toContain('tabs.0.facts.greeting: "hello"')
+    run(client, ["/tabs/1", "propose", "text=good morning"])
+    expect(run(client, ["/tabs/1"])).toContain('proposed: "good morning"')
   } finally {
     run(client, ["close"])
     rmSync(root, { recursive: true, force: true })

@@ -18,6 +18,19 @@ export type TabContext = {
 
 const Context = createContext<TabContext | null>(null)
 
+/** The shell gives the paths a view names under `at` whole; a util's component works with its own, below its tab. */
+export function own<V>(value: V, address: string): V {
+  if (Array.isArray(value)) return value.map((v) => own(v, address)) as V
+  if (!value || typeof value !== "object") return value
+
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [
+      k,
+      k === "at" && typeof v === "string" && (v === address || v.startsWith(`${address}/`)) ? v.slice(address.length) || "/" : own(v, address),
+    ])
+  ) as V
+}
+
 /** The page's one subscription to the surface's changes and its connection; a tab's live reads hang off it. */
 export const ChangesContext = createContext<{ subscribe: (fn: () => void) => () => void; connected: () => boolean }>({
   subscribe: () => () => {},
@@ -39,14 +52,14 @@ export function TabProvider({ address, util, route, active, navigate, children }
       route,
       active,
       navigate,
-      read: (path = "/") => readDoor(full(path)),
-      call: (path, handle, args) => callDoor(full(path), handle, args),
+      read: async (path = "/") => own(await readDoor(full(path)), address) as never,
+      call: async (path, handle, args) => own(await callDoor(full(path), handle, args), address) as never,
       live: (path, onView, onError, onConnected) => {
         let stopped = false
         const load = () =>
           readDoor(full(path)).then(
             (view) => {
-              if (!stopped) onView(view as never)
+              if (!stopped) onView(own(view, address) as never)
             },
             (error: unknown) => {
               if (!stopped) onError?.(error instanceof Error ? error.message : String(error))

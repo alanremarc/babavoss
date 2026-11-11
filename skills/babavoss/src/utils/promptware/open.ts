@@ -58,7 +58,7 @@ export async function stopRuntimes(state: string, waking: boolean): Promise<void
 }
 
 export async function runOpen(dir: string, signal: AbortSignal): Promise<OpenResult> {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "agent-config-")))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "promptware-")))
   const state = join(root, "state")
   const bin = join(root, "bin")
 

@@ -14,6 +14,8 @@ Define the app with defineApp and AppDefinition from #babavoss/core/index.ts in 
 
 Make / a small summary: counts, names, operation status, relevant handles and paths for detail. Show the same domain object for every actor; offered handles may differ. A view is public facts and handles at a path, not a second model.
 
+Name a path of the surface under the key `at`: a view's own, and each listed item's. In a shell, a util writes its own paths and they are given whole, /tabs/N included, to whoever reads them. Home at / lists each open tab with its util's facts at /, which is how the agent is told what changes in a tab: keep a util's / small, and put there what the agent must notice.
+
 Offer each handle where its action applies. Describe one action plainly, with fixed arguments and typed open arguments. A call must repeat the fixed arguments and fit the open arguments. Admission checks the caller's current offered view. An invalid call is refused; make the reason useful for deciding the next action. Persistence inconsistency fails the surface.
 
 Keep actions few and distinct. Walk a real task through its views, handles and refusals. Read the root view as present will show it: each fact should help the agent choose the next step.
@@ -26,7 +28,7 @@ Expose lists as data, with each item's path. Make handles safe to repeat where t
 
 Put effects outside update in commands: timers, file work and requests. Run performs them and reports events; failed handles command failure. Make operation status and errors visible so both agent and person can understand what happened. If an answer is lost after dispatch, the outcome is uncertain: read state before retrying. Stopping effects does not undo them.
 
-An ask is a handle offered to the person only. Make the decision and its result visible in the surface; leave the decision to the person on the page.
+An ask is a handle offered to the person only: define its action with `ask: true` and bind it where the decision stands. Say in a fact what is waited for, so the agent knows to give the person the page and wait. Make the decision and its result visible in the surface; leave the decision to the person on the page.
 
 Prove the task with a [scenario](playground.md) that includes the person's part. Ensure a person call changes facts the agent can notice in its next answer.
 

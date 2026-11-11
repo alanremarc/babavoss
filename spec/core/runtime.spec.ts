@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, describe, expect, it } from "bun:test"
 import { defineApp } from "../../skills/babavoss/framework/core/app.ts"
 import { reach } from "../../skills/babavoss/framework/core/runtime/reach.ts"
-import { startRuntime, appVersion } from "../../skills/babavoss/framework/core/runtime/runtime.ts"
+import { startRuntime, appVersion, RELOAD_MS } from "../../skills/babavoss/framework/core/runtime/runtime.ts"
 import { admitted } from "../../skills/babavoss/framework/core/runtime/door.ts"
 import { ACTOR_HEADER, SERVICE_HEADER, endpointFile, findService, type Endpoint } from "../../skills/babavoss/framework/core/runtime/service.ts"
 import { request as httpRequest, type IncomingMessage } from "node:http"
@@ -210,7 +210,14 @@ describe("reach", () => {
     const dir = scratch()
 
     await started(dir)
-    expect(await startRuntime(app(dir), ["--session", "S"], { env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), log: () => {} })).toBeUndefined()
+
+    // Another process asks for the same directory, and is told it is taken. This one, asking again, is its own code loaded again.
+    const service = join(process.cwd(), "skills/babavoss/framework/core/runtime/service.ts")
+    const state = join(dir, "sessions", "S", "p")
+    const asks = `import { ownService } from ${JSON.stringify(service)}; console.log(String(ownService(${JSON.stringify(state)})))`
+    const other = Bun.spawnSync([process.execPath, "-e", asks])
+
+    expect(other.stdout.toString().trim()).toBe("undefined")
   })
 })
 
@@ -223,34 +230,134 @@ it("refuses a definition without its surface or ui", () => {
   expect(defineApp(whole)).toBe(whole)
 })
 
-it("ends once idle when a watched source changes, releasing the session, so the next call wakes the new code", async () => {
+/** The events an open page hears on its stream, collected as they come. */
+const listen = async (base: string, token: string) => {
+  const ctrl = new AbortController()
+  const response = await fetch(`${base}/`, { headers: { accept: "text/event-stream", [SERVICE_HEADER]: token }, signal: ctrl.signal })
+  const heard: string[] = []
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+
+  void (async () => {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+
+        if (done) break
+        for (const line of decoder.decode(value).split("\n")) if (line.startsWith("event: ")) heard.push(line.slice(7))
+      }
+    } catch {
+      // The stream was stopped.
+    }
+  })()
+
+  return { heard, stop: () => ctrl.abort() }
+}
+const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
+
+it("takes changed code in place: the same process, address and token, the state as it was saved, and open pages and a waiting agent told", async () => {
+  const dir = scratch()
+  const { runtime, endpoint, base, get, post } = await started(dir)
+
+  await post("/", { handle: "bump", args: { by: 3 } }, { [ACTOR_HEADER]: "agent" })
+
+  const page = await listen(base, endpoint.token)
+
+  await poll(() => page.heard.length).toBe(1)
+  await (await get("/?open", { accept: "text/plain" })).text()
+
+  const waiting = get("/_/wait?seconds=20", { accept: "text/plain" }).then((response) => response.text())
+  // The code as edited: the same surface, saying one fact more. Its entry runs again in this process, as under bun --hot.
+  const edited = defineApp({
+    name: "p",
+    ui: join(dir, "ui"),
+    surface: {
+      ...counter,
+      view: (m, path, actor) => (path === "/" ? { ...counter.view(m, path, actor), doubled: m.n * 2 } : counter.view(m, path, actor)),
+    },
+  })
+  const again = await startRuntime(edited, ["--session", "S"], options(dir))
+
+  expect(again!.port).toBe(runtime.port)
+  expect(readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))).toEqual(endpoint)
+  expect(await (await get("/")).json()).toMatchObject({ n: 3, doubled: 6 })
+  expect(await waiting).toContain("+ doubled: 6")
+  expect(page.heard.filter((event) => event === "change").length).toBeGreaterThan(1)
+  page.stop()
+})
+
+it("starts again in place when the framework's own code changed: the same address, the state as saved, a new token for pages to take", async () => {
+  const dir = scratch()
+  const first = await startRuntime(app(dir), ["--session", "S"], { ...options(dir), stamp: 1 })
+  const before = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))!
+  const call = (endpoint: Endpoint, by: number) =>
+    fetch(`http://127.0.0.1:${endpoint.port}/`, {
+      method: "POST",
+      body: JSON.stringify({ handle: "bump", args: { by } }),
+      headers: { "content-type": "application/json", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: "agent" },
+    })
+
+  expect((await call(before, 3)).status).toBe(200)
+
+  const again = await startRuntime(app(dir), ["--session", "S"], { ...options(dir), stamp: 2 })
+
+  closers.push(() => again!.close())
+
+  const after = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))!
+
+  expect(again!.port).toBe(first!.port)
+  expect(after.token).not.toBe(before.token)
+  expect((await call(before, 1)).status).toBe(401)
+  expect(await (await call(after, 1)).json()).toMatchObject({ outcome: "written", view: { n: 4 } })
+})
+
+it("goes on with the code before it when changed code does not start from what was saved", async () => {
+  const dir = scratch()
+  const { runtime, get, post } = await started(dir)
+
+  await post("/", { handle: "bump", args: { by: 3 } }, { [ACTOR_HEADER]: "agent" })
+
+  const broken = defineApp({
+    name: "p",
+    ui: join(dir, "ui"),
+    surface: {
+      ...counter,
+      restore: () => {
+        throw new Error("cannot read what was saved")
+      },
+    },
+  })
+
+  expect((await startRuntime(broken, ["--session", "S"], options(dir)))!.port).toBe(runtime.port)
+  expect(await (await get("/")).json()).toMatchObject({ n: 3 })
+  expect((await post("/", { handle: "bump", args: { by: 1 } }, { [ACTOR_HEADER]: "agent" })).status).toBe(200)
+})
+
+it("tells open pages to load again when the page's own files change, and not when another file does", async () => {
   const dir = scratch()
   const src = join(dir, "src")
 
-  require("node:fs").mkdirSync(src)
+  mkdirSync(src)
 
-  let ended = 0
-  const runtime = await startRuntime(app(dir), ["--session", "W"], {
-    env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"),
-    idleMs: 60_000,
-    log: () => {},
-    watch: [src],
-    exit: () => void ended++,
-  })
+  const runtime = await startRuntime(app(dir), ["--session", "W"], { ...options(dir), watch: [src, join(dir, "ui")] })
 
-  expect(runtime).toBeDefined()
   closers.push(() => runtime!.close())
-  expect(findService(join(dir, "sessions", "W", "p"))).resolves.toMatchObject({ port: runtime!.port })
+
+  const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "W", "p")))!
+  const base = `http://127.0.0.1:${runtime!.port}`
+
+  // A page was loaded, and holds its stream.
+  await (await fetch(`${base}/`, { headers: { accept: "text/html" } })).text()
+
+  const page = await listen(base, endpoint.token)
+
+  await poll(() => page.heard.length).toBe(1)
   writeFileSync(join(src, "app.ts"), "// edited")
-  await poll(() => ended, { timeout: 5000 }).toBe(1)
-  expect(findService(join(dir, "sessions", "W", "p"))).resolves.toBeUndefined()
-
-  // The next runtime has a new page address.
-  const again = await startRuntime(app(dir), ["--session", "W"], { env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {} })
-
-  expect(again).toBeDefined()
-  closers.push(() => again!.close())
-  expect(again!.port).not.toBe(runtime!.port)
+  await sleep(RELOAD_MS + 400)
+  expect(page.heard).not.toContain("page")
+  writeFileSync(join(dir, "ui", "app.js"), "// a new page")
+  await poll(() => page.heard, { timeout: 5000 }).toContain("page")
+  page.stop()
 })
 
 it("reads the version from the package beside the app entry", () => {

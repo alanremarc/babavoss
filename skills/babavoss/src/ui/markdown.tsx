@@ -19,7 +19,8 @@ const components: Components = {
 /** GitHub-flavoured markdown in the canonical `markdown-body` style of github-markdown-css. */
 export function MarkdownBody({ text, className = "" }: { text: string; className?: string }) {
   return (
-    <div className={`markdown-body ${className}`}>
+    // github-markdown-css leaves list markers to the browser's defaults, which the shell's reset removes.
+    <div className={`markdown-body [&_ol]:list-decimal [&_ul]:list-disc ${className}`}>
       <Markdown remarkPlugins={[remarkGfm]} components={components}>
         {text}
       </Markdown>

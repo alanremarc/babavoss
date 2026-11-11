@@ -4,6 +4,7 @@ import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import type { AppDefinition } from "../app.ts"
 import { appVersion, startRuntime } from "../runtime/runtime.ts"
+import { installedIn, SKILL_FOLDERS } from "../skill-folders.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenApp } from "./bv.ts"
 
@@ -40,23 +41,20 @@ function versionNote(app: AppDefinition, directory: string) {
 export async function main(app: AppDefinition, notes?: (cwd: string) => Record<string, string>) {
   const args = process.argv.slice(2)
   const directory = dirname(dirname(realpathSync(process.argv[1]!)))
-  const personal = [
-    join(homedir(), ".agents/skills"),
-    join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "skills"),
-    join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills"),
-  ].some((path) => {
+  const personal = SKILL_FOLDERS.map((folder) => folder.personal()).some((path) => {
     try {
       path = realpathSync(path)
     } catch {}
 
     return directory.startsWith(path + "/")
   })
-  const root = personal ? undefined : /^(.*)\/\.(?:agents|claude|codex)\/skills\//.exec(directory)?.[1] ?? process.cwd()
+  const root = personal ? undefined : (installedIn(directory) ?? process.cwd())
 
   process.env.BABAVOSS_HOME ??= join(root ?? homedir(), ".babavoss")
 
   if (args[0] === "--serve") {
-    if (!(await startRuntime(app, ["--session", args[1]!], { command: args[2] ?? `bv ${app.name}` }))) process.exitCode = 0
+    // Another process serves this session already. Under hot reload a process with nothing to do would stay, so it ends here.
+    if (!(await startRuntime(app, ["--session", args[1]!], { command: args[2] ?? `bv ${app.name}` }))) process.exit(0)
 
     return
   }

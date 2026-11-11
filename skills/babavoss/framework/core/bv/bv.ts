@@ -7,11 +7,24 @@ import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 4
+export const VERSION = 5
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const ENDPOINT_FILE = "service.json"
-export type OpenApp = { directory: string; entry: string; state: string; command?: string; instance?: string }
+export type OpenApp = { directory: string; entry: string; state: string; command?: string; page?: string }
+/**
+ * Whether the app at this entry holds a framework that loads changed code in place, which it does from 0.2.0. One before
+ * it ends when its code changes and is woken again, and under hot reload would be left running with nothing to do.
+ */
+export const reloads = (entry: string): boolean => {
+  try {
+    const [major = 0, minor = 0] = readFileSync(join(dirname(dirname(entry)), "framework", "VERSION"), "utf8").trim().split(".").map(Number)
+
+    return major > 0 || minor >= 2
+  } catch {
+    return false
+  }
+}
 export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".babavoss"), "sessions", session, "open.json")
 export const load = <T>(file: string): T | undefined => {
   try {
@@ -164,52 +177,85 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         if (response.headers.get(SERVICE_HEADER) === endpoint.token) return endpoint
       } catch {}
     }
-    let endpoint = await find()
+    /** The session's runtime for this app: the one up, or one woken. */
+    const reach = async (): Promise<Endpoint> => {
+      let endpoint = await find()
 
-    if (!endpoint) {
-      const log = openSync(join(app.state, "service.log"), "a", 0o600)
-      const child = spawn(process.execPath, [app.entry, "--serve", session, command], {
-        cwd: app.directory,
-        detached: true,
-        stdio: ["ignore", "ignore", log],
-        env: process.env,
-      })
-
-      closeSync(log)
+      if (endpoint) return endpoint
 
       let failed: Error | undefined
+      const wake = () => {
+        const log = openSync(join(app.state, "service.log"), "a", 0o600)
+        // Under bun's hot reload: a change in the app's code is loaded into the runtime, which stays up at its address.
+        const child = spawn(process.execPath, [...(reloads(app.entry) ? ["--hot"] : []), app.entry, "--serve", session, command], {
+          cwd: app.directory,
+          detached: true,
+          stdio: ["ignore", "ignore", log],
+          env: process.env,
+        })
 
-      child.on("error", (error) => {
-        failed = error
-      })
-      child.unref()
+        closeSync(log)
+        child.on("error", (error) => {
+          failed = error
+        })
+        child.unref()
 
+        return child
+      }
       const until = Date.now() + 10_000
+      let child = wake()
+      let woken = Date.now()
 
-      while (!endpoint && Date.now() < until) {
-        if (failed || child.exitCode !== null || child.signalCode !== null) break
+      while (!endpoint && Date.now() < until && !failed) {
         await sleep(50)
         endpoint = await find()
+        if (endpoint || (child.exitCode === null && child.signalCode === null)) continue
+        // It ended without serving. With 0, the runtime before it was still letting go of the session, and the next one
+        // woken finds it free; with anything else it failed, and would again.
+        if (child.exitCode !== 0) break
+        if (Date.now() - woken >= 250) {
+          child = wake()
+          woken = Date.now()
+        }
       }
       if (!endpoint)
         throw new Error(
           `cannot listen on or reach this machine’s runtime; allow resident processes and loopback listening and connections (under a sandbox, in the harness settings); see ${join(app.state, "service.log")}`
         )
-    }
 
-    const page = `http://127.0.0.1:${endpoint.port}`
-    const request = (url: string, method = "GET", body?: string, accept = "text/plain") =>
-      fetch(`${page}${url}`, {
-        method,
-        ...(body !== undefined && { body }),
-        headers: { accept, "content-type": "application/json", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
-      })
-    const announce = () => {
-      if (path !== "close" && app.instance !== endpoint.token) {
-        console.log(`page: ${page}  a new address: give it to the person`)
-        app.instance = endpoint.token
-        save(file, apps)
+      return endpoint
+    }
+    let endpoint = await reach()
+    let page = `http://127.0.0.1:${endpoint.port}`
+    const refused = (error: unknown) =>
+      [error, (error as { cause?: unknown } | undefined)?.cause].some((e) => (e as { code?: string } | undefined)?.code === "ECONNREFUSED")
+    const request = async (url: string, method = "GET", body?: string, accept = "text/plain") => {
+      const send = () =>
+        fetch(`${page}${url}`, {
+          method,
+          ...(body !== undefined && { body }),
+          headers: { accept, "content-type": "application/json", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
+        })
+
+      try {
+        return await send()
+      } catch (error) {
+        // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when its code changes.
+        if (!refused(error)) throw error
+        endpoint = await reach()
+        page = `http://127.0.0.1:${endpoint.port}`
+
+        return send()
       }
+    }
+    // An open always names the page; any other answer names it only when the address is not the one last named.
+    const announce = () => {
+      if (path === "close") return
+      if (app.page !== page) {
+        console.log(`page: ${page}  a new address: give it to the person`)
+        app.page = page
+        save(file, apps)
+      } else if (!path) console.log(`page: ${page}`)
     }
 
     if (program) {

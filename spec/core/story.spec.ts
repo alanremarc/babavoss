@@ -1,5 +1,6 @@
 // Specify an app's behavior entirely through its actors and outside world.
 import { expect, test } from "bun:test"
+import { action, view } from "../../skills/babavoss/framework/core/surface/authoring.ts"
 import { story } from "../../skills/babavoss/framework/core/surface/story.ts"
 import { surface } from "../../skills/babavoss/framework/core/surface/surface.ts"
 import { handle } from "../../skills/babavoss/framework/core/surface/view.ts"
@@ -150,4 +151,45 @@ test("a story can start from a saved model through restore", () => {
   const { agent } = story({ ...list, restore: (saved) => ({ items: (saved as Model).items.map((s) => s.toUpperCase()) }) }, { model: { items: ["One"] } })
 
   expect(agent.sees()).toMatchObject({ items: ["ONE"] })
+})
+
+test("an action declared an ask is offered to the person only, wherever it is bound, and the facts are the same for both", async () => {
+  type Draft = { text: string; approved: boolean }
+
+  const write = action({
+    name: "write",
+    description: "Write the text",
+    subject: {},
+    inputs: { text: "string" },
+    update: (m: Draft, { text }) => ({ model: { ...m, text } }),
+  })
+  const approve = action({
+    name: "approve",
+    description: "Approve the text",
+    subject: {},
+    inputs: {},
+    ask: true,
+    update: (m: Draft) => ({ model: { ...m, approved: true } }),
+  })
+  const pages = view([write, approve], {
+    "/": (m) => ({ text: m.text, approved: m.approved, write: write.bind({}), review: { waiting: !m.approved, approve: approve.bind({}) } }),
+  })
+  const { agent, person } = story(
+    surface<Draft, { kind: "none" }, never>({
+      description: "A draft",
+      init: () => ({ text: "", approved: false }),
+      view: pages.view,
+      update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m }),
+      run: async () => {},
+      failed: () => ({ kind: "none" }),
+    })
+  )
+
+  expect(agent.offered()).toEqual(["write"])
+  expect(person.offered()).toEqual(["write", "approve"])
+  expect(agent.sees()).toMatchObject({ review: { waiting: true } })
+  expect(await agent.call("/", "approve", {})).toMatchObject({ outcome: "refused" })
+  agent.told()
+  expect(await person.call("/", "approve", {})).toMatchObject({ outcome: "written" })
+  expect(agent.told()).toEqual(["approved: false → true", "review.waiting: true → false"])
 })

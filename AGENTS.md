@@ -16,10 +16,11 @@ A TypeScript framework for software that agents operate. An app is one skill: it
 skills/babavoss/            the product; also the authoring app's skill directory
   SKILL.md  references/     the authoring app's skill and know-how
   scripts/open.ts           its door; every app's entry is scripts/open.ts
-  assets/template/          the app a new one starts from
+  assets/template/          the app a new one starts from: a shell of one util; the build util copies it
   framework/core/           the framework's layers; bv/ holds bv and the door
   framework/shell/          the shell: tabs, page hosting and build, layouts, components
-  src/  ui/                 the authoring app: app.ts, utils/{agent-config,playground}, its page
+  src/  ui/                 the authoring app: app.ts, utils/{build,promptware,playground}, its page
+  scenarios/                its own scenarios, run in its playground: first-app asks for a new app
 spec/{core,shell,app}/      the product's specs, mirroring its code
 spec/support/notes/         the small app the framework's specs use
 examples/payments/          an example app, with its own spec/, scenarios/ and assets/

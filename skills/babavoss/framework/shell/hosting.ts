@@ -161,6 +161,7 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
   rmSync(out, { recursive: true, force: true })
 
   const styles = new Map<string, string>()
+  let shell = false
   const { compile } = await import("@tailwindcss/node")
   const { Scanner } = await import("@tailwindcss/oxide")
   const result = await Bun.build({
@@ -172,7 +173,11 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
       {
         name: "tailwind",
         setup(build) {
-          build.onResolve({ filter: /^#babavoss\// }, (args) => ({ path: join(frameworkRoot, args.path.slice("#babavoss/".length)) }))
+          build.onResolve({ filter: /^#babavoss\// }, (args) => {
+            shell ||= args.path.startsWith("#babavoss/shell/ui/")
+
+            return { path: join(frameworkRoot, args.path.slice("#babavoss/".length)) }
+          })
           build.onLoad({ filter: /\.css$/ }, async (args) => {
             const base = dirname(args.path)
             const compiler = await compile(readFileSync(args.path, "utf8"), { base, shouldRewriteUrls: true, onDependency() {} })
@@ -208,6 +213,9 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
   })
 
   if (!result.success) throw new AggregateError(result.logs, "page build failed")
+  // The shell's page brings no styles of its own, so that they are compiled once: without the app's, it would show bare.
+  if (shell && !styles.size)
+    throw new Error("the page has no stylesheet: import one from its entry, such as ./styles.css, which imports the shell's ui/styles.css")
   for (const [name, css] of styles) await Bun.write(join(out, name), css)
 
   const index = join(out, "index.html")

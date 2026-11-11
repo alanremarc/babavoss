@@ -1,0 +1,4 @@
+/* The page uses the shell's design language. */
+@import "../framework/shell/ui/styles.css";
+
+@source ".";

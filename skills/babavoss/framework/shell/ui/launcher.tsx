@@ -3,7 +3,8 @@ import { BoxIcon, SettingsIcon } from "lucide-react"
 import type { Handle } from "../../core/index.ts"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./components/command"
 
-export type UtilEntry = { name: string; description: string; open: Handle }
+/** A util as home lists it; one that is always open offers no `open`: its tab is there. */
+export type UtilEntry = { name: string; description: string; open?: Handle }
 
 /** Whose page this is, from the meta tags the runtime serves the page with; presentation, never in a view. */
 const about = (key: string): string | undefined => document.querySelector<HTMLMetaElement>(`meta[name="babavoss:${key}"]`)?.content || undefined
@@ -25,7 +26,7 @@ export function Launcher({
   tabs: { util: string }[]
   disabled: boolean
   loading: boolean
-  launch: (handle: Handle) => void
+  launch: (util: UtilEntry) => void
   settings: () => void
 }) {
   const [search, setSearch] = useState("")
@@ -56,11 +57,11 @@ export function Launcher({
                   const count = tabs.filter((tab) => tab.util === u.name).length
 
                   return (
-                    <CommandItem key={u.name} value={`util-${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u.open)}>
+                    <CommandItem key={u.name} value={`util-${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u)}>
                       <span className="grid size-[22px] shrink-0 place-items-center">{icons[u.name] ?? <BoxIcon aria-hidden />}</span>
                       <span className="min-w-0 flex-1 truncate">{u.name}</span>
                       <span className="min-w-0 flex-1 truncate text-muted-foreground">{u.description}</span>
-                      {count > 0 && <span className="pl-2 text-[11px] whitespace-nowrap text-muted-foreground">{count} open</span>}
+                      {count > 0 && <span className="pl-2 text-[11px] whitespace-nowrap text-muted-foreground">{u.open ? `${count} open` : "open"}</span>}
                     </CommandItem>
                   )
                 })}

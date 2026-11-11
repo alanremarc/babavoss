@@ -10,14 +10,14 @@ export type Event =
   | { kind: "discovered"; gen: number; apps: Entry[] }
   | { kind: "opened"; gen: number; result: OpenResult }
   | { kind: "failed"; gen: number; error: string }
-export type AgentConfigPorts = { project: string; discover(): Promise<Entry[]>; open(dir: string, signal: AbortSignal): Promise<OpenResult> }
+export type PromptwarePorts = { project: string; discover(): Promise<Entry[]>; open(dir: string, signal: AbortSignal): Promise<OpenResult> }
 
 const choose = (model: Model, p: Entry, gen = model.gen + 1): Update<Model, Command> => ({
   model: { ...model, app: p.id, gen, answer: { status: "running" } },
   commands: [{ kind: "open", gen, dir: p.path }],
 })
 
-export function agentConfigSurface(ports: AgentConfigPorts) {
+export function promptwareSurface(ports: PromptwarePorts) {
   const found = (model: Model) => model.apps ?? []
   const chosen = (model: Model) => found(model).find((p) => p.id === model.app)
   const select = action({
@@ -61,23 +61,30 @@ export function agentConfigSurface(ports: AgentConfigPorts) {
     select: select.bind({ app: p.id }),
   })
   const textView = (at: string, text: string) => ({ at, text, ...size(text) })
+  /** A text as / lists it: where it is and how large. / stays small: it is in every answer that says what changed here. */
+  const sized = (at: string, text: string) => ({ at, ...size(text) })
   const answer = (model: Model) => ({ at: "/open", ...model.answer, ...("text" in (model.answer ?? {}) ? size((model.answer as OpenResult).text) : {}) })
+  const answered = (model: Model) => {
+    const { text: _text, output: _output, command: _command, ...rest } = answer(model) as ReturnType<typeof answer> & Partial<OpenResult>
+
+    return rest
+  }
   const pages = view([select, back, refresh], {
     "/": (model) => {
       const p = chosen(model)
 
       return {
-        title: "Agent config",
+        title: "Promptware",
         project: ports.project,
         apps: found(model).map(listed),
         app: p ? listed(p) : null,
         refresh: refresh.bind({}),
         ...(p && {
           ...(found(model).length > 1 && { back: back.bind({}) }),
-          description: textView("/description", p.promptware.skill.description),
-          skill: { ...textView("/skill", p.promptware.skill.text), file: p.promptware.skill.file },
+          description: sized("/description", p.promptware.skill.description),
+          skill: { ...sized("/skill", p.promptware.skill.text), file: p.promptware.skill.file },
           references: p.promptware.references.map((r) => ({ at: `/references/${encodeURIComponent(r.name)}`, name: r.name, file: r.file, ...size(r.text) })),
-          answer: answer(model),
+          answer: answered(model),
         }),
       }
     },
@@ -106,7 +113,7 @@ export function agentConfigSurface(ports: AgentConfigPorts) {
   const live = new Map<AbortController, number>()
 
   return surface<Model, Event, Command>({
-    description: "An app's skill description, text, references and computed open answer",
+    description: "An app's skill and references as the agent reads them, and what open answers with, each with its size",
     init: () => ({ gen: 0 }),
     restore: (saved) => {
       const kept = (saved ?? {}) as Partial<Model>

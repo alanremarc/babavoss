@@ -1,5 +1,6 @@
 // The shell page: the surface's root view drives the tab strip and the launcher; each tab shows its util's component.
-// The URL is the surface path: / the launcher, /tabs/N/route a tab, /settings the appearance.
+// The URL is the surface path: / the launcher, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
+// the app's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { CircleAlertIcon, SettingsIcon, XIcon } from "lucide-react"
 import type { Handle, View } from "../../core/index.ts"
@@ -11,11 +12,11 @@ import { Launcher, type UtilEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
 import { SurfaceTabs, TabContent } from "./tabs.tsx"
-import "./styles.css"
 
 /** A util's presentation: its component, and the icon the strip and the launcher show. */
 export type Registry = Record<string, { component: ComponentType; icon?: ReactNode }>
-type Row = { at: string; n: number; util: string; title?: string; close: Handle }
+/** A tab as home lists it; one whose util is always open offers no `close`. */
+type Row = { at: string; n: number; util: string; title?: string; close?: Handle }
 type RootView = { title: string; utils: UtilEntry[]; tabs: Row[] }
 type At = { key: string; route: string }
 
@@ -109,6 +110,21 @@ export function App({ utils }: { utils: Registry }) {
     return () => window.removeEventListener("popstate", navigate)
   }, [])
 
+  // A page opened at / lands in the first tab that is always open, where there is one: an app of one util is that util.
+  const landed = useRef(false)
+
+  useEffect(() => {
+    if (!root || landed.current) return
+    landed.current = true
+
+    const first = root.tabs.find((r) => !r.close)
+
+    if (first && at.key === "new") {
+      history.replaceState(null, "", urlOf(first.at))
+      setAt({ key: first.at, route: "/" })
+    }
+  }, [root, at.key])
+
   // A closed tab in the URL falls back to the launcher.
   useEffect(() => {
     if (root && at.key !== active) history.replaceState(null, "", urlOf(active, routes[active]))
@@ -179,7 +195,7 @@ export function App({ utils }: { utils: Registry }) {
                 tabs={rows}
                 disabled={pending || !root}
                 loading={!root}
-                launch={(handle) => void open(handle)}
+                launch={(u) => (u.open ? void open(u.open) : go(rows.find((r) => r.util === u.name)?.at ?? "new"))}
                 settings={() => go("settings")}
               />
             </TabContent>
@@ -247,7 +263,7 @@ export function App({ utils }: { utils: Registry }) {
             id: row.at,
             label: row.title ?? `${row.util} ${row.n}`,
             icon: icons[row.util] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
-            onClose: () => void act("/", row.close).then(() => active === row.at && go("new")),
+            ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && go("new")) }),
           })),
           ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go("new") }] : []),
         ]}

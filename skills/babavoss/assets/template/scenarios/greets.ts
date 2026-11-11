@@ -1,11 +1,12 @@
+// The first task: the agent proposes, the person decides on the page, and the agent notices.
 import type { Scenario } from "#babavoss/core/index.ts"
 
 export default {
-  description: "The greeting set by chat, then changed by the person, and the agent notices",
+  description: "A greeting proposed in chat, accepted by the person on the page, and the agent notices",
   async run(user) {
-    await user.say('Set the greeting to "hola".')
-    await user.read("/")
-    await user.call("/", "greet", { text: "bonjour" })
+    await user.say('Propose "hola" as the greeting.')
+    await user.read("/tabs/1")
+    await user.call("/tabs/1", "accept", {})
     await user.say("What is the greeting now?")
   },
 } satisfies Scenario
