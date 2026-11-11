@@ -1202,7 +1202,8 @@ export default {
       await until(() => r.read("/"), { workspaces: [{ scenario: "keep" }] }, 20_000)
       await poll(() => existsSync(ws), { timeout: 20_000 }).toBe(false)
       expect(pids.filter(running)).toEqual([])
-      expect(readdirSync(trash)).toEqual([`babavoss workspace keep ${made[0]!.id}`])
+      // The XDG trash keeps what it holds under files/, beside info/; the macOS trash, at its top.
+      expect(readdirSync(process.platform === "darwin" ? trash : join(trash, "files"))).toEqual([`babavoss workspace keep ${made[0]!.id}`])
       expect(readFileSync(join(trash, readdirSync(trash)[0]!, "files", "seed.txt"), "utf8")).toBe("seed")
       expect(readSession(join(trash, readdirSync(trash)[0]!), 1)).toMatchObject({ session, status: "exited" })
 
