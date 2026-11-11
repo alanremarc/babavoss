@@ -1,9 +1,10 @@
 name: Release
 
-# The framework is published to npm when a tag vX.Y.Z is pushed, after the checks pass, by npm's trusted publishing: the
-# workflow proves itself to npm with a short-lived GitHub token, so no npm token is kept here and no one-time code is
-# asked. The skill is released by merging the tagged commit to main, after the package is out, so that no installed
-# skill names a framework npm does not have yet.
+# The framework is staged on npm when a tag vX.Y.Z is pushed, after the checks pass. The workflow proves itself to npm
+# with a short-lived GitHub token, npm's trusted publishing, so no npm token is kept here; that token may only stage.
+# A maintainer then approves the staged version on npm with their own second factor, which publishes it. The skill is
+# released by merging the tagged commit to main once the version is published, so that no installed skill names a
+# framework npm does not have yet.
 on:
   push:
     tags: ["v*"]
@@ -24,7 +25,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Required reviewers on this environment, set in the repository's settings, are the human step before a publish.
+    # The environment the trusted publisher on npm is bound to: no other workflow or job can stage.
     environment: npm
     permissions:
       contents: read
@@ -44,11 +45,12 @@ jobs:
             version=$(node -p "require('./$file').version")
             [ "$version" = "$tag" ] || { echo "$file is $version, the tag is $tag"; exit 1; }
           done
-      - name: npm that publishes with a GitHub token
-        run: |
-          npm --version
-          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)" \
-            || npm install --global npm@11
-      - name: publish
+      - name: npm that stages
+        run: npm stage --help > /dev/null 2>&1 || npm install --global npm@12
+      - name: stage
         working-directory: packages/babavoss
-        run: npm publish --access public
+        run: npm stage publish --access public
+      - name: what to do next
+        run: |
+          echo "babavoss ${GITHUB_REF_NAME#v} is staged. Approve it on npmjs.com, or with: npm stage list babavoss, then npm stage approve <id>." >> "$GITHUB_STEP_SUMMARY"
+          echo "Once it is published, merge ${GITHUB_REF_NAME} to main." >> "$GITHUB_STEP_SUMMARY"
