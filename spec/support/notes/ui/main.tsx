@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { BellIcon, BellRingIcon, CheckIcon, PlusIcon, StickyNoteIcon, Trash2Icon } from "lucide-react"
-import type { Handle } from "#babavoss/core/index.ts"
-import { Button, call, changes, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, read } from "#babavoss/shell/ui/index.ts"
+import type { Handle } from "babavoss/core/index.ts"
+import { Button, call, changes, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, read } from "babavoss/shell/ui/index.ts"
 import "./styles.css"
 
 type Note = { at: string; n: number; text: string; due?: "pending" | "due"; remove: Handle; remind?: Handle }

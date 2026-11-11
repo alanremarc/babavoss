@@ -9,12 +9,12 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it } from "bun:test"
-import { SERVICE_HEADER, endpointFile, findService, readJsonFile, run, type Endpoint, type Ports, type Saved } from "#babavoss/core/index.ts"
-import { agents } from "../../skills/babavoss/src/utils/playground/index.ts"
-import { discoverApps, type FoundApp } from "../../skills/babavoss/src/utils/playground/apps.ts"
-import { emptyPreset, firstParagraph, loadScenario, parseSetups, scanScenarios, type Problem, type Scan } from "../../skills/babavoss/src/utils/playground/scenarios.ts"
-import { contextOf, marked, appShare, surfaceOf, total } from "../../skills/babavoss/src/utils/playground/context.ts"
-import { playgroundSurface, type Entry, type PlaygroundPorts, type PortEvent, type SessionRecord } from "../../skills/babavoss/src/utils/playground/surface.ts"
+import { SERVICE_HEADER, endpointFile, findService, readJsonFile, run, type Endpoint, type Ports, type Saved } from "babavoss/core/index.ts"
+import { agents } from "../../skills/baba/src/utils/playground/index.ts"
+import { discoverApps, type FoundApp } from "../../skills/baba/src/utils/playground/apps.ts"
+import { emptyPreset, firstParagraph, loadScenario, parseSetups, scanScenarios, type Problem, type Scan } from "../../skills/baba/src/utils/playground/scenarios.ts"
+import { contextOf, marked, appShare, surfaceOf, total } from "../../skills/baba/src/utils/playground/context.ts"
+import { playgroundSurface, type Entry, type PlaygroundPorts, type PortEvent, type SessionRecord } from "../../skills/baba/src/utils/playground/surface.ts"
 import {
   createWorkspace,
   listWorkspaces,
@@ -26,7 +26,7 @@ import {
   workspacesDir,
   writeSession,
   type WorkspaceSummary,
-} from "../../skills/babavoss/src/utils/playground/workspaces.ts"
+} from "../../skills/baba/src/utils/playground/workspaces.ts"
 
 const dirs: string[] = []
 const scratch = (prefix: string) => {
@@ -116,7 +116,7 @@ describe("apps", () => {
   it("finds this repository's apps", () => {
     const repository = fileURLToPath(new URL("../..", import.meta.url))
 
-    expect(discoverApps(repository).map((p) => p.dir)).toEqual(["examples/payments", "skills/babavoss"])
+    expect(discoverApps(repository).map((p) => p.dir)).toEqual(["examples/payments", "skills/baba"])
   })
 })
 
@@ -964,8 +964,8 @@ describe("playground", () => {
   })
 })
 
-const framework = fileURLToPath(new URL("../../skills/babavoss/framework", import.meta.url))
-const APP = `import { action, defineApp, surface, view, type Update } from "#babavoss/core/index.ts"
+const modules = fileURLToPath(new URL("../../node_modules", import.meta.url))
+const APP = `import { action, defineApp, surface, view, type Update } from "babavoss/core/index.ts"
 
 type Model = { items: string[] }
 const add = action({ name: "add", description: "Keep a note", subject: {}, inputs: { text: "string" },
@@ -1067,21 +1067,21 @@ describe("playground ports", () => {
 
     roots.push(root)
     for (const dir of [join(plug, "src"), join(plug, "scripts"), join(plug, "ui"), bin]) mkdirSync(dir, { recursive: true })
-    symlinkSync(framework, join(plug, "framework"))
+    symlinkSync(modules, join(plug, "node_modules"))
     write(join(plug, "SKILL.md"), "---\nname: notes\ndescription: Keep notes\n---\nOpen notes")
-    writeFileSync(join(plug, "package.json"), JSON.stringify({ version: "0.1.0", type: "module", imports: { "#babavoss/*": "./framework/*" } }))
+    writeFileSync(join(plug, "package.json"), JSON.stringify({ version: "0.1.0", type: "module", dependencies: { babavoss: "0.0.0" } }))
     writeFileSync(join(plug, "ui", "index.html"), "<!doctype html><title>notes</title>")
     writeFileSync(join(plug, "src", "app.ts"), APP)
     writeFileSync(
       join(plug, "scripts/open.ts"),
-      '// The fixture door.\nimport { main } from "#babavoss/core/bv/door.ts"\nimport app from "../src/app.ts"\nawait main(app)\n'
+      '// The fixture door.\nimport { main } from "babavoss/core/bv/door.ts"\nimport app from "../src/app.ts"\nawait main(app)\n'
     )
     write(join(plug, "assets/presets", "fx", "seed.txt"), "seed")
     write(join(plug, "assets/presets", "fx", "docs", "a.md"), "a")
     write(join(plug, "assets/presets", "fx.md"), "A seed and a doc.\n")
     write(
       join(plug, "scenarios", "keep.ts"),
-      `import type { Scenario } from "#babavoss/core/index.ts"
+      `import type { Scenario } from "babavoss/core/index.ts"
 
 export default {
   description: "One note by hand, one by chat, a refusal, a throw",

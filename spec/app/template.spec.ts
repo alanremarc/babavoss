@@ -1,25 +1,26 @@
-// The template as a new app gets it: copied beside a copy of the framework, as the start reference says, its first spec passes.
-// The template's own spec cannot run inside this repository, where it has no framework of its own.
+// The template as a new app gets it: copied, with what it depends on installed, its first spec passes. The template's own
+// spec cannot run where it lies, inside the skill, where nothing is installed for it.
 import { spawnSync } from "node:child_process"
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, expect, test } from "bun:test"
 
-const product = fileURLToPath(new URL("../../skills/babavoss/", import.meta.url))
+const product = fileURLToPath(new URL("../../skills/baba/", import.meta.url))
 const dirs: string[] = []
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-test("a new app, made from the template and the framework, starts with a passing story", () => {
+test("a new app, made from the template with its packages installed, starts with a passing story", () => {
   const app = mkdtempSync(join(tmpdir(), "new-app-"))
 
   dirs.push(app)
   cpSync(join(product, "assets/template"), app, { recursive: true })
-  cpSync(join(product, "framework"), join(app, "framework"), { recursive: true })
+  // Installed as this repository has them: the framework among them, at the version the template names.
+  symlinkSync(fileURLToPath(new URL("../../node_modules", import.meta.url)), join(app, "node_modules"))
 
   const result = spawnSync(process.execPath, ["test", "spec"], { cwd: app, encoding: "utf8" })
 
@@ -27,11 +28,37 @@ test("a new app, made from the template and the framework, starts with a passing
   expect(result.stderr).toContain("5 pass")
 })
 
-test("the template is a shell app: it carries the packages the shell's page is built with", () => {
-  const packages = JSON.parse(readFileSync(join(product, "framework/shell/packages.json"), "utf8")) as Record<string, string>
-  const template = JSON.parse(readFileSync(join(product, "assets/template/package.json"), "utf8")) as { devDependencies: Record<string, string> }
+test("a door whose packages cannot be installed says so once: what to allow, how to install by hand, and why it failed", () => {
+  const app = realpathSync(mkdtempSync(join(tmpdir(), "new-app-")))
+  const manifest = join(app, "package.json")
 
-  expect(template.devDependencies).toMatchObject(packages)
+  dirs.push(app)
+  cpSync(join(product, "assets/template"), app, { recursive: true })
+  // A version no registry has, and a registry that is not there: nothing is installed, as under a sandbox without network.
+  writeFileSync(manifest, readFileSync(manifest, "utf8").replace(/"babavoss": "[^"]+"/, '"babavoss": "0.0.0-never"'))
+
+  const result = spawnSync(process.execPath, [join(app, "scripts/open.ts"), "--session", "S"], {
+    cwd: app,
+    encoding: "utf8",
+    env: { ...process.env, BUN_CONFIG_REGISTRY: "http://127.0.0.1:9/", BABAVOSS_HOME: join(app, ".home"), BABAVOSS_BIN: join(app, ".home") },
+  })
+
+  expect(result.status).toBe(1)
+  expect(result.stdout).toBe("")
+  expect(result.stderr).toStartWith(
+    `cannot install what this app depends on; allow bun to reach the package registry (under a sandbox, in the harness settings), or run: cd '${app}' && bun install\n`
+  )
+  expect(result.stderr.match(/cannot install/g)).toHaveLength(1)
+})
+
+test("one version for all of it: the framework, the skill that depends on it, and the template a new app starts from", () => {
+  const read = (file: string) => JSON.parse(readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")) as { version: string; dependencies: Record<string, string> }
+  const framework = read("../../packages/babavoss/package.json").version
+
+  expect(read("../../skills/baba/package.json").version).toBe(framework)
+  expect(read("../../skills/baba/package.json").dependencies.babavoss).toBe(framework)
+  expect(read("../../skills/baba/assets/template/package.json").dependencies.babavoss).toBe(framework)
+  expect(read("../../examples/payments/package.json").dependencies.babavoss).toBe(framework)
 })
 
 test("every app's skill opens the same way and says the same about operating it: the template's words, kept as they are", () => {

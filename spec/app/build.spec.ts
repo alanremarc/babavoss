@@ -5,8 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpat
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, test } from "bun:test"
-import { story } from "#babavoss/core/index.ts"
-import { BRIEF_FILE, buildPorts, buildSurface, type Brief, type BuildPorts } from "../../skills/babavoss/src/utils/build/index.ts"
+import { story } from "babavoss/core/index.ts"
+import { BRIEF_FILE, buildPorts, buildSurface, type Brief, type BuildPorts } from "../../skills/baba/src/utils/build/index.ts"
 
 const dirs: string[] = []
 const ports: BuildPorts = { project: "/project", load: async () => [], save: async () => {}, create: async (brief) => brief.name }
@@ -190,7 +190,11 @@ test("the app is made in skills/NAME as real files, with its brief, and installe
     expect(readFileSync(join(project, folder, "month-close/SKILL.md"), "utf8")).toContain("name: month-close")
   }
 
-  expect(existsSync(join(app, "framework/core/index.ts"))).toBe(true)
+  // It holds no copy of the framework: it depends on it, at the version this skill does.
+  expect(existsSync(join(app, "framework"))).toBe(false)
+  expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).dependencies.babavoss).toBe(
+    JSON.parse(readFileSync("skills/baba/package.json", "utf8")).dependencies.babavoss
+  )
   expect(readFileSync(join(app, "SKILL.md"), "utf8")).toContain("name: month-close")
   expect(readFileSync(join(app, "src/app.ts"), "utf8")).toContain('name: "month-close"')
   expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).name).toBe("month-close")

@@ -1,6 +1,6 @@
 // The page’s review sequence uses offered person handles and exposes the correction to the agent.
 import { expect, test } from "bun:test"
-import { story } from "#babavoss/core/index.ts"
+import { story } from "babavoss/core/index.ts"
 import app from "../src/app.ts"
 
 test("a confirmed guess and a changed invoice remain visible through the page’s views", async () => {

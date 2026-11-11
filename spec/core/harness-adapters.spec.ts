@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
-import * as claudeCode from "../../skills/babavoss/framework/core/harness-adapters/claude-code/index.ts"
-import * as codex from "../../skills/babavoss/framework/core/harness-adapters/codex/index.ts"
+import * as claudeCode from "../../packages/babavoss/core/harness-adapters/claude-code/index.ts"
+import * as codex from "../../packages/babavoss/core/harness-adapters/codex/index.ts"
 
 describe("claude-code", () => {
   it("builds a launch with a known session and only user settings", () => {

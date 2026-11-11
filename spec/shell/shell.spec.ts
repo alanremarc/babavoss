@@ -1,8 +1,8 @@
 import { setTimeout as sleep } from "node:timers/promises"
 import { describe, expect, it } from "bun:test"
-import { action, run, story, surface, view, type Ports, type Saved, type Update } from "../../skills/babavoss/framework/core/index.ts"
-import { shell, util, whole, within } from "../../skills/babavoss/framework/shell/shell.ts"
-import { own } from "../../skills/babavoss/framework/shell/ui/tab.tsx"
+import { action, run, story, surface, view, type Ports, type Saved, type Update } from "../../packages/babavoss/core/index.ts"
+import { shell, util, whole, within } from "../../packages/babavoss/shell/shell.ts"
+import { own } from "../../packages/babavoss/shell/ui/tab.tsx"
 
 type Model = { title: string; n: number; busy?: boolean }
 type Event = { kind: "bumped" } | { kind: "failed"; error: string }

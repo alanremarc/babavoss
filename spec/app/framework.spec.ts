@@ -1,25 +1,24 @@
-// The note that the app being written holds an older framework than this app carries: said only then.
+// The note that the app being written depends on an older framework than this skill does: said only then.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, expect, it } from "bun:test"
-import { frameworkNotes } from "../../skills/babavoss/src/framework.ts"
+import { frameworkNotes } from "../../skills/baba/src/framework.ts"
 
 const root = mkdtempSync(join(tmpdir(), "framework-"))
 const holding = (name: string, version: string) => {
-  mkdirSync(join(root, name, "framework"), { recursive: true })
   mkdirSync(join(root, name, "src"), { recursive: true })
-  writeFileSync(join(root, name, "framework", "VERSION"), `${version}\n`)
+  writeFileSync(join(root, name, "package.json"), JSON.stringify({ dependencies: { babavoss: version } }))
 
   return join(root, name)
 }
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-it("says when the app's framework is behind the one carried, from anywhere in the app, and nothing otherwise", () => {
+it("says when the app's framework is behind the skill's, from anywhere in the app, and nothing otherwise", () => {
   const author = holding("author", "0.10.0")
 
-  expect(frameworkNotes(join(holding("behind", "0.9.0"), "src"), author).framework).toMatch(/^this app's framework is 0\.9\.0; babavoss carries 0\.10\.0\./)
+  expect(frameworkNotes(join(holding("behind", "0.9.0"), "src"), author).framework).toMatch(/^this app depends on babavoss 0\.9\.0; baba is at 0\.10\.0\./)
   expect(frameworkNotes(holding("level", "0.10.0"), author)).toEqual({})
   expect(frameworkNotes(holding("ahead", "0.11.0"), author)).toEqual({})
   expect(frameworkNotes(holding("prerelease", "0.10.0-rc.1"), author).framework).toContain("0.10.0-rc.1")
@@ -28,8 +27,8 @@ it("says when the app's framework is behind the one carried, from anywhere in th
 
 it("tells the framework note once through the authoring cli, and omits it when versions agree", async () => {
   const { readFileSync } = await import("node:fs")
-  const entry = new URL("../../skills/babavoss/scripts/open.ts", import.meta.url).pathname
-  const carried = readFileSync(new URL("../../skills/babavoss/framework/VERSION", import.meta.url), "utf8").trim()
+  const entry = new URL("../../skills/baba/scripts/open.ts", import.meta.url).pathname
+  const carried = (JSON.parse(readFileSync(new URL("../../packages/babavoss/package.json", import.meta.url), "utf8")) as { version: string }).version
   const cwd = holding("cli-app", "0.0.0")
   const env = {
     ...process.env,
@@ -56,11 +55,11 @@ it("tells the framework note once through the authoring cli, and omits it when v
   }
 
   try {
-    expect(await run("")).toContain("this app's framework is 0.0.0")
-    expect(await run()).not.toContain("this app's framework")
-    expect(await run("")).not.toContain("this app's framework")
-    writeFileSync(join(cwd, "framework", "VERSION"), carried)
-    expect(await run("")).not.toContain("this app's framework")
+    expect(await run("")).toContain("this app depends on babavoss 0.0.0")
+    expect(await run()).not.toContain("this app depends on babavoss")
+    expect(await run("")).not.toContain("this app depends on babavoss")
+    writeFileSync(join(cwd, "package.json"), JSON.stringify({ dependencies: { babavoss: carried } }))
+    expect(await run("")).not.toContain("this app depends on babavoss")
   } finally {
     await run("close")
   }

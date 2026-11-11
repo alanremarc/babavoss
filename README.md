@@ -31,7 +31,7 @@ A user-level install stores its data in `~/.babavoss`. A project install stores 
 Then tell the agent what you want:
 
 ```text
-/babavoss I want an app that matches each month's payments to our invoices.
+/baba I want an app that matches each month's payments to our invoices.
 ```
 
 The agent writes the app, and you can test it before you use it.

@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
-import { harnessModels } from "../../skills/babavoss/framework/core/index.ts"
+import { harnessModels } from "../../packages/babavoss/core/index.ts"
 
 const dirs: string[] = []
 /** An executable that runs `body` with each line of stdin as `line` and `out(object)` to answer. */

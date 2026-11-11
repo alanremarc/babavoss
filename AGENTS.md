@@ -1,6 +1,6 @@
 # babavoss
 
-A TypeScript framework for software that agents operate. An app is one skill: its directory holds the skill, a surface the agent reads and acts on through a command, and a page where the person watches and steers over the same surface. This repository is one product at one version: the framework, the shell and the authoring app.
+A TypeScript framework for software that agents operate. An app is one skill: its directory holds the skill, a surface the agent reads and acts on through a command, and a page where the person watches and steers over the same surface. This repository is one product at one version: the framework and its shell, published to npm as babavoss, and baba, the skill that authors apps on it.
 
 ## Rules
 
@@ -13,12 +13,13 @@ A TypeScript framework for software that agents operate. An app is one skill: it
 ## Layout
 
 ```text
-skills/babavoss/            the product; also the authoring app's skill directory
+packages/babavoss/          the framework, the npm package babavoss; an app depends on it and holds no copy
+  core/                     the framework's layers; bv/ holds bv and the door
+  shell/                    the shell: tabs, page hosting and build, layouts, components
+skills/baba/                the product's skill, baba; also the authoring app's skill directory
   SKILL.md  references/     the authoring app's skill and know-how
-  scripts/open.ts           its door; every app's entry is scripts/open.ts
+  scripts/open.ts           its door; every app's entry is scripts/open.ts, which installs the app's packages where missing
   assets/template/          the app a new one starts from: a shell of one util; the build util copies it
-  framework/core/           the framework's layers; bv/ holds bv and the door
-  framework/shell/          the shell: tabs, page hosting and build, layouts, components
   src/  ui/                 the authoring app: app.ts, utils/{build,promptware,playground}, its page
   scenarios/                its own scenarios, run in its playground: first-app asks for a new app
 spec/{core,shell,app}/      the product's specs, mirroring its code
@@ -26,7 +27,7 @@ spec/support/notes/         the small app the framework's specs use
 examples/payments/          an example app, with its own spec/, scenarios/ and assets/
 docs/DESIGN.md              the design
 site/                       babavoss.org: one page, its favicon and llms.txt, published as they are by the Pages workflow
-.claude/skills/  .agents/skills/   links to skills/babavoss: a harness started here runs this checkout
+.claude/skills/  .agents/skills/   links to skills/baba: a harness started here runs this checkout
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
 ```
@@ -34,9 +35,9 @@ site/                       babavoss.org: one page, its favicon and llms.txt, pu
 ## Code
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
-- Apps import the framework only through `#babavoss/*`, the shell through `#babavoss/shell/*`.
+- Apps import the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`; an app names the framework's exact version in its package.json. Here the workspace links the package.
 - Production never imports spec.
-- Versions are semantic, in package.json, set by hand.
+- Versions are semantic, in package.json, set by hand: the package, the skill, and what the skill, the template and the example depend on are one version; a spec holds them equal.
 
 Style, which no tool enforces:
 

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { story } from "#babavoss/core/index.ts"
+import { story } from "babavoss/core/index.ts"
 import app from "../src/app.ts"
 
 test("CSV files become durable months that a fresh app reads", async () => {

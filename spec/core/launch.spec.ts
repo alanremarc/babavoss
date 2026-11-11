@@ -4,8 +4,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSy
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { LOGIN_KEYCHAIN, startAgent, type AgentEvent } from "../../skills/babavoss/framework/core/launch/agent.ts"
-import * as claudeCode from "../../skills/babavoss/framework/core/harness-adapters/claude-code/index.ts"
+import { LOGIN_KEYCHAIN, startAgent, type AgentEvent } from "../../packages/babavoss/core/launch/agent.ts"
+import * as claudeCode from "../../packages/babavoss/core/harness-adapters/claude-code/index.ts"
 
 const dirs: string[] = []
 const shim = (name: string, script: string) => {

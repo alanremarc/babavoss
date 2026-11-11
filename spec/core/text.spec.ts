@@ -3,11 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { defineApp } from "../../skills/babavoss/framework/core/app.ts"
-import { startRuntime } from "../../skills/babavoss/framework/core/runtime/runtime.ts"
-import { endpointFile, SERVICE_HEADER, type Endpoint } from "../../skills/babavoss/framework/core/runtime/service.ts"
-import { readJsonFile } from "../../skills/babavoss/framework/core/state/json-file.ts"
-import { handle } from "../../skills/babavoss/framework/core/surface/view.ts"
+import { defineApp } from "../../packages/babavoss/core/app.ts"
+import { startRuntime } from "../../packages/babavoss/core/runtime/runtime.ts"
+import { endpointFile, SERVICE_HEADER, type Endpoint } from "../../packages/babavoss/core/runtime/service.ts"
+import { readJsonFile } from "../../packages/babavoss/core/state/json-file.ts"
+import { handle } from "../../packages/babavoss/core/surface/view.ts"
 
 const dirs: string[] = []
 const closes: (() => Promise<void>)[] = []

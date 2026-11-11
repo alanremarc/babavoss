@@ -6,14 +6,14 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, describe, expect, it } from "bun:test"
-import { defineApp } from "../../skills/babavoss/framework/core/app.ts"
-import { reach } from "../../skills/babavoss/framework/core/runtime/reach.ts"
-import { startRuntime, appVersion, RELOAD_MS } from "../../skills/babavoss/framework/core/runtime/runtime.ts"
-import { admitted } from "../../skills/babavoss/framework/core/runtime/door.ts"
-import { ACTOR_HEADER, SERVICE_HEADER, endpointFile, findService, type Endpoint } from "../../skills/babavoss/framework/core/runtime/service.ts"
+import { defineApp } from "../../packages/babavoss/core/app.ts"
+import { reach } from "../../packages/babavoss/core/runtime/reach.ts"
+import { startRuntime, appVersion, RELOAD_MS } from "../../packages/babavoss/core/runtime/runtime.ts"
+import { admitted } from "../../packages/babavoss/core/runtime/door.ts"
+import { ACTOR_HEADER, SERVICE_HEADER, endpointFile, findService, type Endpoint } from "../../packages/babavoss/core/runtime/service.ts"
 import { request as httpRequest, type IncomingMessage } from "node:http"
-import { readJsonFile } from "../../skills/babavoss/framework/core/state/json-file.ts"
-import { action, surface, view, type Update } from "../../skills/babavoss/framework/core/surface/index.ts"
+import { readJsonFile } from "../../packages/babavoss/core/state/json-file.ts"
+import { action, surface, view, type Update } from "../../packages/babavoss/core/surface/index.ts"
 
 type Model = { n: number; busy?: boolean }
 type Event = { kind: "bumped" } | { kind: "failed"; error: string }
@@ -212,7 +212,7 @@ describe("reach", () => {
     await started(dir)
 
     // Another process asks for the same directory, and is told it is taken. This one, asking again, is its own code loaded again.
-    const service = join(process.cwd(), "skills/babavoss/framework/core/runtime/service.ts")
+    const service = join(process.cwd(), "packages/babavoss/core/runtime/service.ts")
     const state = join(dir, "sessions", "S", "p")
     const asks = `import { ownService } from ${JSON.stringify(service)}; console.log(String(ownService(${JSON.stringify(state)})))`
     const other = Bun.spawnSync([process.execPath, "-e", asks])

@@ -6,11 +6,11 @@ import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFil
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION, reloads } from "../../skills/babavoss/framework/core/bv/bv.ts"
-import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../skills/babavoss/framework/core/runtime/service.ts"
-import { installedIn, SKILL_FOLDERS } from "../../skills/babavoss/framework/core/skill-folders.ts"
+import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION, reloads } from "../../packages/babavoss/core/bv/bv.ts"
+import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../packages/babavoss/core/runtime/service.ts"
+import { installedIn, SKILL_FOLDERS } from "../../packages/babavoss/core/skill-folders.ts"
 
-const client = resolve("skills/babavoss/framework/core/bv/bv.ts")
+const client = resolve("packages/babavoss/core/bv/bv.ts")
 const roots: string[] = []
 
 function setup() {
@@ -577,7 +577,7 @@ it("tells the project an app is installed in by the harness skill folder that ho
   expect(SKILL_FOLDERS.filter((folder) => folder.linked).map((folder) => folder.project)).toEqual([".agents/skills", ".claude/skills"])
 })
 
-it("wakes an app under hot reload only where its framework loads changed code in place, from 0.2.0", () => {
+it("wakes an app under hot reload where its framework loads changed code in place: one that depends on it, or holds a copy from 0.2.0", () => {
   const root = mkdtempSync(join(tmpdir(), "bv-spec-"))
 
   roots.push(root)
@@ -597,5 +597,5 @@ it("wakes an app under hot reload only where its framework loads changed code in
   expect(reloads(held("0.2.0"))).toBe(true)
   expect(reloads(held("1.0.0"))).toBe(true)
   expect(reloads(held("0.1.0"))).toBe(false)
-  expect(reloads(held())).toBe(false)
+  expect(reloads(held())).toBe(true)
 })

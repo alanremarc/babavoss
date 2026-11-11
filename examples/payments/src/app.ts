@@ -1,8 +1,8 @@
 // Match monthly payments to invoices, keeping uncertain decisions with the person and durable data in payments.json.
 import { readFile, writeFile, rename } from "node:fs/promises"
 import { resolve } from "node:path"
-import { action, defineApp, surface, view, type Update, type View } from "#babavoss/core/index.ts"
-import { shellUi } from "#babavoss/shell/index.ts"
+import { action, defineApp, surface, view, type Update, type View } from "babavoss/core/index.ts"
+import { shellUi } from "babavoss/shell/index.ts"
 
 type Payment = {
   id: string

@@ -1,4 +1,4 @@
 /* The notes fixture uses the shell styles. */
-@import "#babavoss/shell/ui/styles.css";
+@import "babavoss/shell/ui/styles.css";
 
 @source ".";

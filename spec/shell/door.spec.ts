@@ -4,11 +4,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { action, defineApp, surface, view, type Update } from "../../skills/babavoss/framework/core/index.ts"
-import { startRuntime } from "../../skills/babavoss/framework/core/runtime/runtime.ts"
-import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../skills/babavoss/framework/core/runtime/service.ts"
-import { readJsonFile } from "../../skills/babavoss/framework/core/state/json-file.ts"
-import { shell, util } from "../../skills/babavoss/framework/shell/shell.ts"
+import { action, defineApp, surface, view, type Update } from "../../packages/babavoss/core/index.ts"
+import { startRuntime } from "../../packages/babavoss/core/runtime/runtime.ts"
+import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../packages/babavoss/core/runtime/service.ts"
+import { readJsonFile } from "../../packages/babavoss/core/state/json-file.ts"
+import { shell, util } from "../../packages/babavoss/shell/shell.ts"
 
 type Model = { n: number; note: string }
 

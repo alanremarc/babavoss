@@ -1,6 +1,6 @@
 # Baba Voss
 
-> A framework for agent-first apps. An agent operates the app through a command, and the person follows along and decides on a page. An app is one skill: a directory with a SKILL.md, the app's code and the framework it runs on.
+> A framework for agent-first apps. An agent operates the app through a command, and the person follows along and decides on a page. An app is one skill: a directory with a SKILL.md and the app's code, depending on the framework as an npm package.
 
 This file is for an agent asked to install babavoss.
 
@@ -15,7 +15,7 @@ Ask the person whether they want babavoss in every project or only in the curren
 
 A new session of the harness finds the skill. Tell the person it is installed and that they can ask for an app, for example:
 
-    /babavoss I want an app that matches each month's payments to our invoices.
+    /baba I want an app that matches each month's payments to our invoices.
 
 ## Links
 

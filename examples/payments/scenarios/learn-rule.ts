@@ -1,5 +1,5 @@
 // Continue the reviewed month and ask the agent to learn from the person’s correction.
-import type { Scenario } from "#babavoss/core/index.ts"
+import type { Scenario } from "babavoss/core/index.ts"
 export default {
   description: "Read the person’s corrections and record a rule",
   async run(user) {

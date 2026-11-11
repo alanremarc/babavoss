@@ -1,6 +1,6 @@
 // The payments app's rules as stories; the world settles every file command.
 import { expect, test } from "bun:test"
-import { story } from "#babavoss/core/index.ts"
+import { story } from "babavoss/core/index.ts"
 import app from "../src/app.ts"
 
 const month = {

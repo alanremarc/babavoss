@@ -1,12 +1,12 @@
-// Source pages install missing packages once before bundling; built pages serve files without installing.
-import { appendFileSync, cpSync, existsSync, readFileSync, symlinkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+// Source pages are bundled on demand and again after an edit; built pages are served as files.
+import { appendFileSync, cpSync, readFileSync, symlinkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
 import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
-import { BUILT, shellUi, buildUi } from "../../skills/babavoss/framework/shell/index.ts"
+import { BUILT, shellUi, buildUi } from "../../packages/babavoss/shell/index.ts"
 
 const dirs: string[] = []
 
@@ -48,14 +48,14 @@ describe("a built page", () => {
   })
 })
 
-for (const app of ["skills/babavoss", "spec/support/notes"]) {
-  it(`${app}: bundles source, reloads edits and serves the release without installed packages`, async () => {
+for (const app of ["skills/baba", "spec/support/notes"]) {
+  it(`${app}: bundles source, reloads edits and serves the release`, async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-app-")))
 
     dirs.push(dir)
     for (const name of ["ui", "src"]) cpSync(resolve(app, name), join(dir, name), { recursive: true })
-    cpSync(resolve("skills/babavoss/package.json"), join(dir, "package.json"))
-    symlinkSync(resolve("skills/babavoss/framework"), join(dir, "framework"))
+    cpSync(resolve("skills/baba/package.json"), join(dir, "package.json"))
+    symlinkSync(resolve("packages/babavoss"), join(dir, "framework"))
     symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
     const serve = async () => {
@@ -115,7 +115,7 @@ for (const app of ["skills/babavoss", "spec/support/notes"]) {
       expect(styles).toContain(".flex")
       expect(styles).toContain(".items-center")
       expect(styles).not.toContain('@import "tailwindcss"')
-      expect(scripts).not.toMatch(/(?:from\s*|import\s*)["'](?:react|#babavoss|lucide-react)["'/]/)
+      expect(scripts).not.toMatch(/(?:from\s*|import\s*)["'](?:react|babavoss|lucide-react)["'/]/)
 
       return scripts
     }
@@ -143,121 +143,13 @@ for (const app of ["skills/babavoss", "spec/support/notes"]) {
   })
 }
 
-function fixture() {
-  const app = realpathSync(mkdtempSync(join(tmpdir(), "hosting-packages-")))
-
-  dirs.push(app)
-  mkdirSync(join(app, "ui"))
-
-  const dependency = () => {
-    mkdirSync(join(app, "dependency"), { recursive: true })
-    writeFileSync(join(app, "dependency/package.json"), JSON.stringify({ name: "hosting-probe", main: "index.js" }))
-    writeFileSync(join(app, "dependency/index.js"), 'export default "installed-package-probe"')
-  }
-
-  writeFileSync(
-    join(app, "package.json"),
-    JSON.stringify({ dependencies: { "hosting-probe": "file:./dependency" }, scripts: { postinstall: `${JSON.stringify(process.execPath)} count.ts` } })
-  )
-  writeFileSync(join(app, "count.ts"), 'import { appendFileSync } from "node:fs"; appendFileSync("installs", "install\\n")')
-  writeFileSync(join(app, "ui/index.html"), '<html><head></head><body><script type="module" src="./main.ts"></script></body></html>')
-  writeFileSync(join(app, "ui/main.ts"), 'import value from "hosting-probe"; console.log(value)')
-
-  return { app, dependency, host: () => shellUi(join(app, "ui"))({} as Server) }
-}
-
-it("serves a source page after installing its missing local package", async () => {
-  const { app, dependency, host } = fixture()
-
-  dependency()
-
-  const hosted = await host()
-
-  try {
-    expect(await hosted.page("/")).toContain("/_/")
-    expect(readFileSync(join(app, "installs"), "utf8")).toBe("install\n")
-  } finally {
-    await hosted.close()
-  }
-})
-
-it("shares one install between concurrent page requests", async () => {
-  const { app, dependency, host } = fixture()
-
-  dependency()
-
-  const hosted = await host()
-
-  try {
-    const pages = await Promise.all([hosted.page("/"), hosted.page("/")])
-
-    expect(pages[0]).toEqual(pages[1])
-    expect(readFileSync(join(app, "installs"), "utf8")).toBe("install\n")
-  } finally {
-    await hosted.close()
-  }
-})
-
-it("explains a failed install and retries on the next request", async () => {
-  const { app, dependency, host } = fixture()
-
-  const hosted = await host()
-
-  try {
-    const failure = await hosted.page("/").catch((error: unknown) => String(error))
-
-    expect(failure).toContain("packages could not be installed. Run by hand: cd ")
-    expect(failure).toContain(`'${process.execPath}' install`)
-    expect(failure).toContain("dependency")
-    dependency()
-    expect(await hosted.page("/")).toContain("/_/")
-    expect(readFileSync(join(app, "installs"), "utf8")).toBe("install\n")
-  } finally {
-    await hosted.close()
-  }
-})
-
-it("does not install when the app's packages are present", async () => {
-  const { app, dependency, host } = fixture()
-
-  dependency()
-  mkdirSync(join(app, "node_modules"))
-  symlinkSync(join(app, "dependency"), join(app, "node_modules/hosting-probe"))
-
-  const hosted = await host()
-
-  try {
-    expect(await hosted.page("/")).toContain("/_/")
-    expect(existsSync(join(app, "installs"))).toBe(false)
-  } finally {
-    await hosted.close()
-  }
-})
-
-it("does not install missing packages for a built page", async () => {
-  const { app, host } = fixture()
-
-  mkdirSync(join(app, "ui", BUILT))
-  writeFileSync(join(app, "ui", BUILT, "index.html"), "built page")
-
-  const hosted = await host()
-
-  try {
-    expect(await hosted.page("/")).toBe("built page")
-    expect(existsSync(join(app, "installs"))).toBe(false)
-    expect(existsSync(join(app, "node_modules"))).toBe(false)
-  } finally {
-    await hosted.close()
-  }
-})
-
 it("refuses to build a shell page that imports no stylesheet, and says what to import", async () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("skills/babavoss", name), join(dir, name), { recursive: true })
-  cpSync(resolve("skills/babavoss/package.json"), join(dir, "package.json"))
-  symlinkSync(resolve("skills/babavoss/framework"), join(dir, "framework"))
+  for (const name of ["ui", "src"]) cpSync(resolve("skills/baba", name), join(dir, name), { recursive: true })
+  cpSync(resolve("skills/baba/package.json"), join(dir, "package.json"))
+  symlinkSync(resolve("packages/babavoss"), join(dir, "framework"))
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
   writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
 

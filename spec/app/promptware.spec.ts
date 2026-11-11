@@ -5,8 +5,8 @@ import { mkdirSync, mkdtempSync, existsSync, readdirSync, realpathSync, rmSync, 
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { run } from "#babavoss/core/index.ts"
-import { promptwarePorts, promptwareSurface, frontmatter, readPromptware, runOpen, size } from "../../skills/babavoss/src/utils/promptware/index.ts"
+import { run } from "babavoss/core/index.ts"
+import { promptwarePorts, promptwareSurface, frontmatter, readPromptware, runOpen, size } from "../../skills/baba/src/utils/promptware/index.ts"
 
 const dirs: string[] = []
 const scratch = () => {

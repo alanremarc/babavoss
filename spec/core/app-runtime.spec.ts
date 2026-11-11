@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { endpointFile, readJsonFile, type Endpoint } from "#babavoss/core/index.ts"
+import { endpointFile, readJsonFile, type Endpoint } from "babavoss/core/index.ts"
 
 const dirs: string[] = []
 const run = (file: string, args: string[], input: string, state: string) => {
@@ -42,7 +42,7 @@ it("opens notes, carries changes after calls, and reports a person's change in t
 
   expect(start.status, start.err).toBe(0)
   // The fixture carries the product's package, and so its version.
-  expect(start.out).toContain(`demo ${(await Bun.file("skills/babavoss/package.json").json()).version}`)
+  expect(start.out).toContain(`demo ${(await Bun.file("skills/baba/package.json").json()).version}`)
   expect(start.out).toContain("notes.count: 0")
   expect(start.out).toContain("page: http://127.0.0.1:")
 

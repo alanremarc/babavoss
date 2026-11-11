@@ -1,4 +1,4 @@
 [test]
 timeout = 30000
 # The template's own spec runs in a new app, beside that app's framework; here spec/app/template.spec.ts runs it.
-pathIgnorePatterns = ["skills/babavoss/assets/template/**"]
+pathIgnorePatterns = ["skills/baba/assets/template/**"]

@@ -6,9 +6,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, expect, it } from "bun:test"
-import { endpointFile, findService, readJsonFile, type Endpoint } from "#babavoss/core/index.ts"
+import { endpointFile, findService, readJsonFile, type Endpoint } from "babavoss/core/index.ts"
 
-const src = fileURLToPath(new URL("../../skills/babavoss/", import.meta.url))
+const src = fileURLToPath(new URL("../../skills/baba/", import.meta.url))
 const dirs: string[] = []
 const run = (file: string, args: string[], input: string, state: string, cwd = fileURLToPath(new URL("../..", import.meta.url))) => {
   const result = spawnSync(process.execPath, [join(src, file), ...args], {
@@ -23,7 +23,7 @@ const run = (file: string, args: string[], input: string, state: string, cwd = f
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
-    const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "babavoss")))
+    const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "baba")))
 
     try {
       if (endpoint) process.kill(endpoint.pid, "SIGTERM")
@@ -42,9 +42,9 @@ it("opens on the build tab, presents its utils, opens promptware as a tab throug
   const start = run("scripts/open.ts", ["--session", "S"], "", state)
 
   expect(start.status, start.err).toBe(0)
-  expect(start.out).toContain("babavoss 0.2.0")
+  expect(start.out).toContain("baba 0.3.0")
   expect(start.out).toContain('"promptware"\t')
-  expect(start.out).toContain('utils.1.open: babavoss / open util="promptware"')
+  expect(start.out).toContain('utils.1.open: baba / open util="promptware"')
   expect(start.out).toContain('"playground"\t')
   expect(start.out).not.toContain("utils.3.")
   expect(start.out).toContain("page: http://127.0.0.1:")
@@ -72,8 +72,8 @@ it("works on the session's directory, whoever wakes its runtime and from whereve
   }
   const [state, project, worktree] = [scratch(), scratch(), scratch()]
   const restart = async () => {
-    process.kill(readJsonFile<Endpoint>(endpointFile(join(state, "sessions", "S", "babavoss")))!.pid, "SIGKILL")
-    await poll(() => findService(join(state, "sessions", "S", "babavoss"))).toBeUndefined()
+    process.kill(readJsonFile<Endpoint>(endpointFile(join(state, "sessions", "S", "baba")))!.pid, "SIGKILL")
+    await poll(() => findService(join(state, "sessions", "S", "baba"))).toBeUndefined()
   }
 
   expect(run("scripts/open.ts", ["--session", "S"], "", state, project).status).toBe(0)
@@ -82,7 +82,7 @@ it("works on the session's directory, whoever wakes its runtime and from whereve
   const subagent = run("scripts/open.ts", ["--session", "S"], "", state, worktree)
 
   expect(subagent.status, subagent.err).toBe(0)
-  expect(subagent.out).toContain("babavoss 0.2.0")
+  expect(subagent.out).toContain("baba 0.3.0")
   await restart()
 
   const cli = (...args: string[]) => run("scripts/open.ts", ["--session", "S", ...args], "", state, worktree).out

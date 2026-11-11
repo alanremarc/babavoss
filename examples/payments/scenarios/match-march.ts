@@ -2,7 +2,7 @@
 // one by confirming the agent's guess and one by choosing an invoice: against a guess where the agent left another, which is
 // a correction, and without one where it did not. Each step checks what the app shows, and a refused call fails the scenario,
 // so a run that went wrong never reads as one that went right.
-import type { Scenario } from "#babavoss/core/index.ts"
+import type { Scenario } from "babavoss/core/index.ts"
 
 type Unsure = { id: string; at: string; guess?: string | null }
 

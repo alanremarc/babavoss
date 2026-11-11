@@ -1,6 +1,6 @@
 // How the workbench's toolbars are arranged: settled against the util's tools, tools and toolbars moved by a drop.
 import { describe, expect, it } from "bun:test"
-import { moveBar, moveTool, names, settle, type Bar } from "../../skills/babavoss/framework/shell/ui/layouts/arrange.ts"
+import { moveBar, moveTool, names, settle, type Bar } from "../../packages/babavoss/shell/ui/layouts/arrange.ts"
 
 const tools = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "s", meta: true }]
 const ids = (bars: Bar[]) => bars.map((b) => `${b.edge ?? "float"}:${b.tools.join("")}`)

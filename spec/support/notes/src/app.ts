@@ -1,8 +1,8 @@
 // The notes fixture: notes the agent keeps for the person, with reminders. The core: harness-free, a surface over one model,
 // with a page the person sees it through.
 import { setTimeout as sleep } from "node:timers/promises"
-import { action, defineApp, surface, view, type Update } from "#babavoss/core/index.ts"
-import { shellUi } from "#babavoss/shell/index.ts"
+import { action, defineApp, surface, view, type Update } from "babavoss/core/index.ts"
+import { shellUi } from "babavoss/shell/index.ts"
 
 type Note = { text: string; due?: "pending" | "due" }
 type Model = { items: Note[] }

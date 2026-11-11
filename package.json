@@ -2,13 +2,11 @@
   "name": "babavoss-repository",
   "private": true,
   "workspaces": [
+    "packages/*",
     "skills/*",
     "examples/payments"
   ],
   "type": "module",
-  "imports": {
-    "#babavoss/*": "./skills/babavoss/framework/*"
-  },
   "engines": {
     "bun": ">=1.4.0"
   },

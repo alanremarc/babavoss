@@ -1,8 +1,8 @@
 // The person settles unsure payments through the same surface the agent reads.
 import { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
-import type { Handle } from "#babavoss/core/index.ts"
-import { Button, call, changes, read } from "#babavoss/shell/ui/index.ts"
+import type { Handle } from "babavoss/core/index.ts"
+import { Button, call, changes, read } from "babavoss/shell/ui/index.ts"
 import "./styles.css"
 
 type Month = { name: string; at: string; unsureAt: string; payments: number; matched: number; unsure: number; unmatched: number }

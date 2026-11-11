@@ -1,9 +1,9 @@
 // Specify an app's behavior entirely through its actors and outside world.
 import { expect, test } from "bun:test"
-import { action, view } from "../../skills/babavoss/framework/core/surface/authoring.ts"
-import { story } from "../../skills/babavoss/framework/core/surface/story.ts"
-import { surface } from "../../skills/babavoss/framework/core/surface/surface.ts"
-import { handle } from "../../skills/babavoss/framework/core/surface/view.ts"
+import { action, view } from "../../packages/babavoss/core/surface/authoring.ts"
+import { story } from "../../packages/babavoss/core/surface/story.ts"
+import { surface } from "../../packages/babavoss/core/surface/surface.ts"
+import { handle } from "../../packages/babavoss/core/surface/view.ts"
 
 type Model = { items: string[]; error?: string }
 type Event = { kind: "added"; text: string } | { kind: "failed"; error: string }

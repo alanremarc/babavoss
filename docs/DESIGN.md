@@ -104,8 +104,8 @@ The agent is the app's first user and the surface is built for it: a reader that
 
 ```text
 is:        one skill, in the shape skills have: SKILL.md; references/, know-how read when needed; scripts/open.ts, its door;
-           assets/, what it ships that is not code; then its software and the framework it holds. The directory is what is
-           installed and updated
+           assets/, what it ships that is not code; then its software, and package.json, naming the framework it depends
+           on. The directory is what is installed and updated
 owns:      its code, skill, state, surface, and its ui where it has one
 always:    a surface; a ui where the person has something to see or do
 skill:     its description says what the app does and when to use it; its text says to open it and how any app is operated, and holds the app's own know-how; chooses whether the agent sees it, and so may open it itself, or only the person does
@@ -199,7 +199,7 @@ layouts:   every layout has the header, a menu bar with the util's menus and the
 ## Authoring
 
 ```text
-app:       babavoss, built on the shell; opened in the project where an app is being written
+app:       baba, built on the shell; opened in the project where an app is being written
 utils:     build, the app's brief and the steps of building it, always open; promptware, an app's promptware as the agent gets it;
            the playground
 brief:     the agent writes it and records what the person answers; approving it is an ask; a change to it after that is approved
@@ -253,32 +253,36 @@ kinds:      a workspace is local now; a container is the same directory mounted,
 ```text
 stack:        TypeScript on Bun, which the machine must have: one tool runs the source, tests it and bundles the page
 commands:     scaffold from template, run without a harness
-install:      an app is installed and updated by whatever puts a skill's directory among a harness's skills; babavoss itself
-              through skills.sh. The framework has no installer, no release step and no update notice of its own
+install:      an app is installed and updated by whatever puts a skill's directory among a harness's skills; baba itself
+              through skills.sh. The framework is released to npm with the product; an app takes a new one by raising the
+              version it names
 home:         where everything babavoss keeps is held: by session, what is open, and by app within it, its state and where its
               runtime listens. For an app installed for the person it is ~/.babavoss/, with bv and the app's word beside bun.
               For an app installed in a project it is the project's .babavoss/, which ignores itself in git, with the word
               at .babavoss/bin/NAME and called by that path: a project install writes nothing outside the project. A word
               knows its home from where it sits
-packages:     an app installed as source has none; it installs its own with bun the first time its page is asked for
-framework:    the authoring app carries the framework and the shell at its own version, and an app copies them from it;
-              a fix goes upstream as a pull request
+packages:     an app installed as source has none; its door installs them with bun before it first opens, the framework
+              among them, and says so only when that fails
+framework:    one package on npm, babavoss, at the product's version: the core and the shell. An app depends on it at a
+              pinned version and holds no copy; a fix goes upstream as a pull request
 ```
 
 ## Repository
 
 ```text
-skills/babavoss          the product: one skill, one version, the authoring app; what is installed is exactly this directory
+packages/babavoss        the framework, published to npm as babavoss; imported as babavoss/core/… and babavoss/shell/…
+  core/                  the framework's layers
+  shell/                 the shell; its page served from source, or as built
+skills/baba              the product's skill: the authoring app; what is installed is exactly this directory
   SKILL.md  references/  its skill
   scripts/open.ts        its door
   assets/template/       the app a new one starts from
-  framework/core         the framework's layers; every app holds a copy of framework/, imported as #babavoss/*
-  framework/shell        the shell; imported as #babavoss/shell/*; its page served from source, or as built
   src/  ui/              the authoring app's utils and its page
 spec/                    the product's specs, mirroring its code; they are the repository's, and no install carries them
 app:                     the unit every layer produces; built on the framework alone or on the shell; the authoring app is one
 order:                   the framework, proven by an app, then the shell, then the authoring app, running in an agent outside the developing harness
-versions:                one version for all of it; the authoring app's know-how describes the framework it holds, no other
+versions:                one version for all of it: the package and the skill are released together; the authoring app's
+                         know-how describes the framework at its own version
 examples/payments        the example app, a month's payments matched to invoices, where usage patterns are worked out
 excluded:                hooks and harness plugins, agent orchestration, harness configuration rewriting, generated agent instructions,
                          hosted services, npm

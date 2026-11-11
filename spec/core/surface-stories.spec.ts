@@ -1,7 +1,7 @@
 // The notes app's rules, as stories at the surface's boundary: what each actor sees, is offered and is told.
 // The reminder's delay is the world's: the test holds the command and says when it comes due. The command is proven in app-runtime.spec.ts.
 import { expect, test } from "bun:test"
-import { story } from "#babavoss/core/index.ts"
+import { story } from "babavoss/core/index.ts"
 import app from "../support/notes/src/app.ts"
 
 test("a note the agent keeps is seen by the person, who is told of it once", async () => {
