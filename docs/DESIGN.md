@@ -254,8 +254,8 @@ kinds:      a workspace is local now; a container is the same directory mounted,
 stack:        TypeScript on Bun, which the machine must have: one tool runs the source, tests it and bundles the page
 commands:     scaffold from template, run without a harness
 install:      an app is installed and updated by whatever puts a skill's directory among a harness's skills; baba itself
-              through skills.sh. The framework is released to npm with the product; an app takes a new one by raising the
-              version it names
+              through skills.sh. The framework is released as a tag of the repository, vX.Y.Z, at the product's version;
+              an app takes a new one by naming its tag
 home:         where everything babavoss keeps is held: by session, what is open, and by app within it, its state and where its
               runtime listens. For an app installed for the person it is ~/.babavoss/, with bv and the app's word beside bun.
               For an app installed in a project it is the project's .babavoss/, which ignores itself in git, with the word
@@ -263,14 +263,15 @@ home:         where everything babavoss keeps is held: by session, what is open,
               knows its home from where it sits
 packages:     an app installed as source has none; its door installs them with bun before it first opens, the framework
               among them, and says so only when that fails
-framework:    one package on npm, babavoss, at the product's version: the core and the shell. An app depends on it at a
-              pinned version and holds no copy; a fix goes upstream as a pull request
+framework:    the repository's root package, babavoss: the core and the shell. An app names a release,
+              github:alanremarc/babavoss#vX.Y.Z, and holds no copy; a fix goes upstream as a pull request
 ```
 
 ## Repository
 
 ```text
-packages/babavoss        the framework, published to npm as babavoss; imported as babavoss/core/… and babavoss/shell/…
+package.json             the framework's package, babavoss, at the root, where a git dependency finds it
+packages/babavoss        the framework's code; exported as babavoss/core/… and babavoss/shell/…
   core/                  the framework's layers
   shell/                 the shell; its page served from source, or as built
 skills/baba              the product's skill: the authoring app; what is installed is exactly this directory
@@ -281,8 +282,9 @@ skills/baba              the product's skill: the authoring app; what is install
 spec/                    the product's specs, mirroring its code; they are the repository's, and no install carries them
 app:                     the unit every layer produces; built on the framework alone or on the shell; the authoring app is one
 order:                   the framework, proven by an app, then the shell, then the authoring app, running in an agent outside the developing harness
-versions:                one version for all of it: the package and the skill are released together; the authoring app's
-                         know-how describes the framework at its own version
+versions:                one version for all of it, the tag's; every version on main is a release: a change to the framework
+                         or the skill raises it, and main is tagged with it; the authoring app's know-how describes the
+                         framework at its own version
 examples/payments        the example app, a month's payments matched to invoices, where usage patterns are worked out
 excluded:                hooks and harness plugins, agent orchestration, harness configuration rewriting, generated agent instructions,
                          hosted services, npm
