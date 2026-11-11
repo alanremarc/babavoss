@@ -161,7 +161,8 @@ The model commits before publication. Independent domain state is another surfac
 ```text
 process:   one per session and app; one surface, addressed by the app's directory within the session's, owned exclusively
 lifetime:  woken by bv when a request finds none up; exits when idle or told to close; drains before exit; a change in its code is
-           loaded into the running process once nothing runs, so its address and its open pages stay
+           loaded into the running process once nothing runs, or after a bounded wait that cuts what still runs, so its address
+           and its open pages stay
 address:   an instance takes the address its session last had, where that is free; the first answer names a new one, and the agent
            passes it on to the person
 directory: started in the directory open was run in, and kept for the session

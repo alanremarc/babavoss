@@ -29,6 +29,8 @@ export interface Running<M> {
   busy(): number
   /** The actor of each item of finite work: a running command that is not a session command, or a queued event of one. */
   jobs(): string[]
+  /** Each running command that is not a session command, by its kind where it has one: what a cut would stop. */
+  commands(): string[]
   /** Queued messages and work. */
   active(): number
   /** Resolves once every message queued so far has been taken: a point after which the views show them. */
@@ -55,7 +57,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
   let version = 0
   let stopped = false
   let failure: string | undefined
-  const running = new Map<number, { ctrl: AbortController; session: boolean; actor: string; done: Promise<void> }>()
+  const running = new Map<number, { ctrl: AbortController; session: boolean; actor: string; name: string; done: Promise<void> }>()
   const pending = new Map<string, number>()
   const count = (actor: string, by: number) => {
     const n = (pending.get(actor) ?? 0) + by
@@ -141,7 +143,8 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     }
 
     const owner = session ? SURFACE_ACTOR : actor
-    const entry = { ctrl, session, actor: owner, done: Promise.resolve() }
+    const kind = (command as { kind?: unknown } | undefined)?.kind
+    const entry = { ctrl, session, actor: owner, name: typeof kind === "string" ? kind : "command", done: Promise.resolve() }
     const send = (e: E) => {
       if (stopped) return
       count(owner, 1)
@@ -247,6 +250,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     },
     busy: () => running.size,
     jobs: () => [...[...running.values()].filter((r) => !r.session).map((r) => r.actor), ...[...pending].flatMap(([actor, n]) => Array<string>(n).fill(actor))],
+    commands: () => [...running.values()].filter((r) => !r.session).map((r) => `${r.name} by ${r.actor}`),
     settled: () => enqueue(() => {}),
     active: () => {
       let working = false

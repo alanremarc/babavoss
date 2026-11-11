@@ -3,11 +3,13 @@
 // The app's runtime entry hands startRuntime its arguments and nothing else.
 // An app loaded in place is edited while its runtimes are up. The runtime is woken under bun's hot reload, which runs the
 // entry again in the same process when its code changes: startRuntime then finds the runtime already here and puts the new
-// surface in its place, once nothing is running, from the state the old one saved. The process, its address, its token and
-// its open pages stay. Code that does not load leaves the old surface running. A change in the page's own code is told to
-// the open pages, which load again. The runtime's own code, the framework's core, is not swapped: when that changed, the
-// runtime here closes and starts again in the same process, at the same address. Where the environment refuses it a lock or loopback, it logs why as its last line and
-// ends with DENIED_EXIT, for the waker to say the app does not run here.
+// surface in its place, from the state the old one saved, once nothing is running or after SWAP_WAIT_MS, which cuts what still
+// runs. A wait, a cut and code that does not start are logged and said first in the agent's next answer. The process, its
+// address, its token and its open pages stay. Code that does not load leaves the old surface running. A change in the page's
+// own code is told to the open pages, which load again. The runtime's own code, the framework's core, is not swapped: when
+// that changed, the runtime here closes and starts again in the same process, at the same address. Each line it logs begins
+// with its time. Where the environment refuses it a lock or loopback, it logs why as its last line and ends with DENIED_EXIT,
+// for the waker to say the app does not run here.
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, watch, type FSWatcher } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -28,6 +30,8 @@ export type RuntimeOptions = {
   watch?: string[]
   /** What the framework's own code is, as a number that differs when it changed; for specs. */
   stamp?: number
+  /** How long changed code waits for running work before cutting it; for specs. */
+  swapWaitMs?: number
   /** How the process ends, with its exit code; for specs. */
   exit?: (code?: number) => void
 }
@@ -35,6 +39,8 @@ export const IDLE_MS = 30 * 60_000
 export const CLOSE_MS = 8000
 /** How long after the last change the runtime waits before acting on it, so a save of several files counts once. */
 export const RELOAD_MS = 500
+/** How long changed code waits for what runs to end before it cuts it and is loaded. */
+export const SWAP_WAIT_MS = 30_000
 
 /** The app's own source, its page and the framework it holds, under the app root, above its scripts/open.ts entry. */
 export const sourceDirs = (entry = process.argv[1]!): string[] => {
@@ -117,7 +123,8 @@ export async function startRuntime(
 
   if (!session) throw new Error("a runtime serves one session: --session ID")
 
-  const log = options.log ?? ((line: string) => console.error(line))
+  const write = options.log ?? ((line: string) => console.error(line))
+  const log = (line: string) => write(`${new Date().toISOString()} ${line}`)
   const exit = options.exit ?? ((code?: number) => process.exit(code ?? 0))
   const refused = (error: Denied) => {
     log(error.message)
@@ -184,22 +191,45 @@ export async function startRuntime(
     reload = setTimeout(() => void entrance.refresh(file), RELOAD_MS)
     reload.unref()
   }
-  // The code loaded again: the newest app takes the place of the running one, once that has nothing under way.
+  // The code loaded again: the newest app takes the place of the running one once that has nothing under way, or once it has
+  // waited SWAP_WAIT_MS, counted from the first change waiting, and cut what still runs. A wait is logged and told once.
   let latest = app
   let waiting: AppDefinition | undefined
   let swapping: Promise<void> | undefined
+  const bound = options.swapWaitMs ?? SWAP_WAIT_MS
+  /** What keeps the code from loading: the running commands by name, and the rest of the work under way as a count. */
+  const underWay = () => {
+    const named = running.commands()
+    const rest = running.active() - named.length
+
+    return [...named, ...(rest > 0 ? [`${rest} more under way`] : [])].join(", ")
+  }
   const swap = (to: AppDefinition) => {
     waiting = to
 
     return (swapping ??= (async () => {
+      let since = Date.now()
+      let waited = false
+
       try {
         while (waiting && !closing) {
           const taking = waiting
+          const busy = running.active()
+          let cut = ""
 
-          if (running.active() !== 0) {
+          if (busy !== 0 && Date.now() - since < bound) {
+            if (!waited) {
+              const what = underWay()
+              const jobs = `${busy} job${busy === 1 ? "" : "s"}`
+
+              waited = true
+              log(`${taking.name}: its code changed; waiting for ${jobs} to finish before loading it, at most ${bound / 1000}s: ${what}`)
+              entrance.note(`${taking.name}: its changed code is not loaded yet; it waits at most ${bound / 1000}s for ${what}`)
+            }
             await sleep(RELOAD_MS)
             continue
           }
+          if (busy !== 0) cut = underWay()
           waiting = undefined
           await stand.current().stop()
 
@@ -211,13 +241,18 @@ export async function startRuntime(
             latest = taking
             about.version = appVersion(options.entry)
             await entrance.replace(taking.ui)
-            log(`${taking.name}: its code changed and was loaded in place`)
+            log(`${taking.name}: its code changed and was loaded in place${cut && `, after ${bound / 1000}s, cutting ${cut}`}`)
+            if (cut) entrance.note(`${taking.name}: its changed code was loaded after ${bound / 1000}s, cutting what still ran: ${cut}`)
+            else if (waited) entrance.note(`${taking.name}: its changed code was loaded`)
           } else {
             // What was saved does not start under the new code: the code before it goes on.
             log(`${taking.name}: its changed code did not start, the code before it goes on: ${failure}`)
+            entrance.note(`${taking.name}: its changed code did not start, the code before it goes on: ${failure}`)
             await fresh.stop()
             stand.replace(started(latest))
           }
+          since = Date.now()
+          waited = false
         }
       } finally {
         swapping = undefined

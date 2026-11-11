@@ -6,7 +6,7 @@ Build on the shell: an app starts as one util that is always open, and another j
 
 The session is the unit of state, runtime, page and directory. Open in the project where the app should work; it keeps that directory for the session. Agents sharing a session act in its name and share its offered view.
 
-The runtime wakes on a request and sleeps when idle or told to close. It loads a change in the app's code in place, so its address and the person's open page stay. A new instance takes the address its session last had where that is free; pass the address to the person when the app names a new one. It needs a resident process, a file lock, loopback and writable state. The person owns changes to the harness's configuration. See [Diagnosis](diagnosis.md) for a refused door.
+The runtime wakes on a request and sleeps when idle or told to close. It loads a change in the app's code in place once nothing runs, or after a bounded wait that cuts what still runs, so its address and the person's open page stay; the next answer says when the change waits or cut work. A new instance takes the address its session last had where that is free; pass the address to the person when the app names a new one. It needs a resident process, a file lock, loopback and writable state. The person owns changes to the harness's configuration. See [Diagnosis](diagnosis.md) for a refused door.
 
 A program can use the framework's `connect`, exported from #babavoss/core/index.ts, to reach the runtime with an app definition and session identity.
 

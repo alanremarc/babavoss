@@ -286,6 +286,99 @@ it("takes changed code in place: the same process, address and token, the state 
   page.stop()
 })
 
+describe("changed code while work runs", () => {
+  type Held = { n: number }
+  const releases: (() => void)[] = []
+  const hold = action({
+    name: "hold",
+    description: "Run until released",
+    subject: {},
+    inputs: {},
+    update: (m: Held): Update<Held, { kind: "hold" }> => ({ model: m, commands: [{ kind: "hold" }] }),
+  })
+  const holding = view([hold], { "/": (m) => ({ n: m.n, hold: hold.bind({}) }) })
+  const holder = surface<Held, { kind: "released" } | { kind: "failed"; error: string }, { kind: "hold" }>({
+    description: "holds",
+    init: () => ({ n: 0 }),
+    update: (m, msg) => (msg.kind === "call" ? holding.update(m, msg) : msg.kind === "released" ? { model: { n: m.n + 1 } } : { model: m }),
+    view: (m, path) => holding.view(m, path),
+    async run(_c, send, signal) {
+      await new Promise<void>((done) => {
+        releases.push(done)
+        signal.addEventListener("abort", () => done())
+      })
+      send({ kind: "released" })
+    },
+    failed: (_c, error) => ({ kind: "failed", error }),
+  })
+  const edited = (dir: string) =>
+    defineApp({ name: "h", ui: join(dir, "ui"), surface: { ...holder, view: (m, path) => (path === "/" ? { ...holding.view(m, path), edited: true } : undefined) } })
+  const begun = async (swapWaitMs?: number) => {
+    const dir = scratch()
+    const lines: string[] = []
+    const opts = { ...options(dir), log: (line: string) => lines.push(line), swapWaitMs }
+
+    app(dir)
+
+    const runtime = await startRuntime(defineApp({ name: "h", ui: join(dir, "ui"), surface: holder }), ["--session", "S"], opts)
+
+    closers.push(() => runtime!.close())
+
+    const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "h")))!
+    const headers = { accept: "text/plain", [SERVICE_HEADER]: endpoint.token }
+    const base = `http://127.0.0.1:${runtime!.port}`
+    const read = async () => (await fetch(`${base}/`, { headers })).text()
+    const call = async (handle: string) => (await fetch(`${base}/`, { method: "POST", body: JSON.stringify({ handle, args: {} }), headers })).text()
+
+    return { dir, lines, opts, read, call }
+  }
+
+  it("logs once that it waits, tells the agent, and loads once the work ends", async () => {
+    const { dir, lines, opts, read, call } = await begun()
+
+    await read()
+    await call("hold")
+
+    const again = startRuntime(edited(dir), ["--session", "S"], opts)
+
+    await poll(() => lines.filter((line) => line.includes("waiting")).length).toBe(1)
+    await sleep(RELOAD_MS * 2)
+    expect(lines.filter((line) => line.includes("waiting"))).toEqual([
+      expect.stringMatching(/^\d{4}-\d\d-\d\dT\S+Z h: its code changed; waiting for 1 job to finish before loading it, at most 30s: hold by agent:S$/),
+    ])
+
+    const told = await read()
+
+    expect(told).toStartWith("h: its changed code is not loaded yet; it waits at most 30s for hold by agent:S\n")
+    expect(told).not.toContain("edited")
+    expect(await read()).not.toContain("not loaded yet")
+    releases.splice(0).forEach((release) => release())
+    await again
+    expect(lines.at(-1)).toMatch(/Z h: its code changed and was loaded in place$/)
+
+    const after = await read()
+
+    expect(after).toStartWith("h: its changed code was loaded\n")
+    expect(after).toContain("edited: true")
+  })
+
+  it("cuts work that does not end after the bounded wait, loads the new code, and names what it cut", async () => {
+    const { dir, lines, opts, read, call } = await begun(300)
+
+    await read()
+    await call("hold")
+    await startRuntime(edited(dir), ["--session", "S"], opts)
+    expect(lines.at(-1)).toMatch(/Z h: its code changed and was loaded in place, after 0.3s, cutting hold by agent:S$/)
+
+    const after = await read()
+
+    expect(after).toStartWith("h: its changed code was loaded after 0.3s, cutting what still ran: hold by agent:S\n")
+    expect(after).toContain("edited: true")
+    expect(after).toContain("n: 0")
+    releases.splice(0)
+  })
+})
+
 it("starts again in place when the framework's own code changed: the same address, the state as saved, a new token for pages to take", async () => {
   const dir = scratch()
   const first = await startRuntime(app(dir), ["--session", "S"], { ...options(dir), stamp: 1 })

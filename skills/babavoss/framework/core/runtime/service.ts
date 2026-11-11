@@ -157,10 +157,10 @@ export function wakeService(dir: string, entry: string | URL, session: string, e
 
 export type Request = { method?: string; actor?: string; body?: string; accept?: string; signal?: AbortSignal }
 
-/** Why a runtime the environment refused gave up: the last line it logged. */
+/** Why a runtime the environment refused gave up: the last line it logged, without the time it begins with. */
 const deniedReason = (dir: string): string => {
   try {
-    return readFileSync(logFile(dir), "utf8").trim().split("\n").at(-1) ?? ""
+    return (readFileSync(logFile(dir), "utf8").trim().split("\n").at(-1) ?? "").replace(/^\d{4}-\d\d-\d\dT\S+Z /, "")
   } catch {
     return ""
   }

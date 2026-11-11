@@ -96,6 +96,8 @@ export type Door = {
   replace(ui: Ui): Promise<void>
   /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
   refresh(file: string): Promise<void>
+  /** A line about the app's own code, said first in the agent's next answer; a later one takes its place. */
+  note(line: string): void
 }
 
 export function door<M>(running: Running<M>, options: DoorOptions): Door {
@@ -133,6 +135,16 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   const actorText = `agent:${options.about?.session ?? "session"}`
   const text = textSession(running, options.identity.dir, actorText, options.command ?? "bv app")
   const streams = new Set<ServerResponse>()
+  // What the runtime has to say of the app's code, until an answer to the agent carries it; a wait ends for it too.
+  let said: string | undefined
+  const noted = new Set<() => void>()
+  const told = (answer: string) => {
+    const line = said
+
+    said = undefined
+
+    return line === undefined ? answer : `${line}\n${answer}`
+  }
   const change = () => `event: change\ndata: ${JSON.stringify({ version: running.version(), jobs: running.jobs() })}\n\n`
 
   running.subscribe(() => {
@@ -168,11 +180,12 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const seconds = Number(url.searchParams.get("seconds") ?? 600)
 
           if (!Number.isFinite(seconds) || seconds < 0) return reply(400, "seconds must be a nonnegative number")
-          if (!text.changed().length)
+          if (!text.changed().length && said === undefined)
             await new Promise<void>((done) => {
               const finish = () => {
                 clearTimeout(timer)
                 unsubscribe()
+                noted.delete(finish)
                 res.off("close", finish)
                 done()
               }
@@ -181,11 +194,12 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
               })
               const timer = setTimeout(finish, seconds * 1000)
 
+              noted.add(finish)
               res.once("close", finish)
             })
           if (res.destroyed) return
 
-          return reply(200, text.changed().length ? text.answer([]) : "nothing changed")
+          return reply(200, told(text.changed().length ? text.answer([]) : "nothing changed"))
         }
         if (req.method === "GET") {
           const view = running.read(path, actorText)
@@ -193,7 +207,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const lines = view === undefined ? [`nothing at ${path}`] : [...textLines(view, "", new Map(), path, options.command ?? "bv app").values()]
           const use = open ? [`${options.about?.app} ${options.about?.version}`] : []
 
-          return reply(view === undefined ? 404 : 200, text.answer([...use, ...lines], open, view, path))
+          return reply(view === undefined ? 404 : 200, told(text.answer([...use, ...lines], open, view, path)))
         }
         if (req.method === "POST") {
           const call = JSON.parse(await body(req))
@@ -206,11 +220,11 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const heard = { path, handle: call.handle, args, actor: actorText, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
           for (const stream of streams) stream.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
-          if (answer.outcome === "refused") return reply(409, `refused: ${answer.reason}`)
+          if (answer.outcome === "refused") return reply(409, told(`refused: ${answer.reason}`))
 
           const result = text.answer(text.diff(before, answer.view), false, undefined, path)
 
-          return reply(200, result || "nothing changed")
+          return reply(200, told(result || "nothing changed"))
         }
 
         return reply(405, `${req.method} is not a door`)
@@ -308,6 +322,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       const differs = hosting() ? !("error" in (await page("/"))) && served !== before : !!dir && file.startsWith(dir)
 
       if (differs) for (const res of streams) res.write("event: page\ndata: {}\n\n")
+    },
+    note(line) {
+      said = line
+      for (const finish of Array.from(noted)) finish()
     },
     // Streams and keep-alive connections are cut first, or a browser that reconnects keeps the server open forever.
     close: async () => {
