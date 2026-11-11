@@ -16,7 +16,7 @@ Open the authoring app in the project. Inspect the description, skill text and o
 
 Write a [scenario](playground.md) for the first task and try it with the person. Confirm that open gives the whole view and page address, a call through bv changes the page, and a person call appears in the next answer.
 
-To install an app somewhere else, put its directory among that harness’s skills. Install baba itself with `bunx skills add alanremarc/babavoss`. Update it with `bunx skills update baba`. An app is updated by replacing its directory: when it opens at a newer version than it last did, its door says so once and points to the app’s CHANGELOG.md, so write there, newest first, what each version changed for the person and the agent.
+To install an app somewhere else, put its directory among that harness’s skills. Install baba itself with `bunx skills add alanremarc/babavoss -g` for every project, or without `-g` from a project's directory for that project. Update it with `bunx skills update baba`. An app is updated by replacing its directory: when it opens at a newer version than it last did, its door says so once and points to the app’s CHANGELOG.md, so write there, newest first, what each version changed for the person and the agent.
 
 The framework an app depends on follows this skill, which carries the know-how for it. An app keeps the version it names until it is raised: when this skill is at a later one, its door says so once in the project of that app. On the person's word, read this skill's CHANGELOG.md for what changed, set the app's `babavoss` to this skill's version in its package.json, run `bun install` there, adapt the app, and verify its saved state, skill, open answer and scenarios again. Never raise an app past this skill's version.
 

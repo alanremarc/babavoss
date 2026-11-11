@@ -1,8 +1,14 @@
 {
   "name": "babavoss",
-  "version": "0.3.0",
+  "version": "0.20.0",
   "description": "A TypeScript framework for software that agents operate: a surface the agent reads and acts on through a command, and a page for the person over the same surface.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alanremarc/babavoss.git",
+    "directory": "packages/babavoss"
+  },
+  "homepage": "https://babavoss.org",
   "type": "module",
   "engines": {
     "bun": ">=1.4.0"

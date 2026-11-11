@@ -2,14 +2,15 @@
 
 What each version of baba changed, newest first. The framework is the npm package babavoss, at the same version. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change.
 
-## 0.3.0
+## 0.20.0
 
+- The version follows on from the framework's earlier releases on npm, which ended at 0.19.1; the product had been 0.2.0.
 - The skill is named baba; babavoss is the framework, an npm package. Install the skill with `bunx skills add alanremarc/babavoss`; its command is `baba`.
 - An app no longer holds a copy of the framework. It names `babavoss` at an exact version in its package.json and imports it as `babavoss/core/…` and `babavoss/shell/…`.
 - An app's door installs what the app depends on before it first opens, and says so only when that fails: what to allow, and how to install by hand.
 - The framework an app depends on follows this skill: a new app names this skill's version, and this skill says once when an app it works on names an older one.
 - The page's packages are installed by the door, no longer when the page is first asked for.
-- To move an app from 0.2.0: delete its `framework/`, replace the `imports` entry in its package.json with `"babavoss": "0.3.0"` under `dependencies`, name what its page imports there too (react, react-dom), write `babavoss/` for `#babavoss/` in its imports and stylesheet, and take scripts/open.ts from the template.
+- To move an app from 0.2.0: delete its `framework/`, replace the `imports` entry in its package.json with `"babavoss": "0.20.0"` under `dependencies`, name what its page imports there too (react, react-dom), write `babavoss/` for `#babavoss/` in its imports and stylesheet, and take scripts/open.ts from the template.
 
 ## 0.2.0
 

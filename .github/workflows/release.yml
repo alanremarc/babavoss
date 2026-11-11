@@ -1,0 +1,54 @@
+name: Release
+
+# The framework is published to npm when a tag vX.Y.Z is pushed, after the checks pass, by npm's trusted publishing: the
+# workflow proves itself to npm with a short-lived GitHub token, so no npm token is kept here and no one-time code is
+# asked. The skill is released by merging the tagged commit to main, after the package is out, so that no installed
+# skill names a framework npm does not have yet.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: publish
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Required reviewers on this environment, set in the repository's settings, are the human step before a publish.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: one version for all of it, the tag's
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for file in packages/babavoss/package.json skills/baba/package.json; do
+            version=$(node -p "require('./$file').version")
+            [ "$version" = "$tag" ] || { echo "$file is $version, the tag is $tag"; exit 1; }
+          done
+      - name: npm that publishes with a GitHub token
+        run: |
+          npm --version
+          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)" \
+            || npm install --global npm@11
+      - name: publish
+        working-directory: packages/babavoss
+        run: npm publish --access public

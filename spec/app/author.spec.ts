@@ -42,7 +42,7 @@ it("opens on the build tab, presents its utils, opens promptware as a tab throug
   const start = run("scripts/open.ts", ["--session", "S"], "", state)
 
   expect(start.status, start.err).toBe(0)
-  expect(start.out).toContain("baba 0.3.0")
+  expect(start.out).toContain("baba 0.20.0")
   expect(start.out).toContain('"promptware"\t')
   expect(start.out).toContain('utils.1.open: baba / open util="promptware"')
   expect(start.out).toContain('"playground"\t')
@@ -82,7 +82,7 @@ it("works on the session's directory, whoever wakes its runtime and from whereve
   const subagent = run("scripts/open.ts", ["--session", "S"], "", state, worktree)
 
   expect(subagent.status, subagent.err).toBe(0)
-  expect(subagent.out).toContain("baba 0.3.0")
+  expect(subagent.out).toContain("baba 0.20.0")
   await restart()
 
   const cli = (...args: string[]) => run("scripts/open.ts", ["--session", "S", ...args], "", state, worktree).out
