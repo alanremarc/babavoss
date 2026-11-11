@@ -1,6 +1,6 @@
 # babavoss
 
-The framework, published to npm as `babavoss`. An app depends on it at an exact version and imports it as `babavoss/core/…` and `babavoss/shell/…`. `core/` is the layers; `shell/` is a built-in, the page layer. Bun runs the TypeScript source directly; there is no build, and the package is published as source.
+The framework's code. The package is the repository's root, `babavoss`; an app installs it from a release tag, `github:alanremarc/babavoss#vX.Y.Z`, and imports it as `babavoss/core/…` and `babavoss/shell/…`. `core/` is the layers; `shell/` is a built-in, the page layer. Bun runs the TypeScript source directly; there is no build, and the package is published as source.
 
 ```text
 src/index.ts   what exists, exported
@@ -14,7 +14,6 @@ src/runtime/                               a session's resident process: lock, e
 src/launch/                                startAgent: an agent in a harness without a terminal; prompts in, events out; over the adapters
 src/app.ts                              defineApp: name, version, state location, surface
 spec/          one spec per layer
-package.json   the framework's version, the product's; what its shell's page is built from, as its dependencies
 ```
 
 docs/DESIGN.md in the repository says what is being built and in which order.

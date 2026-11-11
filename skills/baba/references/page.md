@@ -24,7 +24,7 @@ Choose the layout for the job:
 - Plain: a header and a page for a single list or configuration.
 - Welcome: scopes to choose before opening one, such as a project or repository.
 
-Every layout has the header and a menu bar with the util's menus and the layout's controls. Keep component-specific details with the components in the framework; read them in node_modules/babavoss/shell/ui rather than guessing interfaces. A part another util needs belongs in the shell; contribute its fix upstream through [Start](start.md).
+Every layout has the header and a menu bar with the util's menus and the layout's controls. Keep component-specific details with the components in the framework; read them in node_modules/babavoss/packages/babavoss/shell/ui rather than guessing interfaces. A part another util needs belongs in the shell; contribute its fix upstream through [Start](start.md).
 
 ## Verify
 

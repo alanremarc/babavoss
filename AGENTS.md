@@ -1,6 +1,6 @@
 # babavoss
 
-A TypeScript framework for software that agents operate. An app is one skill: its directory holds the skill, a surface the agent reads and acts on through a command, and a page where the person watches and steers over the same surface. This repository is one product at one version: the framework and its shell, published to npm as babavoss, and baba, the skill that authors apps on it.
+A TypeScript framework for software that agents operate. An app is one skill: its directory holds the skill, a surface the agent reads and acts on through a command, and a page where the person watches and steers over the same surface. This repository is one product at one version: the framework and its shell, babavoss, which an app installs from this repository's release tags, and baba, the skill that authors apps on it.
 
 ## Rules
 
@@ -13,7 +13,8 @@ A TypeScript framework for software that agents operate. An app is one skill: it
 ## Layout
 
 ```text
-packages/babavoss/          the framework, the npm package babavoss; an app depends on it and holds no copy
+package.json                the framework's package, babavoss, at the repository's root; an app installs it from a tag and holds no copy
+packages/babavoss/          the framework's code, exported as babavoss/core/… and babavoss/shell/…
   core/                     the framework's layers; bv/ holds bv and the door
   shell/                    the shell: tabs, page hosting and build, layouts, components
 skills/baba/                the product's skill, baba; also the authoring app's skill directory
@@ -35,10 +36,10 @@ site/                       babavoss.org: one page, its favicon and llms.txt, pu
 ## Code
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
-- Apps import the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`; an app names the framework's exact version in its package.json. Here the workspace links the package.
+- Apps import the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`; an app names a release in its package.json, `github:alanremarc/babavoss#vX.Y.Z`. Here the root package links itself, and skills/ and examples/ use the root's node_modules.
 - Production never imports spec.
-- Versions are semantic, in package.json, set by hand: the package, the skill, and what the skill, the template and the example depend on are one version; a spec holds them equal.
-- A release is a tag vX.Y.Z on the commit to release: the Release workflow checks it and publishes the framework to npm. Merge that commit to main only once the version is published; main is what skills.sh installs.
+- Versions are semantic, in package.json, set by hand: the root package, the skill, and the tag the skill, the template and the example name are one version; a spec holds them equal.
+- Every version on main is a release: changing the framework or the skill raises the version, names the new tag where it is depended on, and adds its section to skills/baba/CHANGELOG.md. On main, the Release workflow checks a new version and makes its tag vX.Y.Z and a GitHub release; it fails where the framework or the skill changed under a version tagged already. Tags are never moved.
 
 Style, which no tool enforces:
 

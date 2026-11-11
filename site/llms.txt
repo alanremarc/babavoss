@@ -1,6 +1,6 @@
 # Baba Voss
 
-> A framework for agent-first apps. An agent operates the app through a command, and the person follows along and decides on a page. An app is one skill: a directory with a SKILL.md and the app's code, depending on the framework as an npm package.
+> A framework for agent-first apps. An agent operates the app through a command, and the person follows along and decides on a page. An app is one skill: a directory with a SKILL.md and the app's code, depending on the framework, installed from a release of its repository.
 
 This file is for an agent asked to install babavoss.
 
