@@ -1203,9 +1203,11 @@ export default {
       await poll(() => existsSync(ws), { timeout: 20_000 }).toBe(false)
       expect(pids.filter(running)).toEqual([])
       // The XDG trash keeps what it holds under files/, beside info/; the macOS trash, at its top.
-      expect(readdirSync(process.platform === "darwin" ? trash : join(trash, "files"))).toEqual([`babavoss workspace keep ${made[0]!.id}`])
-      expect(readFileSync(join(trash, readdirSync(trash)[0]!, "files", "seed.txt"), "utf8")).toBe("seed")
-      expect(readSession(join(trash, readdirSync(trash)[0]!), 1)).toMatchObject({ session, status: "exited" })
+      const kept = process.platform === "darwin" ? trash : join(trash, "files")
+
+      expect(readdirSync(kept)).toEqual([`babavoss workspace keep ${made[0]!.id}`])
+      expect(readFileSync(join(kept, readdirSync(kept)[0]!, "files", "seed.txt"), "utf8")).toBe("seed")
+      expect(readSession(join(kept, readdirSync(kept)[0]!), 1)).toMatchObject({ session, status: "exited" })
 
       // Deleting the new one, live, moves it too; nothing is left running under the scratch directory.
       const next = (r.read("/") as { workspaces: { id: string; dir: string }[] }).workspaces[0]!
@@ -1214,7 +1216,7 @@ export default {
       expect(await r.call(`/workspaces/${next.id}`, "delete", { workspace: next.id }, "person")).toMatchObject({ outcome: "written" })
       await poll(() => existsSync(next.dir), { timeout: 20_000 }).toBe(false)
       await until(() => r.read("/"), { workspaces: [], workspace: null, session: null })
-      expect(readdirSync(trash)).toHaveLength(2)
+      expect(readdirSync(kept)).toHaveLength(2)
       await r.stop()
       expect(runtimePids(root).filter(running)).toEqual([])
     } finally {
