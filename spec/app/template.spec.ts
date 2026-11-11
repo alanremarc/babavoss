@@ -34,8 +34,8 @@ test("a door whose packages cannot be installed says so once: what to allow, how
 
   dirs.push(app)
   cpSync(join(product, "assets/template"), app, { recursive: true })
-  // A version no registry has, and a registry that is not there: nothing is installed, as under a sandbox without network.
-  writeFileSync(manifest, readFileSync(manifest, "utf8").replace(/"babavoss": "[^"]+"/, '"babavoss": "0.0.0-never"'))
+  // A release from a host that is not there: nothing is installed, as under a sandbox without network.
+  writeFileSync(manifest, readFileSync(manifest, "utf8").replace(/"babavoss": "[^"]+"/, '"babavoss": "git+http://127.0.0.1:9/babavoss.git#v0.0.0"'))
 
   const result = spawnSync(process.execPath, [join(app, "scripts/open.ts"), "--session", "S"], {
     cwd: app,
@@ -46,19 +46,20 @@ test("a door whose packages cannot be installed says so once: what to allow, how
   expect(result.status).toBe(1)
   expect(result.stdout).toBe("")
   expect(result.stderr).toStartWith(
-    `cannot install what this app depends on; allow bun to reach the package registry (under a sandbox, in the harness settings), or run: cd '${app}' && bun install\n`
+    `cannot install what this app depends on; allow bun to reach github.com and the package registry (under a sandbox, in the harness settings), or run: cd '${app}' && bun install\n`
   )
   expect(result.stderr.match(/cannot install/g)).toHaveLength(1)
 })
 
-test("one version for all of it: the framework, the skill that depends on it, and the template a new app starts from", () => {
+test("one version for all of it: the framework, the skill, and what the skill, the template and the example name, its tag", () => {
   const read = (file: string) => JSON.parse(readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")) as { version: string; dependencies: Record<string, string> }
-  const framework = read("../../packages/babavoss/package.json").version
+  const framework = read("../../package.json").version
+  const release = `github:alanremarc/babavoss#v${framework}`
 
   expect(read("../../skills/baba/package.json").version).toBe(framework)
-  expect(read("../../skills/baba/package.json").dependencies.babavoss).toBe(framework)
-  expect(read("../../skills/baba/assets/template/package.json").dependencies.babavoss).toBe(framework)
-  expect(read("../../examples/payments/package.json").dependencies.babavoss).toBe(framework)
+  expect(read("../../skills/baba/package.json").dependencies.babavoss).toBe(release)
+  expect(read("../../skills/baba/assets/template/package.json").dependencies.babavoss).toBe(release)
+  expect(read("../../examples/payments/package.json").dependencies.babavoss).toBe(release)
 })
 
 test("every app's skill opens the same way and says the same about operating it: the template's words, kept as they are", () => {

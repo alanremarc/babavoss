@@ -9,7 +9,7 @@
     "bun": ">=1.4.0"
   },
   "dependencies": {
-    "babavoss": "0.20.0",
+    "babavoss": "github:alanremarc/babavoss#v0.20.0",
     "github-markdown-css": "^5.9.0",
     "lucide-react": "^1.66.0",
     "react": "^19.3.1",

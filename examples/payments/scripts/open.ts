@@ -1,12 +1,14 @@
 // The app's door: opens a session or serves its resident runtime. What the app depends on is installed first where it is
-// missing, the framework among it, at the version package.json names; only a failure of that is said. Nothing here may
-// import a package: this is what runs before there are any.
+// missing, the framework among it, at the release package.json names: a tag of its repository, github:OWNER/REPO#vX.Y.Z.
+// Only a failure of that is said. Nothing here may import a package: this is what runs before there are any.
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const named = (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies.babavoss
+/** The version the release named is: its tag's, vX.Y.Z; none where a path or a link is named, as when a framework fix is tried. */
+const version = /#v(\d[^\s#]*)$/.exec(named ?? "")?.[1]
 /**
  * The framework's version as installed for this app: in a node_modules here or above, read as files, never through bun's
  * resolver, which answers from its own cache.
@@ -20,8 +22,8 @@ const found = (): string | undefined => {
     }
   }
 }
-// Installed at the version named; where a path or a link is named instead, as when a framework fix is tried, being there is enough.
-const installed = () => found() !== undefined && (found() === named || !/^\d/.test(named ?? ""))
+// Installed at the version named; where no version is named, being there is enough.
+const installed = () => found() !== undefined && (version === undefined || found() === version)
 
 if (!installed()) {
   // Once: a door started again after installing does not install again.
@@ -31,7 +33,7 @@ if (!installed()) {
     const why = install ? install.stderr.toString().trim().split("\n").slice(-4).join("\n") : `babavoss ${named} is still not found after installing`
 
     console.error(
-      `cannot install what this app depends on; allow bun to reach the package registry (under a sandbox, in the harness settings), ` +
+      `cannot install what this app depends on; allow bun to reach github.com and the package registry (under a sandbox, in the harness settings), ` +
         `or run: cd '${root}' && bun install\n${why}`
     )
     process.exit(1)

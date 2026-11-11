@@ -8,7 +8,7 @@ import { frameworkNotes } from "../../skills/baba/src/framework.ts"
 const root = mkdtempSync(join(tmpdir(), "framework-"))
 const holding = (name: string, version: string) => {
   mkdirSync(join(root, name, "src"), { recursive: true })
-  writeFileSync(join(root, name, "package.json"), JSON.stringify({ dependencies: { babavoss: version } }))
+  writeFileSync(join(root, name, "package.json"), JSON.stringify({ dependencies: { babavoss: `github:alanremarc/babavoss#v${version}` } }))
 
   return join(root, name)
 }
@@ -28,7 +28,7 @@ it("says when the app's framework is behind the skill's, from anywhere in the ap
 it("tells the framework note once through the authoring cli, and omits it when versions agree", async () => {
   const { readFileSync } = await import("node:fs")
   const entry = new URL("../../skills/baba/scripts/open.ts", import.meta.url).pathname
-  const carried = (JSON.parse(readFileSync(new URL("../../packages/babavoss/package.json", import.meta.url), "utf8")) as { version: string }).version
+  const carried = (JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }).version
   const cwd = holding("cli-app", "0.0.0")
   const env = {
     ...process.env,
@@ -58,7 +58,7 @@ it("tells the framework note once through the authoring cli, and omits it when v
     expect(await run("")).toContain("this app depends on babavoss 0.0.0")
     expect(await run()).not.toContain("this app depends on babavoss")
     expect(await run("")).not.toContain("this app depends on babavoss")
-    writeFileSync(join(cwd, "package.json"), JSON.stringify({ dependencies: { babavoss: carried } }))
+    writeFileSync(join(cwd, "package.json"), JSON.stringify({ dependencies: { babavoss: `github:alanremarc/babavoss#v${carried}` } }))
     expect(await run("")).not.toContain("this app depends on babavoss")
   } finally {
     await run("close")

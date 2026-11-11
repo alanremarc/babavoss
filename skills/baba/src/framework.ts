@@ -27,7 +27,8 @@ const namedAt = (dir: string) => {
   try {
     const named: unknown = (JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { dependencies?: Record<string, unknown> }).dependencies?.babavoss
 
-    return typeof named === "string" ? named.replace(/^[\^~]/, "") : undefined
+    // A release of the framework is a tag of its repository: github:OWNER/REPO#vX.Y.Z.
+    return typeof named === "string" ? /#v(\d[^\s#]*)$/.exec(named)?.[1] : undefined
   } catch {
     return undefined
   }
