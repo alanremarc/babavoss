@@ -38,7 +38,7 @@ site/                       babavoss.org: one page, its favicon and llms.txt, pu
 - Apps import the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`; an app names the framework's exact version in its package.json. Here the workspace links the package.
 - Production never imports spec.
 - Versions are semantic, in package.json, set by hand: the package, the skill, and what the skill, the template and the example depend on are one version; a spec holds them equal.
-- A release is a tag vX.Y.Z on the commit to release: the Release workflow checks it and stages the framework on npm, and a maintainer approves it there. Merge that commit to main only once the version is published; main is what skills.sh installs.
+- A release is a tag vX.Y.Z on the commit to release: the Release workflow checks it and publishes the framework to npm. Merge that commit to main only once the version is published; main is what skills.sh installs.
 
 Style, which no tool enforces:
 
