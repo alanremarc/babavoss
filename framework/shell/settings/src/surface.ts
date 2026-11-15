@@ -50,7 +50,7 @@ const mode = action({
 const theme = action({
   name: "theme",
   quiet: true,
-  description: `choose a theme: mode both while the modes are the same, else light or dark; theme ${THEME_NAMES}, dynamic keeping its numbers or starting from the theme it replaces`,
+  description: `choose a theme: mode both while the modes are the same, else light or dark; theme ${THEME_NAMES}. Dynamic keeps the mode's numbers, or starts from the theme it replaces`,
   subject: {},
   inputs: { mode: "string", theme: "string" },
   update(m: Model, { mode, theme }): Update<Model, Command> {
