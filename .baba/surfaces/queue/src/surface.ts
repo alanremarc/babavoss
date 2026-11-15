@@ -17,6 +17,13 @@ const moved = (m: Model, n: number, change: (issue: Issue) => Issue): Model => (
   issues: m.issues.map((issue) => (issue.n === n ? { ...change(issue), at: m.clock } : issue)),
 })
 
+/** A notice of what happened to issue `n`, about its path, which a dropped one no longer has: "Issue 3, Title, is done". */
+const said = (m: Model, n: number, what: string) => {
+  const issue = m.issues.find((i) => i.n === n)!
+
+  return { text: `${issue.status === "draft" ? "Draft" : "Issue"} ${n}, ${issue.title}, ${what}`, at: `/issues/${n}` }
+}
+
 const made = (m: Model, title: string, about: string, status: Issue["status"]): Result =>
   title.trim() && about.trim()
     ? { model: { issues: [...m.issues, { n: m.next, title: title.trim(), about: about.trim(), status, at: m.clock }], next: m.next + 1, clock: m.clock + 1 } }
@@ -41,7 +48,7 @@ const approve = action({
   subject: { n: "number" },
   inputs: {},
   ask: true,
-  update: (m: Model, { n }): Result => ({ model: moved(m, n, (issue) => ({ ...issue, status: "backlog" })) }),
+  update: (m: Model, { n }): Result => ({ model: moved(m, n, (issue) => ({ ...issue, status: "backlog" })), notices: [said(m, n, "approved: it joins the backlog")] }),
 })
 const describe = action({
   name: "describe",
@@ -72,7 +79,7 @@ const start = action({
 
     if (busy) return { refused: `Lane ${lane} is delivering issue ${busy.n}` }
 
-    return { model: moved(m, n, (issue) => ({ ...issue, status: "lane", lane })) }
+    return { model: moved(m, n, (issue) => ({ ...issue, status: "lane", lane })), notices: [said(m, n, `started in lane ${lane}`)] }
   },
 })
 const done = action({
@@ -80,7 +87,7 @@ const done = action({
   description: ({ n }) => `Mark issue ${n} done, once it is merged into main and the person can see it`,
   subject: { n: "number" },
   inputs: {},
-  update: (m: Model, { n }): Result => ({ model: moved(m, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "done" })) }),
+  update: (m: Model, { n }): Result => ({ model: moved(m, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "done" })), notices: [said(m, n, "is done")] }),
 })
 const back = action({
   name: "back",
@@ -94,7 +101,7 @@ const drop = action({
   description: ({ n }) => `Remove issue ${n}: it will not be done`,
   subject: { n: "number" },
   inputs: {},
-  update: (m: Model, { n }): Result => ({ model: { ...m, issues: m.issues.filter((issue) => issue.n !== n) } }),
+  update: (m: Model, { n }): Result => ({ model: { ...m, issues: m.issues.filter((issue) => issue.n !== n) }, notices: [said(m, n, "dropped").text] }),
 })
 
 const by = (a: Issue, b: Issue) => a.at - b.at
@@ -111,7 +118,7 @@ const row = (issue: Issue) => ({
 const whole = (issue: Issue) => ({
   ...row(issue),
   about: issue.about,
-  ...(issue.status === "draft" && { waiting: "the person, to approve or drop this draft on the page", approve: approve.bind({ n: issue.n }) }),
+  ...(issue.status === "draft" && { attention: { who: "person", why: "to approve or drop this draft" }, approve: approve.bind({ n: issue.n }) }),
   describe: describe.bind({ n: issue.n }),
   note_: note.bind({ n: issue.n }),
   ...(issue.status === "backlog" && { start: start.bind({ n: issue.n }) }),
@@ -132,7 +139,7 @@ const pages = view([add, draft, approve, describe, note, start, done, back, drop
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       issues: [...lanes, ...backlog, ...drafts, ...finished].map(row),
-      ...(drafts.length && { waiting: `the person, to approve or drop ${drafts.length} draft${drafts.length > 1 ? "s" : ""} on the page` }),
+      ...(drafts.length && { attention: { who: "person", why: `to approve or drop ${drafts.length} draft${drafts.length > 1 ? "s" : ""}` } }),
       add: add.bind({}),
       draft: draft.bind({}),
     }

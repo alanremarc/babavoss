@@ -41,11 +41,18 @@ async function latest(home: string, now: number): Promise<string | undefined> {
   return version
 }
 
-/** What to tell the agent when a later release is out: how to take it in `baba`, the surfaces' package, and what to do after. */
-export async function updateNote(home: string, baba: string, now = Date.now()): Promise<string | undefined> {
+/** The latest release where it is later than the one these surfaces run on, else undefined. */
+export async function laterRelease(home: string, now = Date.now()): Promise<string | undefined> {
   const version = await latest(home, now)
 
-  return version && later(version, VERSION)
+  return version && later(version, VERSION) ? version : undefined
+}
+
+/** What to tell the agent when a later release is out: how to take it in `baba`, the surfaces' package, and what to do after. */
+export async function updateNote(home: string, baba: string, now = Date.now()): Promise<string | undefined> {
+  const version = await laterRelease(home, now)
+
+  return version
     ? `babavoss ${version} is out; these surfaces run on ${VERSION}. Update, unless the person said not to: run \`bun add babavoss@github:${REPOSITORY}#v${version}\` in ${baba}, ` +
         `read node_modules/babavoss/CHANGELOG.md there from ${VERSION} up, adapt the surfaces to what changed, and run their specs`
     : undefined

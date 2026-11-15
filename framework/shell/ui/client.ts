@@ -29,15 +29,18 @@ export async function call<V = View>(path: string, handle: string, args: Args): 
 }
 
 export type Change = { version: number; jobs: string[] }
+/** What just happened, told once as it is heard: `at` the path it is about, `from` who says it, `by` who caused it where not the person. */
+export type Notice = { text: string; at?: string; from?: string; by?: string }
 
-/** Told on every change of the surface, and whether the stream is up; the browser reconnects by itself. Returns stop. */
-export function changes(onChange: (change: Change) => void, onConnected?: (up: boolean) => void): () => void {
+/** Told on every change of the surface, of each notice, and whether the stream is up; the browser reconnects by itself. Returns stop. */
+export function changes(onChange: (change: Change) => void, onConnected?: (up: boolean) => void, onNotice?: (notice: Notice) => void): () => void {
   const source = new EventSource("/")
 
   source.addEventListener("change", (event) => {
     onChange(JSON.parse((event as MessageEvent<string>).data) as Change)
     onConnected?.(true)
   })
+  source.addEventListener("notice", (event) => onNotice?.(JSON.parse((event as MessageEvent<string>).data) as Notice))
   // The page's own code changed: only a fresh page has it.
   source.addEventListener("page", () => location.reload())
   source.onerror = () => {

@@ -1,9 +1,10 @@
-// A surface tested at its boundary. A story's actors see views, call the handles those views offer and are told what changed;
+// A surface tested at its boundary. A story's actors see views, call the handles those views offer, are told what changed
+// and what was noticed;
 // the world outside is held by the test, which settles each command the surface starts. The model is never read.
 import { randomUUID } from "node:crypto"
 import { flatten, changes } from "../present/present.ts"
 import { agentActor } from "../session.ts"
-import { run, type Saved } from "./run.ts"
+import { run, type Noticed, type Saved } from "./run.ts"
 import type { Surface } from "./surface.ts"
 import { handles, type Args } from "./view.ts"
 
@@ -47,7 +48,11 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
       },
       ports
     )
+  const heard: Noticed[] = []
+  const hear = () => running.notices((notice) => void heard.push(notice))
   let running = start()
+
+  hear()
   const barrier = () => running.settled()
   const idle = async () => {
     await barrier()
@@ -64,6 +69,7 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
   }
   const actor = (identity: string) => {
     let before: Map<string, string> | undefined
+    let since = 0
     const sees = (path = "/") => running.read(path, identity)
 
     return {
@@ -77,6 +83,14 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
         before = now
 
         return lines
+      },
+      /** The notices since this actor was last asked, as its side is told them: what its own calls alone gave is not told back. */
+      noticed: () => {
+        const lines = heard.slice(since).filter((n) => !(n.cause.call && n.cause.actor === identity && identity !== "person"))
+
+        since = heard.length
+
+        return lines.map((n) => n.text)
       },
     }
   }
@@ -113,6 +127,7 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
     restart: async () => {
       await running.stop()
       running = start()
+      hear()
     },
   }
 }

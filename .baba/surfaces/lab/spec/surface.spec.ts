@@ -112,7 +112,7 @@ test("a hook injection and a word's answer are entries with their sizes, whole a
   const answer = 'title: "baba"\nsurfaces: name\tdescription\n"greeting"\t"Keep a greeting"'
 
   expect(await agent.call("/", "say", { text: "What surfaces are there?" })).toMatchObject({ outcome: "written" })
-  expect(agent.sees()).toMatchObject({ status: "working", waiting: expect.stringContaining("end its turn") })
+  expect(agent.sees()).toMatchObject({ status: "working" })
   emit(
     hook("SessionStart", present),
     hook("UserPromptSubmit", ""),
@@ -160,9 +160,12 @@ test("a turn's result carries its tokens and cost, and the run its totals; a sec
     ms: 4200,
   })
 
+  expect(agent.noticed()).toEqual(["turn 1 ended"])
+
   await agent.call("/", "say", { text: "Again" })
   emit(result(0.0062))
   await until(() => (agent.sees() as Root).status === "idle")
+  expect(agent.noticed()).toEqual(["turn 2 ended"])
   expect(agent.sees("/entries/5")).toMatchObject({ kind: "turn", cost: expect.closeTo(0.002) })
   expect(agent.sees()).toMatchObject({ turns: 2, cost: 0.0062, tokens: { input: 40, output: 80 } })
 })

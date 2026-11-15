@@ -39,6 +39,7 @@ export { Alert, AlertAction, AlertDescription, AlertTitle } from "./components/a
 export { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./components/empty"
 export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./components/dialog"
 export { Popover, PopoverContent, PopoverTrigger } from "./components/popover"
+export { Toasts, TOAST_MS, type ToastItem } from "./components/toast"
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip"
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group"
 export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./components/command"

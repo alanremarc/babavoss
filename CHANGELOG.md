@@ -2,6 +2,14 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.27.0
+
+- A surface no longer says who it waits on as free text (`waiting: "the person, to …"`). It says `attention: { who: "person" | "agent", why }` at `/`, or a list of them; replace each `waiting` fact with it, and drop `waiting` where nobody is needed.
+- What `update` returns may now carry `notices`, short lines on what just happened, beside `model` and `commands`. Add one where a call or a command's event finishes something the other side should hear of, and assert them in specs with `agent.noticed()` / `person.noticed()`.
+- The present now says first, under `needs`, which tabs need the person or the agent and why; `attention` is no longer among that tab's facts at `/`. Answers and hooks tell what was noticed since the last answer, once, under `notices:`, before what changed. A notice ends a `wait`. What only the agent's own call noticed is not told back to it.
+- On the page a tab that needs the person is marked in the strip, a notice is a toast that goes to where it happened, a broken tab is marked, and the launcher says when a later babavoss is out.
+- `Running` has a new `notices(fn)`. Anything that implements `Running` by hand must add it.
+
 ## 0.26.0
 
 - The shell now frames every tab: the title, the page's menus, an Actions menu with the actions the surface offers at the tab's route and at `/`, and the asks on the right. ⌘K offers all of them first.

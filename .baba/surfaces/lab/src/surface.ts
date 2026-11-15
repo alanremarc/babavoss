@@ -2,8 +2,9 @@
 // headless Claude Code in it, with a root and a page of its own; the lab only watches and drives it. Every event of its
 // stream comes back as a command event and joins the timeline: what entered the agent's context, chunk by chunk, with
 // sizes, tokens and cost. At / a run is short: its status, totals and last few entries; each entry's path has it in full.
+// A turn that ends, and a run that cannot go on, are noticed.
 import { randomUUID } from "node:crypto"
-import { action, isPerson, surface, view, type Call, type Json, type Surface, type Update } from "babavoss/core/index.ts"
+import { action, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claude, type Agent, type Harness } from "./harness.ts"
 import { append, empty, line, stream, type Entry, type Timeline } from "./timeline.ts"
 
@@ -139,7 +140,6 @@ const pages = view([start, say, endMove, stop, close], {
             model: run.model,
             ...(run.page && { page: run.page }),
             ...(run.ended && { ended: run.ended }),
-            ...(run.status === "working" && { waiting: "the agent under test, to end its turn" }),
             entries: run.entries.length,
             turns: run.turns,
             tokens: run.tokens,
@@ -195,6 +195,17 @@ function happened(run: Run, e: Event): Run {
   return failed
 }
 
+/** What an event of the run's own command is worth noticing: a turn that ended, a run that could not go on. */
+function noticed(before: Run, after: Run): Notice[] {
+  if (before.status === "working" && after.status === "idle") {
+    const turn = after.entries.findLast((entry) => entry.kind === "turn")
+
+    return [{ text: `turn ${after.turns} ended${turn?.error ? `: ${turn.text}` : ""}`, ...(turn && { at: `/entries/${turn.i}` }) }]
+  }
+
+  return after.status === "ended" && before.status !== "ended" && after.ended ? [after.ended] : []
+}
+
 const RESTARTED = "the lab was started again, by a change to its code or a new runtime, and the agent under test's process did not survive it"
 
 /** The lab, with its outside given: the real harness by default, a fake in its specs. */
@@ -229,7 +240,10 @@ export function lab(harness: Harness): Surface<Model, Event, Command> {
       // An event of a run that is no longer the current one lands nowhere.
       if (!m.run || message.n !== m.run.n) return { model: m }
 
-      return { model: { ...m, run: happened(m.run, message) } }
+      const run = happened(m.run, message)
+      const notices = noticed(m.run, run)
+
+      return { model: { ...m, run }, ...(notices.length && { notices }) }
     },
     view: pages.view,
     async run(c, send, signal) {

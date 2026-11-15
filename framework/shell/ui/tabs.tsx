@@ -1,4 +1,6 @@
 // The bottom strip: the launcher's "+", then the open tabs as pills that scroll when they overflow; and a tab's panel.
+// A pill is marked by what stands in its tab: broken, needing the person, plainly; needing the agent, quietly; and why, as
+// its tooltip. A tab the agent opened is marked until looked at.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
 import { XIcon } from "lucide-react"
@@ -8,11 +10,30 @@ const contentId = (key: string) => `content-${key.replaceAll("/", "-")}`
 const tabId = (key: string) => `tab-${key.replaceAll("/", "-")}`
 const fadeEnd = "mask-r-from-[calc(100%-32px)]"
 
-type TabItem = { id: string; label: string; icon: ReactNode; unseen?: boolean; onClose?: () => void }
+/** Who a tab needs, and why. */
+export type TabNeed = { who: "person" | "agent"; why: string }
+type TabItem = { id: string; label: string; icon: ReactNode; unseen?: boolean; needs?: TabNeed[]; broken?: string; onClose?: () => void }
+
+/** What the pill says beyond its label, one line each: why it is broken, who it needs and why. */
+export const standing = ({ needs = [], broken }: Pick<TabItem, "needs" | "broken">): string[] => [
+  ...(broken !== undefined ? [`Broken: ${broken}`] : []),
+  ...needs.map((n) => `${n.who === "person" ? "Needs you" : "Needs the agent"}: ${n.why}`),
+]
+/** The mark in the pill's corner, the strongest first: broken, needing the person, new, needing the agent. */
+const MARK = {
+  broken: "size-2 bg-destructive",
+  person: "size-2 bg-warning",
+  unseen: "size-1.5 bg-primary",
+  agent: "size-1.5 bg-muted-foreground/70",
+}
+const markOf = ({ needs = [], broken, unseen }: Pick<TabItem, "needs" | "broken" | "unseen">): keyof typeof MARK | undefined =>
+  broken !== undefined ? "broken" : needs.some((n) => n.who === "person") ? "person" : unseen ? "unseen" : needs.length ? "agent" : undefined
 
 const pillMotion = "transition-[scale,opacity] duration-[200ms,100ms] ease-[cubic-bezier(.3,1.6,.4,1),ease] motion-reduce:transition-none"
 
-function Tab({ label, icon, unseen, active, focusable, id, onSelect, onClose }: { active: boolean; focusable: boolean; onSelect: () => void } & TabItem) {
+function Tab({ label, icon, unseen, needs, broken, active, focusable, id, onSelect, onClose }: { active: boolean; focusable: boolean; onSelect: () => void } & TabItem) {
+  const mark = markOf({ needs, broken, unseen })
+  const said = standing({ needs, broken })
   const labelRef = useRef<HTMLSpanElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const contentRef = useRef<HTMLSpanElement>(null)
@@ -68,7 +89,8 @@ function Tab({ label, icon, unseen, active, focusable, id, onSelect, onClose }: 
       data-slot="pill"
       className={cn(
         "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
-        unseen && "animate-in duration-300 fade-in-0 zoom-in-90 motion-reduce:animate-none"
+        unseen && "animate-in duration-300 fade-in-0 zoom-in-90 motion-reduce:animate-none",
+        mark === "person" && "bg-warning/12 text-foreground ring-1 ring-warning/50 ring-inset"
       )}
       data-active={active || undefined}
       onMouseEnter={() => setEngaged(true)}
@@ -100,8 +122,8 @@ function Tab({ label, icon, unseen, active, focusable, id, onSelect, onClose }: 
         tabIndex={focusable ? 0 : -1}
         className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onSelect}
-        title={label}
-        aria-label={unseen ? `${label}, new` : label}
+        title={[label, ...said].join("\n")}
+        aria-label={[unseen ? `${label}, new` : label, ...said].join(". ")}
       >
         <span
           ref={labelRef}
@@ -127,7 +149,7 @@ function Tab({ label, icon, unseen, active, focusable, id, onSelect, onClose }: 
           )}
         >
           {icon}
-          {unseen && <span aria-hidden className="absolute top-0 right-0 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
+          {mark && <span aria-hidden data-mark={mark} className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
         </span>
       </button>
       {onClose && (

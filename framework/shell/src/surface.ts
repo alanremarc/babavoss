@@ -1,7 +1,9 @@
 // The shell: the root surface of a .baba/, which the framework provides. It holds the project's surfaces, each opened as a
 // tab as often as wanted, and at / it is the desktop: every surface with what it is for and `open`, and every open tab
 // with its surface's facts, so what changes in a tab is in the agent's present. A tab stands at /tabs/N and its surface's
-// own paths below it; the surface never knows: the paths its views name under `at` are given whole on the way out. What
+// own paths below it; the surface never knows: the paths its views name under `at`, and its notices, are given whole on the way
+// out, a notice with its surface's name. A tab whose surface says `attention` at / is needed: who, and why, gathered first at
+// / as `needs`, so who is needed is read before every tab. What
 // a surface throws breaks only what it was asked for: a tab it cannot restore or show at / is listed as broken, with why
 // and what to do, and close stays offered; a path it cannot show says so, and the rest of the tab works; a tab it cannot
 // open is not made.
@@ -9,7 +11,7 @@
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
-import { action, surface, view, type AnySurface, type Call, type Json, type Surface, type Update, type View } from "../../core/index.ts"
+import { action, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 
 /** `broken`: why the tab's surface could not restore its kept model, which is then kept as it was saved. */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string }
@@ -25,6 +27,11 @@ export const EMPTY = "no surfaces yet: ask the agent for one, which it makes wit
 export const MISSING = "there is no .baba/ in this directory or above: make one with `baba init`"
 /** The name a tab of state kept from before gives the picker, which the shell no longer has: its desktop lists the surfaces. */
 const PICKER = "surfaces"
+
+/** Who a surface says is needed at its /: the person, or the agent; and why, in a few words. */
+export type Attention = { who: "person" | "agent"; why: string }
+/** A tab that is needed, as / gathers it. */
+export type Need = { at: string; surface: string } & Attention
 
 const TAB = /^\/tabs\/(\d+)(\/.*)?$/
 
@@ -55,6 +62,12 @@ function facts(value: Json | undefined): Json | undefined {
 
   return Object.fromEntries(Object.entries(value).flatMap(([k, v]) => (isHandle(v) ? [] : [[k, facts(v)]])))
 }
+
+const isAttention = (value: Json | undefined): value is Attention =>
+  !!value && typeof value === "object" && !Array.isArray(value) && (value.who === "person" || value.who === "agent") && typeof value.why === "string"
+/** What a view says under `attention`: one, or a list where both are needed; none where it says nothing of the kind. */
+export const attentionOf = (value: Json | undefined): Attention[] =>
+  isAttention(value) ? [{ who: value.who, why: value.why }] : Array.isArray(value) && value.length && value.every(isAttention) ? value.map(({ who, why }) => ({ who, why })) : []
 
 /**
  * The shell over `surfaces`, by name. `baba` is the .baba/ they are from; where there is none, the desktop says so.
@@ -190,15 +203,21 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       ...(model.pointed && { pointed: model.pointed }),
     }),
   })
-  /** A tab as the desktop lists it, for the actor: its surface's title and facts at /, the paths whole; or why it is broken. */
-  const said = (tab: Tab, actor?: string): { title?: string; facts?: Json; broken?: string } => {
+  /**
+   * A tab as the desktop lists it, for the actor: its surface's title and facts at /, the paths whole, and who it needs, which
+   * / gathers and so is not among its facts; or why it is broken.
+   */
+  const said = (tab: Tab, actor?: string): { row: { title?: string; facts?: Json; broken?: string }; needs: Attention[] } => {
     const seen = shown(tab, "/", actor)
 
-    if ("broken" in seen) return { broken: seen.broken }
+    if ("broken" in seen) return { row: { broken: seen.broken }, needs: [] }
 
     const { title, ...rest } = seen.ok ?? {}
+    const needs = attentionOf(rest.attention)
 
-    return { ...(typeof title === "string" && { title }), facts: facts(whole(rest, `/tabs/${tab.n}`)) }
+    if (needs.length) delete rest.attention
+
+    return { row: { ...(typeof title === "string" && { title }), facts: facts(whole(rest, `/tabs/${tab.n}`)) }, needs }
   }
   /** A call into a tab, or its refusal with why: where its surface cannot show the call's path, or fails on the call itself. */
   const called = (tab: Tab, call: Call, model: ShellModel): Update<ShellModel, ShellCommand> => {
@@ -211,12 +230,20 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       return { refused: `tab ${tab.n} is unchanged: its ${tab.surface} surface fails on ${call.handle} (${message(error)}); fix the surface's code` }
     }
   }
+  /** A tab's notice as the shell gives it: its path whole, and its surface named. */
+  const noticed = (tab: Tab, notice: Notice): Notice => {
+    const { text, at } = typeof notice === "string" ? { text: notice, at: undefined } : notice
+    const address = `/tabs/${tab.n}`
+
+    return { text, at: typeof at === "string" && at.startsWith("/") && at !== "/" ? address + at : address, from: tab.surface }
+  }
   const wrapped = (tab: Tab, result: Update<unknown, unknown>, model: ShellModel): Update<ShellModel, ShellCommand> =>
     "refused" in result
       ? result
       : {
           model: { ...model, tabs: model.tabs.map((t) => (t.n === tab.n ? { ...t, model: result.model } : t)) },
           commands: (result.commands ?? []).map((command) => ({ n: tab.n, surface: tab.surface, command })),
+          ...(result.notices?.length && { notices: result.notices.map((notice) => noticed(tab, notice)) }),
         }
 
   return surface<ShellModel, ShellEvent, ShellCommand>({
@@ -282,7 +309,11 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
 
         if (!home || path !== "/") return home
 
-        return { ...home, tabs: (home.tabs as View[]).map((row, i) => ({ ...row, ...said(model.tabs[i]!, actor) })) }
+        const rows = model.tabs.map((tab) => said(tab, actor))
+        const needs: Need[] = rows.flatMap(({ needs }, i) => needs.map((need) => ({ at: `/tabs/${model.tabs[i]!.n}`, surface: model.tabs[i]!.surface, ...need })))
+        const { title, ...rest } = home
+
+        return { title, ...(needs.length && { needs }), ...rest, tabs: (home.tabs as View[]).map((row, i) => ({ ...row, ...rows[i]!.row })) }
       }
 
       const tab = model.tabs.find((t) => t.n === at.n)

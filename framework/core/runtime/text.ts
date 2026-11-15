@@ -1,9 +1,10 @@
-// The agent's text answers and session memory, with who changed what since it was last answered; JSON clients keep their own presentation.
+// The agent's text answers and session memory, with who changed what since it was last answered, and what was noticed since,
+// told once; JSON clients keep their own presentation.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
 import { changes, flatten } from "../present/present.ts"
 import { handles, type Args, type Handle, type Json } from "../surface/view.ts"
-import type { Running } from "../surface/run.ts"
+import type { Cause, Noticed, Running } from "../surface/run.ts"
 import { isPerson } from "../session.ts"
 
 const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle"
@@ -62,13 +63,25 @@ export function textArgs(view: Json | undefined, name: string, input: unknown): 
 /** Who made a change, in the words the agent is told: the person, this session's agent, the surface by itself, another actor. */
 const BY: Record<string, string> = { person: "the person", you: "you", surface: "the surface" }
 
+/** Who a commit's cause is, for the agent `actor`: the surface where a command's event made it, else the caller, `you` where it is the agent. */
+export const whoOf = (cause: Cause | undefined, actor: string): string | undefined =>
+  !cause ? undefined : !cause.call ? "surface" : cause.actor === actor ? "you" : isPerson(cause.actor) ? "person" : cause.actor
+
+/** A notice in one line: who says it and where, what happened, and by whom. */
+export const noticeLine = (notice: Noticed, who: string) => {
+  const where = [notice.from, notice.at].filter(Boolean).join(" ")
+
+  return `${where && `${where}: `}${notice.text} (by ${BY[who] ?? who})`
+}
+
 /** The key of a line of a diff: `+ key: …`, `key: … → …`, `- key`. */
 const keyOf = (line: string) => /^(?:[+-] )?(.*?)(?:: |$)/.exec(line)![1]!
 
 /**
  * The agent's text session: what it was last told, and since then who changed each fact of /. A change is the person's when
  * their call made it, the agent's when its own did, through the word or a program, and the surface's when a command's event
- * did. What only the agent's own calls changed is not told again: their answers told it.
+ * did. What only the agent's own calls changed is not told again: their answers told it. The notices heard since are told
+ * with the next answer, once, under `notices:`, but for those of the agent's own calls; they are held in memory alone.
  */
 export function textSession<M>(running: Running<M>, dir: string, actor: string, command: string) {
   const file = join(dir, "presented", "text.json")
@@ -84,14 +97,20 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   let marks = flat()
   let version = running.version()
   const by = new Map<string, Set<string>>()
+  let heard: string[] = []
+
+  running.notices((notice) => {
+    const who = whoOf(notice.cause, actor)!
+
+    if (who !== "you") heard.push(noticeLine(notice, who))
+  })
 
   running.subscribe(() => {
     if (running.version() === version) return
     version = running.version()
 
     const now = flat()
-    const cause = running.cause()
-    const who = !cause ? undefined : !cause.call ? "surface" : cause.actor === actor ? "you" : isPerson(cause.actor) ? "person" : cause.actor
+    const who = whoOf(running.cause(), actor)
 
     for (const key of new Set([...now.keys(), ...marks.keys()]))
       if (now.get(key) === marks.get(key)) continue
@@ -134,11 +153,14 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     if (now !== undefined) writeJsonFile(file, now)
     before = now
     by.clear()
+    heard = []
   }
 
   return {
     root,
     diff,
+    /** How many notices wait to be told. */
+    noticed: () => heard.length,
     changed: () => (before === undefined ? [...textLines(root(), "", new Map(), "/", command).values()] : diff(before, root()).filter(others)),
     /** `path` is where the answer's lines were read or called: what / says of that same path, in the same words, is not said again. */
     answer(lines: string[], whole = false, shown?: Json, path?: string) {
@@ -175,7 +197,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
               !repeated(line)
           )
 
-      const said = [...new Set(lines), ...(!extra.length ? [] : before === undefined ? ["changed:", ...extra] : grouped(extra))].join("\n")
+      const notices = heard.length ? ["notices:", ...heard] : []
+      const said = [...new Set(lines), ...notices, ...(!extra.length ? [] : before === undefined ? ["changed:", ...extra] : grouped(extra))].join("\n")
 
       told(now)
 

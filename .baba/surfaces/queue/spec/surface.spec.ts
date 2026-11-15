@@ -53,7 +53,8 @@ test("what the agent suggests is a draft, which only the person approves into th
 
   await agent.call("/", "draft", { title: "Rename the picker", about: "It reads as a list" })
   expect(rows(agent.sees())).toEqual([[1, "draft", undefined]])
-  expect(agent.sees()).toMatchObject({ waiting: expect.stringContaining("the person") })
+  expect(agent.sees()).toMatchObject({ attention: { who: "person", why: "to approve or drop 1 draft" } })
+  expect(agent.sees("/issues/1")).toMatchObject({ attention: { who: "person" } })
   expect(await agent.call("/issues/1", "approve", { n: 1 })).toMatchObject({ outcome: "refused" })
   expect(await agent.call("/issues/1", "start", { n: 1, lane: 1 })).toMatchObject({ outcome: "refused" })
 
@@ -61,4 +62,17 @@ test("what the agent suggests is a draft, which only the person approves into th
   await person.call("/issues/1", "approve", { n: 1 })
   expect(rows(agent.sees())).toEqual([[1, "backlog", undefined]])
   expect(agent.told()).toContain('issues.0.status: "draft" → "backlog"')
+  expect(agent.sees()).not.toHaveProperty("attention")
+  expect(agent.noticed()).toEqual(["Draft 1, Rename the picker, approved: it joins the backlog"])
+})
+
+test("what happens to an issue is noticed: started, done, dropped; the agent is not told back what its own calls did", async () => {
+  const { agent, person } = story(queue)
+
+  await agent.call("/", "add", { title: "One", about: "Why" })
+  await agent.call("/issues/1", "start", { n: 1, lane: 2 })
+  await agent.call("/issues/1", "done", { n: 1 })
+  await person.call("/issues/1", "drop", { n: 1 })
+  expect(person.noticed()).toEqual(["Issue 1, One, started in lane 2", "Issue 1, One, is done", "Issue 1, One, dropped"])
+  expect(agent.noticed()).toEqual(["Issue 1, One, dropped"])
 })

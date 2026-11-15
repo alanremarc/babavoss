@@ -14,26 +14,30 @@ test("the agent proposes a greeting, and only the person is offered the decision
   // When the agent proposes
   expect(await agent.call("/", "propose", { text: "good morning" })).toMatchObject({ outcome: "written" })
 
-  // Then both see the proposal and what is waited for, and the person alone may decide
-  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning", waiting: expect.stringContaining("the person") })
+  // Then both see the proposal and that the person is needed, and the person alone may decide
+  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning", attention: { who: "person" } })
   expect(agent.offered()).toEqual(["propose"])
   expect(person.offered()).toEqual(["accept", "decline", "propose"])
   expect(await agent.call("/", "accept", {})).toMatchObject({ outcome: "refused" })
 })
 
-test("the agent is told what the person decided", async () => {
+test("the agent is told what the person decided, and both notice it", async () => {
   const { agent, person } = story(greeting)
 
   await agent.call("/", "propose", { text: "good morning" })
   agent.told()
+  expect(agent.noticed()).toEqual([])
   await person.call("/", "accept", {})
-  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- waiting"])
+  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- attention.who", "- attention.why"])
+  expect(agent.noticed()).toEqual(['The greeting is now "good morning"'])
+  expect(person.noticed()).toEqual(['The greeting is now "good morning"'])
 
   await agent.call("/", "propose", { text: "hi" })
   agent.told()
   await person.call("/", "decline", {})
   expect(agent.sees()).toMatchObject({ greeting: "good morning" })
-  expect(agent.told()).toEqual(["- proposed", "- waiting"])
+  expect(agent.told()).toEqual(["- proposed", "- attention.who", "- attention.why"])
+  expect(agent.noticed()).toEqual(['"hi" was declined'])
 })
 
 test("a greeting without text is refused, and nothing changes", async () => {

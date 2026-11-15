@@ -20,7 +20,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, 
 import { dirname, join, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { modelPorts, stateDir } from "../state/state.ts"
-import { run, type Running } from "../surface/run.ts"
+import { run, type Noticed, type Running } from "../surface/run.ts"
 import type { RootDefinition } from "../root.ts"
 import { door } from "./door.ts"
 import { DENIED_EXIT, Denied, lastPort, logFile, ownService } from "./service.ts"
@@ -45,6 +45,8 @@ export type RuntimeOptions = {
    * longer the code on disk, and wakes its successor by calling this.
    */
   successor?: () => void
+  /** The later release that is out, if any, asked once as the runtime starts: the page says so, quietly. */
+  latest?: () => Promise<string | undefined>
 }
 export const IDLE_MS = 30 * 60_000
 export const CLOSE_MS = 8000
@@ -142,21 +144,31 @@ const lives = (): Map<string, Live> => {
   return (held[LIVE] ??= new Map())
 }
 
-/** One surface standing for whichever runs now: its subscribers and its count of commits go on through a swap. */
+/** One surface standing for whichever runs now: its subscribers, those who hear its notices and its count of commits go on through a swap. */
 function standing<M>(first: Running<M>) {
   let current = first
   let base = 0
   const subscribers = new Set<() => void>()
+  const hearers = new Set<(notice: Noticed) => void>()
   const tell = () => {
     for (const fn of subscribers) fn()
   }
+  const hear = (notice: Noticed) => {
+    for (const fn of hearers) fn(notice)
+  }
   let off = current.subscribe(tell)
+  let deaf = current.notices(hear)
   const own: Partial<Running<M>> = {
     version: () => base + current.version(),
     subscribe: (fn) => {
       subscribers.add(fn)
 
       return () => void subscribers.delete(fn)
+    },
+    notices: (fn) => {
+      hearers.add(fn)
+
+      return () => void hearers.delete(fn)
     },
   }
 
@@ -165,9 +177,11 @@ function standing<M>(first: Running<M>) {
     current: () => current,
     replace(next: Running<M>) {
       off()
+      deaf()
       base += current.version() + 1
       current = next
       off = next.subscribe(tell)
+      deaf = next.notices(hear)
       tell()
     },
   }
@@ -392,7 +406,14 @@ export async function startRuntime(
 
     return leaving
   }
-  const about = { root: root.name, version: rootVersion(options.entry), session }
+  const about: Record<string, string> = { root: root.name, version: rootVersion(options.entry), session }
+
+  void options
+    .latest?.()
+    .then((version) => {
+      if (version) about.update = version
+    })
+    .catch(() => {})
   const entrance = door(running, {
     identity: owner.identity,
     ui: root.ui,
