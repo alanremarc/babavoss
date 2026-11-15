@@ -1,10 +1,11 @@
 // The shell page: the shell's view at / drives the tab strip and the launcher; each tab shows its surface's component.
 // The strip is the launcher's "+", then the open tabs newest first. A tab the person opens becomes theirs to look at; one
 // the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are.
-// The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
+// The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. When the
+// agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
-import { CircleAlertIcon, SettingsIcon, XIcon } from "lucide-react"
+import { CircleAlertIcon, LocateFixedIcon, SettingsIcon, XIcon } from "lucide-react"
 import type { Handle, View } from "../../core/index.ts"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
 import { Button } from "../../kit/components/button"
@@ -13,6 +14,7 @@ import { call, changes, read } from "./client.ts"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
+import { arrival, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent } from "./tabs.tsx"
 
@@ -20,18 +22,9 @@ import { SurfaceTabs, TabContent } from "./tabs.tsx"
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
 /** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
 type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
-type RootView = { title: string; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[] }
-type At = { key: string; route: string }
+type RootView = { title: string; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
 
-const parse = (): At => {
-  const path = location.pathname.replace(/\/$/, "") || "/"
-  const tab = /^(\/tabs\/\d+)(\/.*)?$/.exec(path)
-
-  if (tab) return { key: tab[1]!, route: tab[2] || "/" }
-  if (path === "/settings") return { key: "settings", route: "/" }
-
-  return { key: "new", route: "/" }
-}
+const parse = () => placeOf(location.pathname)
 const urlOf = (key: string, route = "/") => (key === "new" ? "/" : key === "settings" ? "/settings" : key + (route === "/" ? "" : route))
 
 class TabError extends Component<{ children: ReactNode }, { error?: string }> {
@@ -164,6 +157,45 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     if (opened) go(opened.at, "/")
   }
 
+  // Pointing: the agent's show moves `pointed` at /; the page goes there, or offers it while the person is busy.
+  const [offer, setOffer] = useState<Pointed>()
+  const pointedSeen = useRef<number>(undefined)
+  const acted = useRef(0)
+  const offered = offer && placeOf(offer.at)
+
+  useEffect(() => {
+    const mark = () => void (acted.current = Date.now())
+    const kinds = ["pointerdown", "keydown", "wheel"] as const
+
+    for (const kind of kinds) window.addEventListener(kind, mark, { capture: true, passive: true })
+
+    return () => {
+      for (const kind of kinds) window.removeEventListener(kind, mark, { capture: true })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!root) return
+
+    const { seen, fresh } = pointedSince(pointedSeen.current, root.pointed)
+
+    pointedSeen.current = seen
+    if (!fresh) return
+
+    const place = placeOf(fresh.at)
+
+    if (!root.tabs.some((r) => r.at === place.key) || (place.key === at.key && place.route === at.route)) return setOffer(undefined)
+    if (arrival({ typing: typingIn(document.activeElement), acted: acted.current }, Date.now()) === "go") {
+      setOffer(undefined)
+      go(place.key, place.route)
+    } else setOffer(fresh)
+  }, [root])
+
+  // An offer the person took up by going there themselves is done.
+  useEffect(() => {
+    if (offered && offered.key === at.key && offered.route === at.route) setOffer(undefined)
+  }, [offered?.key, offered?.route, at.key, at.route])
+
   const choices = {
     surfaces: root?.surfaces ?? [],
     icons,
@@ -191,6 +223,23 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           <AlertDescription>{error}</AlertDescription>
           <AlertAction>
             <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setError("")}>
+              <XIcon />
+            </Button>
+          </AlertAction>
+        </Alert>
+      )}
+      {offer && offered && (
+        <Alert className="mx-3 mb-2 w-auto">
+          <LocateFixedIcon />
+          <AlertTitle>
+            The agent points to {entries.find((e) => e.at === offered.key)?.label ?? offered.key}
+            {offered.route !== "/" && <span className="font-mono text-muted-foreground"> {offered.route}</span>}
+          </AlertTitle>
+          <AlertAction className="flex gap-1">
+            <Button size="sm" onClick={() => go(offered.key, offered.route)}>
+              Go there
+            </Button>
+            <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setOffer(undefined)}>
               <XIcon />
             </Button>
           </AlertAction>

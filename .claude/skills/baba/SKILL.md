@@ -17,6 +17,7 @@ Its answer names the page's address, the command to use, the surfaces and the op
 - An answer shows what is true now. Do not look for it in a surface's code or in what it keeps on disk, and never change either to get something done.
 - A line that ends in a description is an action offered now, printed as the exact command. Copy it and give a value where it says `name=string`. An action that is not printed is not offered.
 - A fact named `at` is a path with more behind it: read it with the command for its detail and the actions offered there. A tab's actions are offered at the tab's path, not at `/`.
+- `show` at `/` brings a path to the front of the person's page. Point them to a result or a decision waiting on them, not to each step.
 - A surface is shared and live: the person acts on the page while you work, and is meant to, and a surface's own work changes it too. What moved between two looks is that, not an error or a stale read.
 - With the person's messages and as you work, you are told what changed at `/` since you were last answered, by who changed it: the person, the surface, or you with them. What your own calls alone changed is not told again. Read a tab's path for the rest.
 - What the person did is a move to take up and build on, never to undo or overwrite. Where they changed what you were about to, theirs stands: read again and work from it.

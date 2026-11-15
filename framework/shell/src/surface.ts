@@ -13,7 +13,9 @@ import { action, surface, view, type AnySurface, type Call, type Json, type Surf
 
 /** `broken`: why the tab's surface could not restore its kept model, which is then kept as it was saved. */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string }
-export type ShellModel = { tabs: Tab[]; next: number }
+/** Where the agent last pointed the person, and how many times it has: the page goes there when the count moves. */
+export type Pointed = { at: string; n: number }
+export type ShellModel = { tabs: Tab[]; next: number; pointed?: Pointed }
 export type ShellEvent = { kind: "tab"; n: number; event: { kind: string } }
 export type ShellCommand = { n: number; surface: string; command: unknown }
 
@@ -94,6 +96,32 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
     inputs: {},
     update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({ model: { ...model, tabs: model.tabs.filter((t) => t.n !== n) } }),
   })
+  // Pointing is a moment, not state: the place and a count the page watches, so it goes there once per show. It is
+  // dropped on restore, so a page loaded later does not go there again.
+  const show = action({
+    name: "show",
+    description: "bring a place to the front of the person's page: at is /tabs/N or a path below it, as an at a tab names",
+    subject: {},
+    inputs: { at: "string" },
+    update(model: ShellModel, { at }): Update<ShellModel, ShellCommand> {
+      const place = within(at)
+
+      if (!place) return { refused: `${at} is not in a tab: point at /tabs/N or a path below it` }
+
+      const tab = model.tabs.find((t) => t.n === place.n)
+
+      if (!tab) return { refused: `no tab ${place.n}: it is closed or was never opened; open the surface first` }
+
+      const seen = shown(tab, place.path)
+
+      if ("broken" in seen) return { refused: seen.broken }
+      if (!seen.ok) return { refused: `nothing at ${at}: the ${tab.surface} surface has no such path` }
+
+      const path = `/tabs/${tab.n}${place.path === "/" ? "" : place.path}`
+
+      return { model: { ...model, pointed: { at: path, n: (model.pointed?.n ?? 0) + 1 } } }
+    },
+  })
   /** Why a tab is broken when its surface cannot restore what it keeps: the fault is the kept state, or the restore. */
   const unrestored = (tab: Tab, error: unknown) =>
     `tab ${tab.n} is broken: its ${tab.surface} surface cannot restore the state the tab keeps (${message(error)}); ` +
@@ -152,12 +180,14 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       return { broken: `/tabs/${tab.n}${path} cannot be shown: ${failed}, while tab ${tab.n} works at /: fix the surface's code for this path` }
     }
   }
-  const desktop = view([open, close], {
+  const desktop = view([open, close, show], {
     "/": (model) => ({
       title: "baba",
       ...(baba === undefined ? { missing: MISSING } : !held.size && { empty: EMPTY }),
       surfaces: [...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
       tabs: model.tabs.map((tab) => ({ at: `/tabs/${tab.n}`, n: tab.n, surface: tab.surface, close: close.bind({ n: tab.n }) })),
+      ...(model.tabs.length > 0 && { show: show.bind({}) }),
+      ...(model.pointed && { pointed: model.pointed }),
     }),
   })
   /** A tab as the desktop lists it, for the actor: its surface's title and facts at /, the paths whole; or why it is broken. */

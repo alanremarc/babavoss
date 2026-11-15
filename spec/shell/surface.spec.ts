@@ -343,6 +343,30 @@ describe("the shell surface", () => {
     expect(await agent.call("/", "open", { surface: "counter" })).toMatchObject({ outcome: "written", view: { tabs: [{ at: "/tabs/1" }] } })
   })
 
+  it("lets the agent point the person to a place in a tab: shown at / to both, and refused with why where there is none", async () => {
+    const { agent, person, world } = story(shell({ counter }, BABA))
+
+    expect(agent.offered("/")).not.toContain("show")
+    await agent.call("/", "open", { surface: "counter" })
+    await world.settle({ kind: "tab", n: 1, event: { kind: "bumped" } })
+    expect(agent.offered("/")).toContain("show")
+    expect(await agent.call("/", "show", { at: "/tabs/1/n/" })).toMatchObject({ outcome: "written" })
+    expect(person.sees("/")!.pointed).toEqual({ at: "/tabs/1/n", n: 1 })
+    expect(agent.sees("/")!.pointed).toEqual({ at: "/tabs/1/n", n: 1 })
+    await agent.call("/", "show", { at: "/tabs/1/n" })
+    expect(person.sees("/")!.pointed).toEqual({ at: "/tabs/1/n", n: 2 })
+    expect(await agent.call("/", "show", { at: "/tabs/1/nope" })).toEqual({ outcome: "refused", reason: "nothing at /tabs/1/nope: the counter surface has no such path" })
+    expect(await agent.call("/", "show", { at: "/tabs/7" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("no tab 7") })
+    expect(await agent.call("/", "show", { at: "/settings" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("not in a tab") })
+    expect(person.sees("/")!.pointed).toEqual({ at: "/tabs/1/n", n: 2 })
+  })
+
+  it("drops where it last pointed when it restores, so a page loaded later does not go there again", () => {
+    const kept = { tabs: [{ n: 1, surface: "counter", model: { title: "Counter", n: 0 } }], next: 2, pointed: { at: "/tabs/1", n: 3 } }
+
+    expect(shell({ counter }, BABA).restore!(kept).pointed).toBeUndefined()
+  })
+
   it("names tabs and paths, and refuses bad surface names", () => {
     expect(within("/tabs/3")).toEqual({ n: 3, path: "/" })
     expect(within("/tabs/3/notes/2/")).toEqual({ n: 3, path: "/notes/2" })
