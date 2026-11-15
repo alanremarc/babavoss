@@ -1,0 +1,77 @@
+/* Written by framework/kit/theme.ts from its steps, which a spec keeps it equal to: change them there and run it. */
+/* The theme's numbers, Neutral's by default, which the shell sets on the page's root as the person chose. */
+:root {
+  --theme-hue: 0;
+  --theme-tint: 0;
+  --theme-vivid: 0;
+}
+
+:root,
+[data-theme] {
+  --tint-chroma: calc(clamp(0, var(--theme-tint), 100) / 100 * 0.03);
+  --vivid-chroma: calc(clamp(0, var(--theme-vivid), 100) / 100 * 0.2);
+  --vivid-reach: min(1, clamp(0, var(--theme-vivid), 100) / 60);
+  --bright: calc((1 + cos((var(--theme-hue) - 200) * 1deg)) / 2);
+  --background: oklch(1 calc(var(--tint-chroma) * 0.5) var(--theme-hue));
+  --foreground: oklch(0.145 calc(var(--tint-chroma)) var(--theme-hue));
+  --card: oklch(1 calc(var(--tint-chroma) * 0.4) var(--theme-hue));
+  --card-foreground: oklch(0.145 calc(var(--tint-chroma)) var(--theme-hue));
+  --popover: oklch(1 calc(var(--tint-chroma) * 0.4) var(--theme-hue));
+  --popover-foreground: oklch(0.145 calc(var(--tint-chroma)) var(--theme-hue));
+  --primary: oklch(calc(0.205 + 0.352 * var(--vivid-reach) - 0.08 * var(--vivid-reach) * var(--bright)) calc(var(--tint-chroma) + var(--vivid-chroma)) var(--theme-hue));
+  --primary-foreground: oklch(0.985 calc(var(--tint-chroma) * 0.6) var(--theme-hue));
+  --secondary: oklch(0.97 calc(var(--tint-chroma)) var(--theme-hue));
+  --secondary-foreground: oklch(0.205 calc(var(--tint-chroma)) var(--theme-hue));
+  --muted: oklch(0.97 calc(var(--tint-chroma) * 1.3) var(--theme-hue));
+  --muted-foreground: oklch(0.54 calc(var(--tint-chroma) * 1.2) var(--theme-hue));
+  --accent: oklch(0.97 calc(var(--tint-chroma) * 1.3) var(--theme-hue));
+  --accent-foreground: oklch(0.205 calc(var(--tint-chroma)) var(--theme-hue));
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.53 0.14 150);
+  --warning: oklch(0.56 0.14 65);
+  --info: oklch(0.55 0.16 255);
+  --border: oklch(0.922 calc(var(--tint-chroma) * 1.4) var(--theme-hue));
+  --input: oklch(0.922 calc(var(--tint-chroma) * 1.6) var(--theme-hue));
+  --ring: oklch(0.708 calc(var(--tint-chroma) * 0.5 + var(--vivid-chroma) * 0.8) var(--theme-hue));
+  --sidebar: oklch(0.985 calc(var(--tint-chroma)) var(--theme-hue));
+  --chart-1: oklch(0.87 calc(var(--vivid-chroma) * 0.5) var(--theme-hue));
+  --chart-2: oklch(0.556 calc(var(--vivid-chroma) * 0.8) var(--theme-hue));
+  --chart-3: oklch(0.439 calc(var(--vivid-chroma) * 0.8) var(--theme-hue));
+  --chart-4: oklch(0.371 calc(var(--vivid-chroma) * 0.7) var(--theme-hue));
+  --chart-5: oklch(0.269 calc(var(--vivid-chroma) * 0.6) var(--theme-hue));
+  --thread-user: oklch(0.55 0.16 255);
+  --thread-context: oklch(0.56 0.12 65);
+}
+
+.dark,
+.dark [data-theme]:not(.light) {
+  --background: oklch(0.145 calc(var(--tint-chroma) * 0.8) var(--theme-hue));
+  --foreground: oklch(0.985 calc(var(--tint-chroma) * 0.5) var(--theme-hue));
+  --card: oklch(0.205 calc(var(--tint-chroma)) var(--theme-hue));
+  --card-foreground: oklch(0.985 calc(var(--tint-chroma) * 0.5) var(--theme-hue));
+  --popover: oklch(0.205 calc(var(--tint-chroma) * 1.2) var(--theme-hue));
+  --popover-foreground: oklch(0.985 calc(var(--tint-chroma) * 0.5) var(--theme-hue));
+  --primary: oklch(calc(0.922 + -0.25 * var(--vivid-reach)) calc(var(--tint-chroma) + var(--vivid-chroma)) var(--theme-hue));
+  --primary-foreground: oklch(0.205 calc(var(--tint-chroma) * 1.6) var(--theme-hue));
+  --secondary: oklch(0.269 calc(var(--tint-chroma) * 1.2) var(--theme-hue));
+  --secondary-foreground: oklch(0.985 calc(var(--tint-chroma) * 0.5) var(--theme-hue));
+  --muted: oklch(0.269 calc(var(--tint-chroma) * 2) var(--theme-hue));
+  --muted-foreground: oklch(0.708 calc(var(--tint-chroma) * 1.6) var(--theme-hue));
+  --accent: oklch(0.269 calc(var(--tint-chroma) * 2) var(--theme-hue));
+  --accent-foreground: oklch(0.985 calc(var(--tint-chroma) * 0.5) var(--theme-hue));
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.74 0.15 150);
+  --warning: oklch(0.8 0.14 75);
+  --info: oklch(0.72 0.13 255);
+  --border: oklch(1 calc(var(--tint-chroma) * 1.4) var(--theme-hue) / 10%);
+  --input: oklch(1 calc(var(--tint-chroma) * 1.6) var(--theme-hue) / 15%);
+  --ring: oklch(0.556 calc(var(--tint-chroma) * 0.5 + var(--vivid-chroma) * 0.8) var(--theme-hue));
+  --sidebar: oklch(0.205 calc(var(--tint-chroma)) var(--theme-hue));
+  --chart-1: oklch(0.87 calc(var(--vivid-chroma) * 0.5) var(--theme-hue));
+  --chart-2: oklch(0.556 calc(var(--vivid-chroma) * 0.8) var(--theme-hue));
+  --chart-3: oklch(0.439 calc(var(--vivid-chroma) * 0.8) var(--theme-hue));
+  --chart-4: oklch(0.371 calc(var(--vivid-chroma) * 0.7) var(--theme-hue));
+  --chart-5: oklch(0.269 calc(var(--vivid-chroma) * 0.6) var(--theme-hue));
+  --thread-user: oklch(0.72 0.13 255);
+  --thread-context: oklch(0.78 0.12 75);
+}
