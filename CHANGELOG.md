@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.22.0
+
+- The UI kit left the shell and has its own name, `babavoss/kit`. In a surface's `ui/index.tsx`, components (`Button`, `Alert`, `Empty…`, `Dialog…`, `Popover…`, `Tooltip…`, `ToggleGroup…`, `Command…`, `Trace…`, `CodeBlock…`, `Thread…`, `Composer`, `Message…`, `Bubble…`, `MessageScroller…`, `InputGroup…`), layouts (`Plain`, `Workbench`, `Welcome`, `MenuBar`) and the workbench parts (`Workbench*`, `Dismiss`, `useNarrow` and their types) now import from `babavoss/kit/index.ts` instead of `babavoss/shell/ui/index.ts`.
+- `useTab`, `useLive`, `TabProvider`, `read`, `call`, `changes` and `Shell` stay at `babavoss/shell/ui/index.ts`.
+- `<Workbench>` now takes `address` and `util` props: pass them from `useTab()`.
+- Paths into `babavoss/shell/ui/components/…` or `…/layouts/…` become `babavoss/kit/components/…` and `babavoss/kit/layouts/…`. A stylesheet that imported `babavoss/shell/ui/styles.css` for the design language alone imports `babavoss/kit/styles.css`; the root's page is unchanged.
+
 ## 0.21.3
 
 - A call into a broken tab is now refused with why it is broken. The core adds a view's string fact `broken` to the "not offered" refusal, and any surface may use that fact at any path.
