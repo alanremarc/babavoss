@@ -38,7 +38,8 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
         definition.name,
         typeof definition.description === "string" ? definition.description : definition.description(subject),
         subject,
-        definition.inputs
+        definition.inputs,
+        definition.ask
       ),
     // The loop has already checked the fixed subject, inputs and current availability.
     update: (model: M, call: Call) => definition.update(model, call.args as Inputs<S> & Inputs<I>, call),
@@ -56,10 +57,15 @@ export function view<M, C>(actions: readonly Action<M, C>[], routes: Routes<M>) 
   }
 
   const asks = new Set(actions.filter((a) => a.ask).map((a) => a.name))
-  /** The view without the handles that are the person's alone. */
+  /** The view without the handles that are the person's alone, and with no handle marked as one. */
   const unasked = (value: Json | undefined): Json | undefined => {
     if (Array.isArray(value)) return value.map((v) => unasked(v) ?? null)
-    if (!value || typeof value !== "object" || value.kind === "handle") return value
+    if (value && typeof value === "object" && value.kind === "handle") {
+      const { ask, ...rest } = value
+
+      return ask === undefined ? value : rest
+    }
+    if (!value || typeof value !== "object") return value
 
     return Object.fromEntries(
       Object.entries(value).flatMap(([k, v]) =>

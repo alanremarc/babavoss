@@ -187,6 +187,11 @@ test("an action declared an ask is offered to the person only, wherever it is bo
 
   expect(agent.offered()).toEqual(["write"])
   expect(person.offered()).toEqual(["write", "approve"])
+  // The person's view marks the ask as one, so a page knows it from that view alone; nothing the agent reads carries the mark.
+  expect(person.sees()).toMatchObject({ write: { name: "write" }, review: { approve: { name: "approve", ask: true } } })
+  expect(person.sees()!.write).not.toHaveProperty("ask")
+  expect(JSON.stringify(agent.sees())).not.toContain('"ask"')
+  expect(JSON.stringify(pages.view({ text: "", approved: false }, "/", "agent"))).not.toContain('"ask"')
   expect(agent.sees()).toMatchObject({ review: { waiting: true } })
   expect(await agent.call("/", "approve", {})).toMatchObject({ outcome: "refused" })
   agent.told()
