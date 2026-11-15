@@ -91,3 +91,5 @@ export {
   useMessageScroller,
 } from "./components/message-scroller"
 export { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText, InputGroupTextarea } from "./components/input-group"
+export { ThemePicker } from "./components/theme-picker"
+export { derive, PRESETS, presetOf, varsOf, type Theme, type PresetId } from "./theme.ts"

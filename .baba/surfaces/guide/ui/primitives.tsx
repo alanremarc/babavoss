@@ -1,6 +1,6 @@
 // The primitives' specimens: every component of the kit, in its variants and states, live, with sample content. What
 // opens over the page, a dialog, a sheet, a menu, opens from a button here, as it would in a page.
-import { useState, type ComponentType, type ReactNode } from "react"
+import { useState, type ComponentType, type CSSProperties, type ReactNode } from "react"
 import { BellIcon, BoldIcon, BotIcon, CircleAlertIcon, CopyIcon, FileTextIcon, InboxIcon, ItalicIcon, PlusIcon, RotateCcwIcon, SearchIcon, TerminalIcon, UnderlineIcon, WrenchIcon } from "lucide-react"
 import {
   Alert,
@@ -89,6 +89,10 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  ThemePicker,
+  presetOf,
+  varsOf,
+  type Theme,
   type ToastItem,
 } from "babavoss/kit/index.ts"
 import { Toggle } from "babavoss/kit/components/toggle.tsx"
@@ -820,12 +824,43 @@ function Composers() {
   )
 }
 
+/** The picker over a box of its own theme, which the box takes as it is dragged; what is let go is said under it. */
+function ThemePickers() {
+  const [theme, setTheme] = useState<Theme>(presetOf("claude"))
+  const [kept, setKept] = useState<Theme>(presetOf("claude"))
+  const preview = (mode: "light" | "dark") => (
+    <div data-theme="dynamic" className={`${mode} flex flex-1 items-center gap-2 rounded-md border bg-background p-2 text-foreground`} style={varsOf(theme) as CSSProperties}>
+      <span className="size-3 rounded-full bg-primary" />
+      <span className="text-meta">{mode}</span>
+      <span className="ml-auto rounded bg-muted px-1.5 text-meta text-muted-foreground">muted</span>
+    </div>
+  )
+
+  return (
+    <States min={280}>
+      <State label={`live: kept hue ${kept.hue}, tint ${kept.tint}, vivid ${kept.vivid}`} className="flex-col items-stretch">
+        <ThemePicker value={kept} onChange={setTheme} onCommit={(t) => (setTheme(t), setKept(t))} />
+      </State>
+      <State label="light and dark, as it is dragged" className="flex-col items-stretch">
+        <div className="flex gap-2">
+          {preview("light")}
+          {preview("dark")}
+        </div>
+      </State>
+      <State label="disabled" className="flex-col items-stretch">
+        <ThemePicker value={presetOf("ocean")} disabled />
+      </State>
+    </States>
+  )
+}
+
 export const primitives: Record<EntryOf<"primitives">, ComponentType> = {
   button: Buttons,
   toggle: Toggles,
   input: Inputs,
   "input-group": InputGroups,
   command: Commands,
+  "theme-picker": ThemePickers,
   badge: Badges,
   marker: Markers,
   alert: Alerts,
