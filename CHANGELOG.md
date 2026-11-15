@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.26.0
+
+- The shell now frames every tab: the title, the page's menus, an Actions menu with the actions the surface offers at the tab's route and at `/`, and the asks on the right. ⌘K offers all of them first.
+- A surface's `ui/index.tsx` should return its content alone: remove the `<Plain label="…">` wrapper, which only drew a bar. Give the page's own commands with `useMenus([{ id, label, items }])` from `babavoss/kit/index.ts`.
+- `Plain`, `Workbench` and `MenuBar` still work; inside the shell their menus move into the frame. Keep a layout only for what it adds inside the content.
+- Handle names and descriptions now also label buttons and menu items the person sees; name them for both readers.
+
 ## 0.25.0
 
 - The shell offers `show at=PATH` at `/` while a tab is open: the person's page brings that tab to the front and opens that route. While the person is writing in a field, or acted on the page in the last few seconds, the page offers the place to click to instead. `/` carries `pointed`, the place last shown and its count.
