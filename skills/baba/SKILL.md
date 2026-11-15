@@ -20,28 +20,10 @@ If `bun` is missing, tell the person to install it with `curl -fsSL https://bun.
 
 ## Building an app
 
-The build tab is open from the start, and its `next` says what remains to do. Work in this order:
+1. Give the person the page address before anything else.
+2. Agree with the person what the app is for: its job, the agent's part, what the person sees on the page and what they decide there. Ask what only they can decide.
+3. Call `create` on the build tab. The app is made from the template in skills/NAME and installed in this project.
+4. Open it with the command the build tab prints, and give the person its page before changing anything.
+5. Replace the template's greeting with the app's own work, one step at a time, each ending in something the person can see on the page. A running app loads a change in its code by itself.
 
-1. Give the person the page address before anything else. They follow the brief there while you write it.
-2. Write the brief from what the person asked, before any code: the app's job in one sentence, the agent's part, what the person sees on the page, what they decide there, and what the app needs from outside. The person changes things by telling the agent; the page shows what is true and offers only the decisions that are theirs.
-3. Decide what you sensibly can. What only the person can decide, such as which service or account to use, what must not happen without them, or what the page is for, note as a question, ask it in chat and record the answer. Do not guess those.
-4. Wait for the person to approve the brief on the page. Approving is theirs. If they want it changed, change the brief and wait again.
-5. Create the app. It runs at once, from the template: open it and give the person its page before you build anything.
-6. List the steps of building it, each ending in something the person can see on the app's page. Do one at a time, mark it, and tell the person in a line what to look at.
-7. Before you say it is done, try the first task in the playground with a scenario and look at the trace with the person.
-
-To change an app that has a brief, change the brief first; a change to what was approved is approved again.
-
-The other utils:
-
-- promptware: read the app's skill, its references and its computed open answer as the agent gets them, each with its size in characters and estimated tokens.
-- playground: try the app in a workspace under a setup, by hand or with a scenario, and inspect the trace with the person.
-
-Read the reference when its subject applies:
-
-- [App](references/app.md): understand what an app owns before designing it.
-- [Start](references/start.md): make an app from the template, install it or contribute a framework fix.
-- [Surface](references/surface.md): design facts, handles, commands, asks and stories.
-- [Page](references/page.md): design what the person sees and does; choose a shell layout.
-- [Playground](references/playground.md): write presets and scenarios, try the task and inspect its trace.
-- [Diagnosis](references/diagnosis.md): investigate a missing answer, refusal or unexpected state.
+An app holds no framework: it runs on this skill's, in `framework/` here, and imports it as `babavoss/core/…` and `babavoss/shell/…`. Read the framework's code there rather than guessing its interfaces. Check an app with `bun check` and `bun test` from its directory.

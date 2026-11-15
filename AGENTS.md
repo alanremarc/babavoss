@@ -1,33 +1,31 @@
 # babavoss
 
-A TypeScript framework for software that agents operate. An app is one skill: its directory holds the skill, a surface the agent reads and acts on through a command, and a page where the person watches and steers over the same surface. This repository is one product at one version: the framework and its shell, babavoss, which an app installs from this repository's release tags, and baba, the skill that authors apps on it.
+baba is a skill for making software an agent operates and a person steers. Each such app is one skill: its directory holds the skill, a surface the agent reads and acts on through a command, and a page for the person over the same surface. babavoss is the framework every app runs on; it lives in the baba skill, which provides it to them. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
 
 ## Rules
 
 - Read docs/DESIGN.md before a change. Design leads code: use its vocabulary and name any divergence.
 - A change to docs/DESIGN.md needs proposed wording and a reason, then the person's approval, before it is written.
 - Before each commit run `bun check && bun test`. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
-- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, app, payments, site. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
+- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, app. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
 - Every file and concept earns its keep.
 
 ## Layout
 
 ```text
-package.json                the framework's package, babavoss, at the repository's root; an app installs it from a tag and holds no copy
-packages/babavoss/          the framework's code, exported as babavoss/core/… and babavoss/shell/…
-  core/                     the framework's layers; bv/ holds bv and the door
-  shell/                    the shell: tabs, page hosting and build, layouts, components
-skills/baba/                the product's skill, baba; also the authoring app's skill directory
-  SKILL.md  references/     the authoring app's skill and know-how
-  scripts/open.ts           its door; every app's entry is scripts/open.ts, which installs the app's packages where missing
+package.json                the checkout's root: a workspace that installs the skill's packages; no product
+skills/baba/                the product: the skill baba and the framework, babavoss; what is installed is this directory
+  SKILL.md                  the skill
+  package.json              the package babavoss: its version, its exports and every package an app runs on
+  framework/core/           the framework's layers; bv/ holds bv and the door
+  framework/shell/          the shell: tabs, page hosting and build, layouts, components
+  scripts/open.ts           baba's door
+  scripts/provide.ts        what an app's door hands over to: installs baba's packages, links the app to them, opens it
   assets/template/          the app a new one starts from: a shell of one util; the build util copies it
-  src/  ui/                 the authoring app: app.ts, utils/{build,promptware,playground}, its page
-  scenarios/                its own scenarios, run in its playground: first-app asks for a new app
-spec/{core,shell,app}/      the product's specs, mirroring its code
-spec/support/notes/         the small app the framework's specs use
-examples/payments/          an example app, with its own spec/, scenarios/ and assets/
+  src/  ui/                 the authoring app: app.ts, utils/build, its page
+spec/{core,shell,app}/      the specs, mirroring the code
+spec/support/               the notes app the framework's specs use; baba.ts points every spec at this checkout's baba
 docs/DESIGN.md              the design
-site/                       babavoss.org: one page, its favicon and llms.txt, published as they are by the Pages workflow
 .claude/skills/  .agents/skills/   links to skills/baba: a harness started here runs this checkout
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
@@ -36,10 +34,10 @@ site/                       babavoss.org: one page, its favicon and llms.txt, pu
 ## Code
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
-- Apps import the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`; an app names a release in its package.json, `github:alanremarc/babavoss#vX.Y.Z`. Here the root package links itself, and skills/ and examples/ use the root's node_modules.
+- An app imports the framework only as `babavoss/core/…` and the shell as `babavoss/shell/…`. It holds no copy and no packages: its door, scripts/open.ts, finds baba and hands over, and its node_modules is a link to baba's.
+- Every app's door is the template's, byte for byte; a spec holds them equal.
 - Production never imports spec.
-- Versions are semantic, in package.json, set by hand: the root package, the skill, and the tag the skill, the template and the example name are one version; a spec holds them equal.
-- Every version on main is a release: changing the framework or the skill raises the version, names the new tag where it is depended on, and adds its section to skills/baba/CHANGELOG.md. On main, the Release workflow checks a new version and makes its tag vX.Y.Z and a GitHub release; it fails where the framework or the skill changed under a version tagged already. Tags are never moved.
+- The version is in skills/baba/package.json, set by hand. There are no releases while the design is being reshaped.
 
 Style, which no tool enforces:
 
@@ -51,7 +49,7 @@ Style, which no tool enforces:
 
 ## Specs
 
-- Specs mirror the code: spec/core/ one per layer, spec/shell/, spec/app/; an example's under its own spec/.
+- Specs mirror the code: spec/core/ one per layer, spec/shell/, spec/app/.
 - A surface's rules are stories, with `story()` from the framework: actors see, call and are told; the test settles the world's effects; the model is never read.
 
 ## Skills

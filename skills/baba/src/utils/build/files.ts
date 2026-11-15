@@ -14,7 +14,7 @@ export const HARNESS_SKILLS = SKILL_FOLDERS.filter((folder) => folder.linked).ma
 /** The names the template stands in for the app's own. */
 const PLACEHOLDERS = ["NAME", "my-app"]
 /** The template's files that carry a placeholder. */
-const NAMED = ["SKILL.md", "README.md", "package.json", "src/app.ts", "ui/index.html"]
+const NAMED = ["SKILL.md", "package.json", "src/app.ts", "ui/index.html"]
 const carried = fileURLToPath(new URL("../../../", import.meta.url))
 
 /** Whether anything stands at the path, a link that leads nowhere included. */

@@ -65,7 +65,7 @@ test("the app is made in skills/NAME as real files, and installed in the project
   expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).dependencies).toBeUndefined()
   expect(readFileSync(join(app, "src/app.ts"), "utf8")).toContain('name: "month-close"')
   expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).name).toBe("month-close")
-  for (const file of ["SKILL.md", "README.md", "package.json", "src/app.ts", "ui/index.html"])
+  for (const file of ["SKILL.md", "package.json", "src/app.ts", "ui/index.html"])
     expect(readFileSync(join(app, file), "utf8"), file).not.toMatch(/\bNAME\b|my-app/)
   expect(await files.load()).toEqual([{ name: "month-close", dir: "skills/month-close", description: expect.any(String) }])
   expect(files.create("month-close")).rejects.toThrow("skills/month-close exists already")
