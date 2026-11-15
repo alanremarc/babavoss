@@ -12,8 +12,8 @@ export type LineKind = "blank" | "lead" | "section" | "heading" | "fact" | "add"
 export type Line = { kind: LineKind; text: string; spans: Span[] }
 export type Part = { kind: "prose"; text: string; from: number } | { kind: "shaped"; text: string; from: number; lines: Line[] }
 
-/** A heading of a tab at /: its path, its surface, and its title. */
-const HEADING = /^(\/[^\s:]*)( )([a-z][\w-]*)( )("(?:[^"\\]|\\.)*")$/
+/** A heading of a tab at /: its path, its surface where it is said, its title, and its number where it is said. */
+const HEADING = /^(\/[^\s:]*)( )(?:([a-z][\w-]*)( ))?("(?:[^"\\]|\\.)*")( \(tab \d+\))?$/
 const FACT = /^([\w.[\]/-]+)(: ?)(.*)$/
 const SECTION = /^([a-z][\w ]{0,40}):$/i
 const LEAD = /^(Heard in|In|The shell of) .+:$/
@@ -100,9 +100,9 @@ export function readLine(text: string, section = "", table = false): Line {
       spans: [
         { kind: "path", text: heading[1]! },
         { kind: "plain", text: heading[2]! },
-        { kind: "surface", text: heading[3]! },
-        { kind: "plain", text: heading[4]! },
+        ...(heading[3] ? [{ kind: "surface" as const, text: heading[3] }, { kind: "plain" as const, text: heading[4]! }] : []),
         { kind: "string", text: heading[5]! },
+        ...(heading[6] ? [{ kind: "surface" as const, text: heading[6] }] : []),
       ],
     }
 

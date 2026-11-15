@@ -118,5 +118,10 @@ test("a table is its head, then its rows by tab, until a line with none", () => 
 
 test("what reads as neither is kept as it is, and nothing is lost of a text with odd spacing", () => {
   expect(readLine("nothing at /tabs/1/tasks/1")).toMatchObject({ kind: "plain" })
+  expect(kinds(readLine('/tasks "Tasks" (tab 1)').spans)).toEqual([
+    ["path", "/tasks"],
+    ["string", '"Tasks"'],
+    ["surface", " (tab 1)"],
+  ])
   for (const text of ["", "\n", "  \n\t x", "refused: nothing at /tabs/1", "a \"quoted \\\" string\" → 3", "```\ncode: not a fact\n```", "- pointed\n- done"]) exact(text)
 })

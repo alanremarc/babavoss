@@ -179,7 +179,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "The person looks at the activity",
       about:
-        "While the agent works, the person opens their notifications and clicks a toast, follows where the agent pointed them, and changes a setting: all the page's own housekeeping, none of it the agent's business.",
+        "While the agent works, the person opens their notifications and clicks a toast, follows where the agent pointed them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Add the release tasks and watch the build." },
@@ -211,7 +211,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "One event, one line",
       about:
-        "Twelve tasks; the person approves one on the page. It is one event, yet the agent is told the notice, the row's status, the need gone and the whole new order of the list.",
+        "Twelve tasks; the person approves one on the page. It is one event: is it told as one line, or as the notice, the row's status, the need gone and the whole new order of the list?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Plan the release as tasks; I'll approve them as they are done." },
@@ -228,7 +228,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "A tab the agent is not working in",
       about:
-        "Tasks and build are open; the agent works in tasks over two turns while the build runs again and again, by itself and at the person's asking. Every fact of the build that moved comes with the person's message.",
+        "Tasks and build are open; the agent works in tasks over two turns while the build runs again and again, by itself and at the person's asking. How much of the build comes with the person's message?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Write the notes as tasks." },
@@ -257,7 +257,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "What is detail",
       about:
-        "Forty tasks, thirty of them done with a note each. The whole present at / is told at a session's start, after a compaction and on a read of /: every row, the done ones too.",
+        "Forty tasks, thirty of them done with a note each, and the present at / told at a session's start, after a compaction and on a read of /: is every row told, the done ones too?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Track the port as tasks." },
@@ -287,7 +287,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "A place that moves",
       about:
-        "The agent works in tasks; the person closes the tab and opens tasks again, a new tab with a new number. The agent calls the old path, and has to find the new one.",
+        "The agent works in tasks; the person closes the tab and opens tasks again, a new tab. The agent calls the old path: is it told where tasks went?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Track the release as tasks." },
@@ -307,7 +307,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "A reload under the agent",
       about:
-        "While the agent works, the tasks surface's code changes on disk: its description, and a fact at /. The agent calls while the root loads it and after.",
+        "While the agent works, the tasks surface's code changes on disk: its description, its how and a fact at /. The agent calls while the root loads it and after: what reaches it of the reload?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Track the release as tasks." },
@@ -337,7 +337,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "Hooks that stop",
       about:
-        "The hooks are heard for one turn, then the harness no longer runs them, while the agent's commands go on. Nothing the agent is told says the hooks went quiet, nor that what the person does no longer reaches it.",
+        "The hooks are heard for one turn, then the harness no longer runs them, while the agent's commands go on, a pause among them. Is the agent told the hooks went quiet, and that what the person does no longer reaches it?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Track the release as tasks." },
