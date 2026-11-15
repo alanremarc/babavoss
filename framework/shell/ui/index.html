@@ -9,15 +9,20 @@
       // none yet, from the cookie an older page kept. appearance.ts applies it by the same rules after.
       ;(() => {
         let p = {}
+        let system
         try {
-          p = JSON.parse(document.getElementById("babavoss-settings")?.textContent || "{}").appearance
+          const given = JSON.parse(document.getElementById("babavoss-settings")?.textContent || "{}")
+
+          // The machine's mode, where the runtime could tell it: a browser can be wrong about its machine.
+          system = given.system
+          p = given.appearance
           if (!p) {
             const m = document.cookie.match(/(?:^|; )babavoss\.appearance=([^;]*)/)
             p = JSON.parse(decodeURIComponent(m ? m[1] : "") || "{}")
           }
           p = p || {}
         } catch {}
-        const mode = p.mode === "dark" || (p.mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"
+        const mode = p.mode === "dark" || (p.mode !== "light" && (system ? system === "dark" : matchMedia("(prefers-color-scheme: dark)").matches)) ? "dark" : "light"
         document.documentElement.classList.toggle("dark", mode === "dark")
         document.documentElement.dataset.theme = p.themes?.[mode] || "neutral"
         document.documentElement.style.colorScheme = mode

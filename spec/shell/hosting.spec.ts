@@ -221,6 +221,13 @@ describe("the person's settings in the page", () => {
     expect(withSettings("<head></head>", file)).not.toContain("</script><b>")
   })
 
+  it("come with the machine's mode where it is known, and without it where it is not", () => {
+    const file = scratch()
+
+    expect(given(withSettings("<head></head>", file, () => "dark"))).toMatchObject({ system: "dark" })
+    expect(given(withSettings("<head></head>", file, () => undefined))).not.toHaveProperty("system")
+  })
+
   it("give no appearance while the file has none, so the page paints by an older page's cookie, which is taken into the file once", () => {
     const file = scratch()
     const cookie = `other=1; babavoss.appearance=${encodeURIComponent(JSON.stringify({ mode: "light", themes: { light: "claude", dark: "neutral" } }))}`

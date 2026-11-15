@@ -9,7 +9,8 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { UiHosting } from "../../core/index.ts"
-import { appearanceOf } from "../settings/src/settings.ts"
+import { appearanceOf, type Mode } from "../settings/src/settings.ts"
+import { machineMode } from "../settings/src/system/index.ts"
 import { kept, readSettings, settingsFile, writeSettings } from "../settings/src/store.ts"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -75,11 +76,13 @@ export const SETTINGS_ID = "babavoss-settings"
 
 /**
  * The page with the person's settings in its head, as JSON no markup in it can close. Where the file has no appearance
- * yet, none is given, and the page paints by the cookie an older page kept until it is taken in.
+ * yet, none is given, and the page paints by the cookie an older page kept until it is taken in. `machine` tells the
+ * machine's mode, where it is known: what "system" means to the page, over what its browser says.
  */
-export function withSettings(html: string, file = settingsFile()): string {
+export function withSettings(html: string, file = settingsFile(), machine: () => Mode | undefined = machineMode): string {
   const { appearance, ...rest } = readSettings(file)
-  const given = kept(file)?.appearance === undefined ? rest : { appearance, ...rest }
+  const system = machine()
+  const given = { ...(kept(file)?.appearance === undefined ? rest : { appearance, ...rest }), ...(system && { system }) }
 
   return html.replace(/<head>/i, `<head><script type="application/json" id="${SETTINGS_ID}">${JSON.stringify(given).replaceAll("<", "\\u003c")}</script>`)
 }
@@ -103,12 +106,14 @@ export function migrated(cookie: string | undefined, file = settingsFile()): boo
   }
 }
 
-/** The person's settings, at /_/settings.json, read each time; the cookie of an older page is taken in first. */
+/** The person's settings and the machine's mode, at /_/settings.json, read each time; the cookie of an older page is taken in first. */
 const settingsAsset = (req: IncomingMessage, res: ServerResponse): boolean => {
   if (new URL(req.url ?? "/", "http://127.0.0.1").pathname !== "/_/settings.json") return false
   migrated(req.headers.cookie)
   res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
-  res.end(JSON.stringify(readSettings(settingsFile())))
+  const system = machineMode()
+
+  res.end(JSON.stringify({ ...readSettings(settingsFile()), ...(system && { system }) }))
 
   return true
 }
