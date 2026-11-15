@@ -1,9 +1,8 @@
 // What the queue's two views share: the shapes of its views, the marks of where an issue stands, an issue as a one-liner,
-// the switch between the list and the map, and each narrative's hue.
+// the toolbar that switches between the list and the map, and each narrative's hue.
 import type { ReactNode } from "react"
-import { CircleCheckIcon, CircleDashedIcon, CircleIcon, LoaderCircleIcon } from "lucide-react"
+import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListIcon, LoaderCircleIcon, WaypointsIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
-import { ToggleGroup, ToggleGroupItem } from "babavoss/kit/index.ts"
 
 export type Status = "draft" | "backlog" | "lane" | "done"
 export type Row = { at: string; n: number; title: string; status: Status; lane?: number; narrative: string; from?: number[]; note?: string }
@@ -62,19 +61,29 @@ export function Line({ to, color, onPick }: { to: { n: number; title: string; st
 
 export type Lens = "list" | "map"
 
-/** The switch between the two views, at the top of the sidebar in both; the choice is the tab's route. */
-export function Switch({ lens, onLens, children }: { lens: Lens; onLens: (lens: Lens) => void; children?: ReactNode }) {
+const LENSES: { lens: Lens; label: string; icon: ReactNode }[] = [
+  { lens: "list", label: "List", icon: <ListIcon aria-hidden /> },
+  { lens: "map", label: "Map", icon: <WaypointsIcon aria-hidden /> },
+]
+
+/** The modes of the page, as a toolbar that floats at its foot: an icon each, the one shown lit; the choice is the tab's route. */
+export function Modes({ lens, onLens }: { lens: Lens; onLens: (lens: Lens) => void }) {
   return (
-    <div className="bg-muted/30 sticky top-0 z-10 flex h-9 shrink-0 items-center gap-2 border-b px-2 backdrop-blur">
-      <ToggleGroup type="single" size="sm" variant="outline" value={lens} onValueChange={(value) => value && onLens(value as Lens)} aria-label="View">
-        <ToggleGroupItem value="list" className="px-2.5 text-meta">
-          List
-        </ToggleGroupItem>
-        <ToggleGroupItem value="map" className="px-2.5 text-meta">
-          Map
-        </ToggleGroupItem>
-      </ToggleGroup>
-      <div className="ml-auto flex min-w-0 items-center">{children}</div>
+    <div role="radiogroup" aria-label="View" className="bg-popover absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-xl p-1 shadow-lg ring-1 ring-foreground/10">
+      {LENSES.map((mode) => (
+        <button
+          key={mode.lens}
+          type="button"
+          role="radio"
+          aria-checked={lens === mode.lens}
+          aria-label={mode.label}
+          title={mode.label}
+          onClick={() => onLens(mode.lens)}
+          className="text-muted-foreground hover:bg-foreground/8 hover:text-foreground aria-checked:bg-primary aria-checked:text-primary-foreground grid size-8 place-items-center rounded-lg outline-none focus-visible:bg-foreground/8 [&_svg]:size-4"
+        >
+          {mode.icon}
+        </button>
+      ))}
     </div>
   )
 }

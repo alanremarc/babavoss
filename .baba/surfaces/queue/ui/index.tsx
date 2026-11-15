@@ -12,7 +12,7 @@ import { Button, DialogFooter, Empty, EmptyDescription, EmptyHeader, EmptyTitle,
 import { useLive, useTab, type DrawerProps } from "babavoss/shell/ui/index.tsx"
 import { Detail } from "./detail.tsx"
 import { Narratives, Plane, type Node } from "./map.tsx"
-import { Label, Lane, Line, Mark, Switch, hue, type Lens, type Root, type Status, type Told, type Whole } from "./parts.tsx"
+import { Label, Lane, Line, Mark, Modes, hue, type Lens, type Root, type Status, type Told, type Whole } from "./parts.tsx"
 
 export const icon = <ListTodoIcon aria-hidden />
 
@@ -245,32 +245,33 @@ export default function Queue() {
 
   if (lens === "map")
     return (
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        <Modes lens={lens} onLens={switchTo} />
         {issues.length ? (
           <Plane stories={root!.narratives} nodes={nodes} picked={picked} focus={focus} origin="This session's work" colorOf={colorOf} go={go} />
         ) : (
           <main className="flex min-w-0 flex-1 flex-col">{empty}</main>
         )}
         <aside className="bg-muted/30 flex w-96 shrink-0 flex-col overflow-auto border-l" aria-label={shown ? `Issue ${shown.n}` : "Narratives"}>
-          <Switch lens={lens} onLens={switchTo}>
-            {place !== "/" && (
-              <Button variant="ghost" size="xs" className="min-w-0" onClick={() => go(shown && !focus ? `/narratives/${shown.narrative.id}` : "/")}>
+          {place !== "/" && (
+            <div className="bg-muted/30 sticky top-0 z-10 flex h-9 shrink-0 items-center border-b px-2 backdrop-blur">
+              <Button variant="ghost" size="sm" className="min-w-0" onClick={() => go(shown && !focus ? `/narratives/${shown.narrative.id}` : "/")}>
                 <span className="truncate">← {shown ? shown.narrative.title : "All narratives"}</span>
               </Button>
-            )}
-          </Switch>
+            </div>
+          )}
           {detail(false) ?? (root && <Narratives root={root} told={told} focus={focus && told[focus] ? focus : undefined} colorOf={colorOf} go={go} />)}
         </aside>
       </div>
     )
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1">
+      <Modes lens={lens} onLens={switchTo} />
       <main className="flex min-w-0 flex-1 flex-col overflow-auto">
         {focus && told[focus] ? <Narrative told={told[focus]!} color={colorOf(focus)} go={go} /> : (detail(true) ?? (!issues.length && empty))}
       </main>
       <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label="Issues">
-        <Switch lens={lens} onLens={switchTo} />
         {root && <Stack root={root} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
       </aside>
     </div>

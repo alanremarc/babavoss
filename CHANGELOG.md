@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.43.1
+
+- A menu that is longer than its room scrolls up and down with no bar to show for it, the search being the way through it, and never sideways: every entry is cut at the menu's edge. The kit exports `quietScroll` for a list that scrolls so. Nothing to adapt.
+- In this repository the queue switches between its list and its map from a toolbar of icons floating at the page's foot.
+
 ## 0.43.0
 
 - A refresh is drawn whole in its first frame: the root's door serves the page with an island of JSON, `<script type="application/json" id="babavoss-boot">`, holding the stream's version, the turn and the views the root names for the page's path (`RootDefinition.boot`); the shell names `/`, the notices and the shown tab's views at its `/` and route. Nothing says connecting on a normal load, and the shell's alerts stand over the content without moving it.

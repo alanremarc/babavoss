@@ -36,7 +36,9 @@ export type Menu = {
 
 export const muted = "text-muted-foreground"
 export const menuRow = `relative flex h-row cursor-default items-center gap-2 rounded-md pr-2 outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-40 data-highlighted:bg-foreground/8 data-[state=open]:bg-foreground/8`
-export const menuContent = "z-50 min-w-48 max-w-96 rounded-lg bg-popover p-1 text-body text-popover-foreground shadow-md ring-1 ring-foreground/10"
+/** A list that scrolls up and down where it is long, with no bar to show for it, and never sideways: its entries are cut. */
+export const quietScroll = "overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+export const menuContent = `z-50 min-w-48 max-w-96 max-h-[calc(100dvh-4rem)] rounded-lg bg-popover p-1 text-body text-popover-foreground shadow-md ring-1 ring-foreground/10 ${quietScroll}`
 
 /** The one mark of what waits on the person, beside an entry: on it, and on every label and submenu on the way to it. */
 const Mark = () => <span aria-label="waits on you" className="ml-auto size-1.5 shrink-0 rounded-full bg-primary" />
@@ -55,7 +57,7 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
         return (
           <M.Item key={item.id} disabled={item.disabled} className={menuItem} onSelect={item.run} title={item.hint}>
             <span className="min-w-0 truncate">{item.label}</span>
-            {item.note && <span className={`min-w-0 truncate text-meta ${muted}`}>{item.note}</span>}
+            {item.note && <span className={`min-w-0 shrink-[2] truncate text-meta ${muted}`}>{item.note}</span>}
             {item.mark && <Mark />}
             <Keys keys={item.mark ? undefined : item.keys} />
           </M.Item>
@@ -72,7 +74,7 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
             <M.ItemIndicator className="absolute left-2 grid size-icon place-items-center">
               <CheckIcon className="size-glyph" />
             </M.ItemIndicator>
-            {item.label}
+            <span className="min-w-0 truncate">{item.label}</span>
             <Keys keys={item.keys} />
           </M.CheckboxItem>
         )
@@ -86,7 +88,7 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
                   <M.ItemIndicator className="absolute left-2 grid size-icon place-items-center">
                     <CircleIcon className="size-1.5 fill-current" />
                   </M.ItemIndicator>
-                  {o.label}
+                  <span className="min-w-0 truncate">{o.label}</span>
                 </M.RadioItem>
               ))}
             </M.RadioGroup>
@@ -105,9 +107,9 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
         return (
           <M.Sub key={item.id}>
             <M.SubTrigger disabled={item.disabled} className={menuItem}>
-              {item.label}
+              <span className="min-w-0 truncate">{item.label}</span>
               {item.mark && <Mark />}
-              <ChevronRightIcon aria-hidden className={`${item.mark ? "" : "ml-auto"} size-glyph ${muted}`} />
+              <ChevronRightIcon aria-hidden className={`${item.mark ? "" : "ml-auto"} size-glyph shrink-0 ${muted}`} />
             </M.SubTrigger>
             <M.Portal>
               <M.SubContent sideOffset={4} alignOffset={-4} className={menuContent}>
@@ -214,7 +216,7 @@ export function SearchMenu({
         />
       </label>
       {items.length ? (
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className={`max-h-[60vh] ${quietScroll}`}>
           <MenuItems items={items} kit={kit} />
         </div>
       ) : asked ? (
