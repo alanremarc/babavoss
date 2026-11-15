@@ -44,11 +44,13 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 ...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
 ```
 
-A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
+A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab, and keeps it in the person's notifications; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
 
 ```ts
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
+
+A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page under all activity, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person's notifications.
 
 The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there.
 
@@ -64,6 +66,7 @@ The shell draws one bar above every tab, the same for every surface: the title, 
 - The page's own commands, presentation such as a lens, a pane or a fold, are menus: `useMenus([{ id: "view", label: "View", items }])` from the kit. Every entry is in the palette too.
 - ⌘K or Ctrl+K opens the palette over all of it: the tab's asks, actions and menus first, then the surfaces to open and the tabs to switch to.
 - A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes; its menus join the frame's.
+- Whose move it is is the shell's too: the strip says whether the agent is working or idle, and how many of the person's changes wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
 
 ## Looks
 

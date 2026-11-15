@@ -99,13 +99,15 @@ test("provision writes the framework's hook into Claude Code's settings for each
   const ours = { hooks: [{ type: "command", command: 'bun "${CLAUDE_PROJECT_DIR}/.baba/node_modules/babavoss/bin/baba.ts" hook 2>/dev/null || true' }] }
   const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
 
-  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ hooks: { SessionStart: [ours], UserPromptSubmit: [ours], PostToolUse: [ours] } })
+  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+    hooks: { SessionStart: [ours], UserPromptSubmit: [ours], PostToolUse: [ours], Stop: [ours], StopFailure: [ours], SessionEnd: [ours] },
+  })
   writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs, ours], Stop: [theirs] } }))
   expect(run(["provision"]).status).toBe(0)
   expect(run(["provision"]).status).toBe(0)
   expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
     attribution: { commit: "" },
-    hooks: { PostToolUse: [theirs, ours], Stop: [theirs], SessionStart: [ours], UserPromptSubmit: [ours] },
+    hooks: { PostToolUse: [theirs, ours], Stop: [theirs, ours], SessionStart: [ours], UserPromptSubmit: [ours], StopFailure: [ours], SessionEnd: [ours] },
   })
   writeFileSync(file, "{ not json")
   expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not JSON") })
@@ -118,15 +120,15 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
   const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "" }
   const command = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: project, encoding: "utf8", env })
-  const hook = (event: string) =>
+  const hook = (event: string, more: Record<string, unknown> = {}) =>
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], {
       cwd: project,
       encoding: "utf8",
       env,
-      input: JSON.stringify({ session_id: "hooked", hook_event_name: event }),
+      input: JSON.stringify({ session_id: "hooked", hook_event_name: event, ...more }),
     })
   const body = readFileSync(join(checkout, "skill/SKILL.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
-  const started = hook("SessionStart")
+  const started = hook("SessionStart", { source: "startup" })
 
   try {
     // The skill's own words, then the root's answer: its version, its page's address and how to show it, the surfaces.
@@ -158,8 +160,27 @@ test("a session's start gives what the skill baba gives and starts the root; a s
         body: JSON.stringify({ handle, args }),
       })
 
+    // Whose move it is, as the page is told it: the hooks say it, a stop adds nothing for the agent and tells nothing away.
+    const turn = async () => {
+      const ctrl = new AbortController()
+      const stream = await fetch(`http://127.0.0.1:${endpoint.port}/`, { headers: { accept: "text/event-stream", "babavoss-service": endpoint.token }, signal: ctrl.signal })
+      const reader = stream.body!.getReader()
+      let text = ""
+
+      while (!/event: turn\ndata: .*\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value)
+      ctrl.abort()
+
+      return JSON.parse(/event: turn\ndata: (.*)\n/.exec(text)![1]!) as { agent: string; waiting: number }
+    }
+
+    expect(await turn()).toMatchObject({ agent: "idle", waiting: 0 })
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
+    expect(await turn()).toMatchObject({ agent: "working" })
+    expect(hook("Stop", { stop_hook_active: false, last_assistant_message: "done" })).toMatchObject({ status: 0, stdout: "" })
+    expect(await turn()).toMatchObject({ agent: "idle" })
     expect((await person("/", "open", { surface: "desk" })).status).toBe(200)
+    expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
+    expect(await turn()).toMatchObject({ agent: "idle", waiting: 1 })
 
     const opened = hook("UserPromptSubmit").stdout
 
@@ -202,6 +223,10 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(hook("UserPromptSubmit").stdout).toBe("")
     expect(hook("PostToolUse").stdout).toBe("")
     expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
+    expect(hook("StopFailure", { error: "rate_limit" })).toMatchObject({ status: 0, stdout: "" })
+    expect(await turn()).toMatchObject({ agent: "idle", waiting: 0 })
+    expect(hook("SessionEnd", { reason: "other" })).toMatchObject({ status: 0, stdout: "" })
+    expect(await turn()).toMatchObject({ agent: "unknown" })
 
     // The agent's own calls, through a program, are not told back to it: the program's answers told it.
     expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)

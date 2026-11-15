@@ -187,6 +187,7 @@ describe("the door", () => {
     }
 
     expect(await next()).toEqual({ event: "change", data: { version: 0, jobs: [] } })
+    expect(await next()).toEqual({ event: "turn", data: { agent: "unknown", since: expect.any(Number), waiting: 0, drivable: false } })
     await post("/", { handle: "later", args: {} }, { [ACTOR_HEADER]: "agent:s" })
     expect(await next()).toEqual({ event: "change", data: { version: 1, jobs: ["agent:s"] } })
     expect(await next()).toEqual({ event: "call", data: { path: "/", handle: "later", args: {}, actor: "agent:s" } })
@@ -279,7 +280,7 @@ it("takes changed code in place: the same process, address and token, the state 
 
   const page = await listen(base, endpoint.token)
 
-  await poll(() => page.heard.length).toBe(1)
+  await poll(() => page.heard).toEqual(["change", "turn"])
   await (await get("/?open", { accept: "text/plain" })).text()
 
   // Changed code is no notice: it ends no wait, which tells it when it ends.
@@ -390,7 +391,7 @@ describe("changed code while work runs", () => {
 
     const later = await listen(base, token)
 
-    await poll(() => later.heard).toEqual(["change", "notice"])
+    await poll(() => later.heard).toEqual(["change", "turn", "notice"])
     open.stop()
     later.stop()
     releases.splice(0)
@@ -478,7 +479,7 @@ it("tells open pages to load again when the page's own files change, and not whe
 
   const page = await listen(base, endpoint.token)
 
-  await poll(() => page.heard.length).toBe(1)
+  await poll(() => page.heard).toEqual(["change", "turn"])
   writeFileSync(join(src, "root.ts"), "// edited")
   await sleep(RELOAD_MS + 400)
   expect(page.heard).not.toContain("page")
@@ -495,4 +496,73 @@ it("reads the version from the package beside the root entry", () => {
   expect(rootVersion(entry)).toBe("2.3.4")
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "3.0.0" }))
   expect(rootVersion(entry)).toBe("3.0.0")
+})
+
+describe("the turn", () => {
+  /** The turns an open page is told, as they come. */
+  const turns = async (base: string, token: string) => {
+    const ctrl = new AbortController()
+    const response = await fetch(`${base}/`, { headers: { accept: "text/event-stream", [SERVICE_HEADER]: token }, signal: ctrl.signal })
+    const told: { agent: string; waiting: number; drivable: boolean }[] = []
+    const reader = response.body!.getReader()
+    let buffer = ""
+
+    void (async () => {
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+
+          if (done) break
+          buffer += new TextDecoder().decode(value)
+
+          const blocks = buffer.split("\n\n")
+
+          buffer = blocks.pop()!
+          for (const block of blocks) if (block.startsWith("event: turn\n")) told.push(JSON.parse(/^data: (.*)$/m.exec(block)![1]!))
+        }
+      } catch {
+        // The stream was stopped.
+      }
+    })()
+    closers.push(async () => ctrl.abort())
+
+    return told
+  }
+
+  it("is told by the hooks, counts the person's calls the agent has not been told, and cannot be started from the page", async () => {
+    const { base, endpoint, get, post } = await started(scratch())
+    const text = { accept: "text/plain", [ACTOR_HEADER]: "agent:S" }
+    const hook = (word: string) => fetch(base + "/_/turn", { method: "POST", body: word, headers: { ...text, [SERVICE_HEADER]: endpoint.token } })
+    const told = await turns(base, endpoint.token)
+    const last = () => told.at(-1)
+
+    await poll(last).toEqual({ agent: "unknown", since: expect.any(Number), waiting: 0, drivable: false })
+    await (await get("/?open", text)).text()
+    expect((await hook("started")).status).toBe(200)
+    await poll(last).toMatchObject({ agent: "working", waiting: 0 })
+    expect((await hook("ended")).status).toBe(200)
+    await poll(last).toMatchObject({ agent: "idle", waiting: 0 })
+
+    // The person acts while the agent is idle: each call that changed / waits, and the agent's own calls do not.
+    await post("/", { handle: "bump", args: { by: 1 } })
+    await post("/", { handle: "bump", args: { by: 1 } })
+    await poll(last).toMatchObject({ agent: "idle", waiting: 2 })
+    await post("/", { handle: "bump", args: { by: 1 } }, { [ACTOR_HEADER]: "agent:S" })
+    expect(told.filter((turn) => turn.waiting === 3)).toEqual([])
+
+    // The next message starts the turn and the agent is told: nothing waits.
+    await hook("started")
+    await (await get("/_/wait?seconds=0", text)).text()
+    await poll(last).toMatchObject({ agent: "working", waiting: 0 })
+    await hook("gone")
+    await poll(last).toMatchObject({ agent: "unknown" })
+    expect((await hook("asleep")).status).toBe(400)
+
+    // A harness that cannot be driven: ending the move from the page says why it cannot.
+    const ended = await post("/_/turn", { message: "take them up" })
+
+    expect([ended.status, await ended.json()]).toEqual([200, { cannot: expect.stringContaining("send the agent a message") }])
+    expect((await post("/_/turn", {})).status).toBe(400)
+    expect((await fetch(base + "/_/turn", { method: "POST", body: "{}", headers: { "content-type": "application/json" } })).status).toBe(401)
+  })
 })

@@ -5,6 +5,9 @@
 //                                 notice { text, at?, from?, by? }, each notice as it is heard, `by` absent where the person
 //                                 caused it; a line about the root's own code is one too, and is given to a page that connects
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
+//                                 turn { agent, since, waiting, drivable }, whose move it is (turn.ts), as it changes and on connect
+//   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone
+//   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view.
@@ -21,6 +24,7 @@ import { NEEDS } from "../present/present.ts"
 import type { Args } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
+import { driverOf, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unknownTurn, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
 export type UiHosting = (
@@ -163,8 +167,31 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   /** The last line about the root's own code, with when it was said, for a page that connects soon after. */
   let health: { line: string; at: number } | undefined
 
+  // Whose move it is, as the hooks tell it, and how many of the person's calls wait for the agent's next answer: told to the
+  // page when it reads otherwise. The agent's calls under way keep a working turn from going stale.
+  let turn = unknownTurn(Date.now())
+  let busy = 0
+  let turnSent = ""
+  let stale: ReturnType<typeof setTimeout> | undefined
+  const turnNow = () => {
+    const { agent, since } = reading(turn, Date.now(), busy > 0)
+
+    return { agent, since, waiting: text.waiting(), drivable: !!driverOf(options.about?.session ?? "session") }
+  }
+  const turnEvent = () => `event: turn\ndata: ${(turnSent = JSON.stringify(turnNow()))}\n\n`
+  const pushTurn = () => {
+    clearTimeout(stale)
+    if (turn.agent === "working") (stale = setTimeout(pushTurn, Math.max(0, turn.heard + STALE_MS - Date.now()) + 1)).unref()
+    if (JSON.stringify(turnNow()) === turnSent) return
+
+    const event = turnEvent()
+
+    for (const res of streams) res.write(event)
+  }
+
   running.subscribe(() => {
     for (const res of streams) res.write(change())
+    pushTurn()
   })
   running.notices(({ cause, ...rest }) => {
     const by = byOf(cause)
@@ -199,6 +226,20 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       }
 
       if (tokenOf(req, port) !== options.identity.token) return reply(401, "service token required")
+      if (req.method === "POST" && path === "/_/turn") {
+        const event = (await body(req)).trim() as TurnEvent
+
+        if (!TURN_EVENTS.includes(event)) return reply(400, `the turn is told as one of ${TURN_EVENTS.join(", ")}`)
+        turn = turned(turn, event, Date.now())
+        pushTurn()
+
+        return reply(200, "")
+      }
+      busy += 1
+      res.once("close", () => {
+        busy -= 1
+        pushTurn()
+      })
       try {
         if (req.method === "POST" && path === "/_/close") {
           res.once("finish", () => options.end?.())
@@ -270,6 +311,18 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         return reply(409, `refused: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
+    if (req.method === "POST" && path === "/_/turn") {
+      if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
+
+      let message: unknown
+
+      try {
+        message = (JSON.parse((await body(req)) || "{}") as { message?: unknown }).message
+      } catch {}
+      if (typeof message !== "string" || !message.trim()) return json(res, 400, { error: "ending a move sends a message: { message }" })
+
+      return json(res, 200, await startTurn(options.about?.session ?? "session", message))
+    }
     if (path.startsWith("/_/")) {
       if (hosting()) return (await host()).assets(req, res, () => json(res, 404, { error: `nothing at ${path}` }))
 
@@ -302,6 +355,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     if (req.method === "GET" && wants(req, "text/event-stream")) {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" })
       res.write(change())
+      res.write(turnEvent())
       if (health && Date.now() - health.at < NOTE_MS) res.write(notice({ text: health.line, ...(options.about?.root && { from: options.about.root }) }))
       streams.add(res)
       req.on("close", () => streams.delete(res))
@@ -373,6 +427,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     },
     // Streams and keep-alive connections are cut first, or a browser that reconnects keeps the server open forever.
     close: async () => {
+      clearTimeout(stale)
       for (const res of streams) res.end()
       streams.clear()
 

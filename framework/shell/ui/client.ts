@@ -32,8 +32,16 @@ export type Change = { version: number; jobs: string[] }
 /** What just happened, told once as it is heard: `at` the path it is about, `from` who says it, `by` who caused it where not the person. */
 export type Notice = { text: string; at?: string; from?: string; by?: string }
 
-/** Told on every change of the surface, of each notice, and whether the stream is up; the browser reconnects by itself. Returns stop. */
-export function changes(onChange: (change: Change) => void, onConnected?: (up: boolean) => void, onNotice?: (notice: Notice) => void): () => void {
+/** Whose move it is in the session, and how many of the person's calls wait for the agent's next answer; `drivable` where the page can start a turn. */
+export type Turn = { agent: "working" | "idle" | "unknown"; since: number; waiting: number; drivable: boolean }
+
+/** Told on every change of the surface, of each notice, of the turn, and whether the stream is up; the browser reconnects by itself. Returns stop. */
+export function changes(
+  onChange: (change: Change) => void,
+  onConnected?: (up: boolean) => void,
+  onNotice?: (notice: Notice) => void,
+  onTurn?: (turn: Turn) => void
+): () => void {
   const source = new EventSource("/")
 
   source.addEventListener("change", (event) => {
@@ -41,6 +49,7 @@ export function changes(onChange: (change: Change) => void, onConnected?: (up: b
     onConnected?.(true)
   })
   source.addEventListener("notice", (event) => onNotice?.(JSON.parse((event as MessageEvent<string>).data) as Notice))
+  source.addEventListener("turn", (event) => onTurn?.(JSON.parse((event as MessageEvent<string>).data) as Turn))
   // The page's own code changed: only a fresh page has it.
   source.addEventListener("page", () => location.reload())
   source.onerror = () => {

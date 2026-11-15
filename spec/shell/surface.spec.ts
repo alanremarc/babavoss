@@ -92,6 +92,7 @@ describe("the shell surface", () => {
         title: "baba",
         surfaces: [{ name: "counter", description: "counts things", open: expect.objectContaining({ name: "open", args: { surface: "counter" } }) }],
         tabs: [],
+        activity: { at: "/activity" },
       })
       expect(await r.call("/", "open", { surface: "nope" }, "agent")).toMatchObject({ outcome: "refused" })
 
@@ -116,9 +117,9 @@ describe("the shell surface", () => {
   })
 
   it("is an empty desktop with no surfaces, which says how one is made, and says where there is no .baba/", () => {
-    expect(story(shell({}, BABA)).agent.sees("/")).toEqual({ title: "baba", empty: EMPTY, surfaces: [], tabs: [] })
+    expect(story(shell({}, BABA)).agent.sees("/")).toEqual({ title: "baba", empty: EMPTY, surfaces: [], tabs: [], activity: { at: "/activity" } })
     expect(EMPTY).toContain("bun run baba new NAME")
-    expect(story(shell({})).agent.sees("/")).toEqual({ title: "baba", missing: MISSING, surfaces: [], tabs: [] })
+    expect(story(shell({})).agent.sees("/")).toEqual({ title: "baba", missing: MISSING, surfaces: [], tabs: [], activity: { at: "/activity" } })
   })
 
   it("restores its tabs with their surfaces' models and starts their commands again", async () => {
@@ -400,7 +401,7 @@ describe("the shell surface", () => {
     await agent.call("/", "open", { surface: "asker" })
     expect(agent.sees()).not.toHaveProperty("needs")
     await agent.call("/tabs/2", "ask", { who: "person" })
-    expect(Object.keys(agent.sees()!)).toEqual(["title", "needs", "surfaces", "tabs", "show"])
+    expect(Object.keys(agent.sees()!)).toEqual(["title", "needs", "surfaces", "tabs", "show", "activity"])
     expect(agent.sees()).toMatchObject({ needs: [{ at: "/tabs/2", surface: "asker", who: "person", why: "to decide" }] })
     expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({})
     // The tab's own path still says it.

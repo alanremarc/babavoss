@@ -84,6 +84,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
       return path
     }
   }
+  /** The person's calls that changed / since the present was last told: what waits for the agent's next boundary. */
+  let acts = 0
 
   running.notices((notice) => {
     const who = whoOf(notice.cause, actor)!
@@ -106,6 +108,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
       // A commit of no known cause, as when code is loaded again, and the agent's own, which its answer told: no one's to tell.
       else if (!who || who === "you") by.delete(key)
       else by.set(key, (by.get(key) ?? new Set()).add(who))
+    // A call of the person's that changed / waits for the agent's next boundary.
+    if (who === "person" && [...now.keys(), ...marks.keys()].some((key) => now.get(key) !== marks.get(key))) acts += 1
     // What the agent's own call changed, it knows: the present as told takes it, so only what others change stays to be told.
     if (who === "you" && before !== undefined) {
       before = rebase(before, last, view)
@@ -156,6 +160,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     if (now !== undefined) writeJsonFile(file, now)
     before = now
     by.clear()
+    acts = 0
   }
   // What was heard, under `notices:`, and forgotten.
   const notices = () => {
@@ -173,6 +178,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     diff: (old: Json | undefined, now: Json | undefined, path: string) => tell(diff(old, now, { command, path })),
     /** How much was heard and waits to be told. */
     noticed: () => heard.length,
+    /** How many of the person's calls changed / since the present was last told: what waits for the agent's next boundary. */
+    waiting: () => acts,
     /** What changed at / since the session was last told it, by others than the agent alone. */
     changed: () => since(root()),
     /** The session was given / whole, as a program's read of it: what changes is counted from here. */

@@ -10,6 +10,8 @@ export interface Call {
   handle: string
   args: Args
   actor: string
+  /** When the call was admitted, in ms since the epoch: an update that keeps time takes it from here, never from a clock. */
+  t?: number
 }
 
 /**

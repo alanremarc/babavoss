@@ -22,6 +22,7 @@ Its answer names the page's address, the command to use, the surfaces and the op
 - `/` says first, under `needs`, which tabs need the person or you, and why: what is the person's, wait for; what is yours, take up.
 - As you work you hear what just happened, under `notices`, one line each and once: what a surface reports, and where the person acted. Read there if it bears on your work.
 - With the person's message you are told what changed at `/` since you were last told it, by who: the person or a surface; a row by its path or name, with only what changed. What your own calls did is never told back: their answers said it. What is cut says where to read it whole. Reading `/` gives the present whole again, and what changed counts from there.
+- `/activity` has who did what in this session, newest first, and `/activity/notices` what the surfaces chose to say: read it first to catch up after a break or a compaction.
 - What the person did is a move to take up and build on, never to undo or overwrite. Where they changed what you were about to, theirs stands: read again and work from it.
 - A refusal gives its reason, which may be that the person or the surface moved first. Read again and act on what is offered; do not repeat the call.
 - For more than a few calls of one kind, write one program with the command's `-e`: `root.read(path)`, `root.call(path, handle, args)` and `root.wait(seconds)`. Print each result and stop at the first refusal.

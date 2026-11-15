@@ -2,6 +2,29 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.31.0
+
+- The strip's right has one notifications button: a bell counting the notices others caused that the person has not seen. Its panel opens on Notifications, with a switch to All activity. A toast hides into the button when it passes.
+- Activity entries say whether a surface said them: `notice` on the entry, `kind` (`notice` or `call`) at `/activity`, and `/activity/notices` for the notices alone. A call without a notice appears only under All activity, so give a notice where the person should hear of it.
+- What the person has seen is kept in the shell's state per session, so a refresh or a page opened later shows the right count. `seen` and `looked` are person-only actions at `/activity/notices`, and the agent is told nothing of them.
+- `Toasts` in the kit takes `into`, where a passed toast goes.
+
+## 0.30.0
+
+- The framework has a harness layer, `babavoss/core/harness/index.ts`: a `Harness` interface whose sessions report normalised events, Claude Code's adapter (`claudeCode()`, with the pure `claudeEvents(line)` parser), and `fakeHarness()` for stories. A surface that drives an agent uses it instead of spawning `claude` itself.
+- A session the adapter starts has a home of its own, which reaches the person's login through a link, never a copy; the link and the account files the harness writes there are removed when the session's home is released.
+
+## 0.29.0
+
+- The framework's hook is now also provisioned for `Stop`, `StopFailure` and `SessionEnd`. It tells the session's runtime whose move it is, adds no context at those events and never blocks stopping. Installing in `.baba/` provisions it again.
+- The shell's strip shows whose move it is: the agent working, idle, or unknown. When the agent is idle it shows how many of the person's changes wait for its next message, with a button that copies a message to send. A surface should drop any busy indicator or end-of-move button of its own.
+- The door has `POST /_/turn` and a `turn` event on the page's stream; a page that counts stream events now receives `turn` after `change` when it connects. Nothing about the turn is in the present.
+
+## 0.28.0
+
+- The shell keeps the session's activity: every notice, every call into a tab that gave none (as its handle and arguments), and every tab opened, closed or shown. The agent reads it at `/activity`, named at `/` by `activity: { at: "/activity" }`, and is never told it. The person sees it in a panel at the strip's right. A surface that wants a meaningful line there instead of the mechanical one gives a notice.
+- A call carries `t`, the time it was admitted, in ms since the epoch. An update that keeps time reads it there, never from a clock. Nothing to adapt.
+
 ## 0.27.0
 
 - A surface no longer says who it waits on as free text (`waiting: "the person, to …"`). It says `attention: { who: "person" | "agent", why }` at `/`, or a list of them; replace each `waiting` fact with it, and drop `waiting` where nobody is needed.
