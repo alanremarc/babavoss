@@ -13,6 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Logo } from "./mark.tsx"
 import type { Standing as TurnStanding } from "./turn.ts"
 import { choices, type SurfaceEntry } from "./home.ts"
+import { named } from "./commands.ts"
 import { HOME } from "./pointing.ts"
 import { SEARCH_MARK } from "./shortcuts.ts"
 import { standing, type TabNeed } from "./tabs.tsx"
@@ -140,9 +141,9 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, di
                   ) : (
                     <CommandItem key={u.name} value={`surface ${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u.open)}>
                       <Glyph>{icons[u.name] ?? <BoxIcon aria-hidden />}</Glyph>
-                      <span className="max-w-[45%] shrink-0 truncate text-foreground">{u.name}</span>
-                      <span className="min-w-0 flex-1 truncate pl-1.5" title={u.description}>
-                        {u.description}
+                      {/* A surface's description is written for the agent, to choose it by: here it is found by, and told on hover, not shown. */}
+                      <span className="min-w-0 flex-1 truncate text-foreground" title={u.description}>
+                        {named(u.name)}
                       </span>
                       {count > 0 && <span className="pl-2 text-meta whitespace-nowrap">{count} open</span>}
                     </CommandItem>

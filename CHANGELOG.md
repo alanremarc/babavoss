@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.43.2
+
+- Home lists a surface by its name alone. Its description, written for the agent to choose it by, still finds it in the search and is told on hover. Nothing to adapt.
+
 ## 0.43.1
 
 - A menu that is longer than its room scrolls up and down with no bar to show for it, the search being the way through it, and never sideways: every entry is cut at the menu's edge. The kit exports `quietScroll` for a list that scrolls so. Nothing to adapt.
