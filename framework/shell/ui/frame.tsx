@@ -1,5 +1,6 @@
 // The frame: the menu bar the shell draws at the top of every surface's tab, under the page's strip, always and the same for
-// every surface, made from the surface's views alone; a surface cannot hide or replace it. A
+// every surface, made from the surface's views alone; a surface cannot hide or replace it. The person can hide it, for
+// every tab (appearance.ts): then it takes no space, what it held is still in the palette, and the asks float at the right. A
 // menu named after the surface, its actions at /; where the tab is below /, a menu for that place, its actions, the asks
 // first and marked; Go, the places the view names and the way back up; Help, a search of the actions and places of the
 // whole tree below the tab. What waits on the person stands at the right too. An action that needs input opens a modal,
@@ -13,6 +14,7 @@ import type { Args, View } from "../../core/surface/view.ts"
 import { commandsOf, grouped, indexOf, labelOf, named, offered, parentOf, placesOf, search, type Command, type Found, type Offered } from "./commands.ts"
 import { Inputs, type Drawers } from "./inputs.tsx"
 import { ChangesContext, useTab } from "./tab.tsx"
+import { menubar, togglesMenubar } from "./appearance.ts"
 
 /** Each frame's commands, by its tab's address, for the palette: a frame gives them while its tab is shown. */
 export type Frames = {
@@ -148,6 +150,33 @@ export function Frame({
   const bar: Menu[] = [...menus, { id: "help", label: "Help", items: [], search: { placeholder: "Search actions and places", find }, opened: help.refresh }]
   const asks = [...atHere, ...atRoot].filter((a) => a.ask)
   const commands: Command[] = commandsOf(menus.filter((m) => m.items.length))
+  const shownBar = useSyncExternalStore(menubar.subscribe, menubar.get)
+  const askButtons = asks.slice(0, 3).map((a) => (
+    <button
+      key={`${a.path} ${a.handle.name} ${JSON.stringify(a.handle.args)}`}
+      type="button"
+      title={a.handle.description}
+      className="flex h-row shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-primary/10 px-2 text-meta font-medium text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => start(a)}
+    >
+      <span className="size-1.5 rounded-full bg-primary" aria-hidden />
+      {named(a.handle.name)}
+    </button>
+  ))
+
+  // The menu bar's keys, while this tab is the one looked at: a hidden tab's effects are gone.
+  useEffect(() => {
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform)
+    const key = (e: KeyboardEvent) => {
+      if (!togglesMenubar(e, mac)) return
+      e.preventDefault()
+      menubar.set(!menubar.get())
+    }
+
+    window.addEventListener("keydown", key)
+
+    return () => window.removeEventListener("keydown", key)
+  }, [])
 
   // The palette's commands are this tab's while it is shown; a hidden tab's effects are gone, and so are its commands.
   useLayoutEffect(() => frames.set(tab.address, commands))
@@ -155,27 +184,25 @@ export function Frame({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col text-body">
-        <header aria-label={shown} data-frame className="flex h-menubar shrink-0 items-center gap-1 border-b bg-background pr-1 pl-1">
-          <MenuTriggers menus={bar} />
-          <span className="min-w-2 flex-1" />
-          {asks.slice(0, 3).map((a) => (
-            <button
-              key={`${a.path} ${a.handle.name} ${JSON.stringify(a.handle.args)}`}
-              type="button"
-              title={a.handle.description}
-              className="flex h-row shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-primary/10 px-2 text-meta font-medium text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => start(a)}
-            >
-              <span className="size-1.5 rounded-full bg-primary" aria-hidden />
-              {named(a.handle.name)}
-            </button>
-          ))}
-          {/* The shell's own marks for this tab go here. */}
-          <div data-frame-aside className="flex shrink-0 items-center gap-1 empty:hidden">
-            {aside}
-          </div>
-        </header>
+      <div className="relative flex min-h-0 flex-1 flex-col text-body">
+        {shownBar ? (
+          <header aria-label={shown} data-frame className="flex h-menubar shrink-0 items-center gap-1 border-b bg-background pr-1 pl-1">
+            <MenuTriggers menus={bar} />
+            <span className="min-w-2 flex-1" />
+            {askButtons}
+            {/* The shell's own marks for this tab go here. */}
+            <div data-frame-aside className="flex shrink-0 items-center gap-1 empty:hidden">
+              {aside}
+            </div>
+          </header>
+        ) : (
+          // With the bar hidden, what waits on the person still shows, over the content's top right, taking no space.
+          askButtons.length > 0 && (
+            <div aria-label={`${shown}: yours to decide`} data-frame-asks className="absolute top-1 right-1 z-10 flex gap-1 rounded-lg bg-background/90 p-0.5 shadow-sm ring-1 ring-foreground/10">
+              {askButtons}
+            </div>
+          )
+        )}
         {refused && (
           <p role="alert" className="flex shrink-0 items-center gap-2 border-b bg-destructive/5 py-0.5 pr-1 pl-2.5 text-meta text-destructive">
             <span className="min-w-0 flex-1 truncate" title={refused}>

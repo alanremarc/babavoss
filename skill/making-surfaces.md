@@ -61,7 +61,7 @@ The framework is the package `babavoss`, in `node_modules/babavoss`: import it a
 
 ## The frame
 
-The shell draws one menu bar at the top of every tab, under the page's strip, the same for every surface and made from its views alone. A page cannot add to it, hide it or replace it: `ui/index.tsx` returns its content, and optionally `icon` and `drawers`.
+The shell draws one menu bar at the top of every tab, under the page's strip, the same for every surface and made from its views alone. A page cannot add to it, hide it or replace it: `ui/index.tsx` returns its content, and optionally `icon` and `drawers`. The person may hide it for every tab, from the palette, settings or ⌘\; then the content fills the tab, everything the bar held is in the palette, and the asks float at the tab's top right, so a page needs no way of its own to reach them.
 
 - The surface's menu, named by its `title` at `/`: the actions offered at `/`.
 - Where the tab's route is below `/`, a menu for that place, named by its view's `title` or `name`, or its row's: the actions offered there, the asks first, marked as the person's. An ask also stands at the bar's right.

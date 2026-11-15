@@ -1,13 +1,14 @@
 // The launcher: one palette to open a surface and to switch to an open tab, found by name. It drops from the strip's "+"
 // and from ⌘K or Ctrl+K anywhere on the page; where no tab is open it is the page itself. A tab row says what stands in
 // it, broken or who it needs, and its footer says, quietly, when a later babavoss is out.
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { cn } from "cn"
-import { BoxIcon, PlusIcon, SettingsIcon } from "lucide-react"
+import { BoxIcon, PanelTopIcon, PlusIcon, SettingsIcon } from "lucide-react"
 import type { Handle } from "../../core/index.ts"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Popover, PopoverContent, PopoverTrigger } from "../../kit/components/popover"
 import { standing, type TabNeed } from "./tabs.tsx"
+import { menubar, menubarCommand } from "./appearance.ts"
 
 /** A surface as the desktop lists it. */
 export type SurfaceEntry = { name: string; description: string; open: Handle }
@@ -45,6 +46,8 @@ function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, sel
   done?: () => void
 }) {
   const openable = surfaces
+  const bar = useSyncExternalStore(menubar.subscribe, menubar.get)
+  const barCommand = menubarCommand(bar, mac)
   const prompt = active.startsWith("/") ? "Run, open or switch to…" : "Open or switch to…"
 
   return (
@@ -89,6 +92,20 @@ function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, sel
               <SettingsIcon aria-hidden />
             </Glyph>
             Settings
+          </CommandItem>
+          <CommandItem
+            value="menubar"
+            keywords={[barCommand.label, "menu bar", "header"]}
+            onSelect={() => {
+              done()
+              menubar.set(!bar)
+            }}
+          >
+            <Glyph>
+              <PanelTopIcon aria-hidden />
+            </Glyph>
+            {barCommand.label}
+            <CommandShortcut>{barCommand.keys}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
       </CommandList>

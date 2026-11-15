@@ -1,8 +1,8 @@
-// The shell's settings page: the person's appearance, its choices in the content.
-import { useEffect, useState } from "react"
+// The shell's settings page: the person's appearance and whether the menu bar shows, its choices in the content.
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { SunIcon, MoonIcon, MonitorIcon } from "lucide-react"
 import { ToggleGroup, ToggleGroupItem } from "../../kit/components/toggle-group"
-import { applyAppearance, readAppearance, resolveMode, themes, writeAppearance, type Appearance } from "./appearance"
+import { applyAppearance, menubar, readAppearance, resolveMode, themes, writeAppearance, type Appearance } from "./appearance"
 import { Plain } from "../../kit/layouts/plain.tsx"
 
 /** Appearance: color mode and the theme per mode, kept in this browser for every babavoss page on this machine. */
@@ -10,6 +10,7 @@ export function Settings({ title }: { title: string }) {
   const [appearance, setAppearance] = useState(readAppearance)
   const [systemDark, setSystemDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches)
   const mode = resolveMode(appearance, systemDark)
+  const bar = useSyncExternalStore(menubar.subscribe, menubar.get)
 
   useEffect(() => {
     const system = matchMedia("(prefers-color-scheme: dark)")
@@ -85,6 +86,23 @@ export function Settings({ title }: { title: string }) {
                 ))}
               </ToggleGroup>
             </div>
+          </section>
+          <section className="flex flex-col gap-2" aria-labelledby="menubar-heading">
+            <h2 id="menubar-heading" className="text-sm font-medium">
+              Menu bar
+            </h2>
+            <p className="text-muted-foreground">The bar above every tab, with the surface's actions, its places and Help. Hidden, they are all in the palette.</p>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              spacing={0}
+              value={bar ? "shown" : "hidden"}
+              aria-label="Menu bar"
+              onValueChange={(value) => value && menubar.set(value === "shown")}
+            >
+              <ToggleGroupItem value="shown">Shown</ToggleGroupItem>
+              <ToggleGroupItem value="hidden">Hidden</ToggleGroupItem>
+            </ToggleGroup>
           </section>
         </div>
       </div>
