@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.21.3
+
+- A call into a broken tab is now refused with why it is broken. The core adds a view's string fact `broken` to the "not offered" refusal, and any surface may use that fact at any path.
+- A broken tab's reason now says what is known: the kept state could not be restored, the surface fails on the kept state but not on a fresh one (close the tab or fix the code), or it fails on a fresh one too (fix the code; closing will not help).
+- A path a tab's surface cannot show no longer breaks the whole tab: reading it returns `{ at, broken }` with what failed there, and the rest of the tab works.
+- `open` is refused, and no tab is made, when the surface fails in `init`, `start` or its view at `/`. An always-open util that cannot init is listed as a broken tab and is made again at the next restore.
+
 ## 0.21.2
 
 - What the root tells the agent of `/`, in the hook and in the "changed" part of an answer, now names who made each change: `changed by the person:`, `changed by the surface:` for a command's event, or a combination such as `changed by the person and you:`. A change of no known cause, such as code loaded again, stays under `changed:`.
