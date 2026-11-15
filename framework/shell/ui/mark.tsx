@@ -66,7 +66,8 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
     }
 
     if (looking) timer = window.setTimeout(move, 300)
-    else if (at.current !== REST) turn(REST, 600, () => (at.current = REST))
+    // Wherever a turn was cut, the eyes settle from there: nothing jumps.
+    else if (at.current !== REST) turn(REST, 900, () => (at.current = REST))
 
     return () => {
       stopped = true
