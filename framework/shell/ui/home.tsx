@@ -93,7 +93,7 @@ function Does({ row }: { row: HomeRow }) {
 
   return (
     <span className="shrink-0 pl-3 text-meta whitespace-nowrap group-data-[selected=true]/command-item:text-foreground">
-      {enter} <span className="text-muted-foreground">↵</span>
+      {enter}
     </span>
   )
 }
