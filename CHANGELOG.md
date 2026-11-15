@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.42.0
+
+- Breaking: ⌘P or Ctrl+P goes home and back; ⌘K no longer does. ⌘J and ⌘K go to the next and previous tab, home first, wrapping round. They work anywhere on the page but in a text field, so a page should not bind them itself.
+- Breaking: home is the shell's own page: the surfaces to open, the tabs to switch to, and the shell's commands. A surface's actions and places are only in its tab's menu. Check that nothing tells the person to find them on home.
+- Settings is a surface that comes with the shell, listed as `settings`. It holds the appearance, the shortcuts (`bind command= keys=`, `reset command=NAME|all`) and whether the mark animates while the agent works (`animate on=`). They are the person's, kept in `~/.babavoss/settings.json` (`BABAVOSS_SETTINGS` names another file), the same in every session and project. A browser's earlier appearance cookie is taken in once.
+- Breaking: `settings` is a reserved name, like `baba`. Rename a project surface called `settings`.
+
 ## 0.41.0
 
 - The notifications are an activity log: one line an entry, who as a small mark, what, its place as a quiet token, how long ago, grouped Now, Earlier today, Yesterday, then by date, with what needs the person pinned above under Needs you. Hierarchy is carried by type and colour alone: what was new when the log opened stays in the foreground with a dot until it closes. It opens on Notices; All adds a line for every call; Mark all seen clears what is new. The bell carries one dot. While the log is open no toast is shown: a toast on screen leaves into it and a notice heard comes in as its newest line. Toasts are one line. Nothing to adapt.
