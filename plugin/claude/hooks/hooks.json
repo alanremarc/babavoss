@@ -1,0 +1,65 @@
+{
+  "description": "baba's hook: the skill's words and the shell's present at a session's start, what changed after; silent where bun or the package is missing",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(cd -P \"${CLAUDE_PLUGIN_ROOT}/../..\" && pwd)/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(cd -P \"${CLAUDE_PLUGIN_ROOT}/../..\" && pwd)/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(cd -P \"${CLAUDE_PLUGIN_ROOT}/../..\" && pwd)/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(cd -P \"${CLAUDE_PLUGIN_ROOT}/../..\" && pwd)/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(cd -P \"${CLAUDE_PLUGIN_ROOT}/../..\" && pwd)/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(cd -P \"${CLAUDE_PLUGIN_ROOT}/../..\" && pwd)/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,26 +1,18 @@
 // Provisioning: a project's surfaces are code in its .baba/ directory, and what the harnesses beside it are given is one
-// thing, the content that makes an agent aware of them. Where a harness has hooks, the framework's hook delivers it: the
-// skill baba's words and the root's present at a session's start, the present's changes after. The skill baba itself is
-// written too, for harnesses without hooks and as the way back in. A surface has no skill and no instructions beside
-// it: what it is for is its own description, and how it is worked is what its views say.
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
+// thing, the content that makes an agent aware of them. Each harness's adapter writes it in that harness's way, and withdraws
+// it where the configuration no longer enables that harness (harness/); here the adapters are run in turn, and the root is
+// generated from the surfaces. A surface has no skill and no instructions beside it: what it is for is its own description,
+// and how it is worked is what its views say.
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
+import { checkConfig, loadConfig, sectionOf } from "./config.ts"
+import { ADAPTERS } from "./harness/index.ts"
+import { written } from "./harness/setup.ts"
 
-/** Where the harnesses read skills, relative to a project or to the person's home: Claude Code, and Codex with the rest. */
-export const SKILL_FOLDERS = [".claude/skills", ".agents/skills"]
 export const SURFACES_DIR = "surfaces"
-/** The harness events the framework's hook is provisioned for: it adds context at the first three, tells the turn at all, and blocks nothing. */
-export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "StopFailure", "SessionEnd"]
-/** Claude Code's settings beside .baba/: the person's too, so only the framework's own hooks in it are written. */
-const SETTINGS = ".claude/settings.json"
-/** How the framework's hooks are told from the person's: by the command they run. */
-const HOOK = '/.baba/node_modules/babavoss/bin/baba.ts" hook'
 export const NAME = /^[a-z][a-z0-9-]*$/
 /** Names a surface cannot take: the shell's, which is the word. */
 export const RESERVED = ["baba"]
-const BABA = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
 
 /** The surfaces in a .baba/ directory, by name: each directory under surfaces/ that holds one, src/surface.ts. A name that cannot be one is left out. */
 export function surfaces(baba: string): string[] {
@@ -31,13 +23,6 @@ export function surfaces(baba: string): string[] {
 
 /** Where the root of a .baba/ is generated: its surfaces named in one module, each loaded on its own, and the page that holds each in its tab. */
 export const ROOT_DIR = ".root"
-
-const written = (file: string, text: string) => {
-  // Only what differs is written: the running root loads a changed file again.
-  if (existsSync(file) && readFileSync(file, "utf8") === text) return
-  mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, text)
-}
 
 /**
  * Generates the root of `baba` from its surfaces, and answers with its directory: surfaces.ts, the surfaces by name, each
@@ -106,54 +91,29 @@ export function findBaba(from: string): string | undefined {
   }
 }
 
-type Handler = { type?: string; command?: string }
-type Group = { matcher?: string; hooks?: Handler[] }
-type Settings = { hooks?: Record<string, Group[]> } & Record<string, unknown>
+/** What provisioning did: each path written, and each withdrawn, relative to the directory .baba/ is in, and what the adapters say to the person. */
+export type Provisioned = { written: string[]; withdrawn: string[]; said: string[] }
 
 /**
- * Writes the framework's hook into Claude Code's settings beside `baba`, for each of its events, and leaves everything
- * else in the file as it is: the person's settings and their own hooks.
+ * Provisions `baba`, a .baba/ directory: each harness its configuration enables is made aware of the surfaces by its
+ * adapter, each it does not has that withdrawn, and the root is generated from the surfaces. A configuration that does not
+ * load, or says what no adapter has, stops it before anything is written.
  */
-export function provisionHooks(baba: string) {
+export async function provision(baba: string): Promise<Provisioned> {
   const root = dirname(baba)
-  const file = join(root, SETTINGS)
-  let settings: Settings
+  const config = await loadConfig(baba)
+  const done: Provisioned = { written: [], withdrawn: [], said: [] }
 
-  try {
-    settings = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Settings) : {}
-  } catch {
-    throw new Error(`${file} is not JSON: correct it, and provision again`)
+  checkConfig(config, ADAPTERS)
+  for (const adapter of ADAPTERS) {
+    const { enable, ...options } = sectionOf(config, adapter)
+    const set = enable ? adapter.provision(root, options) : adapter.withdraw(root)
+
+    done[enable ? "written" : "withdrawn"].push(...set.paths)
+    if (set.said) done.said.push(set.said)
   }
-
-  // Under a project the harness names its root; under the person's home, the home is it. Silent where bun or the package is missing.
-  const dir = root === realpathSync(homedir()) ? "$HOME" : "${CLAUDE_PROJECT_DIR}"
-  const ours: Group = { hooks: [{ type: "command", command: `bun "${dir}${HOOK} 2>/dev/null || true` }] }
-  const hooks: Record<string, Group[]> = {}
-
-  for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
-    const kept = groups
-      .map((group) => ({ ...group, hooks: (group.hooks ?? []).filter((handler) => !handler.command?.includes(HOOK)) }))
-      .filter((group) => group.hooks.length)
-
-    if (kept.length) hooks[event] = kept
-  }
-  for (const event of HOOK_EVENTS) hooks[event] = [...(hooks[event] ?? []), ours]
-  mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, `${JSON.stringify({ ...settings, hooks }, null, 2)}\n`)
-}
-
-/**
- * Provisions `baba`, a .baba/ directory: the skill baba in the harnesses' skill folders beside it, the framework's hook
- * in Claude Code's settings there, and the root generated from the surfaces. Answers with what it wrote, relative to the
- * directory .baba/ is in.
- */
-export function provision(baba: string): string[] {
-  const root = dirname(baba)
-  const skill = readFileSync(BABA, "utf8")
-
-  for (const folder of SKILL_FOLDERS) written(join(root, folder, "baba", "SKILL.md"), skill)
-  provisionHooks(baba)
   generateRoot(baba)
+  done.written.push(relative(root, join(baba, ROOT_DIR)))
 
-  return [...SKILL_FOLDERS.map((folder) => join(folder, "baba")), SETTINGS, relative(root, join(baba, ROOT_DIR))]
+  return done
 }

@@ -15,12 +15,15 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 ```text
 package.json                the package babavoss, at the repository's root, where a git dependency finds it
 bin/baba.ts                 the package's command: init, new, start, provision, hook
-framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, hook.ts, update.ts
+framework/core/             the framework's layers; bv/ holds bv and the door; harness/ the adapters, one per harness, each the only code that
+                            knows it: set up (provision, withdraw), hooks (its input and output), run; provision.ts, config.ts, hook.ts, update.ts
 framework/shell/            the shell, the root of a .baba/, laid out as a surface: src/surface.ts its surface, a function of the project's
                             surfaces; ui/ its whole page, the tabs, launcher, settings and the tab hooks; scripts/open.ts its door,
                             which finds, generates and follows .baba/; src/hosting.ts and scripts/build.ts host and build any root's page
 framework/kit/              the kit: the components, layouts and design language every page is built with; it imports no shell
 skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
+plugin/claude/              Claude Code's plugin: the manifest, of the package's version; hooks/hooks.json, the hook for each event; SKILL.md,
+                            skill/SKILL.md's words, which a spec keeps equal
 skill/making-surfaces.md    how a surface is made and changed; read from the package when needed
 template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
@@ -29,7 +32,8 @@ spec/support/               the notes fixture the framework's specs use; offline
 spec/surfaces.spec.ts       runs .baba/'s surfaces' specs with the framework's, as bun check checks their types with it
 docs/DESIGN.md              the design
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
-.claude/  .agents/          provisioned from .baba/: baba's skill and the framework's hook; a harness started here runs this checkout
+.claude/skills/baba        provisioned from .baba/: a link to the plugin, which is this checkout's, so a harness started here runs it
+.agents/  .codex/hooks.json provisioned from .baba/: baba's skill and the framework's hook for Codex
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
 ```
@@ -39,9 +43,11 @@ A project that uses it:
 ```text
 .baba/                      the surfaces' package: package.json names the framework, installing provisions
   surfaces/NAME/            a surface: src/surface.ts, ui/index.tsx, spec/
+  baba.config.ts            optional: which harnesses are made aware, each by its adapter's name, with enable and the adapter's options
   .root/                    generated from the surfaces: one module that names each, loaded on its own, and the shell's page with each one's component
-.claude/skills/baba/  .agents/skills/baba/   generated: baba's SKILL.md
-.claude/settings.json       the person's, with the framework's hook written into it
+.claude/skills/baba         a link to the installed package's plugin/claude: baba's skill and the framework's hook, loaded in a trusted folder
+.agents/skills/baba/        generated: baba's SKILL.md, for Codex and the rest
+.codex/hooks.json           the person's, with the framework's hook for each of Codex's events among theirs; Codex asks the person to review it
 .babavoss/                  what the root's sessions write
 ```
 

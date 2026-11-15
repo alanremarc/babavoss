@@ -1,13 +1,19 @@
-// Claude Code as a harness: one long-lived headless process per session, spoken to and read as JSON lines, in a home of
-// its own, so its transcripts, settings and caches land there and the person's own are neither read nor written. Its
+// Claude Code's adapter. Set up: a project-level plugin, the package's plugin/claude/, which is the skill baba and the
+// framework's hook for each event; the project gets one link to it, .claude/skills/baba, which Claude Code loads in place
+// in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json. Hooks: Claude Code's input
+// and output, whose names the framework's moments are. Run: one long-lived headless process per session, spoken to and
+// read as JSON lines, in a home of its own, so its transcripts, settings and caches land there and the person's own are
+// neither read nor written; the project is trusted in that home, so its plugin loads as in the person's own session. Its
 // login is the person's: on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a
 // token or key the environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on
 // nothing of the account's: no account, organisation or user id, and no address, whatever field or text carries one.
-import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync, symlinkSync } from "node:fs"
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { basename, dirname, join, relative } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { Json } from "../surface/view.ts"
-import type { Harness, HarnessEvent, Loaded, Request, Session, Start, Tokens } from "./harness.ts"
+import type { Adapter, Harness, HarnessEvent, HookEvent, Loaded, Moment, Request, Session, SetUp, Start, Tokens } from "./harness.ts"
+import { editJson, pruned, withHooks, without, type Hooks } from "./setup.ts"
 
 /** A Bash command that is the root's word: the command a project's root names for itself, or `bun run baba`. */
 export const WORD = /(^|[\s;&|(/])(\.babavoss\/bin\/(baba|bv)|bv)(\s|$)|\bbun run baba\b/
@@ -217,7 +223,29 @@ async function* jsonLines(stream: ReadableStream<Uint8Array>): AsyncIterable<Jso
   }
 }
 
+/**
+ * Marks `project` trusted in the session's `home`, as the person's own session of it is, so the project's plugin loads.
+ * Claude Code asks it of a git worktree's main checkout, so that is marked too.
+ */
+export function trust(home: string, project: string) {
+  const file = join(home, ".claude.json")
+  let state: { projects?: Record<string, Record<string, unknown>> } & Record<string, unknown> = {}
+
+  try {
+    state = JSON.parse(readFileSync(file, "utf8")) as typeof state
+  } catch {}
+
+  const git = Bun.spawnSync(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: project, stdout: "pipe", stderr: "ignore" })
+  const common = git.exitCode === 0 ? git.stdout.toString().trim() : ""
+  const main = basename(common) === ".git" ? [realpathSync(dirname(common))] : []
+
+  for (const at of new Set([realpathSync(project), ...main])) state.projects = { ...state.projects, [at]: { ...state.projects?.[at], hasTrustDialogAccepted: true } }
+  writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`)
+}
+
 function spawnClaude({ project, home, session, model, budget = 0.5 }: Start): Session {
+  trust(home, project)
+
   const child = Bun.spawn(
     [
       "claude",
@@ -249,3 +277,93 @@ function spawnClaude({ project, home, session, model, budget = 0.5 }: Start): Se
     },
   }
 }
+
+/** Claude Code's hook events the framework is told at; an API error ends a turn as a stop does. */
+export const CLAUDE_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "StopFailure", "SessionEnd"] as const
+export type ClaudeOptions = { events: (typeof CLAUDE_EVENTS)[number][] }
+
+/** The plugin the package carries, and where a project links it. */
+export const PLUGIN = fileURLToPath(new URL("../../../plugin/claude", import.meta.url))
+export const PLUGIN_LINK = ".claude/skills/baba"
+/** Claude Code's settings beside .baba/: the person's, where older provisioning wrote the framework's hooks. */
+const SETTINGS = ".claude/settings.json"
+const PLUGIN_FILES = ["SKILL.md", ".claude-plugin", "hooks"]
+
+/** Whether the skill folder at `link` is baba's: a link to a babavoss plugin, or a folder of baba's files alone whose skill is baba. */
+function ours(link: string): boolean {
+  const stat = lstatSync(link, { throwIfNoEntry: false })
+
+  if (!stat) return false
+  if (stat.isSymbolicLink()) return /babavoss[/\\]plugin[/\\]claude$/.test(readlinkSync(link))
+  if (!stat.isDirectory() || readdirSync(link).some((entry) => !PLUGIN_FILES.includes(entry))) return false
+  try {
+    return /^---\n[\s\S]*?^name: baba$/m.test(readFileSync(join(link, "SKILL.md"), "utf8"))
+  } catch {
+    return false
+  }
+}
+
+/** The settings' hooks without the framework's, which the plugin now carries: run from both, each would run twice. */
+const stripped = (project: string) => editJson(join(project, SETTINGS), (value) => withHooks(value, without((value.hooks ?? {}) as Hooks)), false)
+
+export const claude: Adapter<ClaudeOptions> = {
+  name: "claude",
+  defaults: { events: [...CLAUDE_EVENTS] },
+  events: CLAUDE_EVENTS,
+  provision(project): SetUp {
+    const link = join(project, PLUGIN_LINK)
+    // The plugin of the package this .baba/ installed, so the project runs the version it names; else this one's.
+    const installed = join(project, ".baba/node_modules/babavoss/plugin/claude")
+    const plugin = existsSync(installed) ? installed : PLUGIN
+    const target = relative(dirname(link), plugin)
+    const stat = lstatSync(link, { throwIfNoEntry: false })
+    const paths: string[] = []
+
+    if (!stat?.isSymbolicLink() || readlinkSync(link) !== target) {
+      if (stat && !ours(link)) throw new Error(`${link} is not baba's: move it, and provision again`)
+      rmSync(link, { recursive: true, force: true })
+      mkdirSync(dirname(link), { recursive: true })
+      try {
+        symlinkSync(target, link, "dir")
+      } catch {
+        // Where no link can be made, a copy, whose hook finds the package from the project, or the home, instead of through the link.
+        cpSync(plugin, link, { recursive: true, dereference: true })
+
+        const dir = project === realpathSync(homedir()) ? "$HOME" : "${CLAUDE_PROJECT_DIR}"
+        const file = join(link, "hooks/hooks.json")
+
+        writeFileSync(file, readFileSync(file, "utf8").replaceAll('$(cd -P \\"${CLAUDE_PLUGIN_ROOT}/../..\\" && pwd)/bin/baba.ts', `${dir}/.baba/node_modules/babavoss/bin/baba.ts`))
+      }
+      paths.push(PLUGIN_LINK)
+    }
+    if (stripped(project)) paths.push(SETTINGS)
+
+    return { paths }
+  },
+  withdraw(project): SetUp {
+    const link = join(project, PLUGIN_LINK)
+    const paths: string[] = []
+
+    if (ours(link)) {
+      rmSync(link, { recursive: true, force: true })
+      pruned(dirname(link), project)
+      paths.push(PLUGIN_LINK)
+    }
+    if (stripped(project)) paths.push(SETTINGS)
+
+    return { paths }
+  },
+  hookEvent(input): HookEvent | undefined {
+    const i = obj(input as Json)
+    const event = str(i.hook_event_name)
+    const moment = (event === "StopFailure" ? "Stop" : (CLAUDE_EVENTS as readonly string[]).includes(event) ? event : undefined) as Moment | undefined
+
+    return moment && { session: str(i.session_id) || undefined, event, moment, ...(event === "SessionStart" && i.source === "compact" && { compact: true }) }
+  },
+  hookOutput: (event, context) => postToolUse(event, context),
+  run: () => claudeCode(),
+}
+
+/** A hook's output where its context is plain text, as at a session's start and with a prompt; after a tool call it is named as such. */
+export const postToolUse = (event: HookEvent, context: string): string =>
+  event.moment === "PostToolUse" ? JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: context } }) : context
