@@ -109,7 +109,7 @@ test("a call is the word when it runs the root's command, and only then", () => 
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "harness-spec-")))
 
-test("a session's home reaches the person's login by a link, never a copy; release takes back the link and the live process's keys", () => {
+test("a session's home reaches the person's login by a link, never a copy; release takes it back, and the account's profile", () => {
   const own = temp()
   const home = join(temp(), "home")
 
@@ -129,10 +129,12 @@ test("a session's home reaches the person's login by a link, never a copy; relea
   expect(readlinkSync(join(home, "Library/Keychains"))).toBe(join(own, "Library/Keychains"))
   mkdirSync(join(home, ".claude/sessions"), { recursive: true })
   writeFileSync(join(home, ".claude/sessions/1.key"), "a live process's")
+  writeFileSync(join(home, ".claude.json"), '{ "oauthAccount": {} }')
   writeFileSync(join(home, ".claude/transcript.jsonl"), "kept")
   harness.release(home)
   expect(existsSync(join(home, "Library/Keychains"))).toBe(false)
   expect(existsSync(join(home, ".claude/sessions"))).toBe(false)
+  expect(existsSync(join(home, ".claude.json"))).toBe(false)
   expect(existsSync(join(home, ".claude/transcript.jsonl"))).toBe(true)
   expect(existsSync(join(own, "Library/Keychains/login.keychain-db"))).toBe(true)
   rmSync(own, { recursive: true, force: true })

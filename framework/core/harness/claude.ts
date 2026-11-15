@@ -129,8 +129,11 @@ export const cleanEnv = (env: NodeJS.ProcessEnv = process.env): Record<string, s
 /** The environment of a session in `home`. */
 export const sessionEnv = (home: string, env: NodeJS.ProcessEnv = process.env): Record<string, string> => ({ ...cleanEnv(env), HOME: home })
 
-/** What Claude Code keeps of its live processes in a home, keys among them: of no use once the session has ended. */
-const LIVE = ".claude/sessions"
+/**
+ * What Claude Code keeps in a home beside the transcripts, of no use once the session has ended: its live processes, keys
+ * among them, and its state with the account's profile, and that state's backups.
+ */
+const KEPT_BY_IT = [".claude/sessions", ".claude.json", ".claude/backups"]
 /** Where the login is in the person's home, and where its link goes in a session's: macOS keeps it in the login keychain. */
 const LOGINS = [
   { path: "Library/Keychains", how: "the person's login keychain, linked", darwin: true },
@@ -160,7 +163,7 @@ export function claudeCode(own: string = homedir(), platform: NodeJS.Platform = 
       return process.env.ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY, from the environment" : "none found: the session is not logged in"
     },
     release(home) {
-      rmSync(join(home, LIVE), { recursive: true, force: true })
+      for (const path of KEPT_BY_IT) rmSync(join(home, path), { recursive: true, force: true })
       for (const login of LOGINS) {
         const link = join(home, login.path)
 
