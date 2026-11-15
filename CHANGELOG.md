@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.39.4
+
+- A tab under the keyboard's focus has no ring: it reads as one hovered, with its ground and its dots. Nothing to adapt.
+
 ## 0.39.3
 
 - A menu keeps room at its left only where it has something to put there, a mark of what waits on the person or a tick; without one its entries start at its edge. The kit's `menuItem` class is now `menuRow`, without the padding. Nothing else to adapt.

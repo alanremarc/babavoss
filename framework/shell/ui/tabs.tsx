@@ -123,7 +123,7 @@ function Tab({
     <div
       data-slot="pill"
       className={cn(
-        "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
+        "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground has-focus-visible:not-data-[active]:bg-foreground/6 has-focus-visible:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
         unseen && "animate-in duration-300 fade-in-0 zoom-in-90 motion-reduce:animate-none",
         open && "bg-foreground/6 text-foreground"
       )}
@@ -167,7 +167,7 @@ function Tab({
           e.preventDefault()
           setOpen(true)
         }}
-        className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none"
         onClick={onSelect}
         title={[label, ...said].join("\n")}
         aria-label={[unseen ? `${label}, new` : label, ...said].join(". ")}
