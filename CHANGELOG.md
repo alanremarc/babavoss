@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.28.0
+
+- The shell keeps the session's activity: every notice, every call into a tab that gave none (as its handle and arguments), and every tab opened, closed or shown. The agent reads it at `/activity`, named at `/` by `activity: { at: "/activity" }`, and is never told it. The person sees it in a panel at the strip's right. A surface that wants a meaningful line there instead of the mechanical one gives a notice.
+- A call carries `t`, the time it was admitted, in ms since the epoch. An update that keeps time reads it there, never from a clock. Nothing to adapt.
+
 ## 0.27.0
 
 - A surface no longer says who it waits on as free text (`waiting: "the person, to …"`). It says `attention: { who: "person" | "agent", why }` at `/`, or a list of them; replace each `waiting` fact with it, and drop `waiting` where nobody is needed.
