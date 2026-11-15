@@ -4,8 +4,13 @@
 
 /** Where the face looks, in radians, right and down positive; and how wide the eyes are, 1 at rest. */
 export type Gaze = { yaw: number; pitch: number; size: number }
-/** An eye at rest, in the mark's 100 by 100 box: its centre's x, the centre's y being the sphere's, and its radius. */
-export type Eye = { x: number; r: number }
+/**
+ * An eye at rest, in the mark's 100 by 100 box: its centre's x, the centre's y being the sphere's, and its radius. `lens`,
+ * where a variant of the mark has one, is how much a lens over the sphere's middle enlarges it: the eye grows as a turn
+ * brings it towards the middle and shrinks as it goes towards the edge, by `lens` times how much nearer the front it is
+ * than at rest. At rest it is its own size.
+ */
+export type Eye = { x: number; r: number; lens?: number }
 /** An eye as drawn: an ellipse whose `rx` lies along the line from the sphere's centre, turned by `turn` degrees. */
 export type Drawn = { cx: number; cy: number; rx: number; ry: number; turn: number }
 
@@ -26,7 +31,8 @@ export function drawn(eye: Eye, gaze: Gaze): Drawn {
   const depth = front * Math.cos(gaze.pitch)
   const x = sx * Math.cos(gaze.yaw) + depth * Math.sin(gaze.yaw)
   const z = Math.max(0, -sx * Math.sin(gaze.yaw) + depth * Math.cos(gaze.yaw))
-  const r = eye.r * gaze.size
+  // The lens: an eye nearer the front than it rests is larger, one further from it smaller, never less than a third.
+  const r = eye.r * gaze.size * Math.max(1 / 3, 1 + (eye.lens ?? 0) * (z - front))
 
   return {
     cx: SPHERE.x + x * SPHERE.radius,

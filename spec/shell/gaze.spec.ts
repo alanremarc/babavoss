@@ -69,3 +69,20 @@ test("a page that lost its runtime sends the smaller eye round the larger, from 
   expect(right.cx - SPHERE.x).toBeGreaterThan(EYES[0]!.r + EYES[1]!.r)
   expect(right.cx - SPHERE.x + EYES[1]!.r).toBeLessThan(SPHERE.radius)
 })
+
+test("under a lens an eye is its own size at rest, larger as a turn brings it to the middle and smaller as it goes to the edge, and still round to the front", () => {
+  const left = { x: 31, r: 15, lens: 2 }
+  const right = { x: 69, r: 15, lens: 2 }
+
+  expect(drawn(left, REST).ry).toBeCloseTo(15, 6)
+  expect(drawn(left, REST).rx).toBeCloseTo(15, 6)
+
+  // Looking right, the left eye comes to the middle and the right one goes to the edge.
+  const turned = { yaw: 0.4, pitch: 0, size: 1 }
+
+  expect(drawn(left, turned).ry).toBeGreaterThan(15)
+  expect(drawn(right, turned).ry).toBeLessThan(15)
+  expect(drawn(right, { yaw: 1.4, pitch: 0, size: 1 }).ry).toBeCloseTo(5, 6)
+  // An eye with no lens keeps its size wherever it is.
+  expect(drawn({ x: 69, r: 15 }, turned).ry).toBeCloseTo(15, 6)
+})

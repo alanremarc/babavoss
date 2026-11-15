@@ -232,12 +232,12 @@ describe("the person's settings in the page", () => {
 
   it("give no appearance while the file has none, so the page paints by an older page's cookie, which is taken into the file once", () => {
     const file = scratch()
-    const cookie = `other=1; babavoss.appearance=${encodeURIComponent(JSON.stringify({ mode: "light", themes: { light: "claude", dark: "neutral" } }))}`
+    const cookie = `other=1; babavoss.appearance=${encodeURIComponent(JSON.stringify({ mode: "light", themes: { light: "clay", dark: "neutral" } }))}`
 
     expect(given(withSettings("<head></head>", file))).not.toHaveProperty("appearance")
     expect(migrated(cookie, file)).toBe(true)
-    expect(readSettings(file).appearance).toEqual({ mode: "light", same: false, themes: { light: "claude", dark: "neutral" } })
-    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", same: false, themes: { light: "claude", dark: "neutral" } } })
+    expect(readSettings(file).appearance).toEqual({ mode: "light", same: false, themes: { light: "clay", dark: "neutral" } })
+    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", same: false, themes: { light: "clay", dark: "neutral" } } })
     expect(migrated(cookie, file)).toBe(false)
     expect(readSettings(file).appearance.mode).toBe("dark")
   })

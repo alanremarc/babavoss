@@ -10,13 +10,15 @@ describe("the settings a file keeps", () => {
 
   it("take what they can read, part by part, and leave the rest the default", () => {
     expect(
-      settingsOf({ appearance: { mode: "dark", themes: { dark: "claude", light: "sepia" } }, keys: { home: "Cmd+H", next: "banana", gone: "mod+x" }, logo: { animate: false } })
-    ).toEqual({ appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: "claude" } }, keys: { home: "mod+h" }, logo: { animate: false } })
+      settingsOf({ appearance: { mode: "dark", themes: { dark: "clay", light: "sepia" } }, keys: { home: "Cmd+H", next: "banana", gone: "mod+x" }, logo: { animate: false } })
+    ).toEqual({ appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: "clay" } }, keys: { home: "mod+h" }, logo: { animate: false } })
   })
 
   it("read a file of before dynamic themes: its themes are presets, and its modes the same where they name the same one", () => {
-    expect(appearanceOf({ mode: "light", themes: { light: "claude", dark: "claude" } })).toEqual({ mode: "light", same: true, themes: { light: "claude", dark: "claude" } })
-    expect(appearanceOf({ themes: { light: "neutral", dark: "claude" } })).toEqual({ mode: "system", same: false, themes: { light: "neutral", dark: "claude" } })
+    expect(appearanceOf({ mode: "light", themes: { light: "clay", dark: "clay" } })).toEqual({ mode: "light", same: true, themes: { light: "clay", dark: "clay" } })
+    // Clay was named claude: a file from then reads as clay.
+    expect(appearanceOf({ themes: { light: "claude", dark: "claude" } }).themes).toEqual({ light: "clay", dark: "clay" })
+    expect(appearanceOf({ themes: { light: "neutral", dark: "clay" } })).toEqual({ mode: "system", same: false, themes: { light: "neutral", dark: "clay" } })
   })
 
   it("read a dynamic theme as its three numbers, held to their bounds, and one that is not three numbers as the default", () => {

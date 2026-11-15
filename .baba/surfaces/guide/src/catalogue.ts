@@ -25,7 +25,7 @@ export const GROUPS = [
         entries: [
           { id: "states", title: "States", files: [`${SHELL}/mark.tsx`, `${SHELL}/turn.ts`], states: ["still", "working", "working, animation off", "waiting", "lost"] },
           { id: "moves", title: "Moves", files: [`${SHELL}/gaze.ts`], states: ["any", ...MOVES.map((m) => m.name)] },
-          { id: "variants", title: "Variants, experimental", files: [`${SHELL}/gaze.ts`], states: ["brand", "twins", "twins, large", "twins, small", "twins, close", "twins, apart"] },
+          { id: "variants", title: "Variants, experimental", files: [`${SHELL}/gaze.ts`], states: ["brand", "lens"] },
         ],
       },
     ],

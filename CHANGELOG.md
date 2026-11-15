@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.54.1
+
+- The preset claude is named clay, "Clay": `theme=clay`, `presetOf("clay")`. A settings file that says claude reads as clay; a call or code that names the preset must say clay.
+- An eye of the mark may have a `lens`: it grows as a turn brings it to the sphere's middle and shrinks towards the edge. The brand's eyes have none and the shell's mark is unchanged; this repository's Design Guide tries it at `/guide/mark/variants`, beside the brand's.
+
 ## 0.54.0
 
 - Breaking: the kit's palettes are generated. A theme is three numbers, `{ hue, tint, vivid }`: a hue from 0 to 360, how strongly the greys are tinted toward it and how vivid the accent is, each from 0 to 100. Every colour token is derived from them in CSS, over lightness fixed per mode, so text keeps its contrast at any hue; `framework/kit/theme.ts` is the source and `theme.css` is written from it. The token names are unchanged, so a component that reads them, shadcn's among them, follows the theme as before.

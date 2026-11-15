@@ -11,7 +11,7 @@ export type Theme = { hue: number; tint: number; vivid: number }
 /** The presets, the first the default. Adding one is adding its row. */
 export const PRESETS = [
   { id: "neutral", label: "Neutral", theme: { hue: 0, tint: 0, vivid: 0 } },
-  { id: "claude", label: "Claude", theme: { hue: 40, tint: 36, vivid: 68 } },
+  { id: "clay", label: "Clay", theme: { hue: 40, tint: 36, vivid: 68 } },
   { id: "slate", label: "Slate", theme: { hue: 255, tint: 32, vivid: 22 } },
   { id: "sand", label: "Sand", theme: { hue: 78, tint: 55, vivid: 8 } },
   { id: "moss", label: "Moss", theme: { hue: 145, tint: 28, vivid: 50 } },

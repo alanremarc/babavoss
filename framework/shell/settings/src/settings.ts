@@ -28,8 +28,9 @@ export const isMode = (value: unknown): value is Appearance["mode"] => value ===
 const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
 
-/** The choice a kept value says: a preset's id, or three numbers, bounded; anything else, none. */
+/** The choice a kept value says: a preset's id, or three numbers, bounded; anything else, none. Clay was once named claude. */
 export function choiceOf(value: unknown): Choice | undefined {
+  if (value === "claude") return "clay"
   if (isPreset(value)) return value
 
   const { hue, tint, vivid } = record(value)

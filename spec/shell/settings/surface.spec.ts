@@ -54,12 +54,12 @@ describe("the settings", () => {
     const { agent, world } = story(settings(() => "unused"))
 
     expect(await agent.call("/", "mode", { mode: "dark" })).toMatchObject({ outcome: "written" })
-    expect(await agent.call("/", "theme", { mode: "both", theme: "claude" })).toMatchObject({ outcome: "written" })
+    expect(await agent.call("/", "theme", { mode: "both", theme: "clay" })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/", "animate", { on: false })).toMatchObject({ outcome: "written" })
-    expect(agent.sees()).toMatchObject({ appearance: { mode: "dark", same: true, theme: "claude" }, logo: { animate: false } })
+    expect(agent.sees()).toMatchObject({ appearance: { mode: "dark", same: true, theme: "clay" }, logo: { animate: false } })
     expect(world.commands().filter(writing).at(-1)).toEqual({
       kind: "write",
-      settings: { appearance: { mode: "dark", same: true, themes: { light: "claude", dark: "neutral" } }, keys: {}, logo: { animate: false } },
+      settings: { appearance: { mode: "dark", same: true, themes: { light: "clay", dark: "neutral" } }, keys: {}, logo: { animate: false } },
     })
     expect(agent.noticed()).toEqual([])
   })
@@ -94,9 +94,9 @@ describe("the settings", () => {
     expect(await agent.call("/", "mode", { mode: "dim" })).toEqual({ outcome: "refused", reason: "no mode dim: it is light, dark, system" })
     expect(await agent.call("/", "theme", { mode: "both", theme: "sepia" })).toEqual({
       outcome: "refused",
-      reason: "no theme sepia: it is neutral, claude, slate, sand, moss, ocean, plum, dynamic",
+      reason: "no theme sepia: it is neutral, clay, slate, sand, moss, ocean, plum, dynamic",
     })
-    expect(await agent.call("/", "theme", { mode: "dark", theme: "claude" })).toEqual({
+    expect(await agent.call("/", "theme", { mode: "dark", theme: "clay" })).toEqual({
       outcome: "refused",
       reason: "both modes use one theme: name both, or call same with on false first to give dark its own",
     })
@@ -104,11 +104,11 @@ describe("the settings", () => {
     expect(await agent.call("/", "dynamic", { mode: "both", hue: 0, tint: 101, vivid: 0 })).toEqual({ outcome: "refused", reason: "tint is 0 to 100, not 101" })
     expect(await agent.call("/", "dynamic", { mode: "both", hue: 0, tint: 0, vivid: -1 })).toEqual({ outcome: "refused", reason: "vivid is 0 to 100, not -1" })
     await agent.call("/", "same", { on: false })
-    expect(await agent.call("/", "theme", { mode: "both", theme: "claude" })).toEqual({
+    expect(await agent.call("/", "theme", { mode: "both", theme: "clay" })).toEqual({
       outcome: "refused",
       reason: "the modes have themes of their own: name light or dark, or call same with on true first",
     })
-    expect(await agent.call("/", "theme", { mode: "dim", theme: "claude" })).toMatchObject({ outcome: "refused", reason: "a theme is of the light or the dark mode, or both, not dim" })
+    expect(await agent.call("/", "theme", { mode: "dim", theme: "clay" })).toMatchObject({ outcome: "refused", reason: "a theme is of the light or the dark mode, or both, not dim" })
   })
 
   it("bind a command to keys, and refuse keys another command has, saying which, and keys that cannot be a binding", async () => {

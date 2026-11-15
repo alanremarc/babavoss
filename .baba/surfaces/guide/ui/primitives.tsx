@@ -826,8 +826,8 @@ function Composers() {
 
 /** The picker over a box of its own theme, which the box takes as it is dragged; what is let go is said under it. */
 function ThemePickers() {
-  const [theme, setTheme] = useState<Theme>(presetOf("claude"))
-  const [kept, setKept] = useState<Theme>(presetOf("claude"))
+  const [theme, setTheme] = useState<Theme>(presetOf("clay"))
+  const [kept, setKept] = useState<Theme>(presetOf("clay"))
   const preview = (mode: "light" | "dark") => (
     <div data-theme="dynamic" className={`${mode} flex flex-1 items-center gap-2 rounded-md border bg-background p-2 text-foreground`} style={varsOf(theme) as CSSProperties}>
       <span className="size-3 rounded-full bg-primary" />

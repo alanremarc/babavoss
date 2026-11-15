@@ -89,15 +89,13 @@ const twins = (r: number, gap: number): Eye[] => [
 
 /**
  * Pairs of eyes being tried, the brand's first to compare with. Each is a constant: the mark moves the pair it is given
- * and takes a new array for a new pair. The brand's eyes are 18 and 12.7 in radius, 7 apart, 68.5 across.
+ * and takes a new array for a new pair. The brand's eyes are 18 and 12.7 in radius, 7 apart, 68.5 across. The lens pair
+ * is two eyes of one size, as wide across as the brand's, under a lens over the sphere's middle: at rest they are equal,
+ * and as the face turns the eye that comes to the middle grows and the one that goes to the edge shrinks.
  */
 const VARIANTS: { label: string; about: string; pair: Eye[] }[] = [
   { label: "brand", about: "18 and 12.7, 7 apart", pair: EYES },
-  { label: "twins", about: "15.4 each, 7 apart: the brand's width", pair: twins(15.364, 7) },
-  { label: "twins, large", about: "18 each, 4 apart", pair: twins(18, 4) },
-  { label: "twins, small", about: "12.7 each, 7 apart", pair: twins(12.728, 7) },
-  { label: "twins, close", about: "16 each, 2 apart", pair: twins(16, 2) },
-  { label: "twins, apart", about: "13 each, 16 apart", pair: twins(13, 16) },
+  { label: "lens", about: "15.4 each, 7 apart; the middle of the sphere enlarges", pair: twins(15.364, 7).map((eye) => ({ ...eye, lens: 2.2 })) },
 ]
 /** The standings a variant is judged in: at rest, looking about, and with the runtime lost. */
 const SHOWN: { label: string; standing: Standing; lost?: true }[] = [
