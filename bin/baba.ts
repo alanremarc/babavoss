@@ -10,7 +10,7 @@ import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
 const USAGE = `baba init [--from SPEC]   make .baba/ in this directory, install the framework and provision; SPEC names the framework, a release by default
 baba new NAME             make the surface NAME from the template in .baba/surfaces/NAME, and provision
-baba start [--session ID] start the root of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the surfaces and the open tabs
+baba start [--session ID] start the shell of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the surfaces and the open tabs
 baba provision            write the skill baba and the framework's hook into the harnesses' configuration beside .baba/, and generate the root from the surfaces
 baba hook                 what a harness's hook runs: reads the hook's input, prints the context to add`
 const TEMPLATE = fileURLToPath(new URL("../template", import.meta.url))
