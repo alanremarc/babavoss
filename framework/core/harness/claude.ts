@@ -1,7 +1,8 @@
 // Claude Code as a harness: one long-lived headless process per session, spoken to and read as JSON lines, in a home of
 // its own, so its transcripts, settings and caches land there and the person's own are neither read nor written. Its
 // login is the person's: on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a
-// token or key the environment already carries. `claudeEvents` reads one line of its stream, a pure function.
+// token or key the environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on
+// nothing of the account's: no account, organisation or user id, and no address, whatever field or text carries one.
 import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync, symlinkSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
@@ -42,9 +43,28 @@ export const tokensOf = (usage: Json | undefined): Tokens => {
   }
 }
 
+/** A field that names who the session's account is: an account, organisation or user, by id, name or address. */
+const WHOSE = /account|organi[sz]ation|email|^(org|user)([_-]?(id|uuid|name))?$|^user[_-]?(id|uuid|name)$|^userID$/i
+const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+/** An id said in text after what it is of: `organization 1234…`, `account_uuid: "…"`, `org_id=…`. */
+const NAMED = new RegExp(`\\b(account|organi[sz]ation|org|user)([ _-]?(id|uuid))?(["']?\\s*[:=]?\\s*["']?)(${UUID}|[0-9a-f]{16,}|[\\w-]*\\d[\\w-]{11,})`, "gi")
+export const REDACTED = "<redacted>"
+
+/** Text with no address and no account's id in it. */
+export const redact = (text: string): string => text.replace(EMAIL, REDACTED).replace(NAMED, `$1$2$4${REDACTED}`)
+/** A line of the stream with no field that names the account, and no address or account's id in any text. */
+const scrub = (value: Json): Json => {
+  if (typeof value === "string") return redact(value)
+  if (Array.isArray(value)) return value.map(scrub)
+  if (!value || typeof value !== "object") return value
+
+  return Object.fromEntries(Object.entries(value).flatMap(([key, v]) => (WHOSE.test(key) || v === undefined ? [] : [[key, scrub(v)]])))
+}
+
 /** The framework's events in one line of Claude Code's stream; a line of no meaning to it, or a subagent's, has none. */
 export function claudeEvents(line: Json): HarnessEvent[] {
-  const e = obj(line)
+  const e = obj(scrub(line))
   const type = str(e.type)
   const subtype = str(e.subtype)
 
@@ -219,7 +239,7 @@ function spawnClaude({ project, home, session, model, budget = 0.5 }: Start): Se
     events: (async function* () {
       for await (const line of jsonLines(child.stdout)) yield* claudeEvents(line)
 
-      yield { kind: "ended", code: await child.exited, stderr: (await stderr).trim() } satisfies HarnessEvent
+      yield { kind: "ended", code: await child.exited, stderr: redact((await stderr).trim()) } satisfies HarnessEvent
     })(),
     say: (text) => write({ type: "user", message: { role: "user", content: text }, parent_tool_use_id: null, session_id: session }),
     stop: () => write({ type: "control_request", request_id: `stop-${Date.now()}`, request: { subtype: "interrupt" } }),

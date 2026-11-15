@@ -100,6 +100,50 @@ test("Claude Code's stream reads as the framework's events: hooks' injections, m
   expect(JSON.stringify(events)).not.toContain("credential")
 })
 
+test("nothing of the account's is handed on: no account, organisation or user id, and no address, in a field or in text", () => {
+  const ORG = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+  const ACCOUNT = "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a"
+  const lines: Json[] = [
+    {
+      type: "system",
+      subtype: "init",
+      cwd: "/runs/r1/project",
+      session_id: SESSION,
+      model: "claude-haiku-5-5",
+      tools: ["Bash"],
+      account: { email: "someone@example.invalid", uuid: ACCOUNT },
+      organization_uuid: ORG,
+      user_id: "user_01HZXKQ4ACCOUNTID",
+    },
+    {
+      type: "system",
+      subtype: "hook_response",
+      hook_event: "SessionStart",
+      stdout: `Logged in as someone@example.invalid, organization ${ORG}`,
+      exit_code: 0,
+    },
+    assistant([{ type: "tool_use", id: "t1", name: "Write", input: { file_path: "a.json", email: "someone@example.invalid", accountUuid: ACCOUNT } }]),
+    {
+      type: "user",
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: `{"account_uuid": "${ACCOUNT}", "org_id": "${ORG}"}` }] },
+      parent_tool_use_id: null,
+    },
+    { type: "result", subtype: "error_during_execution", is_error: true, result: `account ${ACCOUNT} has no access`, usage: {}, organization: ORG },
+  ]
+  const told = JSON.stringify(lines.flatMap(claudeEvents))
+
+  expect(told).not.toMatch(/example\.invalid|ACCOUNTID/)
+  expect(told).not.toContain(ORG)
+  expect(told).not.toContain(ACCOUNT)
+  expect(lines.flatMap(claudeEvents)).toMatchObject([
+    { kind: "started", session: SESSION, loaded: { model: "claude-haiku-5-5", cwd: "/runs/r1/project" } },
+    { kind: "injected", text: "Logged in as <redacted>, organization <redacted>" },
+    { kind: "call", tool: "Write", input: '{"file_path":"a.json"}' },
+    { kind: "result", text: '{"account_uuid": "<redacted>", "org_id": "<redacted>"}' },
+    { kind: "turn", ok: false, text: "error_during_execution: account <redacted> has no access" },
+  ])
+})
+
 test("a call is the word when it runs the root's command, and only then", () => {
   const word = (command: string) => (claudeEvents(assistant([{ type: "tool_use", id: "t", name: "Bash", input: { command } }]))[0] as { word: boolean }).word
 
