@@ -147,7 +147,7 @@ const needsOf = (v: Json | undefined): Need[] | undefined => {
 }
 /** A need's identity: its tab and who; a tab may need both. */
 const needKey = (n: Need) => keyOf(NEEDS, `${n.at} ${n.who}`)
-const needed = (n: Need) => `${n.who === "agent" ? "you" : `the ${n.who}`}, at ${[n.at, n.surface].filter(Boolean).join(" ")}`
+const needed = (n: Need) => `${n.who === "agent" ? "you" : `the ${n.who}`}, at ${[n.at, n.at !== `/${n.surface}` && n.surface].filter(Boolean).join(" ")}`
 
 /** Needs changed, each as an event on one need: added or gone, who, where and why; a why changed, the new one. */
 function needsChanged(a: Need[], b: Need[]): Change[] {
@@ -213,16 +213,30 @@ export function rebase(known: Json | undefined, was: Json | undefined, now: Json
   return now
 }
 
-/** Where in the root a path is: the open tab it is in, by its surface and path; else the path itself. */
+/** Where in the root a path is: the open tab it is in, by its address or its number, said by its surface and address; else the path itself. */
 export function placeOf(view: Json | undefined, path: string): string {
-  const tab = tabsOf(view)?.find((t) => path === t.at || path.startsWith(`${t.at}/`))
+  const under = (at: string) => path === at || path.startsWith(`${at}/`)
+  const tab = tabsOf(view)?.find((t) => under(t.at) || (typeof t.n === "number" && under(`/tabs/${t.n}`)))
 
-  return tab ? [typeof tab.surface === "string" && tab.surface, tab.at].filter(Boolean).join(" ") : path
+  return tab ? (named(tab) ? tab.at : [typeof tab.surface === "string" && tab.surface, tab.at].filter(Boolean).join(" ")) : path
 }
 
-/** A tab's one line: its path, its surface and its title. */
+/** Whether a tab stands at its surface's name, /NAME, which then says its surface. */
+const named = (tab: Tab) => typeof tab.surface === "string" && tab.at === `/${tab.surface}`
+
+/**
+ * A tab's one line: its path, its surface where the path does not say it, its title; and where it stands at its surface's
+ * name, its number, so a tab opened again at the name reads as another.
+ */
 export const heading = (tab: Tab) =>
-  [tab.at, typeof tab.surface === "string" && tab.surface, typeof tab.title === "string" && JSON.stringify(tab.title)].filter(Boolean).join(" ")
+  [
+    tab.at,
+    !named(tab) && typeof tab.surface === "string" && tab.surface,
+    typeof tab.title === "string" && JSON.stringify(tab.title),
+    named(tab) && typeof tab.n === "number" && `(tab ${tab.n})`,
+  ]
+    .filter(Boolean)
+    .join(" ")
 const names = (v: Json | undefined) => (Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ") : "")
 const SAID = new Set(["at", "n", "surface", "title", "actions", "facts"])
 
@@ -404,12 +418,14 @@ function rowsChanged(a: Row[], b: Row[], id: string, at: At, out: Change[]): Cha
  * one line; otherwise its row's changes, and its facts' relative to it.
  */
 function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
-  const before = new Map(a.map((t) => [t.at, t]))
-  const now = new Set(b.map((t) => t.at))
+  // A tab is its path and its number: one closed and another opened at the same path are two.
+  const id = (t: Tab) => `${t.at} ${String(t.n)}`
+  const before = new Map(a.map((t) => [id(t), t]))
+  const now = new Set(b.map(id))
 
-  for (const t of a.filter((t) => !now.has(t.at))) out.push({ line: `- ${heading(t)} closed`, keys: [keyOf("tabs", t.at)], where: "/" })
+  for (const t of a.filter((t) => !now.has(id(t)))) out.push({ line: `- ${heading(t)} closed`, keys: [keyOf("tabs", t.at)], where: "/" })
   for (const t of b) {
-    const old = before.get(t.at)
+    const old = before.get(id(t))
     const key = keyOf("tabs", t.at)
 
     if (!old) {

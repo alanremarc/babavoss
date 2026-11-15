@@ -88,7 +88,7 @@ test("a read's answer is the door's text of the view, and what is heard after a 
   const lead = heard.text.split("\n")[0]!
 
   expect(lead.startsWith(before!) && lead.endsWith(after!)).toBe(true)
-  expect(heard.text).toContain("the person acted on tasks /tabs/1")
+  expect(heard.text).toContain("the person acted on /tasks")
 })
 
 test("an ask: the wait ends with what the person decided on the page", async () => {
@@ -110,7 +110,7 @@ test("a scenario's path lists its steps with sizes and an at each; a step's path
   const step = agent.sees("/scenarios/work/3") as Step
 
   expect(step).toMatchObject({ who: "agent", did: `${WORD} / open surface=tasks` })
-  expect(step.changed).toContain("activity: agent · tasks /tabs/1 · opened")
+  expect(step.changed).toContain("activity: agent · tasks /tasks · opened")
   expect(agent.sees("/scenarios/work/99")).toBeUndefined()
   expect(agent.sees("/scenarios/none")).toBeUndefined()
 })
@@ -122,7 +122,7 @@ test("a step carries what the person's page showed after it: each open tab at /,
   const done = at(`${WORD} /tabs/1/tasks/1 done`)
 
   expect(at("says: Write the notes and have me check them.")).toEqual({ tabs: [] })
-  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toMatchObject({ shown: "/tabs/1", tabs: [{ at: "/tabs/1", surface: "tasks" }] })
+  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toMatchObject({ shown: "/tasks", tabs: [{ at: "/tasks", surface: "tasks" }] })
   expect(task(at(`${WORD} /tabs/1 add 'title=Write the notes'`))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "todo" })
   // In review, the task carries the person's asks, as their page has them, and the tab says they are waited for.
   expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve", ask: true }, reopen: { ask: true } })
@@ -135,14 +135,14 @@ test("a step carries what the person's page showed after it: each open tab at /,
   expect(told.filter((t) => /baba \S+ (approve|reopen)/.test(t))).toEqual([])
   expect((agent.sees(`/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
     at: `/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
-    tabs: ["tasks /tabs/1 (in front)"],
+    tabs: ["tasks /tasks (in front)"],
   })
 
   // Where the person acts is in front, and a page that sleeps is as it last was.
   const beside = plays.find((p) => p.name === "beside")!.steps
 
-  expect(beside.map((s) => s.page.shown).filter(Boolean).at(-1)).toBe("/tabs/1")
-  expect(beside[stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1]!.page.shown).toBe("/tabs/1")
+  expect(beside.map((s) => s.page.shown).filter(Boolean).at(-1)).toBe("/tasks")
+  expect(beside[stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1]!.page.shown).toBe("/tasks")
   expect(plays.find((p) => p.name === "break")!.steps.find((s) => s.who === "root")!.page).toMatchObject({ asleep: true, tabs: [{}, {}] })
 })
 

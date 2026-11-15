@@ -145,5 +145,8 @@ export const arrived = (row: Row, since: number): boolean => row.n > since && ro
 export const levelKey = (key: string, level: Level): "back" | undefined =>
   level === "channel" && (key === "Escape" || key === "Backspace" || key === "ArrowLeft") ? "back" : undefined
 
-/** The tab a place is in, the channel a toast opens on: "/tabs/2/issues/12" is in /tabs/2; anything else is the shell's. */
-export const tabIn = (at: string | undefined): string => (at && /^\/tabs\/\d+/.exec(at)?.[0]) || SHELL
+/**
+ * The tab a place is in, the channel a toast opens on: "/tabs/2/issues/12" is in /tabs/2, "/queue/issues/12" in /queue, the
+ * address of the tab at its surface's name; anything else is the shell's.
+ */
+export const tabIn = (at: string | undefined): string => (at && /^(?:\/tabs\/\d+|\/(?!(?:tabs|activity)(?:\/|$))[a-z][a-z0-9-]*)/.exec(at)?.[0]) || SHELL

@@ -48,6 +48,8 @@ test("init makes .baba/ as a package that names the framework and provisions whe
 test("new makes a surface from the template, with a passing spec, and the root is generated with it; a surface gets no skill and no file of instructions", () => {
   expect(run(["new", "Month Close"])).toMatchObject({ status: 2, err: expect.stringContaining("kebab-case") })
   expect(run(["new", "baba"])).toMatchObject({ status: 2, err: expect.stringContaining("not baba") })
+  // The shell's own paths are reserved, or a tab's address by its surface's name would stand on them.
+  for (const name of ["tabs", "activity"]) expect(run(["new", name])).toMatchObject({ status: 2, err: expect.stringContaining(`or ${name}`) })
 
   const made = run(["new", "month-close"])
 
@@ -328,11 +330,11 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(opened).toStartWith(
       "In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nnotices:\nthe person acted on /\nchanged by the person:\n"
     )
-    expect(opened).toMatch(/\n\+ \/tabs\/\d+ desk "Greeting"\nactions: propose /)
+    expect(opened).toMatch(/\n\+ \/desk "Greeting" \(tab \d+\)\nactions: propose /)
     expect(opened).toContain('\nhow: "Propose a greeting when the person asks for another.')
     expect(opened).toContain('\ngreeting: "hello"')
 
-    const tab = /\+ (\/tabs\/\d+) desk/.exec(opened)![1]!
+    const tab = /\+ (\/desk) "Greeting"/.exec(opened)![1]!
 
     // The tab's own path offers its actions, as the exact commands.
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
@@ -351,14 +353,14 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(JSON.parse(hook("PostToolUse").stdout)).toEqual({
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
-        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nthe person acted on desk ${tab}`,
+        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nthe person acted on ${tab}`,
       },
     })
 
     const told = hook("UserPromptSubmit").stdout
 
     expect(told).toStartWith("In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
-    expect(told).toContain(`+ need: the person, at ${tab} desk, to accept or decline the proposed greeting`)
+    expect(told).toContain(`+ need: the person, at ${tab}, to accept or decline the proposed greeting`)
     expect(told).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")
@@ -376,7 +378,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
       const again = hook("SessionStart", { source }).stdout
 
       expect(again).toStartWith(`${reminder}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
-      expect(again).toContain(`${tab} desk "Greeting"`)
+      expect(again).toContain(`${tab} "Greeting" (tab `)
     }
     expect(hook("SessionStart", { source: "clear" }).stdout).toStartWith(body)
 
@@ -420,7 +422,7 @@ test("the root starts with the surfaces that load, lists one that does not as br
     expect(started.status, started.stderr).toBe(0)
     expect(started.stdout).toContain('"by-hand"\t\t"the by-hand surface does not load (not configured, at .baba/surfaces/by-hand/src/surface.ts:')
     expect(started.stdout).toContain('"desk"\t"Keep the house greeting.')
-    expect(call("/", "open", "surface=desk").stdout).toMatch(/\+ \/tabs\/1 desk "Greeting"/)
+    expect(call("/", "open", "surface=desk").stdout).toMatch(/\+ \/desk "Greeting" \(tab 1\)/)
 
     // Mended, it is opened; broken again while its tab is open, the tab says why and keeps what it holds.
     writeFileSync(code, mended)

@@ -147,9 +147,9 @@ describe("the shell's activity", () => {
     })
 
     expect(rows).toEqual([
-      { n: 3, who: "person", kind: "notice", surface: "things", at: "/tabs/1/things/12", tab: "/tabs/1", what: "Approved #12" },
-      { n: 2, who: "agent", kind: "call", surface: "things", at: "/tabs/1", tab: "/tabs/1", what: 'bump by=2 why="two more"' },
-      { n: 1, who: "person", kind: "call", surface: "things", at: "/tabs/1", what: "opened" },
+      { n: 3, who: "person", kind: "notice", surface: "things", at: "/things/things/12", tab: "/things", what: "Approved #12" },
+      { n: 2, who: "agent", kind: "call", surface: "things", at: "/things", tab: "/things", what: 'bump by=2 why="two more"' },
+      { n: 1, who: "person", kind: "call", surface: "things", at: "/things", what: "opened" },
     ])
   })
 
@@ -419,7 +419,9 @@ describe("the activity drawer", () => {
     it("are opened from a toast by the tab its place is in, or on the shell's own", () => {
       expect(tabIn("/tabs/2/issues/12")).toBe("/tabs/2")
       expect(tabIn("/tabs/2")).toBe("/tabs/2")
-      expect(tabIn("/settings")).toBe("/")
+      expect(tabIn("/queue/issues/12")).toBe("/queue")
+      expect(tabIn("/settings")).toBe("/settings")
+      expect(tabIn("/activity/notices")).toBe("/")
       expect(tabIn(undefined)).toBe("/")
     })
   })
