@@ -1,6 +1,7 @@
 // The lab's page: the timeline of what entered the agent under test's context as the main column, a chat to drive it at
 // its foot, and the page under test beside it, live, where the person acts as the person. Hook injections, the word's
-// answers and what the developing agent did as the person stand out and open in full; other tool calls stay folded.
+// answers, what the developing agent did as the person and what the person did on the page stand out and open in full;
+// other tool calls stay folded.
 // What is open is this tab's own; the entry in the tab's route, /entries/N, is open too and scrolled to, so a refresh or
 // the agent's pointing lands on it; /runs shows the runs kept, each to open here.
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
@@ -9,7 +10,7 @@ import type { Handle } from "babavoss/core/index.ts"
 import { Button, Composer, Empty, EmptyDescription, EmptyHeader, EmptyTitle, ToggleGroup, ToggleGroupItem } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
-type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "note"
+type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "person" | "note"
 type Tokens = { input: number; cache_write: number; cache_read: number; output: number }
 type Row = { at: string; i: number; kind: Kind; title: string; size: number; line: string; context?: number | null; growth?: number | null }
 type Whole = Row & { t: number; text: string; call?: string; error?: boolean; pending?: boolean; tokens?: Tokens; cost?: number; ms?: number; calls?: number }
@@ -43,6 +44,7 @@ type Past = {
   cost: number
   shown?: boolean
   open?: Handle
+  forget?: Handle
 }
 
 export const icon = <FlaskConicalIcon aria-hidden />
@@ -54,6 +56,7 @@ const LOOK: Record<Kind, { label: string; edge: string; tag: string }> = {
   word: { label: "word", edge: "border-l-violet-500", tag: "bg-violet-500/15 text-violet-700 dark:text-violet-300" },
   message: { label: "message", edge: "border-l-sky-500", tag: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
   act: { label: "as person", edge: "border-l-rose-500", tag: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+  person: { label: "person", edge: "border-l-rose-500", tag: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
   reply: { label: "reply", edge: "border-l-emerald-500", tag: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
   tool: { label: "tool", edge: "border-l-border", tag: "bg-muted text-muted-foreground" },
   thinking: { label: "thinking", edge: "border-l-border", tag: "bg-muted text-muted-foreground" },
@@ -123,7 +126,7 @@ function Entry({ row, open, toggle, here }: { row: Row; open: boolean; toggle: (
         className={`flex w-full items-center gap-2 px-3 py-1 text-left text-xs ${inline ? "cursor-default" : "hover:bg-muted/60"}`}
       >
         <span className={`inline-flex h-4 shrink-0 items-center rounded-sm px-1 text-[10px] font-medium ${look.tag}`}>{look.label}</span>
-        <span className={`shrink-0 ${row.kind === "hook" || row.kind === "word" || row.kind === "act" ? "font-medium" : "text-muted-foreground"}`}>
+        <span className={`shrink-0 ${["hook", "word", "act", "person"].includes(row.kind) ? "font-medium" : "text-muted-foreground"}`}>
           {row.kind === "word" ? "" : row.title}
         </span>
         <span className={`min-w-0 flex-1 truncate ${row.kind === "word" || row.kind === "tool" ? "font-mono text-[11px]" : "text-muted-foreground"}`}>
@@ -131,7 +134,7 @@ function Entry({ row, open, toggle, here }: { row: Row; open: boolean; toggle: (
         </span>
         <Context row={row} />
         <span className="text-muted-foreground/80 w-14 shrink-0 text-right text-[10px] tabular-nums" title={`${row.size} characters`}>
-          {row.kind === "note" && !row.size ? "" : `${k(row.size)} ch`}
+          {(row.kind === "note" || row.kind === "person") && !row.size ? "" : `${k(row.size)} ch`}
         </span>
       </button>
       {inline && entry && <p className="px-3 pt-0.5 pb-2 text-[13px] leading-[1.6] whitespace-pre-wrap">{entry.text}</p>}
@@ -272,7 +275,10 @@ export default function Lab() {
             }}
           >
             {listing ? (
-              <Runs open={(handle) => void act(handle, {}, "/runs").then((refusal) => !refusal && navigate("/"))} />
+              <Runs
+                open={(handle) => void act(handle, {}, "/runs").then((refusal) => !refusal && navigate("/"))}
+                forget={(handle) => void act(handle, {}, "/runs")}
+              />
             ) : entries.length ? (
               <ol className="flex flex-col gap-px py-2">
                 {entries.map((row) => (
@@ -363,8 +369,8 @@ function Checkout({ of }: { of: Root }) {
   )
 }
 
-/** The runs kept, newest first, each to open here while no run is up. */
-function Runs({ open }: { open: (handle: Handle) => void }) {
+/** The runs kept, newest first, each to open here while no run is up, and to forget. */
+function Runs({ open, forget }: { open: (handle: Handle) => void; forget: (handle: Handle) => void }) {
   const { view } = useLive<{ runs: Past[] }>("/runs")
   const runs = view?.runs ?? []
 
@@ -373,7 +379,7 @@ function Runs({ open }: { open: (handle: Handle) => void }) {
       <Empty>
         <EmptyHeader>
           <EmptyTitle>No runs yet</EmptyTitle>
-          <EmptyDescription>Each run's record is kept under .babavoss/lab/runs, and listed here.</EmptyDescription>
+          <EmptyDescription>Each run's record is kept under .babavoss/lab/runs, the last 20, and listed here.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     )
@@ -398,6 +404,13 @@ function Runs({ open }: { open: (handle: Handle) => void }) {
             </Button>
           ) : (
             <span className="w-11 shrink-0 text-right text-[11px] text-muted-foreground">{run.shown ? "shown" : ""}</span>
+          )}
+          {run.forget ? (
+            <Button size="xs" variant="ghost" onClick={() => forget(run.forget!)} title="Delete this run's record">
+              Forget
+            </Button>
+          ) : (
+            <span className="w-14 shrink-0" />
           )}
         </li>
       ))}

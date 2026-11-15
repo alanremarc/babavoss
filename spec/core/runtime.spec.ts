@@ -488,6 +488,17 @@ it("tells open pages to load again when the page's own files change, and not whe
   page.stop()
 })
 
+it("tells the version the package says when it is told, not the one the runtime started with", async () => {
+  const dir = scratch()
+  const { get, base } = await started(dir)
+  const opened = async () => (await get("/?open", { accept: "text/plain" })).text()
+
+  expect(await opened()).toStartWith("p 1.0\n")
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1.1" }))
+  expect(await opened()).toStartWith("p 1.1\n")
+  expect(await (await fetch(base + "/", { headers: { accept: "text/html" } })).text()).toContain('<meta name="babavoss:version" content="1.1">')
+})
+
 it("reads the version from the package beside the root entry", () => {
   const dir = scratch()
   const entry = join(dir, "scripts/open.ts")

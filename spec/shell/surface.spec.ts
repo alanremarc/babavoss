@@ -464,3 +464,62 @@ describe("the shell surface", () => {
     expect(() => shell({ "Bad Name": counter })).toThrow("kebab-case")
   })
 })
+
+describe("a surface whose code does not load", () => {
+  const why = "Unexpected end of file, at /project/.baba/surfaces/queue/src/surface.ts:3:1"
+
+  it("is listed at / as broken, with why, and cannot be opened; the others are opened as ever", async () => {
+    const { agent } = story(shell({ counter }, BABA, { queue: why }))
+    const home = agent.sees("/")!
+
+    expect(home.surfaces).toEqual([
+      { name: "counter", description: "counts things", open: expect.objectContaining({ name: "open" }) },
+      { name: "queue", broken: `the queue surface does not load (${why}); fix its code, and it is loaded again` },
+    ])
+    expect(home).not.toHaveProperty("empty")
+    expect(await agent.call("/", "open", { surface: "queue" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("not offered") })
+    expect(shell({ counter }, BABA, { queue: why }).update({ tabs: [], next: 1 }, { kind: "call", path: "/", handle: "open", args: { surface: "queue" }, actor: "agent" })).toEqual({
+      refused: `no queue tab is opened: the queue surface does not load (${why}); fix its code, and it is loaded again`,
+    })
+    expect(await agent.call("/", "open", { surface: "counter" })).toMatchObject({ outcome: "written" })
+  })
+
+  it("keeps its open tabs with what they hold, broken with why, and gives them back when its code loads again", async () => {
+    const ports = memory<unknown>()
+    const first = run(shell({ counter }, BABA), ports)
+
+    await first.call("/", "open", { surface: "counter" }, "agent")
+    await settled(first)
+    await first.call("/tabs/1", "bump", { by: 5 }, "agent")
+    await first.stop()
+
+    // The counter's code is broken: the shell is made again without it, and saves what it holds as it was.
+    const broken = run(shell({}, BABA, { counter: why }), ports)
+
+    try {
+      expect(broken.failure()).toBeUndefined()
+      expect(broken.read("/")!.tabs).toMatchObject([
+        {
+          at: "/tabs/1",
+          surface: "counter",
+          broken: `tab 1 is broken: the counter surface does not load (${why}); fix its code, and it is loaded again, with the state the tab keeps`,
+          close: { name: "close" },
+        },
+      ])
+      expect(await broken.call("/tabs/1", "bump", { by: 1 }, "agent")).toMatchObject({ outcome: "refused", reason: expect.stringContaining("does not load") })
+      // A commit while it is broken saves the tab as it was kept.
+      expect(await broken.call("/activity/notices", "seen", { n: 0 }, "person")).toMatchObject({ outcome: "written" })
+    } finally {
+      await broken.stop()
+    }
+
+    const mended = run(shell({ counter }, BABA), ports)
+
+    try {
+      await settled(mended)
+      expect(mended.read("/tabs/1/n")).toMatchObject({ n: 7 })
+    } finally {
+      await mended.stop()
+    }
+  })
+})

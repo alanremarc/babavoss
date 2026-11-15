@@ -350,7 +350,6 @@ export async function startRuntime(
           if (failure === undefined) {
             stand.replace(fresh)
             latest = taking
-            about.version = rootVersion(options.entry)
             await entrance.replace(taking.ui)
             log(`${taking.name}: its code changed and was loaded in place${cut && `, after ${bound / 1000}s, cutting ${cut}`}`)
             if (cut) entrance.note(`${taking.name}: its changed code was loaded after ${bound / 1000}s, cutting what still ran: ${cut}`)
@@ -406,7 +405,14 @@ export async function startRuntime(
 
     return leaving
   }
-  const about: Record<string, string> = { root: root.name, version: rootVersion(options.entry), session }
+  // The version is read each time it is told: a package taken while the runtime runs is the version it runs from then on.
+  const about: Record<string, string> = {
+    root: root.name,
+    get version() {
+      return rootVersion(options.entry)
+    },
+    session,
+  }
 
   void options
     .latest?.()

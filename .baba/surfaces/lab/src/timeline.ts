@@ -1,10 +1,10 @@
 // A run's timeline: every chunk that entered the agent under test's context, in order, from the harness's normalised
-// events, and what the developing agent did on the page under test, as the person. Pure: `stream` takes the timeline and
+// events, what the developing agent did on the page under test, as the person, and what the person did there. Pure: `stream` takes the timeline and
 // one event and answers with the next, so the surface's update stays the one writer.
 import { NONE, type HarnessEvent, type Tokens } from "babavoss/core/harness/index.ts"
 
 export type { Tokens }
-export type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "note"
+export type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "person" | "note"
 /**
  * One chunk: `text` is what entered the context, in full; `call` is what a word or tool was asked, or what was done on the
  * page; `context` and `growth`, on the first chunk of an API call, are the tokens it was given and how many more than the
@@ -59,13 +59,11 @@ export const resolve = (tl: Timeline, id: string, text: string, error = false): 
   entries: tl.entries.map((entry) => (entry.id === id ? { ...entry, text, pending: false, ...(error && { error: true }) } : entry)),
 })
 
-/** An address in the text of what a harness reports, in case one is there: account details stay out of the record. */
-const ACCOUNT = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g
-
 /** The timeline after one event of the harness, `t` ms into the run. */
 export function stream(tl: Timeline, t: number, e: HarnessEvent): Timeline {
   if (e.kind === "started") {
-    const text = JSON.stringify(e.loaded, null, 2).replace(ACCOUNT, "<redacted>")
+    // The harness's adapter hands on nothing of the account's; what it loaded is copied as it said.
+    const text = JSON.stringify(e.loaded, null, 2)
 
     // Each turn begins with it; it is noted where it differs from the one before.
     if (tl.entries.findLast((entry) => entry.title.startsWith("init "))?.text === text) return tl
@@ -108,7 +106,7 @@ export function stream(tl: Timeline, t: number, e: HarnessEvent): Timeline {
 
 /** An entry in one line: its first line of text, or of what it called, clipped. */
 export const line = (entry: Entry, max = 100): string => {
-  const one = (entry.kind === "word" || entry.kind === "tool" || entry.kind === "act" ? (entry.call ?? "") : entry.text).replace(/\s+/g, " ").trim()
+  const one = (["word", "tool", "act", "person"].includes(entry.kind) ? (entry.call ?? "") : entry.text).replace(/\s+/g, " ").trim()
 
   return one.length > max ? `${one.slice(0, max - 1)}…` : one
 }

@@ -47,7 +47,7 @@ test("new makes a surface from the template, with a passing spec, and the root i
   expect(made.status, made.err).toBe(0)
   expect(readdirSync(join(baba, "surfaces/month-close")).sort()).toEqual(["spec", "src", "ui"])
   // The root is generated from the surfaces: each by name, and the page with each one's component.
-  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('import s0 from "../surfaces/month-close/src/surface.ts"')
+  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('"month-close": () => import("../surfaces/month-close/src/surface.ts")')
   expect(readFileSync(join(baba, ".root/main.tsx"), "utf8")).toContain('import * as p0 from "../surfaces/month-close/ui/index.tsx"')
   for (const folder of FOLDERS) expect(existsSync(join(project, folder, "month-close"))).toBe(false)
   expect(run(["new", "month-close"])).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
@@ -60,7 +60,7 @@ test("new makes a surface from the template, with a passing spec, and the root i
 
 test("provision generates the root from the surfaces that are there, from anywhere in the project", () => {
   expect(run(["new", "reel-maker"]).status).toBe(0)
-  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('"reel-maker": s')
+  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('"reel-maker": () => import(')
   rmSync(join(baba, "surfaces/reel-maker"), { recursive: true })
   expect(run(["provision"], project).status).toBe(0)
   expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).not.toContain("reel-maker")
@@ -252,4 +252,36 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     command("start", "close")
   }
   expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], { cwd: project, encoding: "utf8", env, input: "not json" })).toMatchObject({ status: 0, stdout: "" })
+}, 60_000)
+
+test("the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "" }
+  const word = join(project, ".babavoss/bin/baba")
+  const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
+  const code = join(baba, "surfaces/by-hand/src/surface.ts")
+  const mended = readFileSync(code, "utf8")
+
+  writeFileSync(code, `${mended}\nthrow new Error("not configured")\n`)
+  try {
+    const started = spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env })
+
+    expect(started.status, started.stderr).toBe(0)
+    expect(started.stdout).toContain('"by-hand"\t\t"the by-hand surface does not load (not configured, at .baba/surfaces/by-hand/src/surface.ts:')
+    expect(started.stdout).toContain('"desk"\t"Keep the house greeting.')
+    expect(call("/", "open", "surface=desk").stdout).toMatch(/\+ \/tabs\/1 desk "Greeting"/)
+
+    // Mended, it is opened; broken again while its tab is open, the tab says why and keeps what it holds.
+    writeFileSync(code, mended)
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"\t"Keep the house greeting.')
+    expect(call("/", "open", "surface=by-hand").status).toBe(0)
+    expect(call("/tabs/2", "propose", "text=kept").status).toBe(0)
+    writeFileSync(code, `${mended}\nexport const broken = (\n`)
+    await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain("tab 2 is broken: the by-hand surface does not load (Unexpected end of file")
+    expect(call("/tabs/1").stdout).toContain('greeting: "hello"')
+    writeFileSync(code, mended)
+    await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain('proposed: "kept"')
+  } finally {
+    writeFileSync(code, mended)
+    spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
+  }
 }, 60_000)

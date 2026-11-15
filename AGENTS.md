@@ -39,7 +39,7 @@ A project that uses it:
 ```text
 .baba/                      the surfaces' package: package.json names the framework, installing provisions
   surfaces/NAME/            a surface: src/surface.ts, ui/index.tsx, spec/
-  .root/                    generated from the surfaces: all of them as one module, and the shell's page with each one's component
+  .root/                    generated from the surfaces: one module that names each, loaded on its own, and the shell's page with each one's component
 .claude/skills/baba/  .agents/skills/baba/   generated: baba's SKILL.md
 .claude/settings.json       the person's, with the framework's hook written into it
 .babavoss/                  what the root's sessions write
