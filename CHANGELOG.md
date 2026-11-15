@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.35.0
+
+- What was heard and not yet told to the agent is kept on disk, so a root that sleeps, reloads or starts again still tells each notice once; more than 20 waiting are told as the newest 20 after `N earlier notices; read /activity/notices`. Nothing to adapt.
+- A surface whose code does not load no longer takes the root down: `/` lists it in `surfaces` as `{ name, broken }` with the error and where it is, it cannot be opened, and its open tabs are broken with why and come back with their state when the code loads. `.baba/.root/surfaces.ts` now names each surface as `() => import(…)`; installing in `.baba/` generates it again.
+- While the page does not build, the root serves the last page that did, also after its code is loaded again.
+- The version a running root tells is read from the package each time, so it is right after a release is taken without a restart.
+
 ## 0.34.0
 
 - Claude Code's adapter hands on no account, organisation or user id and no address, in any field or text, the process's stderr included. An adapter for another harness should do the same.
