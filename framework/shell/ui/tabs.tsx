@@ -6,7 +6,7 @@
 // have not looked at; needing the agent, quietly; and why, as its tooltip. At its right stands what is the session's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "../../kit/cn.ts"
-import { ChevronDownIcon } from "lucide-react"
+import { EllipsisIcon } from "lucide-react"
 import { MenuDropdown } from "../../kit/layouts/menu.tsx"
 import { tabScrollOffset } from "./tab-scroll"
 
@@ -194,12 +194,12 @@ function Tab({
             "pointer-events-none absolute left-[3px] grid size-[22px] place-items-center",
             pillMotion,
             menu &&
-              "group-hover/pill:scale-50 group-hover/pill:opacity-0 group-has-[:focus-visible]/pill:scale-50 group-has-[:focus-visible]/pill:opacity-0 group-data-[menu]/pill:scale-50 group-data-[menu]/pill:opacity-0 [@media(hover:none)]:opacity-0"
+              "group-has-[[data-slot=tab-menu]:hover]/pill:scale-50 group-has-[[data-slot=tab-menu]:hover]/pill:opacity-0 group-data-[menu]/pill:scale-50 group-data-[menu]/pill:opacity-0 [@media(hover:none)]:opacity-0"
           )}
         >
           {icon}
         </span>
-        {/* The mark stands still over whichever is shown, the icon or the caret. */}
+        {/* The mark stands still over whichever is shown, the icon or the dots. */}
         {mark && (
           <span aria-hidden className="pointer-events-none absolute top-[3px] left-[3px] size-[22px]">
             <span data-mark={mark} className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />
@@ -211,7 +211,7 @@ function Tab({
           open={open}
           setOpen={setOpen}
           label={`Menu for ${label}`}
-          // The menu stands a little under the strip, its left on the tab's: the caret's foot is 11.5px above the
+          // The menu stands a little under the strip, its left on the tab's: the button's foot is 11.5px above the
           // strip's lower edge, and the gap is 4px more.
           sideOffset={15.5}
           alignOffset={-3}
@@ -220,21 +220,22 @@ function Tab({
             if (!document.querySelector('[role="dialog"]:not([data-slot="sheet-content"])')) tab.current?.focus()
           }}
           trigger={
-            // The button keeps its place and size, so the menu hangs from the same spot whenever it opens; what grows
-            // into view is the caret inside it.
+            // The button lies over the icon alone, so only a pointer on the icon swaps it for the dots; it keeps its place
+            // and size, so the menu hangs from the same spot whenever it opens.
             <button
               type="button"
-              className="pointer-events-none absolute top-[3px] left-[3px] grid size-[22px] cursor-pointer place-items-center rounded-full text-foreground outline-none group-hover/pill:pointer-events-auto group-has-[:focus-visible]/pill:pointer-events-auto group-data-[menu]/pill:pointer-events-auto [@media(hover:none)]:pointer-events-auto"
+              data-slot="tab-menu"
+              className="absolute top-[3px] left-[3px] grid size-[22px] cursor-pointer place-items-center rounded-full text-foreground outline-none"
               tabIndex={-1}
               aria-label={`Menu for ${label}`}
             >
               <span
                 className={cn(
-                  "grid size-full scale-50 place-items-center rounded-full opacity-0 group-hover/pill:scale-100 group-hover/pill:opacity-100 group-has-[:focus-visible]/pill:scale-100 group-has-[:focus-visible]/pill:opacity-100 group-data-[menu]/pill:scale-100 group-data-[menu]/pill:bg-foreground/11 group-data-[menu]/pill:opacity-100 hover:bg-foreground/11 [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100",
+                  "grid size-full scale-50 place-items-center rounded-full opacity-0 group-has-[[data-slot=tab-menu]:hover]/pill:scale-100 group-has-[[data-slot=tab-menu]:hover]/pill:opacity-100 group-data-[menu]/pill:scale-100 group-data-[menu]/pill:bg-foreground/11 group-data-[menu]/pill:opacity-100 hover:bg-foreground/11 [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100",
                   pillMotion
                 )}
               >
-                <ChevronDownIcon aria-hidden className={cn("transition-[rotate] duration-200 ease-[cubic-bezier(.3,1.6,.4,1)] motion-reduce:transition-none", open && "rotate-180")} />
+                <EllipsisIcon aria-hidden />
               </span>
             </button>
           }
