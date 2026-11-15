@@ -133,8 +133,9 @@ function useModel({
   return { asks: [...atRoot, ...atHere].filter((a) => a.ask).length, items, found, ready: !!root }
 }
 
-/** The tab's menu, as the dropdown in the strip shows it while it is open: its views are read as it opens. */
+/** The tab's menu, as the dropdown in the strip shows it while it is open: its views are read as it opens, through `door` where given. */
 export function TabMenu({
+  door: given,
   address,
   route,
   title,
@@ -145,6 +146,8 @@ export function TabMenu({
   controls,
   close,
 }: {
+  /** Where its views are read from: the tab's, at its address, unless another is given, as a sample's. */
+  door?: Door
   address: string
   route: string
   title?: string
@@ -156,7 +159,7 @@ export function TabMenu({
   close: () => void
 }) {
   const changes = useContext(ChangesContext)
-  const door = useMemo(() => doorOf(address, changes), [address, changes])
+  const door = useMemo(() => given ?? doorOf(address, changes), [given, address, changes])
   const model = useModel({ door, route, title, name, start, navigate, menu: { notices, controls } })
   const find = (query: string) => foundItems(search(model.found ?? [], query), navigate, start)
 

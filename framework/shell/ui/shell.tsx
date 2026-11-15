@@ -17,7 +17,7 @@ import type { Handle, View } from "../../core/index.ts"
 import { DropdownKit, MenuItems, type MenuItem } from "../../kit/layouts/menu.tsx"
 import { call, changes, read, type Turn } from "./client.ts"
 import { Actions, TabMenu, useTabAsks } from "./actions.tsx"
-import { noticesIn, type Offered } from "./commands.ts"
+import { controlsOf, noticesIn, type Offered } from "./commands.ts"
 import { Home, HomeTab, SEARCH, type TabEntry } from "./home.tsx"
 import { backTo, shortcut, type SurfaceEntry } from "./home.ts"
 import type { Drawers } from "./inputs.tsx"
@@ -363,32 +363,13 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     )
   }
   // The shell's own controls, the same in every tab's menu.
-  const controls = (row: Row): MenuItem[] => [
-    {
-      kind: "action",
-      id: "close",
-      label: "Close tab",
-      note: "its state is dropped",
-      hint: row.close?.description,
-      disabled: !row.close,
-      run: () => void close(row),
-    },
-    {
-      kind: "action",
-      id: "close-others",
-      label: "Close other tabs",
-      disabled: !strip.some((other) => other.at !== row.at && other.close),
-      run: () => void closeOthers(row),
-    },
-    {
-      kind: "action",
-      id: "copy",
-      label: "Copy link",
-      hint: location.origin + urlOf(row.at, routes[row.at]),
-      run: () => void navigator.clipboard?.writeText(location.origin + urlOf(row.at, routes[row.at])),
-    },
-    { kind: "action", id: "reload", label: "Reload", hint: "Read the tab's views again", run: () => setReloads((r) => ({ ...r, [row.at]: (r[row.at] ?? 0) + 1 })) },
-  ]
+  const controls = (row: Row): MenuItem[] =>
+    controlsOf({
+      ...(row.close && { close: { hint: row.close.description, run: () => void close(row) } }),
+      ...(strip.some((other) => other.at !== row.at && other.close) && { others: () => void closeOthers(row) }),
+      link: location.origin + urlOf(row.at, routes[row.at]),
+      reload: () => setReloads((r) => ({ ...r, [row.at]: (r[row.at] ?? 0) + 1 })),
+    })
 
   // Going where an unseen notice is about sees it.
   useEffect(() => {

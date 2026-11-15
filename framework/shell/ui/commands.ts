@@ -314,3 +314,16 @@ export function foundItems(found: Found[], navigate: (at: string) => void, start
         }
   )
 }
+
+/**
+ * The shell's own controls, the same in every tab's menu: close the tab, where it can be; close the others, where there
+ * are any; copy its link; read its views again.
+ */
+export function controlsOf({ close, others, link, reload }: { close?: { hint: string; run: () => void }; others?: () => void; link: string; reload: () => void }): MenuItem[] {
+  return [
+    { kind: "action", id: "close", label: "Close tab", note: "its state is dropped", hint: close?.hint, disabled: !close, run: () => close?.run() },
+    { kind: "action", id: "close-others", label: "Close other tabs", disabled: !others, run: () => others?.() },
+    { kind: "action", id: "copy", label: "Copy link", hint: link, run: () => void navigator.clipboard?.writeText(link) },
+    { kind: "action", id: "reload", label: "Reload", hint: "Read the tab's views again", run: reload },
+  ]
+}
