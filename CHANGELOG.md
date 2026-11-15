@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.43.7
+
+- A tab's menu is an ordinary one again, rounded and lined all round, standing a little under the strip. A submenu opens over its parent's edge, covering the arrow it grew from, its first entry level with the entry it grew from. Nothing to adapt.
+
 ## 0.43.6
 
 - The activity's button is a stack, and carries the count of the person's changes that wait for the agent's next turn, which the mark no longer does. The activity opens on them, under The agent sees next: what the agent is told with the person's next message. Nothing to adapt.

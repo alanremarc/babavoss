@@ -211,11 +211,10 @@ function Tab({
           open={open}
           setOpen={setOpen}
           label={`Menu for ${label}`}
-          // The menu hangs from the strip: its top square and with no line of its own, starting on the pixel under the
-          // strip's lower border, which is its top edge; its left on the tab's. The caret's foot is 11.5px above that.
-          sideOffset={11.5}
+          // The menu stands a little under the strip, its left on the tab's: the caret's foot is 11.5px above the
+          // strip's lower edge, and the gap is 4px more.
+          sideOffset={15.5}
           alignOffset={-3}
-          className="rounded-t-none border border-t-0 border-foreground/10 ring-0"
           // Focus goes back to the tab, unless what was chosen opened a modal, which keeps it.
           closed={() => {
             if (!document.querySelector('[role="dialog"]:not([data-slot="sheet-content"])')) tab.current?.focus()
