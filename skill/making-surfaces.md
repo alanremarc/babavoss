@@ -8,7 +8,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
-The running shell takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harness: it writes the skill baba and the framework's hook beside `.baba/` again, as installing does.
+The running shell takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harnesses: it writes again what makes each aware of the surfaces beside `.baba/`, as installing does.
 
 ## A surface
 
@@ -96,6 +96,23 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
 - Never hard-code a colour, a font or a size where a token fits.
 
 Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
+
+## The harnesses
+
+Each harness beside `.baba/` is made aware by its own adapter when `.baba/` is installed or provisioned. Claude Code gets `.claude/skills/baba`, a link to the package's plugin: the skill and the hook, loaded once the folder is trusted. Codex gets the skill in `.agents/skills/baba` and the hook in `.codex/hooks.json`, among the person's own hooks; Codex asks the person to review them once, with `/hooks`. With no configuration every harness is set up so. Where the person wants otherwise, `.baba/baba.config.ts` says it:
+
+```ts
+import { config } from "babavoss/core/config.ts"
+
+export default config({
+  harnesses: {
+    claude: { enable: true, events: ["SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "SessionEnd"] },
+    codex: { enable: false },
+  },
+})
+```
+
+A section per harness, each starting with `enable`; `enable: false` takes back what baba wrote for that harness at the next `bun run baba provision`. `events` lists the hook's events that tell anything, all by default; the hook reads it as it runs, so a change needs no provisioning. Codex's section takes `network: true` too, which opens the sandbox's network in `.codex/config.toml` where that file does not already say, so the shell's command reaches its runtime. A configuration that does not load stops provisioning with its error, and keeps the hooks silent until it is corrected; the shell's answer says so.
 
 ## Updating
 

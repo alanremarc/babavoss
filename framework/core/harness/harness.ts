@@ -1,9 +1,9 @@
-// A harness as the framework drives one: a session of an agent started in a project, with a home of its own, spoken to,
-// and its stream read as the framework's own events. An adapter is the only code that knows a harness: its command and
-// flags, what its stream means, and where its login is kept. Claude Code's is the first; another harness is another
-// adapter with this interface. An adapter hands on nothing of the account's: no account, organisation or user id and no
-// address, so what records a session's events never holds them. What makes an agent aware, the hooks and the skill, is
-// provisioned elsewhere.
+// A harness's adapter, the only code that knows the harness, with three faces. Set up: what makes the harness aware of a
+// project's surfaces, written into the project and withdrawn from it again. Hooks: how the harness's hook input becomes
+// the framework's moment, and how what the framework tells becomes the harness's hook output. Run: a session of an agent
+// started in a project, with a home of its own, spoken to, and its stream read as the framework's own events; an adapter
+// that cannot run its harness yet leaves it out. A run hands on nothing of the account's: no account, organisation or user
+// id and no address, so what records a session's events never holds them.
 
 export type Tokens = { input: number; cache_write: number; cache_read: number; output: number }
 /** The API request a chunk of the agent's came from, and the tokens it was given; left out where a harness does not say. */
@@ -58,3 +58,30 @@ export interface Harness {
 }
 
 export const NONE: Tokens = { input: 0, cache_write: 0, cache_read: 0, output: 0 }
+
+/** The moments of a session the framework's hook knows, named as the harnesses commonly name their hooks. */
+export type Moment = "SessionStart" | "UserPromptSubmit" | "PostToolUse" | "Stop" | "SessionEnd"
+/** One hook's input, read: the session's id, the harness's own name for its event, the framework's moment, and whether a start is a compaction's. */
+export type HookEvent = { session?: string; event: string; moment: Moment; compact?: boolean }
+
+/** What a set-up face did: the paths it wrote or removed, relative to the project, and a line to say to the person. */
+export type SetUp = { paths: string[]; said?: string }
+
+export interface Adapter<O extends { events: string[] } = { events: string[] }> {
+  /** The harness's name: its section of .baba/baba.config.ts. */
+  name: string
+  /** The options it is set up with where the configuration does not say: every event among them. */
+  defaults: O
+  /** The harness's hook events the framework is told at; an option `events` names some of them. */
+  events: readonly string[]
+  /** Writes into `project` what makes the harness aware of its surfaces, and only what differs. */
+  provision(project: string, options: O): SetUp
+  /** Removes from `project` what `provision` wrote there, and nothing else. */
+  withdraw(project: string): SetUp
+  /** The framework's moment in what the harness gave its hook on standard input; undefined where it is none of them. */
+  hookEvent(input: unknown): HookEvent | undefined
+  /** What the hook prints for the harness to add `context`. */
+  hookOutput(event: HookEvent, context: string): string
+  /** The harness, run; left out where the adapter cannot run it. */
+  run?: () => Harness
+}

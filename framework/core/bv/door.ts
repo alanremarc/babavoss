@@ -5,6 +5,8 @@ import { dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import type { RootDefinition } from "../root.ts"
 import { startRuntime } from "../runtime/runtime.ts"
+import { checkConfig, loadConfig } from "../config.ts"
+import { ADAPTERS } from "../harness/index.ts"
 import { findBaba } from "../provision.ts"
 import { laterRelease, updateNote } from "../update.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
@@ -113,6 +115,12 @@ export async function main(root: RootDefinition) {
     const note = at < 0 ? undefined : await updateNote(process.env.BABAVOSS_HOME, directory.slice(0, at + "/.baba".length))
 
     if (note) console.log(note)
+
+    // A configuration that does not load keeps every hook silent, so the answer says it instead.
+    const baba = findBaba(process.cwd())
+    const unloaded = baba && (await loadConfig(baba).then((config) => checkConfig(config, ADAPTERS)).then(() => undefined, (error: Error) => error.message))
+
+    if (unloaded) console.log(`${unloaded}. The harnesses' hooks say nothing until it loads: correct it, and run \`bun run baba provision\` in .baba/`)
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = error instanceof SyntaxError ? 2 : 1
