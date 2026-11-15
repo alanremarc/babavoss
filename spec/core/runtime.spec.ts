@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, describe, expect, it } from "bun:test"
 import { defineRoot } from "../../framework/core/root.ts"
 import { reach } from "../../framework/core/runtime/reach.ts"
-import { startRuntime, rootVersion, RELOAD_MS } from "../../framework/core/runtime/runtime.ts"
+import { startRuntime, rootVersion, RELOAD_MS, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
 import { admitted } from "../../framework/core/runtime/door.ts"
 import { ACTOR_HEADER, SERVICE_HEADER, endpointFile, findService, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { request as httpRequest, type IncomingMessage } from "node:http"
@@ -66,8 +66,15 @@ const root = (dir: string) => {
 
   return defineRoot({ name: "p", ui, surface: counter })
 }
-const started = async (dir: string) => {
-  const runtime = await startRuntime(root(dir), ["--session", "S"], { env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
+const started = async (dir: string, more: Partial<RuntimeOptions> = {}) => {
+  const runtime = await startRuntime(root(dir), ["--session", "S"], {
+    env: { BABAVOSS_HOME: dir },
+    entry: join(dir, "scripts/open.ts"),
+    idleMs: 60_000,
+    log: () => {},
+    watch: [],
+    ...more,
+  })
 
   if (!runtime) throw new Error("not started")
   closers.push(() => runtime.close())
@@ -114,6 +121,14 @@ describe("the door", () => {
     expect((await post("/", { args: {} })).status).toBe(400)
   })
 
+  it("says on the page, quietly, that a later release is out", async () => {
+    const { base } = await started(scratch(), { latest: async () => "99.0.0" })
+
+    await poll(async () => (await fetch(base + "/", { headers: { accept: "text/html" } })).text()).toContain(
+      '<meta name="babavoss:update" content="99.0.0">'
+    )
+  })
+
   it("serves the root's page for a browser, keeps the token on everything else, and refuses other machines", async () => {
     const dir = scratch()
     const { base, endpoint, get } = await started(dir)
@@ -125,6 +140,7 @@ describe("the door", () => {
       `<meta name="babavoss:root" content="p"><meta name="babavoss:version" content="1.0"><meta name="babavoss:session" content="S"></head>`
     )
     expect((await fetch(base + "/_/root.js")).headers.get("content-type")).toBe("text/javascript")
+    expect(text).not.toContain("babavoss:update")
     expect(page.headers.get("set-cookie")).toContain(`babavoss-service-${new URL(base).port}=`)
     expect((await fetch(base + "/n", { headers: { accept: "application/json", cookie: page.headers.get("set-cookie")!.split(";")[0]! } })).status).toBe(200)
 
@@ -330,7 +346,7 @@ describe("changed code while work runs", () => {
     const read = async () => (await fetch(`${base}/`, { headers })).text()
     const call = async (handle: string) => (await fetch(`${base}/`, { method: "POST", body: JSON.stringify({ handle, args: {} }), headers })).text()
 
-    return { dir, lines, opts, read, call }
+    return { dir, lines, opts, read, call, base, token: endpoint.token }
   }
 
   it("logs once that it waits, tells the agent, and loads once the work ends", async () => {
@@ -360,6 +376,23 @@ describe("changed code while work runs", () => {
 
     expect(after).toStartWith("h: its changed code was loaded\n")
     expect(after).toContain("edited: true")
+  })
+
+  it("tells the open pages what it says of its code, as notices, and a page that connects soon after", async () => {
+    const { dir, opts, read, call, base, token } = await begun(300)
+    const open = await listen(base, token)
+
+    await read()
+    await call("hold")
+    await startRuntime(edited(dir), ["--session", "S"], opts)
+    await poll(() => open.heard.filter((event) => event === "notice").length).toBe(1)
+
+    const later = await listen(base, token)
+
+    await poll(() => later.heard).toEqual(["change", "notice"])
+    open.stop()
+    later.stop()
+    releases.splice(0)
   })
 
   it("cuts work that does not end after the bounded wait, loads the new code, and names what it cut", async () => {

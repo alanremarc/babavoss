@@ -1,8 +1,8 @@
-// Specify a root's behavior entirely through its actors and outside world.
+// Specify a root's behavior entirely through its actors and outside world: what they see, call, are told and notice.
 import { expect, test } from "bun:test"
 import { action, view } from "../../framework/core/surface/authoring.ts"
 import { story } from "../../framework/core/surface/story.ts"
-import { surface } from "../../framework/core/surface/surface.ts"
+import { surface, type Update } from "../../framework/core/surface/surface.ts"
 import { handle } from "../../framework/core/surface/view.ts"
 
 type Model = { items: string[]; error?: string }
@@ -192,4 +192,37 @@ test("an action declared an ask is offered to the person only, wherever it is bo
   agent.told()
   expect(await person.call("/", "approve", {})).toMatchObject({ outcome: "written" })
   expect(agent.told()).toEqual(["approved: false → true", "review.waiting: true → false"])
+})
+
+test("an update gives notices beside its model: each side notices them once, the agent not what its own call gave, and no view holds them", async () => {
+  type Model = { n: number }
+  const bump = action({
+    name: "bump",
+    description: "Count one",
+    subject: {},
+    inputs: {},
+    update: (m: Model): Update<Model, { kind: "later" }> => ({ model: { n: m.n + 1 }, notices: [`counted to ${m.n + 1}`], commands: [{ kind: "later" }] }),
+  })
+  const pages = view([bump], { "/": (m) => ({ n: m.n, bump: bump.bind({}) }) })
+  const { agent, person, world } = story(
+    surface<Model, { kind: "done" }, { kind: "later" }>({
+      description: "A counter",
+      init: () => ({ n: 0 }),
+      view: pages.view,
+      update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m, notices: [{ text: "later is done", at: "/" }] }),
+      run: async () => {},
+      failed: () => ({ kind: "done" }),
+    })
+  )
+
+  await agent.call("/", "bump")
+  expect(person.noticed()).toEqual(["counted to 1"])
+  expect(agent.noticed()).toEqual([])
+  await world.settle({ kind: "done" })
+  // A command's event is the surface's, though the agent's call started it: it is told to both.
+  expect(agent.noticed()).toEqual(["later is done"])
+  await person.call("/", "bump")
+  expect(agent.noticed()).toEqual(["counted to 2"])
+  expect(agent.noticed()).toEqual([])
+  expect(JSON.stringify(agent.sees())).not.toContain("counted")
 })

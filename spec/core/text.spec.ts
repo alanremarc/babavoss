@@ -27,7 +27,9 @@ const setup = async () => {
         msg.kind === "call"
           ? msg.handle === "later"
             ? { model: m, commands: [{ kind: "count" }] }
-            : { model: { n: msg.args.n as number, yes: msg.args.yes as boolean } }
+            : msg.handle === "say"
+              ? { model: m, notices: [msg.args.text as string] }
+              : { model: { n: msg.args.n as number, yes: msg.args.yes as boolean } }
           : msg.kind === "counted"
             ? { model: { ...m, n: m.n + 1 } }
             : { model: m },
@@ -37,6 +39,7 @@ const setup = async () => {
               n: m.n,
               yes: m.yes,
               later: handle("later", "Count one, by a command"),
+              say: handle("say", "Notice a line", {}, { text: "string" }),
               rows: [
                 { at: "/one", text: "two words", do: handle("set", "Set values", { id: 1 }, { n: "number", yes: "boolean" }) },
                 ...(path === "/two" ? [{ at: "/two", text: "other", do: handle("set", "Set values", { id: 2 }, { n: "number", yes: "boolean" }) }] : []),
@@ -210,4 +213,20 @@ it("10: where the person changed a fact after the agent did, the person's change
   await request("/one", { handle: "set", args: { id: 1, n: 1, yes: false } }, false, "agent:S")
   await request("/one", { handle: "set", args: { id: 1, n: 2, yes: false } }, false)
   expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person and you:\nn: 0 → 2")
+})
+it("11: tells what was noticed once, with the next answer, by who caused it, but not what the agent's own calls gave; a notice ends a wait", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/", { handle: "say", args: { text: "mine" } }, false, "agent:S")
+  expect(await (await request("/", { handle: "say", args: { text: "also mine" } })).text()).toBe("nothing changed")
+
+  const waiting = request("/_/wait?seconds=2")
+
+  await request("/", { handle: "say", args: { text: "the person said" } }, false)
+  expect(await (await waiting).text()).toBe("notices:\nthe person said (by the person)")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+  await request("/", { handle: "say", args: { text: "again" } }, false)
+  await request("/one", { handle: "set", args: { id: 1, n: 7, yes: false } }, false)
+  expect(await (await request("/missing")).text()).toBe("nothing at /missing\nnotices:\nagain (by the person)\nchanged by the person:\nn: 0 → 7")
 })

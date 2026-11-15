@@ -1,7 +1,7 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
 // baba would, its text and the root's answer, the root started; with each message of the person and after each tool call, what changed in
 // an open root since the session was last answered, by who changed it: the person on its page, the surface by itself, or the
-// agent with them; what the agent's own calls alone changed, their answers told it. It steers and informs, and blocks
+// agent with them, and what was noticed there since, once; what the agent's own calls alone changed or noticed, their answers told it. It steers and informs, and blocks
 // nothing: a hook that finds nothing says nothing, and one that fails is silent.
 import { readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"

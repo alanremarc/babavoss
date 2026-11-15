@@ -1,14 +1,16 @@
 // Run a surface: one model, one queue. The loop: a message at a time, `update`, the model saved, the subscribers told,
-// the commands started; a command's events join the same queue with the actor whose message started it. A surface that
+// the notices heard, the commands started; a command's events join the same queue with the actor whose message started it. A surface that
 // cannot keep memory and disk in agreement fails once: it stops, refuses calls with the error and ignores events.
 // A session's surface runs here inside its runtime; a spec or a tool runs one in its own process the same way, a door never.
 import { admit, type Args, type View } from "./view.ts"
-import type { Call, Surface } from "./surface.ts"
+import type { Call, Notice, Surface } from "./surface.ts"
 
 export type Answer = { outcome: "written"; view: View } | { outcome: "refused"; reason: string }
 export type Saved = { model: unknown }
 /** A commit's cause: an actor's call, or an event reported by a command, which carries the actor that started it. */
 export type Cause = { actor: string; call: boolean }
+/** A notice as heard: its text, the path it is about and who says it where given, and the cause of the commit that gave it. */
+export type Noticed = { text: string; at?: string; from?: string; cause: Cause }
 export type Ports<M> = {
   /** What was kept, or undefined the first time. */
   load(): Saved | undefined
@@ -29,6 +31,8 @@ export interface Running<M> {
   call(path: string, name: string, args: Args, actor: string): Promise<Answer>
   /** Told after every change of the model, every command started or ended, and once on failure. */
   subscribe(fn: () => void): () => void
+  /** Told of each notice a commit gives, before its subscribers are told of the commit; nothing keeps them. */
+  notices(fn: (notice: Noticed) => void): () => void
   /** Running commands. */
   busy(): number
   /** The actor of each item of finite work: a running command that is not a session command, or a queued event of one. */
@@ -71,6 +75,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     else pending.delete(actor)
   }
   const listeners = new Set<() => void>()
+  const hearers = new Set<(notice: Noticed) => void>()
 
   const tell = () => {
     for (const fn of Array.from(listeners))
@@ -111,6 +116,31 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     version++
     cause = by
   }
+  /** The notices of a commit, to those who hear them; one that is not a notice is logged and dropped. */
+  const notify = (notices: Notice[] | undefined, by: Cause) => {
+    for (const n of notices ?? []) {
+      const said = typeof n === "string" ? { text: n } : n
+
+      if (!said || typeof said.text !== "string" || !said.text.trim()) {
+        log(`a notice is a line of text: ${JSON.stringify(n)}`)
+        continue
+      }
+
+      const notice: Noticed = {
+        text: said.text.trim(),
+        ...(typeof said.at === "string" && { at: said.at }),
+        ...(typeof said.from === "string" && { from: said.from }),
+        cause: by,
+      }
+
+      for (const fn of Array.from(hearers))
+        try {
+          fn(notice)
+        } catch (e) {
+          log(`notice hearer failed: ${message(e)}`)
+        }
+    }
+  }
 
   const event = (e: E, actor: string) => {
     if (stopped) return
@@ -131,6 +161,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
       return
     }
+    notify(r.notices, { actor, call: false })
     for (const c of r.commands ?? []) start(c, actor)
     tell()
   }
@@ -243,6 +274,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
           return refused(failure!)
         }
+        notify(r.notices, { actor, call: true })
         for (const c of r.commands ?? []) start(c, actor)
         tell()
 
@@ -253,6 +285,13 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
       return () => {
         listeners.delete(fn)
+      }
+    },
+    notices: (fn) => {
+      hearers.add(fn)
+
+      return () => {
+        hearers.delete(fn)
       }
     },
     busy: () => running.size,

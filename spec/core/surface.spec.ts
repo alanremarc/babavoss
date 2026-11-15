@@ -166,4 +166,37 @@ describe("a running surface", () => {
     expect(await broken.call("/", "revise", { id: 1, title: "y", published: false }, "agent")).toEqual({ outcome: "refused", reason: "disk full" })
     await Promise.all([r.stop(), broken.stop()])
   })
+
+  it("hears each notice a commit gives with its cause, before its subscribers are told, and drops one that is not a line of text", async () => {
+    const lines: string[] = []
+    const said = surface<{ n: number }, { kind: "late" }, { kind: "go" }>({
+      description: "says",
+      init: () => ({ n: 0 }),
+      update: (m, msg) =>
+        msg.kind === "late"
+          ? { model: m, notices: [{ text: "late", at: "/x", from: "other" }] }
+          : msg.handle === "no"
+            ? { refused: "no" }
+            : { model: { n: m.n + 1 }, notices: [" one ", "", { text: 3 } as unknown as string], commands: [{ kind: "go" }] },
+      view: () => ({ say: handle("say", "say"), no: handle("no", "no") }),
+      run: async (_c, send) => send({ kind: "late" }),
+      failed: () => ({ kind: "late" }),
+    })
+    const r = run(said, { ...memory(), log: (l) => lines.push(l) })
+    const heard: unknown[] = []
+    let told = 0
+
+    r.notices((n) => heard.push({ ...n, told }))
+    r.subscribe(() => told++)
+    await r.call("/", "no", {}, "person")
+    await r.call("/", "say", {}, "person")
+    await r.settled()
+    await sleep(5)
+    expect(heard).toEqual([
+      { text: "one", cause: { actor: "person", call: true }, told: 0 },
+      { text: "late", at: "/x", from: "other", cause: { actor: "person", call: false }, told: expect.any(Number) },
+    ])
+    expect(lines.filter((l) => l.startsWith("a notice"))).toHaveLength(2)
+    await r.stop()
+  })
 })

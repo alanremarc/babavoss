@@ -16,7 +16,7 @@ type Action<M, C> = { name: string; ask: boolean; update(model: M, call: Call): 
 
 /**
  * Define the contract and pure transition once, then bind the subject wherever the action is offered. An ask is offered to
- * the person only: bind it where the decision stands, and say in a fact what is waited for, so the agent knows to wait.
+ * the person only: bind it where the decision stands, and say `attention` at / with who is waited for and why, so the agent knows to wait.
  */
 export function action<M, const S extends Schema, const I extends Schema, C = never>(definition: {
   name: string

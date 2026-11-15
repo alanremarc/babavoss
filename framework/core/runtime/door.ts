@@ -2,6 +2,9 @@
 //   GET  /p   application/json   the view at /p for the actor in the header     GET /p  text/html  the root's page
 //   GET  /    text/event-stream  change { version } and work { jobs }           POST /p { handle, args }  a call
 //                                 call { path, handle, args, actor, refused? }, each call through this door as it is answered
+//                                 notice { text, at?, from?, by? }, each notice as it is heard, `by` absent where the person
+//                                 caused it; a line about the root's own code is one too, and is given to a page that connects
+//                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view.
@@ -12,9 +15,10 @@ import { existsSync, readFileSync } from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { Running } from "../surface/run.ts"
+import type { Noticed, Running } from "../surface/run.ts"
 import { textArgs, textLines, textSession } from "./text.ts"
 import type { Args } from "../surface/view.ts"
+import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
@@ -37,9 +41,14 @@ export type DoorOptions = {
   end?: () => void
   /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
   current?: () => Promise<string | undefined>
-  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session. */
+  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. */
   about?: Record<string, string>
 }
+
+/** How long a line about the root's own code is still given to a page that connects. */
+export const NOTE_MS = 60_000
+/** Who caused a notice, in the page's words; nothing where the person did. */
+const byOf = ({ actor, call }: Noticed["cause"]) => (!call ? "the surface" : isPerson(actor) ? undefined : actor.startsWith("agent:") ? "the agent" : actor)
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"])
 const TYPES: Record<string, string> = {
@@ -99,7 +108,7 @@ export type Door = {
   replace(ui: Ui): Promise<void>
   /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
   refresh(file: string): Promise<void>
-  /** A line about the root's own code, said first in the agent's next answer; a later one takes its place. */
+  /** A line about the root's own code, said first in the agent's next answer, and to the open pages as a notice; a later one takes its place. */
   note(line: string): void
 }
 
@@ -149,9 +158,17 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     return line === undefined ? answer : `${line}\n${answer}`
   }
   const change = () => `event: change\ndata: ${JSON.stringify({ version: running.version(), jobs: running.jobs() })}\n\n`
+  const notice = (value: { text: string; at?: string; from?: string; by?: string }) => `event: notice\ndata: ${JSON.stringify(value)}\n\n`
+  /** The last line about the root's own code, with when it was said, for a page that connects soon after. */
+  let health: { line: string; at: number } | undefined
 
   running.subscribe(() => {
     for (const res of streams) res.write(change())
+  })
+  running.notices(({ cause, ...rest }) => {
+    const by = byOf(cause)
+
+    for (const res of streams) res.write(notice({ ...rest, ...(by && { by }) }))
   })
 
   const server = createServer(async (req, res) => {
@@ -191,7 +208,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const seconds = Number(url.searchParams.get("seconds") ?? 600)
 
           if (!Number.isFinite(seconds) || seconds < 0) return reply(400, "seconds must be a nonnegative number")
-          if (!text.changed().length && said === undefined)
+          if (!text.changed().length && !text.noticed() && said === undefined)
             await new Promise<void>((done) => {
               const finish = () => {
                 clearTimeout(timer)
@@ -201,7 +218,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
                 done()
               }
               const unsubscribe = running.subscribe(() => {
-                if (text.changed().length) finish()
+                if (text.changed().length || text.noticed()) finish()
               })
               const timer = setTimeout(finish, seconds * 1000)
 
@@ -276,6 +293,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     if (req.method === "GET" && wants(req, "text/event-stream")) {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" })
       res.write(change())
+      if (health && Date.now() - health.at < NOTE_MS) res.write(notice({ text: health.line, ...(options.about?.root && { from: options.about.root }) }))
       streams.add(res)
       req.on("close", () => streams.delete(res))
 
@@ -337,6 +355,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     },
     note(line) {
       said = line
+      health = { line, at: Date.now() }
+      for (const res of streams) res.write(notice({ text: line, ...(options.about?.root && { from: options.about.root }) }))
       for (const finish of Array.from(noted)) finish()
     },
     // Streams and keep-alive connections are cut first, or a browser that reconnects keeps the server open forever.

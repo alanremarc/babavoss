@@ -12,8 +12,14 @@ export interface Call {
   actor: string
 }
 
-/** What an update returns: the next model with the commands to start, or a refusal that changes nothing. */
-export type Update<M, C> = { model: M; commands?: C[] } | { refused: string }
+/**
+ * A notice: one short line saying what just happened, told once to each side and kept nowhere, neither in a view nor in the
+ * model. `at` is the path it is about, where there is one; `from` names who says it, where one surface speaks for another.
+ */
+export type Notice = string | { text: string; at?: string; from?: string }
+
+/** What an update returns: the next model with the commands to start and the notices to tell, or a refusal that changes nothing. */
+export type Update<M, C> = { model: M; commands?: C[]; notices?: Notice[] } | { refused: string }
 
 export interface Surface<M, E extends { kind: string }, C> {
   description: string
