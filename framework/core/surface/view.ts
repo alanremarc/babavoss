@@ -20,15 +20,19 @@ export function handles(value: Json | undefined): Handle[] {
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-/** Admission of a call against the view at its path: the offered handle, or why the call is refused. */
+/** Admission of a call against the view at its path: the offered handle, or why the call is refused. A view that says
+ * `broken`, why it offers what it would not otherwise, has it said in the refusal. */
 export function admit(view: View, path: string, name: string, args: Args): Handle | string {
   if (!args || typeof args !== "object" || Array.isArray(args)) return "args must be a JSON object"
 
   const offered = handles(view)
   const h = offered.find((x) => x.name === name && Object.entries(x.args).every(([k, v]) => same(args[k], v)))
 
-  if (!h)
-    return `${name} ${JSON.stringify(args)} is not offered at ${path}; offered: ${offered.map((x) => x.name + (Object.keys(x.args).length ? " " + JSON.stringify(x.args) : "")).join(", ") || "nothing"}`
+  if (!h) {
+    const list = offered.map((x) => x.name + (Object.keys(x.args).length ? " " + JSON.stringify(x.args) : "")).join(", ") || "nothing"
+
+    return `${name} ${JSON.stringify(args)} is not offered at ${path}; offered: ${list}${typeof view.broken === "string" ? `; ${view.broken}` : ""}`
+  }
   for (const [k, type] of Object.entries(h.open)) if (typeof args[k] !== type) return `${name}: ${k} must be a ${type}`
   for (const k of Object.keys(args)) if (!Object.hasOwn(h.args, k) && !Object.hasOwn(h.open, k)) return `${name} takes no ${k}`
 

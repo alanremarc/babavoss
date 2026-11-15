@@ -94,6 +94,7 @@ describe("the view", () => {
     expect(handles(v).map((h) => h.name)).toEqual(["remove", "add"])
     expect(admit(v, "/", "remove", { id: 1 })).toMatchObject({ name: "remove" })
     expect(admit(v, "/", "remove", { id: 2 })).toBe('remove {"id":2} is not offered at /; offered: remove {"id":1}, add')
+    expect(admit({ at: "/x", broken: "x is broken" }, "/x", "add", {})).toBe("add {} is not offered at /x; offered: nothing; x is broken")
     expect(admit(v, "/", "add", { text: 5 })).toBe("add: text must be a string")
     expect(admit(v, "/", "add", { text: "x", more: 1 })).toBe("add takes no more")
     expect(admit(v, "/", "add", [] as never)).toBe("args must be a JSON object")
