@@ -1,5 +1,5 @@
 // Source pages are bundled on demand and again after an edit; built pages are served as files.
-import { appendFileSync, cpSync, readFileSync, symlinkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { appendFileSync, cpSync, readdirSync, readFileSync, symlinkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
 import type { IncomingMessage, Server, ServerResponse } from "node:http"
@@ -141,6 +141,28 @@ for (const root of ["spec/support/notes"]) {
     }
   })
 }
+
+it("builds a page with one React, the framework's, where the page's own packages bring another", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-react-")))
+
+  dirs.push(dir)
+  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  // As a library installed beside the surfaces may leave it: a copy of React of their own, and the framework's own.
+  mkdirSync(join(dir, "node_modules"))
+  for (const name of readdirSync("node_modules"))
+    if (name === "react" || name === "react-dom") cpSync(resolve("node_modules", name), join(dir, "node_modules", name), { recursive: true })
+    else symlinkSync(resolve("node_modules", name), join(dir, "node_modules", name))
+  await buildUi(join(dir, "ui"), join(dir, "out"))
+
+  const bundle = readdirSync(join(dir, "out"))
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => readFileSync(join(dir, "out", name), "utf8"))
+    .join("")
+  const reacts = bundle.match(/^\/\/ .*\/react\/cjs\/react\.development\.js$/gm) ?? []
+
+  expect(reacts).toHaveLength(1)
+  expect(reacts[0]).not.toContain("hosting-react-")
+})
 
 it("refuses to build a shell page that imports no stylesheet, and says what to import", async () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
