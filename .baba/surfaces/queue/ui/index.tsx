@@ -49,8 +49,9 @@ const Lane = ({ lane }: { lane: number }) => (
 
 export default function Queue() {
   const { view, error } = useLive<Root>("/")
-  const { call } = useTab()
-  const [picked, setPicked] = useState<number>()
+  // The selected issue is the tab's route, /issues/N, so it is in the address and survives a refresh.
+  const { call, route, navigate } = useTab()
+  const picked = Number(/^\/issues\/(\d+)$/.exec(route)?.[1])
   const [refused, setRefused] = useState("")
   const issues = view?.issues ?? []
   const current = issues.find((issue) => issue.n === picked) ?? issues[0]
@@ -135,7 +136,7 @@ export default function Queue() {
                     <li key={issue.n}>
                       <button
                         type="button"
-                        onClick={() => setPicked(issue.n)}
+                        onClick={() => navigate(`/issues/${issue.n}`)}
                         aria-current={issue.n === current?.n}
                         title={issue.title}
                         className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-xs outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
