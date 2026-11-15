@@ -163,10 +163,10 @@ export const stamp = (when: number): string => new Date(when).toISOString().repl
 /**
  * /activity, newest first, PAGE at a time, or with `notices` the notices alone, at /activity/notices: `upto` the number
  * of the newest entry shown, the newest by default; `earlier` names the page before where there is one. `kind` is notice
- * where a surface said it, call for the mechanical line; `at` is null where the entry's tab is closed. `open` is the tab
- * numbers open now.
+ * where a surface said it, call for the mechanical line; `at` is null where the entry's tab is closed. An entry keeps its
+ * place by tab number; `open` gives the address an open tab stands at now, which the entry's place is said below.
  */
-export function activityView(all: Entry[], open: Set<number>, upto?: number, notices = false): View | undefined {
+export function activityView(all: Entry[], open: (n: number) => string | undefined, upto?: number, notices = false): View | undefined {
   if (upto !== undefined && (!Number.isInteger(upto) || upto < 1)) return undefined
 
   const base = notices ? NOTICES : ACTIVITY
@@ -175,9 +175,10 @@ export function activityView(all: Entry[], open: Set<number>, upto?: number, not
   const oldest = shown.at(-1)
   const more = !!oldest && entries[0]!.n < oldest.n
   const live = (at: string) => {
-    const m = /^\/tabs\/(\d+)/.exec(at)
+    const m = /^\/tabs\/(\d+)(.*)$/.exec(at)
+    const address = m && open(Number(m[1]))
 
-    return !m || open.has(Number(m[1])) ? at : null
+    return !m ? at : address ? address + m[2] : null
   }
   const row = (e: Entry) => ({ n: e.n, when: stamp(e.when), who: e.who, ...(!notices && { kind: e.notice ? "notice" : "call" }), surface: e.surface, at: live(e.at), what: e.what })
 

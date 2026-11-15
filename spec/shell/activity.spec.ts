@@ -146,9 +146,9 @@ describe("the shell's activity", () => {
     })
 
     expect(rows).toEqual([
-      { n: 3, who: "person", kind: "notice", surface: "things", at: "/tabs/1/things/12", what: "Approved #12" },
-      { n: 2, who: "agent", kind: "call", surface: "things", at: "/tabs/1", what: 'bump by=2 why="two more"' },
-      { n: 1, who: "person", kind: "call", surface: "things", at: "/tabs/1", what: "opened" },
+      { n: 3, who: "person", kind: "notice", surface: "things", at: "/things/things/12", what: "Approved #12" },
+      { n: 2, who: "agent", kind: "call", surface: "things", at: "/things", what: 'bump by=2 why="two more"' },
+      { n: 1, who: "person", kind: "call", surface: "things", at: "/things", what: "opened" },
     ])
   })
 

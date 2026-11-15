@@ -286,7 +286,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         if (req.method === "GET") {
           const view = running.read(path, actorText)
           const open = path === "/" && url.searchParams.has("open")
-          const lines = view === undefined ? [`nothing at ${path}`] : textView(view, path, options.command ?? "bv root")
+          const lines = view === undefined ? [running.absent(path)] : textView(view, path, options.command ?? "bv root")
           const use = open ? [`${options.about?.root} ${options.about?.version}`] : []
 
           // A read of / is the present whole, and what changes is counted from it; any other read is its own, and what was heard.
@@ -394,7 +394,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         // A program's read of / gives the agent the present whole, as the word's does.
         if (path === "/" && actor === actorText && view !== undefined) text.seen()
 
-        return view === undefined ? json(res, 404, { error: `nothing at ${path}` }) : json(res, 200, view)
+        return view === undefined ? json(res, 404, { error: running.absent(path) }) : json(res, 200, view)
       } catch (error) {
         return json(res, 500, { error: error instanceof Error ? error.message : String(error) })
       }
