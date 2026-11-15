@@ -9,7 +9,7 @@
 import { randomBytes, randomUUID } from "node:crypto"
 import { action, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
-import { runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
+import { LEFT_OUT, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
 import { append, empty, line, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
 
 export const MODELS = ["haiku", "sonnet", "opus"]
@@ -353,6 +353,7 @@ function happened(run: Run, e: Exclude<Event, { kind: "listed" | "read" }>): Run
       e.t,
       `run ${id} made`,
       `a copy of ${checkout.from} at ${checkout.commit.slice(0, 10)}${dirty}\n` +
+        `left out: ${LEFT_OUT.join(", ")}, so the run cannot start runs of its own\n` +
         `in ${project}, made in ${(e.ms / 1000).toFixed(1)}s\nhome ${home}; login: ${login}\nsession ${session}${page ? `\npage ${page}` : ""}`
     )
   }

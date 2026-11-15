@@ -123,6 +123,7 @@ test("a run starts on a copy of this repository, with its page from the start an
   })
   expect(agent.sees("/entries/1")).toMatchObject({ text: expect.stringContaining("notes.md") })
   expect(agent.sees("/entries/1")).toMatchObject({ text: expect.stringContaining("login: a fake login") })
+  expect(agent.sees("/entries/1")).toMatchObject({ text: expect.stringContaining("left out: .baba/surfaces/lab, so the run cannot start runs of its own") })
   expect(agent.offered()).toEqual(["say", "end_move", "act", "look", "close"])
   expect(where.records.get(where.made[0]!.id)).toMatchObject({ status: "idle", entries: [{ kind: "note" }] })
 })
