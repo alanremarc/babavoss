@@ -1,4 +1,4 @@
-// The shell page: the surface's root view drives the tab strip and the launcher; each tab shows its util's component.
+// The shell page: the shell's view at / drives the tab strip and the launcher; each tab shows its surface's component.
 // The URL is the surface path: / the launcher, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
@@ -8,16 +8,16 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { call, changes, read } from "./client.ts"
-import { Launcher, type UtilEntry } from "./launcher.tsx"
+import { Launcher, type SurfaceEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
 import { SurfaceTabs, TabContent } from "./tabs.tsx"
 
-/** A util's presentation: its component, and the icon the strip and the launcher show. */
-export type Registry = Record<string, { component: ComponentType; icon?: ReactNode }>
-/** A tab as home lists it; one whose util is always open offers no `close`; `broken` says why its util fails on what it keeps. */
-type Row = { at: string; n: number; util: string; title?: string; close?: Handle; broken?: string }
-type RootView = { title: string; utils: UtilEntry[]; tabs: Row[] }
+/** Each surface's page module: its component, the default export, and the icon the strip and the launcher show. */
+export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
+/** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
+type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
+type RootView = { title: string; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[] }
 type At = { key: string; route: string }
 
 const parse = (): At => {
@@ -41,7 +41,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
 
     return (
       <Alert variant="destructive" className="m-3 w-auto">
-        <AlertTitle>The util's page failed</AlertTitle>
+        <AlertTitle>The surface's page failed</AlertTitle>
         <AlertDescription>{this.state.error}</AlertDescription>
         <Button variant="outline" onClick={() => this.setState({ error: undefined })}>
           Try again
@@ -51,7 +51,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
   }
 }
 
-export function Shell({ utils }: { utils: Registry }) {
+export function Shell({ surfaces }: { surfaces: Registry }) {
   const [root, setRoot] = useState<RootView>()
   const [error, setError] = useState("")
   const [connected, setConnected] = useState(false)
@@ -73,7 +73,7 @@ export function Shell({ utils }: { utils: Registry }) {
   )
   const rows = root?.tabs ?? []
   const active = at.key === "new" || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : "new"
-  const icons = useMemo(() => Object.fromEntries(Object.entries(utils).map(([name, u]) => [name, u.icon])), [utils])
+  const icons = useMemo(() => Object.fromEntries(Object.entries(surfaces).map(([name, s]) => [name, s.icon])), [surfaces])
 
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -110,21 +110,6 @@ export function Shell({ utils }: { utils: Registry }) {
     return () => window.removeEventListener("popstate", navigate)
   }, [])
 
-  // A page opened at / lands in the first tab that is always open, where there is one: a root of one util is that util.
-  const landed = useRef(false)
-
-  useEffect(() => {
-    if (!root || landed.current) return
-    landed.current = true
-
-    const first = root.tabs.find((r) => !r.close)
-
-    if (first && at.key === "new") {
-      history.replaceState(null, "", urlOf(first.at))
-      setAt({ key: first.at, route: "/" })
-    }
-  }, [root, at.key])
-
   // A closed tab in the URL falls back to the launcher.
   useEffect(() => {
     if (root && at.key !== active) history.replaceState(null, "", urlOf(active, routes[active]))
@@ -157,7 +142,7 @@ export function Shell({ utils }: { utils: Registry }) {
   }
   const open = async (handle: Handle) => {
     const view = await act("/", handle)
-    const opened = view?.tabs.filter((r) => r.util === handle.args.util).at(-1)
+    const opened = view?.tabs.filter((r) => r.surface === handle.args.surface).at(-1)
 
     if (opened) go(opened.at, "/")
   }
@@ -190,18 +175,19 @@ export function Shell({ utils }: { utils: Registry }) {
             <TabContent address="new" hidden={false}>
               <Launcher
                 title={root?.title}
-                utils={root?.utils ?? []}
+                notice={root?.missing ?? root?.empty}
+                surfaces={root?.surfaces ?? []}
                 icons={icons}
                 tabs={rows}
                 disabled={pending || !root}
                 loading={!root}
-                launch={(u) => (u.open ? void open(u.open) : go(rows.find((r) => r.util === u.name)?.at ?? "new"))}
+                launch={(s) => void open(s.open)}
                 settings={() => go("settings")}
               />
             </TabContent>
           )}
           {rows.map((row) => {
-            const Util = utils[row.util]?.component
+            const Page = surfaces[row.surface]?.default
 
             return (
               <TabContent key={row.at} address={row.at} hidden={active !== row.at}>
@@ -211,16 +197,16 @@ export function Shell({ utils }: { utils: Registry }) {
                       <AlertTitle>This tab is broken</AlertTitle>
                       <AlertDescription>{row.broken}</AlertDescription>
                     </Alert>
-                  ) : Util ? (
+                  ) : Page ? (
                     <TabError>
                       <TabProvider
                         address={row.at}
-                        util={row.util}
+                        surface={row.surface}
                         route={routes[row.at] ?? "/"}
                         active={active === row.at}
                         navigate={(route) => go(row.at, route)}
                       >
-                        <Util />
+                        <Page />
                       </TabProvider>
                     </TabError>
                   ) : (
@@ -229,8 +215,8 @@ export function Shell({ utils }: { utils: Registry }) {
                         <EmptyMedia variant="icon">
                           <CircleAlertIcon />
                         </EmptyMedia>
-                        <EmptyTitle>{row.util} has no page</EmptyTitle>
-                        <EmptyDescription>Register a component for it in the page's utils.</EmptyDescription>
+                        <EmptyTitle>{row.surface} has no page</EmptyTitle>
+                        <EmptyDescription>Give it one: the default export of its ui/index.tsx.</EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   )}
@@ -266,8 +252,8 @@ export function Shell({ utils }: { utils: Registry }) {
         items={[
           ...rows.map((row) => ({
             id: row.at,
-            label: row.title ?? `${row.util} ${row.n}`,
-            icon: icons[row.util] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
+            label: row.title ?? `${row.surface} ${row.n}`,
+            icon: icons[row.surface] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
             ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && go("new")) }),
           })),
           ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go("new") }] : []),

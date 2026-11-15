@@ -8,7 +8,7 @@ import { action, defineRoot, surface, view, type Update } from "../../framework/
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
-import { shell, util } from "../../framework/shell/src/surface.ts"
+import { shell } from "../../framework/shell/src/surface.ts"
 
 type Model = { n: number; note: string }
 
@@ -27,19 +27,14 @@ const note = action({
   update: (m: Model, { text }): Update<Model, never> => ({ model: { ...m, note: text } }),
 })
 const pages = view([bump, note], { "/": (m) => ({ title: "Counter", n: m.n, note: m.note, bump: bump.bind({}), note_: note.bind({}) }) })
-const counter = util(
-  "counter",
-  "counts",
-  surface<Model, { kind: "none" }, never>({
-    description: "counts",
-    init: () => ({ n: 0, note: "" }),
-    update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m }),
-    view: pages.view,
-    run: async () => {},
-    failed: () => ({ kind: "none" }),
-  }),
-  { open: "always" }
-)
+const counter = surface<Model, { kind: "none" }, never>({
+  description: "counts",
+  init: () => ({ n: 0, note: "" }),
+  update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m }),
+  view: pages.view,
+  run: async () => {},
+  failed: () => ({ kind: "none" }),
+})
 const dirs: string[] = []
 const closes: (() => Promise<void>)[] = []
 
@@ -54,7 +49,7 @@ it("says a tab's change once in the answer to a call there, and still tells at /
   dirs.push(dir)
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1" }))
 
-  const root = defineRoot({ name: "tabs", ui: dir, surface: shell({ title: "Tabs", utils: [counter] }) })
+  const root = defineRoot({ name: "tabs", ui: dir, surface: shell({ counter }, dir) })
   const runtime = await startRuntime(root, ["--session", "S"], {
     entry: join(dir, "scripts/open.ts"),
     env: { BABAVOSS_HOME: dir },
@@ -77,7 +72,8 @@ it("says a tab's change once in the answer to a call there, and still tells at /
       })
     ).text()
 
-  expect(await request("/?open")).toContain("tabs.0.facts.n: 0")
+  expect(await request("/?open")).toContain('/ open surface="counter"   open a counter tab')
+  expect(await request("/", { handle: "open", args: { surface: "counter" } })).toContain("tabs.0.facts.n: 0")
   // The agent's own call: its change is in the answer once, not again under tabs.0.facts.
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
   // The person acts in the tab; the agent's next call there says its own change, and at / what the person did.
