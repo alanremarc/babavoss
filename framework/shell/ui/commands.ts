@@ -1,14 +1,12 @@
 // What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers and
 // which are asks, ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
 // below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
-// input form's fields make of the inputs; and every menu entry as one command of the palette.
-import type { Menu, MenuItem } from "../../kit/layouts/menu.tsx"
+// input form's fields make of the inputs.
+import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import { handles, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
 
 /** An action offered at a path: the handle, and whether it is an ask, the person's alone. */
 export type Offered = { path: string; handle: Handle; ask: boolean }
-/** One command of the palette: from a menu, or an action the view offers. */
-export type Command = { id: string; group: string; label: string; hint?: string; keys?: string; ask?: boolean; disabled?: boolean; run: () => void }
 /** A place a view names: its path within the tab, and what it is called, by its row's `title` or `name`, else its path's last part. */
 export type Place = { at: string; label: string }
 
@@ -34,7 +32,7 @@ export const named = (name: string): string => {
 }
 
 /**
- * Offered actions as entries of a menu or the palette: each by its name, or by its description where several share
+ * Offered actions as entries of a menu: each by its name, or by its description where several share
  * one, the same handle bound to different subjects; with "…" where it asks for input first. Asks first.
  */
 export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; ask: boolean; run: () => void }[] {
@@ -115,36 +113,6 @@ export function labelOf(path: string, view: View | undefined, listed: Place[] = 
 
 /** The path above one within a tab, `/` at the top; none above `/`. */
 export const parentOf = (path: string): string | undefined => (path === "/" ? undefined : path.replace(/\/[^/]*$/, "") || "/")
-
-/** Every entry of the menus as a command, grouped by its menu and named by the path to it: a check toggles, a choice's option sets it. */
-export function commandsOf(menus: Menu[]): Command[] {
-  const walk = (group: string, trail: string[], items: MenuItem[], off: boolean): Command[] =>
-    items.flatMap((item): Command[] => {
-      const label = (text: string) => [...trail, text].join(" › ")
-      const disabled = off || ("disabled" in item && item.disabled === true)
-
-      switch (item.kind) {
-        case "action":
-          return [{ id: `${group}/${item.id}`, group, label: label(item.label), hint: item.hint, keys: item.keys, disabled, run: item.run, ...(item.mark && { ask: true }) }]
-        case "check": {
-          const verb = item.checked ? "Uncheck" : "Check"
-
-          return [{ id: `${group}/${item.id}`, group, label: label(`${verb} ${item.label}`), keys: item.keys, disabled, run: () => item.set(!item.checked) }]
-        }
-        case "choice":
-          return item.options
-            .filter((o) => o.id !== item.value)
-            .map((o) => ({ id: `${group}/${item.id}/${o.id}`, group, label: label(`${item.label}: ${o.label}`), disabled, run: () => item.set(o.id) }))
-        case "submenu":
-          return walk(group, [...trail, item.label], item.items, disabled)
-        case "separator":
-        case "label":
-          return []
-      }
-    })
-
-  return menus.flatMap((menu) => walk(menu.label, [], menu.items, menu.disabled === true))
-}
 
 /** What an input form's fields hold, as the action's arguments: each open input of its type, or undefined while one is not. */
 export function argsOf(open: Schema, fields: Record<string, string | boolean | undefined>): Args | undefined {

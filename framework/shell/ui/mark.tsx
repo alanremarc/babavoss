@@ -1,6 +1,6 @@
 // The babavoss mark, the two eyes of the brand, as the strip's first tab, home; and the agent's standing in it: at rest,
-// looking about like a face that thinks while the agent works, a tint where motion is reduced, and a count of the
-// person's changes waiting. The eyes sit on an invisible sphere, gaze.ts; here they are moved, a frame at a time and
+// looking about like a face that thinks while the agent works, a tint instead where motion is reduced or the person turned
+// the mark's animation off in the settings, and a count of the person's changes waiting. The eyes sit on an invisible sphere, gaze.ts; here they are moved, a frame at a time and
 // only while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "cn"
@@ -95,11 +95,13 @@ export function Eyes({ looking = false, className }: { looking?: boolean; classN
   )
 }
 
-/** The mark with the agent's standing on it. */
-export function Logo({ standing }: { standing: Standing }) {
+/** The mark with the agent's standing on it; `animate` false keeps it still, the work shown by its tint alone. */
+export function Logo({ standing, animate = true }: { standing: Standing; animate?: boolean }) {
+  const working = standing.state === "working"
+
   return (
-    <span data-turn={standing.state} className="relative grid size-[22px] place-items-center">
-      <Eyes looking={standing.state === "working"} className={cn("size-5", standing.state === "working" && "motion-reduce:text-primary")} />
+    <span data-turn={standing.state} data-animate={animate || undefined} className="relative grid size-[22px] place-items-center">
+      <Eyes looking={working && animate} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
       {standing.state === "waiting" && (
         <span
           aria-hidden

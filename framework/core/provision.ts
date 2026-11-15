@@ -11,8 +11,8 @@ import { written } from "./harness/setup.ts"
 
 export const SURFACES_DIR = "surfaces"
 export const NAME = /^[a-z][a-z0-9-]*$/
-/** Names a surface cannot take: the shell's, which is the word. */
-export const RESERVED = ["baba"]
+/** Names a surface cannot take: the shell's, which is the word, and those of the surfaces that come with it. */
+export const RESERVED = ["baba", "settings"]
 
 /** The surfaces in a .baba/ directory, by name: each directory under surfaces/ that holds one, src/surface.ts. A name that cannot be one is left out. */
 export function surfaces(baba: string): string[] {
