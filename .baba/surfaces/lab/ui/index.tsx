@@ -1,21 +1,25 @@
 // The lab's page: the timeline of what entered the agent under test's context as the main column, a chat to drive it at
-// its foot, and the sandbox's own root page beside it, live, where the person acts as the person. Hook injections and
-// the word's answers stand out and open in full; other tool calls stay folded. What is open is this tab's own; the entry
-// in the tab's route, /entries/N, is open too and scrolled to, so a refresh or the agent's pointing lands on it.
+// its foot, and the page under test beside it, live, where the person acts as the person. Hook injections, the word's
+// answers and what the developing agent did as the person stand out and open in full; other tool calls stay folded.
+// What is open is this tab's own; the entry in the tab's route, /entries/N, is open too and scrolled to, so a refresh or
+// the agent's pointing lands on it; /runs shows the runs kept, each to open here.
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Composer, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain, ToggleGroup, ToggleGroupItem } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
-type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "note"
+type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "note"
 type Tokens = { input: number; cache_write: number; cache_read: number; output: number }
 type Row = { at: string; i: number; kind: Kind; title: string; size: number; line: string; context?: number | null; growth?: number | null }
 type Whole = Row & { t: number; text: string; call?: string; error?: boolean; pending?: boolean; tokens?: Tokens; cost?: number; ms?: number; calls?: number }
 type Root = {
   status: string
-  run?: number
+  run?: string | null
   model?: string
+  checkout?: string
+  commit?: string
+  uncommitted?: number
   page?: string
   ended?: string
   turns?: number
@@ -27,6 +31,19 @@ type Root = {
   stop?: Handle
   close?: Handle
 }
+type Past = {
+  id: string
+  began: string
+  model: string
+  status: string
+  checkout?: string
+  commit?: string
+  uncommitted?: number
+  turns: number
+  cost: number
+  shown?: boolean
+  open?: Handle
+}
 
 export const icon = <FlaskConicalIcon aria-hidden />
 
@@ -36,6 +53,7 @@ const LOOK: Record<Kind, { label: string; edge: string; tag: string }> = {
   hook: { label: "hook", edge: "border-l-amber-500", tag: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
   word: { label: "word", edge: "border-l-violet-500", tag: "bg-violet-500/15 text-violet-700 dark:text-violet-300" },
   message: { label: "message", edge: "border-l-sky-500", tag: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
+  act: { label: "as person", edge: "border-l-rose-500", tag: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
   reply: { label: "reply", edge: "border-l-emerald-500", tag: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
   tool: { label: "tool", edge: "border-l-border", tag: "bg-muted text-muted-foreground" },
   thinking: { label: "thinking", edge: "border-l-border", tag: "bg-muted text-muted-foreground" },
@@ -105,11 +123,11 @@ function Entry({ row, open, toggle, here }: { row: Row; open: boolean; toggle: (
         className={`flex w-full items-center gap-2 px-3 py-1 text-left text-xs ${inline ? "cursor-default" : "hover:bg-muted/60"}`}
       >
         <span className={`inline-flex h-4 shrink-0 items-center rounded-sm px-1 text-[10px] font-medium ${look.tag}`}>{look.label}</span>
-        <span className={`shrink-0 ${row.kind === "hook" || row.kind === "word" ? "font-medium" : "text-muted-foreground"}`}>
+        <span className={`shrink-0 ${row.kind === "hook" || row.kind === "word" || row.kind === "act" ? "font-medium" : "text-muted-foreground"}`}>
           {row.kind === "word" ? "" : row.title}
         </span>
         <span className={`min-w-0 flex-1 truncate ${row.kind === "word" || row.kind === "tool" ? "font-mono text-[11px]" : "text-muted-foreground"}`}>
-          {inline ? "" : row.line}
+          {inline || row.kind === "act" ? "" : row.line}
         </span>
         <Context row={row} />
         <span className="text-muted-foreground/80 w-14 shrink-0 text-right text-[10px] tabular-nums" title={`${row.size} characters`}>
@@ -160,16 +178,17 @@ export default function Lab() {
   const { view: timeline } = useLive<{ entries: Row[] }>("/entries")
   const { call, route, navigate } = useTab()
   const routed = Number(/^\/entries\/(\d+)$/.exec(route)?.[1] ?? NaN)
+  const listing = route === "/runs"
   const [model, setModel] = useState("haiku")
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [refused, setRefused] = useState("")
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   const entries = view?.run !== undefined ? (timeline?.entries ?? []) : []
-  const act = async (handle: Handle | undefined, args: Record<string, string> = {}) => {
+  const act = async (handle: Handle | undefined, args: Record<string, string> = {}, path = "/") => {
     if (!handle) return "not offered now"
 
-    const answer = await call("/", handle.name, { ...handle.args, ...args })
+    const answer = await call(path, handle.name, { ...handle.args, ...args })
     const reason = answer.outcome === "refused" ? answer.reason : undefined
 
     setRefused(reason ?? "")
@@ -191,7 +210,7 @@ export default function Lab() {
       return next
     })
   }
-  const injections = entries.filter((e) => e.kind === "hook" || e.kind === "word").map((e) => e.i)
+  const injections = entries.filter((e) => e.kind === "hook" || e.kind === "word" || e.kind === "act").map((e) => e.i)
   const allOpen = injections.length > 0 && injections.every((i) => open.has(i))
 
   // The timeline follows its end while the person is at it, and stays where they scrolled to otherwise.
@@ -208,11 +227,14 @@ export default function Lab() {
           <header className="flex h-9 shrink-0 items-center gap-2 border-b px-3 text-xs">
             <Status status={view?.status ?? ""} />
             {view?.run !== undefined && (
-              <span className="text-muted-foreground tabular-nums">
-                run {view.run} · {view.model} · {view.turns} turns · {view.tokens && tokens(view.tokens)} · {money(view.cost ?? 0)}
+              <span className="text-muted-foreground min-w-0 truncate tabular-nums" title={view.run ?? undefined}>
+                {view.model} · {view.turns} turns · {view.tokens && tokens(view.tokens)} · {money(view.cost ?? 0)}
               </span>
             )}
             <span className="flex-1" />
+            <Button size="sm" variant={listing ? "secondary" : "ghost"} onClick={() => navigate(listing ? "/" : "/runs")} aria-pressed={listing}>
+              Runs
+            </Button>
             {injections.length > 0 && (
               <Button size="sm" variant="ghost" onClick={() => setOpen(allOpen ? new Set() : new Set([...open, ...injections]))}>
                 {allOpen ? "Fold injections" : "Open injections"}
@@ -238,6 +260,7 @@ export default function Lab() {
               </Button>
             )}
           </header>
+          {view?.checkout && <Checkout of={view} />}
           {view?.ended && <p className="border-b px-3 py-1.5 text-xs text-muted-foreground">{view.ended}</p>}
           <div
             ref={scroller}
@@ -248,7 +271,9 @@ export default function Lab() {
               pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
             }}
           >
-            {entries.length ? (
+            {listing ? (
+              <Runs open={(handle) => void act(handle, {}, "/runs").then((refusal) => !refusal && navigate("/"))} />
+            ) : entries.length ? (
               <ol className="flex flex-col gap-px py-2">
                 {entries.map((row) => (
                   <Entry
@@ -263,9 +288,10 @@ export default function Lab() {
             ) : (
               <Empty>
                 <EmptyHeader>
-                  <EmptyTitle>{view?.status === "starting" ? "Making the sandbox…" : "No run"}</EmptyTitle>
+                  <EmptyTitle>{view?.status === "starting" ? "Copying the checkout…" : "No run"}</EmptyTitle>
                   <EmptyDescription>
-                    Start a run: an agent under test in a sandbox with the greeting and queue surfaces. What enters its context shows here.
+                    Start a run: an agent under test in a copy of this repository as it is now, uncommitted work included, with its real
+                    surfaces and hooks and a home of its own. What enters its context shows here.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -291,9 +317,9 @@ export default function Lab() {
             }
           />
         </section>
-        <aside className="flex w-[46%] shrink-0 flex-col" aria-label="The sandbox's page">
+        <aside className="flex w-[46%] shrink-0 flex-col" aria-label="The page under test">
           <header className="flex h-9 shrink-0 items-center gap-2 border-b px-3 text-xs">
-            <span className="font-medium">Sandbox page</span>
+            <span className="font-medium">Page under test</span>
             {view?.page && (
               <a
                 href={view.page}
@@ -307,13 +333,13 @@ export default function Lab() {
             )}
           </header>
           {view?.page && view.status !== "closed" ? (
-            <iframe key={view.page} src={view.page} title="The sandbox's root page" className="min-h-0 flex-1 border-0 bg-background" />
+            <iframe key={view.page} src={view.page} title="The page under test" className="min-h-0 flex-1 border-0 bg-background" />
           ) : (
             <Empty>
               <EmptyHeader>
                 <EmptyTitle>No page yet</EmptyTitle>
                 <EmptyDescription>
-                  The sandbox's root starts with the agent's first message; its page shows here, for you to act on as the person.
+                  The root under test starts with the run; its page shows here, for you to act on as the person.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -321,6 +347,61 @@ export default function Lab() {
         </aside>
       </div>
     </Plain>
+  )
+}
+
+/** Which checkout the run is a copy of, at which commit, and whether it carried uncommitted work. */
+function Checkout({ of }: { of: Root }) {
+  return (
+    <p className="text-muted-foreground flex items-center gap-1.5 border-b px-3 py-1 text-[11px]">
+      <span className="min-w-0 truncate font-mono" title={of.checkout}>
+        {of.checkout}
+      </span>
+      {of.commit && <span className="font-mono">@ {of.commit}</span>}
+      {of.uncommitted ? <span className="text-warning">+ {of.uncommitted} uncommitted</span> : of.commit && <span>clean</span>}
+    </p>
+  )
+}
+
+/** The runs kept, newest first, each to open here while no run is up. */
+function Runs({ open }: { open: (handle: Handle) => void }) {
+  const { view } = useLive<{ runs: Past[] }>("/runs")
+  const runs = view?.runs ?? []
+
+  if (!runs.length)
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>No runs yet</EmptyTitle>
+          <EmptyDescription>Each run's record is kept under .babavoss/lab/runs, and listed here.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+
+  return (
+    <ol className="flex flex-col py-1">
+      {runs.map((run) => (
+        <li key={run.id} className={`flex items-center gap-3 px-3 py-1.5 text-xs ${run.shown ? "bg-accent/40" : ""}`}>
+          <span className="w-36 shrink-0 tabular-nums">{new Date(run.began).toLocaleString()}</span>
+          <span className="text-muted-foreground w-12 shrink-0">{run.model}</span>
+          <span className="text-muted-foreground w-14 shrink-0">{run.status}</span>
+          <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]" title={run.checkout}>
+            {run.checkout?.split("/").at(-1)} @ {run.commit}
+            {run.uncommitted ? ` + ${run.uncommitted}` : ""}
+          </span>
+          <span className="text-muted-foreground shrink-0 tabular-nums">
+            {run.turns} turns · {money(run.cost)}
+          </span>
+          {run.open ? (
+            <Button size="xs" variant="outline" onClick={() => open(run.open!)}>
+              Open
+            </Button>
+          ) : (
+            <span className="w-11 shrink-0 text-right text-[11px] text-muted-foreground">{run.shown ? "shown" : ""}</span>
+          )}
+        </li>
+      ))}
+    </ol>
   )
 }
 
