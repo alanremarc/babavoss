@@ -126,7 +126,7 @@ describe("a running surface", () => {
       expect(written).toMatchObject({ outcome: "written", view: { notes: [{ id: 1, title: "Uno" }] } })
       expect([r.busy(), r.jobs()]).toEqual([1, ["agent"]])
       // Each commit names its cause: the call, then the event its command reported, with the actor that started it.
-      expect(r.cause()).toEqual({ actor: "agent", call: true })
+      expect(r.cause()).toEqual({ actor: "agent", call: true, path: "/" })
       await settled(r)
       expect(r.model()).toMatchObject({ actor: "agent", busy: false })
       expect(r.cause()).toEqual({ actor: "agent", call: false })
@@ -193,7 +193,7 @@ describe("a running surface", () => {
     await r.settled()
     await sleep(5)
     expect(heard).toEqual([
-      { text: "one", cause: { actor: "person", call: true }, told: 0 },
+      { text: "one", cause: { actor: "person", call: true, path: "/" }, told: 0 },
       { text: "late", at: "/x", from: "other", cause: { actor: "person", call: false }, told: expect.any(Number) },
     ])
     expect(lines.filter((l) => l.startsWith("a notice"))).toHaveLength(2)

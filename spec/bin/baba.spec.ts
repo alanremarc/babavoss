@@ -163,7 +163,9 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const opened = hook("UserPromptSubmit").stdout
 
-    expect(opened).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
+    expect(opened).toStartWith(
+      "In the root of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nnotices:\nthe person acted on /\nchanged by the person:\n"
+    )
     expect(opened).toMatch(/\n\+ \/tabs\/\d+ desk "Greeting"\nactions: propose /)
     expect(opened).toContain('\nhow: "Propose a greeting when the person asks for another.')
     expect(opened).toContain('\ngreeting: "hello"')
@@ -183,9 +185,18 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     // The person proposes there: a call the agent did not make.
     expect((await person(tab, "propose", { text: "good morning" })).status).toBe(200)
 
+    // After a tool call, what was heard alone, one line; what it changed comes with the person's next message.
+    expect(JSON.parse(hook("PostToolUse").stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PostToolUse",
+        additionalContext: `Heard in the root of .baba/ while you worked:\nnotices:\nthe person acted on desk ${tab}`,
+      },
+    })
+
     const told = hook("UserPromptSubmit").stdout
 
-    expect(told).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
+    expect(told).toStartWith("In the root of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
+    expect(told).toContain(`+ need: the person, at ${tab} desk, to accept or decline the proposed greeting`)
     expect(told).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")

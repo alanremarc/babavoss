@@ -1,8 +1,8 @@
-// The agent's text answers and session memory, with who changed what since it was last answered, and what was noticed since,
-// told once; JSON clients keep their own presentation.
+// The agent's text answers and session memory: what was heard since it was last told, told once with every answer, and the
+// present as it was last told, with who changed what since, told at a boundary; JSON clients keep their own presentation.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
-import { diff, entries, tell, whole, type Change } from "../present/present.ts"
+import { diff, entries, placeOf, rebase, tell, whole, type Change } from "../present/present.ts"
 import { handles, type Args, type Json } from "../surface/view.ts"
 import type { Cause, Noticed, Running } from "../surface/run.ts"
 import { isPerson } from "../session.ts"
@@ -50,31 +50,45 @@ export const noticeLine = (notice: Noticed, who: string) => {
 export const textView = (view: Json | undefined, path: string, command: string): string[] => whole(view, { command, path })
 
 /**
- * The agent's text session: what it was last told, and since then who changed each fact of /. A change is the person's when
- * their call made it, the agent's when its own did, through the word or a program, and the surface's when a command's event
- * did. What only the agent's own calls changed is not told again: their answers told it. The notices heard since are told
- * with the next answer, once, under `notices:`, but for those of the agent's own calls; they are held in memory alone.
+ * The agent's text session, two records kept apart. What was heard and not yet told: the notices, and that the person acted
+ * in a place, once however often, and not where a notice of theirs already told it; told with every text answer, once. And the present as
+ * the session was last told it, with who changed each fact of / since: told whole at a read of /, and as what changed at a
+ * boundary, the person's message or a wait; a call's answer and a read of any other path leave it, so what the person and
+ * the surfaces change while the agent works waits for the next boundary. A change is the person's when their call made it,
+ * the agent's when its own did, through the word or a program, and the surface's when a command's event did; what only the
+ * agent's own calls changed or gave is never told back, their answers told it. What was heard is held in memory alone.
  */
 export function textSession<M>(running: Running<M>, dir: string, actor: string, command: string) {
   const file = join(dir, "presented", "text.json")
   let before = readJsonFile<Json>(file)
   const root = () => running.read("/", actor)
-  const flat = () => {
+  const read = () => {
     try {
-      return entries(root())
+      return root()
     } catch {
-      return new Map<string, string>()
+      return undefined
     }
   }
-  let marks = flat()
+  let last = read()
+  let marks = entries(last)
   let version = running.version()
-  // Who changed each fact since the session was last told, by the facts' keys by identity, so a row moved keeps its own.
+  // Who changed each fact since the session was last told the present, by the facts' keys by identity, so a row moved keeps its own.
   const by = new Map<string, Set<string>>()
   let heard: string[] = []
+  // The places the person acted in since what was heard was told: each is heard once, and not where their notice was.
+  const acted = new Set<string>()
+  const place = (path: string) => {
+    try {
+      return placeOf(root(), path)
+    } catch {
+      return path
+    }
+  }
 
   running.notices((notice) => {
     const who = whoOf(notice.cause, actor)!
 
+    if (who === "person" && notice.cause.path !== undefined) acted.add(place(notice.cause.path))
     if (who !== "you") heard.push(noticeLine(notice, who))
   })
 
@@ -82,15 +96,30 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     if (running.version() === version) return
     version = running.version()
 
-    const now = flat()
-    const who = whoOf(running.cause(), actor)
+    const cause = running.cause()
+    const view = read()
+    const now = entries(view)
+    const who = whoOf(cause, actor)
 
     for (const key of new Set([...now.keys(), ...marks.keys()]))
       if (now.get(key) === marks.get(key)) continue
-      // A commit of no known cause, as when code is loaded again: what it changed is told without a name.
-      else if (!who) by.delete(key)
+      // A commit of no known cause, as when code is loaded again, and the agent's own, which its answer told: no one's to tell.
+      else if (!who || who === "you") by.delete(key)
       else by.set(key, (by.get(key) ?? new Set()).add(who))
+    // What the agent's own call changed, it knows: the present as told takes it, so only what others change stays to be told.
+    if (who === "you" && before !== undefined) {
+      before = rebase(before, last, view)
+      if (before !== undefined) writeJsonFile(file, before)
+    }
     marks = now
+    last = view
+    // The person's call that gave no notice is still heard, as where they acted: the agent reads there if it matters.
+    const where = who === "person" && cause?.path !== undefined ? place(cause.path) : undefined
+
+    if (where !== undefined && !acted.has(where)) {
+      acted.add(where)
+      heard.push(`the person acted on ${where}`)
+    }
   })
 
   // Who made a change: everyone who changed a fact it covers. Unnamed where the change came before this runtime, or from code loaded again.
@@ -119,47 +148,54 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
 
     return names.length ? `changed by ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]}:` : "changed:"
   }
-  // What changed of / since the session was last told, that not only the agent's own calls changed; the whole root where it was never told.
-  // Groups the agent is told before these changes, as who is needed, go before them here.
+  // What changed of / since the session was last told it, that not only the agent's own calls changed; the whole root where it was never told.
   const since = (now: Json | undefined): Change[] =>
     before === undefined ? whole(now, { command }).map((line) => ({ line, keys: [], where: "/" })) : diff(before, now, { command }).filter(others)
-  // The present told: what changes is counted from `now`. The notices are told with it where its text carried them.
-  const told = (now: Json | undefined, notices = true) => {
+  // The present told: what changes is counted from `now`.
+  const seen = (now: Json | undefined) => {
     if (now !== undefined) writeJsonFile(file, now)
     before = now
     by.clear()
-    if (notices) heard = []
+  }
+  // What was heard, under `notices:`, and forgotten.
+  const notices = () => {
+    const out = heard.length ? ["notices:", ...heard] : []
+
+    heard = []
+    acted.clear()
+
+    return out
   }
 
   return {
     root,
     /** What a call changed at `path`, as its answer says it. */
     diff: (old: Json | undefined, now: Json | undefined, path: string) => tell(diff(old, now, { command, path })),
-    /** How many notices wait to be told. */
+    /** How much was heard and waits to be told. */
     noticed: () => heard.length,
+    /** What changed at / since the session was last told it, by others than the agent alone. */
     changed: () => since(root()),
     /** The session was given / whole, as a program's read of it: what changes is counted from here. */
-    seen: () => told(root(), false),
+    seen: () => seen(root()),
+    /** An answer to a call or a read: its own lines, then what was heard since. The present is left for a boundary. */
+    answer: (lines: string[]) => [...lines, ...notices()].join("\n"),
+    /** What was heard since, alone, as after a tool call. */
+    heard: () => notices().join("\n"),
     /**
-     * An answer: its own lines, then the notices heard since the session was last told, then what else changed at / since.
-     * `whole`, the answer is / itself and no change follows it. `read` is the path the answer showed whole: what changed
-     * under it is in the answer already.
+     * A boundary: what was heard, then what changed at / since the session was last told it, by who; or, `whole`, the lines
+     * are / itself, before what was heard. The present is told from here.
      */
-    answer(lines: string[], whole = false, read?: string) {
+    tell(lines: string[] = [], whole = false) {
       const now = root()
       const fresh = before === undefined
-      const extra = whole
-        ? []
-        : since(now).filter(
-            (change) =>
-              !lines.includes(change.line) && !(read !== undefined && read !== "/" && (change.where === read || change.where.startsWith(`${read}/`)))
-          )
-      const notices = heard.length ? ["notices:", ...heard] : []
-      const said = [...lines, ...notices, ...(fresh && extra.length ? ["changed:", ...extra.map((c) => c.line)] : tell(extra, head))].join("\n")
+      const changes = whole ? [] : since(now)
+      const said = whole
+        ? [...lines, ...notices()]
+        : [...notices(), ...(fresh && changes.length ? ["changed:", ...changes.map((c) => c.line)] : tell(changes, head))]
 
-      told(now)
+      seen(now)
 
-      return said
+      return said.join("\n")
     },
   }
 }

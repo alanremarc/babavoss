@@ -166,6 +166,60 @@ function needsChanged(a: Need[], b: Need[]): Change[] {
   return out
 }
 
+/** A list's rows by what names them across versions: their identity, else, for needs, their tab and who; undefined where neither holds. */
+function namer(lists: Row[][]): ((row: Row) => string) | undefined {
+  const id = identity(lists.filter((rows) => rows.length))
+
+  if (id) return (row) => JSON.stringify(row[id])
+  if (lists.every((rows) => needsOf(rows))) return (row) => needKey(row as Need)
+
+  return undefined
+}
+
+/**
+ * `known` with what changed from `was` to `now` made in it, and nothing else: what one party changed laid over what
+ * another was last told, so that what others changed meanwhile stays to be told. Rows of a list by what names them; a
+ * value of any other kind, as it is now.
+ */
+export function rebase(known: Json | undefined, was: Json | undefined, now: Json | undefined): Json | undefined {
+  if (same(was, now)) return known
+  if (same(known, was) || known === undefined || was === undefined || now === undefined) return now
+
+  const rk = rowsOf(known)
+  const rw = rowsOf(was)
+  const rn = rowsOf(now)
+  const name = rk && rw && rn ? namer([rk, rw, rn]) : undefined
+
+  if (rk && rw && rn && name) {
+    const k = new Map(rk.map((r) => [name(r), r]))
+    const w = new Map(rw.map((r) => [name(r), r]))
+    const rows = rn.flatMap((r) => (w.has(name(r)) && !k.has(name(r)) ? [] : [(k.has(name(r)) ? rebase(k.get(name(r)), w.get(name(r)), r) : r) as Row]))
+    const kept = rk.filter((r) => !w.has(name(r)) && !rows.some((x) => name(x) === name(r)))
+
+    return [...rows, ...kept] as Json
+  }
+  if (isRow(known) && isRow(was) && isRow(now) && !isHandle(now)) {
+    const out: Row = {}
+
+    for (const key of new Set([...Object.keys(known), ...Object.keys(now), ...Object.keys(was)])) {
+      const v = rebase(known[key], was[key], now[key])
+
+      if (v !== undefined) out[key] = v
+    }
+
+    return out as Json
+  }
+
+  return now
+}
+
+/** Where in the root a path is: the open tab it is in, by its surface and path; else the path itself. */
+export function placeOf(view: Json | undefined, path: string): string {
+  const tab = tabsOf(view)?.find((t) => path === t.at || path.startsWith(`${t.at}/`))
+
+  return tab ? [typeof tab.surface === "string" && tab.surface, tab.at].filter(Boolean).join(" ") : path
+}
+
 /** A tab's one line: its path, its surface and its title. */
 export const heading = (tab: Tab) =>
   [tab.at, typeof tab.surface === "string" && tab.surface, typeof tab.title === "string" && JSON.stringify(tab.title)].filter(Boolean).join(" ")

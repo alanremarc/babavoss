@@ -1,6 +1,6 @@
 // The present as the agent reads it: a view whole, and what changed between two views, told as events on things.
 import { describe, expect, it } from "bun:test"
-import { CAP, diff, entries, lines, tell, whole, type Change } from "../../framework/core/present/present.ts"
+import { CAP, diff, entries, lines, rebase, tell, whole, type Change } from "../../framework/core/present/present.ts"
 import { handle, type Json } from "../../framework/core/surface/index.ts"
 
 const say = { command: "baba" }
@@ -173,4 +173,15 @@ it("keys facts by identity, so a row moved keeps its keys, and a list's order ha
     ["rows[2].v", '"b"'],
   ])
   expect([...b].filter(([k, v]) => a.get(k) !== v)).toEqual([["rows#order", "2,1"]])
+})
+
+it("rebases what one party knows by another's change, so what others changed meanwhile is still to be told", () => {
+  const known = root([issue(1), issue(2)])
+  // The person moved issue 1 on, then the agent opened issue 3 and gave issue 2 a note.
+  const was = root([issue(1, "lane"), issue(2)])
+  const now = root([issue(1, "lane"), issue(2, "backlog", { note: "mine" }), issue(3)])
+
+  expect(told(rebase(known, was, now)!, now)).toEqual(['/tabs/3 queue "Queue"', "/tabs/3/issues/1: status \"backlog\" → \"lane\""])
+  expect(rebase(known, known, now)).toEqual(now)
+  expect(rebase(known, now, now)).toEqual(known)
 })

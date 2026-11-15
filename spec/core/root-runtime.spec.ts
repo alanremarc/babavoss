@@ -1,4 +1,4 @@
-// The root opened through its cli: answers carry agent and person changes, and come from the code on disk however it was
+// The root opened through its cli: answers carry the agent's own changes and what was heard, a wait the person's changes, and come from the code on disk however it was
 // changed under the running root.
 import { notesRoot } from "../support/notes.ts"
 import { spawnSync } from "node:child_process"
@@ -63,9 +63,12 @@ it("opens notes, carries changes after calls, and reports a person's change in t
   })
 
   expect(response.ok).toBe(true)
-  expect(cli("/notes").out).toContain('latest: "hello" → "from person"')
+  // Heard with the next answer, in one line; what it changed, at the next boundary.
+  expect(cli("/notes").out).toEndWith("notices:\nthe person acted on /\n")
+  expect(cli("wait", "0").out).toContain('latest: "hello" → "from person"')
   expect(cli("/notes/1", "remind", "n=1", "seconds=0.2").status).toBe(0)
-  expect(cli("wait", "2").out).toContain("due: 0 → 1")
+  // A reminder due is a fact the surface changed by itself: it ends no wait, which tells it when it ends.
+  expect(cli("wait", "1").out).toContain("due: 0 → 1")
 })
 
 it("answers with the code on disk after it is replaced, deleted and made again, or broken and then mended", async () => {
