@@ -59,13 +59,11 @@ export const resolve = (tl: Timeline, id: string, text: string, error = false): 
   entries: tl.entries.map((entry) => (entry.id === id ? { ...entry, text, pending: false, ...(error && { error: true }) } : entry)),
 })
 
-/** An address in the text of what a harness reports, in case one is there: account details stay out of the record. */
-const ACCOUNT = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g
-
 /** The timeline after one event of the harness, `t` ms into the run. */
 export function stream(tl: Timeline, t: number, e: HarnessEvent): Timeline {
   if (e.kind === "started") {
-    const text = JSON.stringify(e.loaded, null, 2).replace(ACCOUNT, "<redacted>")
+    // The harness's adapter hands on nothing of the account's; what it loaded is copied as it said.
+    const text = JSON.stringify(e.loaded, null, 2)
 
     // Each turn begins with it; it is noted where it differs from the one before.
     if (tl.entries.findLast((entry) => entry.title.startsWith("init "))?.text === text) return tl
