@@ -221,16 +221,22 @@ function Tab({
             if (!document.querySelector('[role="dialog"]:not([data-slot="sheet-content"])')) tab.current?.focus()
           }}
           trigger={
+            // The button keeps its place and size, so the menu hangs from the same spot whenever it opens; what grows
+            // into view is the caret inside it.
             <button
               type="button"
-              className={cn(
-                "pointer-events-none absolute top-[3px] left-[3px] grid size-[22px] scale-50 cursor-pointer place-items-center rounded-full text-foreground opacity-0 outline-none group-hover/pill:pointer-events-auto group-hover/pill:scale-100 group-hover/pill:opacity-100 group-has-[:focus-visible]/pill:pointer-events-auto group-has-[:focus-visible]/pill:scale-100 group-has-[:focus-visible]/pill:opacity-100 group-data-[menu]/pill:pointer-events-auto group-data-[menu]/pill:scale-100 group-data-[menu]/pill:opacity-100 hover:bg-foreground/11 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100",
-                pillMotion
-              )}
+              className="pointer-events-none absolute top-[3px] left-[3px] grid size-[22px] cursor-pointer place-items-center rounded-full text-foreground outline-none group-hover/pill:pointer-events-auto group-has-[:focus-visible]/pill:pointer-events-auto group-data-[menu]/pill:pointer-events-auto [@media(hover:none)]:pointer-events-auto"
               tabIndex={-1}
               aria-label={`Menu for ${label}`}
             >
-              <ChevronDownIcon aria-hidden className={cn("transition-[rotate] duration-200 ease-[cubic-bezier(.3,1.6,.4,1)] motion-reduce:transition-none", open && "rotate-180")} />
+              <span
+                className={cn(
+                  "grid size-full scale-50 place-items-center rounded-full opacity-0 group-hover/pill:scale-100 group-hover/pill:opacity-100 group-has-[:focus-visible]/pill:scale-100 group-has-[:focus-visible]/pill:opacity-100 group-data-[menu]/pill:scale-100 group-data-[menu]/pill:bg-foreground/11 group-data-[menu]/pill:opacity-100 hover:bg-foreground/11 [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100",
+                  pillMotion
+                )}
+              >
+                <ChevronDownIcon aria-hidden className={cn("transition-[rotate] duration-200 ease-[cubic-bezier(.3,1.6,.4,1)] motion-reduce:transition-none", open && "rotate-180")} />
+              </span>
             </button>
           }
         >

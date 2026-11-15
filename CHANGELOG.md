@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.43.5
+
+- A tab's menu hangs from the same spot however it is opened: the caret's button keeps its place and size, and only the caret in it grows into view. It used to hang a few pixels high and to the right when opened before the caret had grown. Nothing to adapt.
+
 ## 0.43.4
 
 - A tab's menu has no line along its top and starts on the pixel under the strip's lower border, which is its top edge. Nothing to adapt.
