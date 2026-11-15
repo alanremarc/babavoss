@@ -52,8 +52,8 @@ export const GROUPS: Record<Scenario["group"], string> = { canonical: "Canonical
 
 const opened = (...surfaces: string[]): Scripted[] => surfaces.map((surface) => ({ kind: "call", path: "/", handle: "open", args: { surface } }))
 
-/** A program that adds each title as a task at a tab, printing each answer, as the skill has the agent do. */
-const adding = (tab: string, titles: string[]) => `for (const title of ${JSON.stringify(titles)}) console.log(await root.call(${JSON.stringify(tab)}, "add", { title }))`
+/** A program that adds each title as a task at a tab, printing each call's outcome. */
+const adding = (tab: string, titles: string[]) => `for (const title of ${JSON.stringify(titles)}) console.log((await root.call(${JSON.stringify(tab)}, "add", { title })).outcome)`
 
 const RELEASE = [
   "Freeze the branch",
