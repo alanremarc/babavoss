@@ -179,7 +179,7 @@ export function TabContent({ address, hidden, children }: { address: string; hid
   )
 }
 
-/** `end`: what stands at the strip's right, after the tabs, of the session rather than a tab: whose move it is, and the activity button. */
+/** `end`: what stands at the strip's right, after the tabs, of the session rather than a tab: whose move it is, and the notifications. */
 export function SurfaceTabs({ items, active, onSelect, home, end }: { items: TabItem[]; active: string; onSelect: (id: string) => void; home: ReactNode; end?: ReactNode }) {
   const strip = useRef<HTMLDivElement>(null)
   const [more, setMore] = useState(false)

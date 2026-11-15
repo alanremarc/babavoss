@@ -1,9 +1,9 @@
 // The shell page: the shell's view at / drives the tab strip and the launcher; each tab shows its surface's component.
 // The strip is the launcher's "+", then the open tabs newest first. A tab the person opens becomes theirs to look at; one
 // the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are. A tab that
-// is broken or needs someone is marked in the strip and the launcher, from / where the shell gathers who is needed. Each
-// notice heard while the page is open is a toast, once: the surface, what happened, and who did it where not the person;
-// clicking it goes where it happened. At the strip's right, the activity panel keeps all of it, the person's own too.
+// is broken or needs someone is marked in the strip and the launcher, from / where the shell gathers who is needed. At the
+// strip's right are the notifications: each notice heard while the page is open is a toast that then goes into their
+// button, and their panel keeps the notices and all activity (notifications.tsx).
 // The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
@@ -13,11 +13,10 @@ import type { Handle, View } from "../../core/index.ts"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
-import { Toasts, type ToastItem } from "../../kit/components/toast"
-import { ActivityButton } from "./activity.tsx"
 import { call, changes, read, type Notice, type Turn } from "./client.ts"
 import { Frame, TabCommands, useFrames } from "./frame.tsx"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
+import { Notifications } from "./notifications.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
 import { arrival, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
@@ -32,8 +31,6 @@ type Row = { at: string; n: number; surface: string; title?: string; close?: Han
 /** A tab that is needed, as / gathers it. */
 type Need = { at: string; surface: string } & TabNeed
 type RootView = { title: string; needs?: Need[]; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
-/** The most toasts shown at once; an older one goes first. */
-const TOASTS = 4
 
 const parse = () => placeOf(location.pathname)
 const urlOf = (key: string, route = "/") => (key === "new" ? "/" : key === "settings" ? "/settings" : key + (route === "/" ? "" : route))
@@ -93,8 +90,18 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     needs: (root?.needs ?? []).filter((need) => need.at === row.at).map(({ who, why }) => ({ who, why })),
     ...(row.broken !== undefined && { broken: row.broken }),
   }))
-  const [toasts, setToasts] = useState<ToastItem[]>([])
-  const heard = useRef<(notice: Notice) => void>(() => {})
+  // Who hears each notice as it comes: the notifications.
+  const [hearers] = useState(() => new Set<(notice: Notice) => void>())
+  const notices = useMemo(
+    () => ({
+      subscribe: (fn: (notice: Notice) => void) => {
+        hearers.add(fn)
+
+        return () => void hearers.delete(fn)
+      },
+    }),
+    [hearers]
+  )
   // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
   const [seen, setSeen] = useState<ReadonlySet<string>>()
   // Whose move it is, as the runtime hears it from the harness's hooks.
@@ -115,10 +122,12 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         up.current = connected
         setConnected(connected)
       },
-      (notice) => heard.current(notice),
+      (notice) => {
+        for (const fn of hearers) fn(notice)
+      },
       setTurn
     )
-  }, [listeners])
+  }, [listeners, hearers])
 
   useEffect(() => {
     document.title = root?.title ?? "babavoss"
@@ -170,19 +179,6 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     } finally {
       setPending(false)
     }
-  }
-  // A notice names its tab by `at`, and the route within it, where it goes on a click.
-  heard.current = (notice) => {
-    const tab = notice.at && /^(\/tabs\/\d+)(\/.*)?$/.exec(notice.at)
-    const toast: ToastItem = {
-      id: Date.now() + Math.random(),
-      title: notice.from ?? root?.title ?? "baba",
-      text: notice.text,
-      ...(notice.by && { meta: `by ${notice.by}` }),
-      ...(tab && { onSelect: () => go(tab[1]!, tab[2] ?? "/") }),
-    }
-
-    setToasts((all) => [...all, toast].slice(-TOASTS))
   }
   const open = async (handle: Handle) => {
     const view = await act("/", handle)
@@ -332,7 +328,6 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           })}
         </main>
       </ChangesContext.Provider>
-      <Toasts toasts={toasts} dismiss={(id) => setToasts((all) => all.filter((t) => t.id !== id))} className="right-2 bottom-13" />
       <SurfaceTabs
         active={active}
         onSelect={(key) => go(key)}
@@ -340,7 +335,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         end={
           <>
             <TurnIndicator turn={turn} />
-            <ActivityButton changes={stream} go={(at) => go(placeOf(at).key, placeOf(at).route)} />
+            <Notifications changes={stream} notices={notices} title={root?.title ?? "baba"} go={(at) => go(placeOf(at).key, placeOf(at).route)} />
           </>
         }
         items={[
