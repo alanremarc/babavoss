@@ -1,36 +1,50 @@
-// The mark's eyes on their sphere: at rest the brand's circles, squashed towards the edge as they turn, and never the same move twice running.
+// The mark's eyes on their sphere, under a lens at its middle: two of one size that rest to the right of it and so unequal,
+// narrower and smaller towards the edge, gone behind, and never the same move twice running.
 import { expect, test } from "bun:test"
-import { between, drawn, eased, EYES, MOVES, next, orbiting, REST, SPHERE } from "../../framework/shell/ui/gaze.ts"
+import { between, drawn, eased, EYES, MOVES, next, REST, SEARCH, settled, SPHERE, TURNED } from "../../framework/shell/ui/gaze.ts"
 
-test("at rest each eye is the brand's circle, where the brand has it", () => {
-  for (const eye of EYES) {
-    const d = drawn(eye, REST)
+const [left, right] = EYES as [(typeof EYES)[0], (typeof EYES)[0]]
 
-    expect(d.cx).toBeCloseTo(eye.x, 6)
-    expect(d.cy).toBeCloseTo(SPHERE.y, 6)
-    expect(d.rx).toBeCloseTo(eye.r, 6)
-    expect(d.ry).toBe(eye.r)
-  }
+test("the eyes are of one size, the same distance either side of the head's front", () => {
+  expect(left.r).toBe(right.r)
+  expect(SPHERE.x - left.x).toBeCloseTo(right.x - SPHERE.x, 6)
 })
 
-test("an eye that turns towards the sphere's edge moves there and narrows along the radius, as a patch on a ball does", () => {
-  const [left, right] = EYES as [(typeof EYES)[0], (typeof EYES)[0]]
-  const looking = { yaw: 0.4, pitch: 0, size: 1 }
+test("at rest the head is turned to the right: the left eye is near the middle, nearly whole and round, and the right one smaller and narrower", () => {
+  const [l, r] = [drawn(left, REST), drawn(right, REST)]
 
-  expect(drawn(right, looking).cx).toBeGreaterThan(right.x)
-  expect(drawn(right, looking).rx).toBeLessThan(right.r)
-  expect(drawn(right, looking).ry).toBe(right.r)
-  // The eye on the far side comes towards the front, and rounds out.
-  expect(drawn(left, looking).rx).toBeGreaterThan(drawn(right, looking).rx / right.r * left.r)
+  expect(Math.abs(l.cx - SPHERE.x)).toBeLessThan(5)
+  expect(l.ry).toBeGreaterThan(left.r * 0.99)
+  expect(l.rx).toBeGreaterThan(l.ry * 0.99)
+  expect(r.cx).toBeGreaterThan(l.cx + l.rx + r.rx)
+  expect(r.ry).toBeLessThan(l.ry * 0.75)
+  expect(r.rx).toBeLessThan(r.ry)
+  expect(l.cy).toBe(SPHERE.y)
+})
 
+test("the lens stays at the middle: an eye brought there by a turn is whole, and the sizes swap as the head looks the other way", () => {
+  // Turned back by its rest and by the eye's own angle, the right eye is dead ahead.
+  const ahead = drawn(right, { yaw: -TURNED - Math.asin((right.x - SPHERE.x) / SPHERE.radius), pitch: 0, size: 1 })
+
+  expect(ahead.cx).toBeCloseTo(SPHERE.x, 6)
+  expect(ahead.rx).toBeCloseTo(right.r, 6)
+  expect(ahead.ry).toBeCloseTo(right.r, 6)
+
+  const away = { yaw: -2 * TURNED, pitch: 0, size: 1 }
+
+  expect(drawn(right, away).ry).toBeCloseTo(drawn(left, REST).ry, 6)
+  expect(drawn(left, away).ry).toBeCloseTo(drawn(right, REST).ry, 6)
+})
+
+test("an eye that turns down moves there and narrows along the radius, as a patch on a ball does", () => {
   const down = drawn(left, { yaw: 0, pitch: 0.36, size: 1 })
 
   expect(down.cy).toBeGreaterThan(SPHERE.y)
-  expect(down.rx).toBeLessThan(left.r)
-  expect(Math.abs(down.turn)).toBeGreaterThan(90)
+  expect(down.rx).toBeLessThan(down.ry)
+  expect(Math.abs(down.turn)).toBeGreaterThan(45)
 })
 
-test("every move keeps both eyes inside the sphere, and focusing changes their size alone", () => {
+test("every move keeps both eyes inside the sphere, focusing changes their size alone, and an eye behind the head is not seen", () => {
   for (const move of MOVES)
     for (const gaze of move.through)
       for (const eye of EYES) {
@@ -41,7 +55,20 @@ test("every move keeps both eyes inside the sphere, and focusing changes their s
 
   const focus = MOVES.find((m) => m.name === "focus")!.through[0]!
 
-  expect(drawn(EYES[0]!, { ...REST, size: focus.size }).ry).toBeCloseTo(EYES[0]!.r * focus.size, 6)
+  expect(drawn(left, { ...REST, size: focus.size }).ry).toBeCloseTo(drawn(left, REST).ry * focus.size, 6)
+  expect(drawn(left, { yaw: Math.PI, pitch: 0, size: 1 })).toMatchObject({ rx: 0, ry: 0 })
+})
+
+test("a spin takes the head once round to where it rests, and is then said as rest, so the next turn takes the short way", () => {
+  const spin = MOVES.find((m) => m.name === "spin")!.through.at(-1)!
+
+  for (const eye of EYES) {
+    expect(drawn(eye, spin).cx).toBeCloseTo(drawn(eye, REST).cx, 6)
+    expect(drawn(eye, spin).ry).toBeCloseTo(drawn(eye, REST).ry, 6)
+  }
+  expect(settled(spin).yaw).toBeCloseTo(0, 6)
+  expect(settled({ yaw: 3.5, pitch: 0, size: 1 }).yaw).toBeCloseTo(3.5 - 2 * Math.PI, 6)
+  expect(settled(REST)).toBe(REST)
 })
 
 test("a turn eases in and out, and the next move is never the one just made", () => {
@@ -49,44 +76,11 @@ test("a turn eases in and out, and the next move is never the one just made", ()
   expect(eased(1)).toBe(1)
   expect(eased(0.5)).toBeCloseTo(0.5, 6)
   expect(eased(0.1)).toBeLessThan(0.1)
-  expect(between(REST, { yaw: 1, pitch: 1, size: 2 }, 0.5)).toEqual({ yaw: 0.5, pitch: 0.5, size: 1.5, lid: 1 })
+  expect(between(REST, { yaw: 1, pitch: 1, size: 2 }, 0.5)).toEqual({ yaw: 0.5, pitch: 0.5, size: 1.5 })
   for (const move of MOVES) for (let i = 0; i < 20; i++) expect(next(move.name, () => i / 20).name).not.toBe(move.name)
 })
 
-test("a page that lost its runtime sends the smaller eye round the larger, from rest and back to it", () => {
-  const [large, small] = orbiting(0, 0)
-
-  expect([large.cx, large.rx, small.cx, small.cy, small.rx]).toEqual([EYES[0]!.x, EYES[0]!.r, EYES[1]!.x, SPHERE.y, EYES[1]!.r])
-
-  const [centre, right] = orbiting(1, 0)
-  const [, below] = orbiting(1, Math.PI / 2)
-
-  expect(centre.cx).toBe(SPHERE.x)
-  expect(right.cy).toBeCloseTo(SPHERE.y, 6)
-  expect(below.cx).toBeCloseTo(SPHERE.x, 6)
-  expect(below.cy - SPHERE.y).toBeCloseTo(right.cx - SPHERE.x, 6)
-  // The two never touch, and the smaller stays inside the sphere.
-  expect(right.cx - SPHERE.x).toBeGreaterThan(EYES[0]!.r + EYES[1]!.r)
-  expect(right.cx - SPHERE.x + EYES[1]!.r).toBeLessThan(SPHERE.radius)
-})
-
-test("under a lens an eye is a patch of the sphere as seen: whole and round at the middle, smaller and narrower towards the edge, never less than a part", () => {
-  const eye = { x: 50, r: 18, lens: 2 }
-
-  expect(drawn(eye, REST)).toMatchObject({ cx: 50, rx: 18, ry: 18 })
-
-  const turned = drawn(eye, { yaw: 0.5, pitch: 0, size: 1 })
-
-  expect(turned.ry).toBeCloseTo(18 * (1 + 2 * (Math.cos(0.5) - 1)), 6)
-  expect(turned.rx).toBeCloseTo(turned.ry * Math.cos(0.5), 6)
-  expect(drawn(eye, { yaw: 1.4, pitch: 0, size: 1 }).ry).toBeCloseTo(18 * 0.3, 6)
-  // A face that rests turned draws its eyes at rest where a turn would put them: to one side of the lens, and unequal.
-  expect(drawn({ ...eye, yaw: 0.5 }, REST)).toMatchObject({ cx: turned.cx, ry: turned.ry })
-  // The brand's eyes have no lens: they keep their size wherever they are.
-  expect(drawn({ x: 69, r: 15 }, { yaw: 0.4, pitch: 0, size: 1 }).ry).toBeCloseTo(15, 6)
-})
-
-test("lids close an eye from above and below, and open between gazes as the rest of a gaze does", () => {
-  expect(drawn(EYES[0]!, { ...REST, lid: 0.1 }).ry).toBeCloseTo(EYES[0]!.r * 0.1, 6)
-  expect(between(REST, { ...REST, lid: 0.2 }, 0.5).lid).toBeCloseTo(0.6, 6)
+test("a page that lost its runtime looks from one side to the other, both eyes in sight", () => {
+  expect(SEARCH.map((s) => Math.sign(s.to.yaw))).toEqual([-1, 1])
+  for (const { to } of SEARCH) for (const eye of EYES) expect(drawn(eye, to).rx).toBeGreaterThan(0)
 })

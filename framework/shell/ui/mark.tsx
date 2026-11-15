@@ -1,10 +1,11 @@
 // The babavoss mark, the two eyes of the brand, as the strip's first tab, home; and the agent's standing in it: at rest,
 // looking about like a face that thinks while the agent works, a tint instead where motion is reduced or the person turned
-// the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the activity. The eyes sit on an invisible sphere, gaze.ts; here they are moved, a frame at a time and
-// only while they turn.
+// the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the
+// activity. The eyes sit on an invisible sphere under a lens, gaze.ts; here they are moved, a frame at a time and only
+// while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "../../kit/cn.ts"
-import { between, drawn, eased, EYES, LOST_LOOPS, MOVES, next, ORBIT_MS, orbiting, REST, within, type Drawn, type Eye, type Gaze, type Lost } from "./gaze.ts"
+import { between, drawn, eased, EYES, MOVES, next, REST, SEARCH, settled, within, type Drawn, type Gaze } from "./gaze.ts"
 import type { Standing } from "./turn.ts"
 
 const put = (el: SVGEllipseElement | null | undefined, { cx, cy, rx, ry, turn }: Drawn) => {
@@ -15,29 +16,26 @@ const put = (el: SVGEllipseElement | null | undefined, { cx, cy, rx, ry, turn }:
   el.setAttribute("ry", ry.toFixed(2))
   el.setAttribute("transform", `rotate(${turn.toFixed(1)} ${cx.toFixed(2)} ${cy.toFixed(2)})`)
 }
-const place = (eyes: (SVGEllipseElement | null)[], pair: Eye[], gaze: Gaze) => eyes.forEach((el, i) => put(el, drawn(pair[i]!, gaze)))
-const round = (eyes: (SVGEllipseElement | null)[], pair: Eye[], into: number, angle: number) => orbiting(into, angle, pair).forEach((d, i) => put(eyes[i], d))
+const place = (eyes: (SVGEllipseElement | null)[], gaze: Gaze) => eyes.forEach((el, i) => put(el, drawn(EYES[i]!, gaze)))
 
 /**
  * Moves the eyes. While `looking`: one move after another in no fixed order, each an eased turn and then a rest; frames
  * are asked for only during a turn, a rest is a timer, and a page not shown waits. Stopping eases the eyes back to rest.
- * While `lost`, whatever else: the larger eye comes to the centre and the smaller goes round it, until the page has its
- * runtime again, when it finishes its round and both return to where they rest. `only` names the one move to make, again
- * and again, in place of one after another: a move looked at on its own. `pair` is the two eyes that are moved.
+ * While `lost`, whatever else: the face looks slowly from one side to the other, until the page has its runtime again,
+ * when the eyes return to where they rest. `only` names the one move to make, again and again, in place of one after
+ * another: a move looked at on its own.
  */
-function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean, lost: boolean, only?: string, pair: Eye[] = EYES, lostAs: Lost = "orbit") {
+function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean, lost: boolean, only?: string) {
   const at = useRef<Gaze>(REST)
-  const orbit = useRef({ into: 0, angle: 0 })
 
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    // Where motion is reduced the eyes are put where they belong, with no turn.
+    // Where motion is reduced the eyes are put where they rest, with no turn.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      orbit.current = { into: lost && lostAs === "orbit" ? 1 : 0, angle: 0 }
-      at.current = lost && lostAs === "doze" ? LOST_LOOPS.doze[0]!.to : REST
+      at.current = REST
 
-      return void (orbit.current.into ? round(eyes.current, pair, 1, 0) : place(eyes.current, pair, at.current))
+      return void place(eyes.current, REST)
     }
 
     let frame = 0
@@ -51,9 +49,11 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
         const t = Math.min(1, (now - began) / ms)
 
         at.current = between(from, to, eased(t))
-        place(eyes.current, pair, at.current)
-        if (t < 1) frame = requestAnimationFrame(step)
-        else then()
+        place(eyes.current, at.current)
+        if (t < 1) return void (frame = requestAnimationFrame(step))
+        // A head that went round is where it was: said so, the next turn takes the short way.
+        at.current = settled(at.current)
+        then()
       }
 
       frame = requestAnimationFrame(step)
@@ -74,150 +74,61 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
       last = name
       go(0)
     }
-    const look = () => {
-      if (looking) timer = window.setTimeout(move, 300)
-      // Wherever a turn was cut, the eyes settle from there: nothing jumps.
-      else if (at.current !== REST) turn(REST, 900, () => (at.current = REST))
-    }
-    // Into the orbit from wherever the eyes are, then round and round.
-    const circle = () => {
-      const from = orbit.current.into
-      const began = performance.now()
-      let before = began
-      const step = (now: number) => {
-        const t = Math.min(1, (now - began) / 500)
+    // Lost: from one side to the other, again and again.
+    const search = (i: number) => {
+      if (stopped) return
 
-        orbit.current.into = from + (1 - from) * eased(t)
-        if (!document.hidden) orbit.current.angle += ((now - before) / ORBIT_MS) * 2 * Math.PI * orbit.current.into
-        before = now
-        round(eyes.current, pair, orbit.current.into, orbit.current.angle)
-        frame = requestAnimationFrame(step)
-      }
+      const { to, turn: ms, hold } = SEARCH[i % SEARCH.length]!
 
-      frame = requestAnimationFrame(step)
-    }
-    // Out of it: the smaller eye finishes its round as both go back to where they rest.
-    const land = (then: () => void) => {
-      const { into, angle } = orbit.current
-      const end = Math.ceil(angle / (2 * Math.PI)) * 2 * Math.PI
-      const began = performance.now()
-      const step = (now: number) => {
-        const t = eased(Math.min(1, (now - began) / 700))
-
-        orbit.current = { into: into * (1 - t), angle: angle + (end - angle) * t }
-        round(eyes.current, pair, orbit.current.into, orbit.current.angle)
-        if (t < 1) return void (frame = requestAnimationFrame(step))
-        orbit.current = { into: 0, angle: 0 }
-        then()
-      }
-
-      frame = requestAnimationFrame(step)
+      turn(to, ms, () => (timer = window.setTimeout(() => search(i + 1), hold)))
     }
 
-    // Lost in another way than the orbit: its gazes one after another, round again; fading in turn is the stylesheet's.
-    const loop = (i: number) => {
-      if (stopped || lostAs === "orbit" || lostAs === "pulse") return
-
-      const steps = LOST_LOOPS[lostAs]
-      const { to, turn: ms, hold } = steps[i % steps.length]!
-
-      turn(to, ms, () => (timer = window.setTimeout(() => loop(i + 1), hold)))
+    if (lost) search(0)
+    else if (looking) timer = window.setTimeout(move, 300)
+    // Wherever a turn was cut, the eyes settle from there, the short way: nothing jumps.
+    else if (at.current !== REST) {
+      at.current = settled(at.current)
+      turn(REST, 900, () => (at.current = REST))
     }
-
-    if (lost && lostAs !== "orbit") {
-      if (lostAs === "pulse") {
-        if (at.current !== REST) turn(REST, 400, () => (at.current = REST))
-      } else loop(0)
-    } else if (lost) {
-      // A gaze is left where it is: the orbit starts from rest, which a cut turn is brought to first.
-      if (at.current !== REST) turn(REST, 250, () => ((at.current = REST), circle()))
-      else circle()
-    } else if (orbit.current.into > 0) land(look)
-    else look()
 
     return () => {
       stopped = true
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [eyes, looking, lost, only, pair, lostAs])
+  }, [eyes, looking, lost, only])
 }
 
 /**
- * The eyes alone, in the current colour; `looking` has them look about, or make the one `move` named again and again; `lost`
- * reddens the larger and sends the smaller round it, or, by `lostAs`, says the loss another way (gaze.ts). `pair` is the two eyes, the brand's by default: another pair is a variant
- * of the mark being tried, and must be the same array from one render to the next.
+ * The eyes alone, in the current colour; `looking` has them look about, or make the one `move` named again and again;
+ * `lost` dims them and has them look from side to side.
  */
-export function Eyes({
-  looking = false,
-  lost = false,
-  move,
-  pair = EYES,
-  lostAs = "orbit",
-  className,
-}: {
-  looking?: boolean
-  lost?: boolean
-  move?: string
-  pair?: Eye[]
-  lostAs?: Lost
-  className?: string
-}) {
+export function Eyes({ looking = false, lost = false, move, className }: { looking?: boolean; lost?: boolean; move?: string; className?: string }) {
   const eyes = useRef<(SVGEllipseElement | null)[]>([])
 
-  useGaze(eyes, looking, lost, move, pair, lostAs)
+  useGaze(eyes, looking, lost, move)
 
   return (
     <svg viewBox="0 0 100 100" aria-hidden className={cn("overflow-visible", className)}>
-      <g className="fill-current">
-        {pair.map((eye, i) => {
+      <g className={cn("fill-current transition-opacity duration-300 motion-reduce:transition-none", lost && "opacity-60")}>
+        {EYES.map((eye, i) => {
           const { cx, cy, rx, ry } = drawn(eye, REST)
 
-          return (
-            <ellipse
-              key={i}
-              ref={(el) => void (eyes.current[i] = el)}
-              cx={cx}
-              cy={cy}
-              rx={rx}
-              ry={ry}
-              style={lost && lostAs === "pulse" ? { animationDelay: `${i * 600}ms` } : undefined}
-              className={cn(
-                "transition-[fill,opacity] duration-300 motion-reduce:transition-none",
-                lost && lostAs === "orbit" && i === 0 && "fill-destructive",
-                lost && lostAs !== "orbit" && "opacity-60",
-                lost && lostAs === "pulse" && "animate-[pulse_1.2s_ease-in-out_infinite] motion-reduce:animate-none"
-              )}
-            />
-          )
+          return <ellipse key={i} ref={(el) => void (eyes.current[i] = el)} cx={cx} cy={cy} rx={rx} ry={ry} />
         })}
       </g>
     </svg>
   )
 }
 
-/** The mark with the agent's standing on it; `animate` false keeps it still, the work shown by its tint alone; `move` and `pair` as the eyes'. */
-export function Logo({
-  standing,
-  animate = true,
-  lost = false,
-  move,
-  pair,
-  lostAs,
-}: {
-  standing: Standing
-  animate?: boolean
-  lost?: boolean
-  move?: string
-  pair?: Eye[]
-  lostAs?: Lost
-}) {
+/** The mark with the agent's standing on it; `animate` false keeps it still, the work shown by its tint alone; `move` as the eyes'. */
+export function Logo({ standing, animate = true, lost = false, move }: { standing: Standing; animate?: boolean; lost?: boolean; move?: string }) {
   // A page that lost its runtime knows nothing of the turn: the mark says the loss, and nothing else, until it is back.
   const working = standing.state === "working" && !lost
 
   return (
     <span data-turn={lost ? "lost" : standing.state} data-animate={animate || undefined} className="relative grid size-[22px] place-items-center">
-      <Eyes looking={working && animate} lost={lost} move={move} {...(pair && { pair })} {...(lostAs && { lostAs })} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
+      <Eyes looking={working && animate} lost={lost} move={move} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
     </span>
   )
 }

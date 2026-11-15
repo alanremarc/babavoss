@@ -1,10 +1,9 @@
 // The mark's specimens: home's tab in each standing, at the strip's size and enlarged so its motion can be judged, side
-// by side and live; its moves, one at a time or one after another as while the agent works; and variants of the eyes
-// being tried, each in the standings that move, beside the brand's.
-import { useState, type ComponentType, type ReactNode } from "react"
+// by side and live; and its moves, one at a time or one after another as while the agent works.
+import { useState, type ComponentType } from "react"
 import { HomeTab } from "babavoss/shell/ui/home.tsx"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
-import { EYES, MOVES, type Eye, type Lost } from "babavoss/shell/ui/gaze.ts"
+import { MOVES } from "babavoss/shell/ui/gaze.ts"
 import { standingOf, type Standing } from "babavoss/shell/ui/turn.ts"
 import { WorkbenchSegments } from "babavoss/kit/index.ts"
 import type { EntryOf } from "../src/catalogue.ts"
@@ -81,75 +80,4 @@ function Moves() {
   )
 }
 
-/**
- * The lens pair: two eyes of one size, 18, the same angle either side of the sphere's front, under a lens that stays at
- * the mark's middle. The face rests turned a quarter of a radian to the right, so its eyes rest to the right of the
- * middle: the left one near it, whole and round, the right one towards the edge, smaller and narrower.
- */
-const HALF = 0.28
-const LENS: Eye[] = [-1, 1].map((side) => ({ x: 50 + 70 * Math.sin(side * HALF), r: 18, lens: 2.2, yaw: 0.25 }))
-
-/** Pairs of eyes being tried, the brand's first to compare with. Each is a constant: the mark takes a new array for a new pair. */
-const VARIANTS: { label: string; about: string; pair: Eye[]; losts: readonly Lost[] }[] = [
-  { label: "brand", about: "two circles, 18 and 12.7, 7 apart", pair: EYES, losts: ["orbit"] },
-  { label: "lens", about: "two eyes of 18 on the sphere, resting to the right of a lens at the middle", pair: LENS, losts: ["search"] },
-]
-const STILL = standingOf({ agent: "idle", waiting: 0 })
-const WORKING = standingOf({ agent: "working", waiting: 0 })
-const LOST = standingOf(undefined)
-
-/** The mark on the strip's ground, at the strip's size or enlarged; the ground keeps its shape however narrow its place. */
-const Ground = ({ zoom = 1, title, children }: { zoom?: number; title?: string; children: ReactNode }) => (
-  <span title={title} className="grid size-7 shrink-0 place-items-center rounded-full bg-sidebar" style={{ zoom }}>
-    {children}
-  </span>
-)
-
-function Variants() {
-  return (
-    <div className="flex flex-col gap-4">
-      {VARIANTS.map((v) => (
-        <div key={v.label} className="flex flex-col gap-1.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-foreground">{v.label}</span>
-            <span className="text-meta text-muted-foreground">{v.about}</span>
-          </div>
-          <States min={190}>
-            <State label="strip" className="justify-center gap-3">
-              <Ground title="still">
-                <Logo standing={STILL} pair={v.pair} />
-              </Ground>
-              <Ground title="working">
-                <Logo standing={WORKING} pair={v.pair} />
-              </Ground>
-              {v.losts.map((lostAs) => (
-                <Ground key={lostAs} title={`lost: ${lostAs}`}>
-                  <Logo standing={LOST} pair={v.pair} lost lostAs={lostAs} />
-                </Ground>
-              ))}
-            </State>
-            <State label={`still, ×${LARGE}`} className="justify-center p-4">
-              <Ground zoom={LARGE}>
-                <Logo standing={STILL} pair={v.pair} />
-              </Ground>
-            </State>
-            <State label={`working, ×${LARGE}`} className="justify-center p-4">
-              <Ground zoom={LARGE}>
-                <Logo standing={WORKING} pair={v.pair} />
-              </Ground>
-            </State>
-            {v.losts.map((lostAs) => (
-              <State key={lostAs} label={`lost: ${lostAs}, ×${LARGE}`} className="justify-center p-4">
-                <Ground zoom={LARGE}>
-                  <Logo standing={LOST} pair={v.pair} lost lostAs={lostAs} />
-                </Ground>
-              </State>
-            ))}
-          </States>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export const mark: Record<EntryOf<"mark">, ComponentType> = { states: States_, moves: Moves, variants: Variants }
+export const mark: Record<EntryOf<"mark">, ComponentType> = { states: States_, moves: Moves }

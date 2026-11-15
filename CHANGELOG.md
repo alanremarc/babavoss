@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.55.0
+
+- The mark is redrawn: two eyes of one size on the sphere, under a lens that stays at its middle. The head rests turned to the right, so at rest the left eye, near the middle, is whole and round and the right one smaller and narrower; as the head turns, an eye grows towards the middle and shrinks towards the edge. The two circles of unequal size are gone.
+- While the agent works the head may also spin once round, a move named spin.
+- A page that lost its runtime dims the eyes and has them look slowly from one side to the other. The red eye and the eye going round it are gone, with `orbiting` and `ORBIT_MS`; `Logo` and `Eyes` no longer take `pair` or `lostAs`, an eye no `lens`, `yaw` or `lid`. Nothing to adapt in a project.
+
 ## 0.54.3
 
 - An eye of the mark has no `dx`: a lens stays at the mark's middle, and a face that rests turned rests its eyes to one side of it. Only this repository's Design Guide used it. Nothing to adapt.
