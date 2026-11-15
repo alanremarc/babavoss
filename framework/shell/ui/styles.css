@@ -1,5 +1,5 @@
-/* The shell's page: the kit's design language, with the shell's own classes scanned. */
+/* The shell's page: the kit's design language, with the shell's own classes scanned, and its own surfaces'. */
 @import "../../kit/styles.css";
 
 @source ".";
-
+@source "../settings";

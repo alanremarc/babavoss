@@ -73,7 +73,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
 
 export function Shell({ surfaces: project }: { surfaces: Registry }) {
   const surfaces = useMemo(() => ({ ...project, ...OWN }), [project])
-  const settings = useSettings()
+  const { settings, again: settingsAgain } = useSettings()
   const [root, setRoot] = useState<RootView>()
   const [error, setError] = useState("")
   const [connected, setConnected] = useState(false)
@@ -102,6 +102,9 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     [listeners]
   )
   const rows = root?.tabs ?? []
+  const settingsOpen = useRef(false)
+
+  settingsOpen.current = rows.some((r) => r.surface === "settings")
   const active = at.key === HOME || rows.some((r) => r.at === at.key) ? at.key : HOME
   // The tab shown before home, which home returns to.
   const [shown, setShown] = useState<string>()
@@ -148,6 +151,8 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     return changes(
       () => {
         void load()
+        // A settings tab of this session may have changed them, also while it is not shown: they are read again.
+        if (settingsOpen.current) settingsAgain()
         for (const fn of listeners) fn()
       },
       (connected) => {
@@ -160,7 +165,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
       },
       setTurn
     )
-  }, [listeners, hearers])
+  }, [listeners, hearers, settingsAgain])
 
   useEffect(() => {
     document.title = root?.title ?? "babavoss"
