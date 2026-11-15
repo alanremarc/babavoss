@@ -2,7 +2,7 @@
 // the person's alone, attention while they are waited for, a notice when a task moves, and a path per task. A task in
 // review carries its asks in the list too, so the person decides from the list; the agent is never offered them. The
 // list is ordered by what is to be done: in review first, then to do, then done, so an approval moves a row.
-import { action, surface, view, type Update } from "babavoss/core/index.ts"
+import { action, detail, surface, view, type Update } from "babavoss/core/index.ts"
 
 export type Task = { n: number; title: string; status: "todo" | "review" | "done"; note?: string }
 export type Model = { tasks: Task[]; next: number }
@@ -15,7 +15,7 @@ const moved = (m: Model, n: number, status: Task["status"], what: string): Resul
 }
 
 const ORDER: Record<Task["status"], number> = { review: 0, todo: 1, done: 2 }
-/** A task as / lists it. What is detail is the done tasks' rows: the place to mark them so is this function. */
+/** A task as / lists it; a done one is detail there, counted at / and read whole at the tab's path. */
 const row = (t: Task) => ({
   at: `/tasks/${t.n}`,
   n: t.n,
@@ -70,7 +70,7 @@ const pages = view([add, done, approve, reopen, annotate], {
     return {
       title: "Tasks",
       how: "Add what the person asks for and mark a task done when it is; they approve it on the page.",
-      tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map(row),
+      tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
       ...(review.length && { attention: { who: "person", why: `to review ${review.length === 1 ? `task ${review[0]!.n}` : `${review.length} tasks`}` } }),
       add: add.bind({}),
     }
