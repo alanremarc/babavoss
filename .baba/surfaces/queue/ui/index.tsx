@@ -171,7 +171,7 @@ function Stack({ root, groups, picked, colorOf, go }: { root: Root; groups: Grou
                     className="hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none"
                   >
                     <Mark status={issue.status} color={colorOf(issue.narrative)} />
-                    <span className="text-muted-foreground/70 shrink-0 text-meta tabular-nums">#{issue.n}</span>
+                    <span className="text-muted-foreground/70 w-7 shrink-0 text-meta tabular-nums">#{issue.n}</span>
                     <span className={`min-w-0 flex-1 truncate ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}>{issue.title}</span>
                     {issue.lane && <Lane lane={issue.lane} />}
                   </button>
