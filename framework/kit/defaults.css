@@ -20,12 +20,12 @@
               destructive                  errors and what cannot be undone
               success, warning, info       states: done or passing, needs attention, neutral news
               border, input, ring          lines, field outlines, the focus ring
-              sidebar                      the frame's chrome: menu bar, side panels, the tab strip
+              sidebar                      the shell's chrome: the tab strip, side panels
               chart-1 … chart-5            series in a chart, in order
    type       badge 9px, meta 11px, body 12px (the frame's default), large 13px; Tailwind's sm and up for headings
    font       sans (Inter), heading, mono
    radius     sm, md, lg (= --radius), xl, 2xl, 3xl, 4xl
-   frame      menubar, bar, row: heights of the menu bar, every bar below it, a row or an icon button;
+   frame      menubar, bar, row: heights of a compact header, a bar, a row or an icon button;
               icon, rail-icon, glyph: icon sizes; spacing is Tailwind's, at 0.25rem a step */
 @theme {
   --spacing-menubar: 1.75rem;

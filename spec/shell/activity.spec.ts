@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test"
 import { action, story, surface, view, type Call, type Update } from "../../framework/core/index.ts"
 import { KEPT, PAGE, linesOf, lookAt, record, restored, said, seenFrom, seeUpto, unseenOf, type Entry, type Line } from "../../framework/shell/src/activity.ts"
 import { shell, type ShellModel } from "../../framework/shell/src/surface.ts"
-import { badgeOf, entryOf, groupOf, groupsOf, inView, type Row } from "../../framework/shell/ui/notifications.tsx"
+import { badgeOf, entryOf, groupOf, groupsOf, inView, unseenRows, type Row } from "../../framework/shell/ui/notifications.tsx"
 
 type Model = { n: number }
 type Event = { kind: "rang" }
@@ -329,7 +329,14 @@ describe("the notifications panel", () => {
     expect(inView(rows, "all", "all", "person").map((r) => r.n)).toEqual([3])
   })
 
-  it("counts a toast on the button once it has gone into it, and nothing while the panel is open", () => {
+  it("takes as unseen the newest notices others caused, as many as the shell counts, which dot where they are", () => {
+    const rows = [row(5, at(1), "person"), row(4, at(1), "surface"), row(3, at(1)), row(2, at(1))]
+
+    expect(unseenRows(rows, 2).map((r) => r.n)).toEqual([4, 3])
+    expect(unseenRows(rows, 0)).toEqual([])
+  })
+
+  it("counts a toast on the button once it has gone into it, and nothing while the drawer is open", () => {
     expect(badgeOf(3, 1, false)).toBe(2)
     expect(badgeOf(0, 2, false)).toBe(0)
     expect(badgeOf(3, 0, true)).toBe(0)

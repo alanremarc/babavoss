@@ -1,4 +1,5 @@
-// A surface's component runs inside a tab: it knows its address, its route within, and reads, calls and watches below its address.
+// A surface's component runs inside a tab, the home of one instance of the surface with its own state: it knows its
+// address, its route within, and reads, calls and watches below its address.
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { Args, View } from "../../core/index.ts"
 import { call as callDoor, read as readDoor, type Answer } from "./client.ts"
@@ -37,50 +38,61 @@ export const ChangesContext = createContext<{ subscribe: (fn: () => void) => () 
   connected: () => false,
 })
 
-export function TabProvider({ address, surface, route, active, navigate, children }: Omit<TabContext, "read" | "call" | "live"> & { children?: ReactNode }) {
-  const { subscribe, connected } = useContext(ChangesContext)
-  const value = useMemo<TabContext>(() => {
-    const full = (path: string) => {
-      if (!path.startsWith("/") || path.includes("?") || path.includes("#")) throw new Error("Tab paths start with / and carry no query or fragment")
+/** A tab's way to its views and actions, below its address: what its context gives, and what its menu in the strip reads by. */
+export type Door = Pick<TabContext, "read" | "call" | "live">
 
-      return address + (path === "/" ? "" : path)
-    }
+export function doorOf(address: string, { subscribe, connected }: { subscribe: (fn: () => void) => () => void; connected: () => boolean }): Door {
+  const full = (path: string) => {
+    if (!path.startsWith("/") || path.includes("?") || path.includes("#")) throw new Error("Tab paths start with / and carry no query or fragment")
 
-    return {
-      address,
-      surface,
-      route,
-      active,
-      navigate,
-      read: async (path = "/") => own(await readDoor(full(path)), address) as never,
-      call: async (path, handle, args) => own(await callDoor(full(path), handle, args), address) as never,
-      live: (path, onView, onError, onConnected) => {
-        let stopped = false
-        const load = () =>
-          readDoor(full(path)).then(
-            (view) => {
-              if (!stopped) onView(own(view, address) as never)
-            },
-            (error: unknown) => {
-              if (!stopped) onError?.(error instanceof Error ? error.message : String(error))
-            }
-          )
+    return address + (path === "/" ? "" : path)
+  }
 
-        void load()
+  return {
+    read: async (path = "/") => own(await readDoor(full(path)), address) as never,
+    call: async (path, handle, args) => own(await callDoor(full(path), handle, args), address) as never,
+    live: (path, onView, onError, onConnected) => {
+      let stopped = false
+      const load = () =>
+        readDoor(full(path)).then(
+          (view) => {
+            if (!stopped) onView(own(view, address) as never)
+          },
+          (error: unknown) => {
+            if (!stopped) onError?.(error instanceof Error ? error.message : String(error))
+          }
+        )
+
+      void load()
+      onConnected?.(connected())
+
+      const off = subscribe(() => {
         onConnected?.(connected())
+        void load()
+      })
 
-        const off = subscribe(() => {
-          onConnected?.(connected())
-          void load()
-        })
+      return () => {
+        stopped = true
+        off()
+      }
+    },
+  }
+}
 
-        return () => {
-          stopped = true
-          off()
-        }
-      },
-    }
-  }, [address, surface, route, active, navigate, subscribe, connected])
+/** `reload`: a number the shell raises to have every view of the tab read again, as its menu's Reload does. */
+export function TabProvider({
+  address,
+  surface,
+  route,
+  active,
+  navigate,
+  reload = 0,
+  children,
+}: Omit<TabContext, "read" | "call" | "live"> & { reload?: number; children?: ReactNode }) {
+  const changes = useContext(ChangesContext)
+  // A new door on every reload, so every live read of the tab starts again.
+  const door = useMemo(() => doorOf(address, changes), [address, changes, reload])
+  const value = useMemo<TabContext>(() => ({ address, surface, route, active, navigate, ...door }), [address, surface, route, active, navigate, door])
 
   // The tab's own element, named by its surface: a surface's stylesheet is scoped to it, so it styles its tab alone.
   return (

@@ -1,16 +1,17 @@
 // Home: the shell's first tab, at /, and what the page shows where no tab is. It is the palette, filling the page under
 // the strip: a search focused at once, then the commands of the tab shown before home, the surfaces to open, the open tabs
-// to switch to, and the page's own. Typing filters them all; arrows and Enter choose. Escape clears what is typed, then
+// to switch to, and the page's own, among them ending the person's move while their changes wait. Typing filters them all; arrows and Enter choose. Escape clears what is typed, then
 // returns to the tab shown before. ⌘K or Ctrl+K goes home from anywhere, and from home back. A surface that does not load
 // is listed, broken, and cannot be opened. Its footer says whose page it is, and when a later babavoss is out.
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { cn } from "cn"
 import type { Handle } from "../../core/index.ts"
-import { BoxIcon, PanelTopIcon, PlusIcon, SettingsIcon } from "lucide-react"
-import { menubar, menubarCommand } from "./appearance.ts"
+import { BoxIcon, SendIcon, SettingsIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { named, type Command as TabCommand } from "./commands.ts"
-import type { Frames } from "./frame.tsx"
+import type { TabCommands } from "./actions.tsx"
+import { Logo } from "./mark.tsx"
+import type { Standing as TurnStanding } from "./turn.ts"
 import { choices, type SurfaceEntry } from "./home.ts"
 import { HOME } from "./pointing.ts"
 import { standing, type TabNeed } from "./tabs.tsx"
@@ -47,8 +48,8 @@ export function useHomeKey(go: () => void) {
   }, [])
 }
 
-/** Home's place in the strip, first: a tab like the others, selected while home is shown. */
-export function HomeTab({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+/** Home's place in the strip, first: a tab like the others, selected while home is shown, the mark that says whose move it is. */
+export function HomeTab({ active, standing, onSelect }: { active: boolean; standing: TurnStanding; onSelect: () => void }) {
   return (
     <button
       type="button"
@@ -56,14 +57,14 @@ export function HomeTab({ active, onSelect }: { active: boolean; onSelect: () =>
       id={`tab-${HOME}`}
       aria-selected={active}
       aria-controls={`content-${HOME}`}
-      aria-label="Home"
-      title={`Home: open, switch to or run (${keys})`}
+      aria-label={`Home. ${standing.said}`}
+      title={`Home: open, switch to or run (${keys})\n${standing.said}`}
       tabIndex={active ? 0 : -1}
       data-active={active || undefined}
       className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-foreground/11 data-[active]:text-foreground"
       onClick={onSelect}
     >
-      <PlusIcon className="size-4" aria-hidden />
+      <Logo standing={standing} />
     </button>
   )
 }
@@ -77,7 +78,9 @@ type Props = {
   tabs: TabEntry[]
   /** The tab shown before home, which Escape returns to and whose commands come first. */
   back?: TabEntry
-  frames: Frames
+  commands: TabCommands
+  /** Ending the person's move, while their changes wait for the agent: `run` says what it did. */
+  end?: { drivable: boolean; run: () => Promise<string> }
   disabled: boolean
   loading: boolean
   launch: (open: Handle) => void
@@ -87,11 +90,13 @@ type Props = {
 }
 
 /** Home's page: the root's title, the palette, and whose page it is at the bottom. */
-export function Home({ title, notice, surfaces, icons, tabs, back, frames, disabled, loading, launch, select, settings, leave }: Props) {
+export function Home({ title, notice, surfaces, icons, tabs, back, commands, end, disabled, loading, launch, select, settings, leave }: Props) {
   const [search, setSearch] = useState("")
-  const bar = useSyncExternalStore(menubar.subscribe, menubar.get)
-  const barCommand = menubarCommand(bar, mac)
+  const [ended, setEnded] = useState<string>()
   const offered = choices(surfaces)
+
+  // What ending the move last did is said until the turn moves on.
+  useEffect(() => setEnded(undefined), [end?.drivable, !end])
 
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-4 pt-[max(16px,10vh)] pb-3 text-body" aria-label="Home">
@@ -112,7 +117,7 @@ export function Home({ title, notice, surfaces, icons, tabs, back, frames, disab
           <CommandInput autoFocus aria-label="Run, open or switch to" placeholder="Run, open or switch to…" value={search} onValueChange={setSearch} />
           <CommandList className="max-h-none">
             <CommandEmpty>{loading ? "Loading…" : "Nothing found."}</CommandEmpty>
-            {back && <BackCommands frames={frames} tab={back} select={select} />}
+            {back && <BackCommands commands={commands} tab={back} select={select} />}
             {offered.length > 0 && (
               <CommandGroup heading="Open">
                 {offered.map((u) => {
@@ -159,13 +164,15 @@ export function Home({ title, notice, surfaces, icons, tabs, back, frames, disab
                 </Glyph>
                 Settings
               </CommandItem>
-              <CommandItem value="menubar" keywords={[barCommand.label, "menu bar", "header"]} onSelect={() => menubar.set(!bar)}>
-                <Glyph>
-                  <PanelTopIcon aria-hidden />
-                </Glyph>
-                {barCommand.label}
-                <CommandShortcut>{barCommand.keys}</CommandShortcut>
-              </CommandItem>
+              {end && (
+                <CommandItem value="end move" keywords={["end my move", "agent", "turn", "changes"]} onSelect={() => void end.run().then(setEnded)}>
+                  <Glyph>
+                    <SendIcon aria-hidden />
+                  </Glyph>
+                  {end.drivable ? "End my move" : "Copy the message that ends my move"}
+                  <span className="min-w-0 flex-1 truncate pl-1.5">{ended ?? (end.drivable ? "start the agent's turn with your changes" : "nothing here can start the agent's turn")}</span>
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
@@ -178,12 +185,12 @@ export function Home({ title, notice, surfaces, icons, tabs, back, frames, disab
 }
 
 /**
- * The commands of the tab shown before home, as its frame gives them, under the tab's name: what waits on the person
- * first. Its frame stays live while home is shown, so they are current. A command goes back to its tab, then runs, so
+ * The commands of the tab shown before home, as its actions give them, under the tab's name: what waits on the person
+ * first. Its actions stay live while home is shown, so they are current. A command goes back to its tab, then runs, so
  * what it opens, such as its prompt, opens there.
  */
-function BackCommands({ frames, tab, select }: { frames: Frames; tab: TabEntry; select: (at: string) => void }) {
-  const commands = useSyncExternalStore(frames.subscribe, () => frames.get(tab.at)) ?? []
+function BackCommands({ commands: store, tab, select }: { commands: TabCommands; tab: TabEntry; select: (at: string) => void }) {
+  const commands = useSyncExternalStore(store.subscribe, () => store.get(tab.at)) ?? []
   const own = new Set([tab.label, named(tab.surface)])
   const list = [...commands.filter((c) => c.ask), ...commands.filter((c) => !c.ask)]
   const choose = (command: TabCommand) => {
@@ -227,7 +234,7 @@ function Standing({ tab, previous }: { tab: TabEntry; previous: boolean }) {
       )}
     >
       {first !== undefined && (
-        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", tab.broken !== undefined ? "bg-destructive" : person ? "bg-warning" : "bg-muted-foreground/70")} />
+        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", tab.broken !== undefined ? "bg-destructive" : person ? "bg-primary" : "bg-muted-foreground/70")} />
       )}
       <span className="truncate">{first ?? (previous ? "previous" : `${tab.surface} ${tab.n}`)}</span>
     </span>

@@ -1,10 +1,13 @@
-// The strip, the page's header: home's "+", then the open tabs as pills that scroll when they overflow, and at its right
-// what the shell puts there; and a tab's panel.
-// A pill is marked by what stands in its tab: broken, needing the person, plainly; needing the agent, quietly; and why, as
-// its tooltip. A tab the agent opened is marked until looked at. At its right stands what is the session's, not a tab's.
+// The strip, the page's header: home, the babavoss mark, then the open tabs as pills that scroll when they overflow, and
+// at its right what the shell puts there; and a tab's panel. A tab is the home of one instance of a surface, with its own
+// state. A pill is its icon and its title; over it, or focused, the icon gives way to dots that open the tab's menu, as a
+// right click or the context-menu key does. A pill is marked by what stands in its tab: broken, plainly; something that
+// waits on the person, by one dot: needing them, an ask, a notice they have not seen, or a tab the agent opened that they
+// have not looked at; needing the agent, quietly; and why, as its tooltip. At its right stands what is the session's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
-import { XIcon } from "lucide-react"
+import { EllipsisIcon } from "lucide-react"
+import { MenuDropdown } from "../../kit/layouts/menu.tsx"
 import { tabScrollOffset } from "./tab-scroll"
 
 const contentId = (key: string) => `content-${key.replaceAll("/", "-")}`
@@ -13,27 +16,58 @@ const fadeEnd = "mask-r-from-[calc(100%-32px)]"
 
 /** Who a tab needs, and why. */
 export type TabNeed = { who: "person" | "agent"; why: string }
-type TabItem = { id: string; label: string; icon: ReactNode; unseen?: boolean; needs?: TabNeed[]; broken?: string; onClose?: () => void }
+/**
+ * A pill: `waits` where an ask or a notice in it waits on the person; `menu` the tab's menu, made as it opens and given
+ * the way to close it; `onClose` closes the tab, as a middle click does.
+ */
+type TabItem = {
+  id: string
+  label: string
+  icon: ReactNode
+  unseen?: boolean
+  waits?: boolean
+  needs?: TabNeed[]
+  broken?: string
+  menu?: (close: () => void) => ReactNode
+  onClose?: () => void
+}
 
 /** What the pill says beyond its label, one line each: why it is broken, who it needs and why. */
 export const standing = ({ needs = [], broken }: Pick<TabItem, "needs" | "broken">): string[] => [
   ...(broken !== undefined ? [`Broken: ${broken}`] : []),
   ...needs.map((n) => `${n.who === "person" ? "Needs you" : "Needs the agent"}: ${n.why}`),
 ]
-/** The mark in the pill's corner, the strongest first: broken, needing the person, new, needing the agent. */
+/** The mark in the pill's corner, the strongest first: broken; the one dot of what waits on the person; needing the agent. */
 const MARK = {
   broken: "size-2 bg-destructive",
-  person: "size-2 bg-warning",
-  unseen: "size-1.5 bg-primary",
+  person: "size-1.5 bg-primary",
   agent: "size-1.5 bg-muted-foreground/70",
 }
-const markOf = ({ needs = [], broken, unseen }: Pick<TabItem, "needs" | "broken" | "unseen">): keyof typeof MARK | undefined =>
-  broken !== undefined ? "broken" : needs.some((n) => n.who === "person") ? "person" : unseen ? "unseen" : needs.length ? "agent" : undefined
+export const markOf = ({ needs = [], broken, unseen, waits }: Pick<TabItem, "needs" | "broken" | "unseen" | "waits">): keyof typeof MARK | undefined =>
+  broken !== undefined ? "broken" : waits || unseen || needs.some((n) => n.who === "person") ? "person" : needs.length ? "agent" : undefined
 
 const pillMotion = "transition-[scale,opacity] duration-[200ms,100ms] ease-[cubic-bezier(.3,1.6,.4,1),ease] motion-reduce:transition-none"
 
-function Tab({ label, icon, unseen, needs, broken, active, focusable, id, onSelect, onClose }: { active: boolean; focusable: boolean; onSelect: () => void } & TabItem) {
-  const mark = markOf({ needs, broken, unseen })
+/** What opens a tab's menu from the keyboard, on the tab: the context-menu key, or Shift+F10. */
+export const opensMenu = (e: { key: string; shiftKey: boolean }) => e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)
+
+function Tab({
+  label,
+  icon,
+  unseen,
+  waits,
+  needs,
+  broken,
+  menu,
+  active,
+  focusable,
+  id,
+  onSelect,
+  onClose,
+}: { active: boolean; focusable: boolean; onSelect: () => void } & TabItem) {
+  const mark = markOf({ needs, broken, unseen, waits })
+  const [open, setOpen] = useState(false)
+  const tab = useRef<HTMLButtonElement>(null)
   const said = standing({ needs, broken })
   const labelRef = useRef<HTMLSpanElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
@@ -91,9 +125,15 @@ function Tab({ label, icon, unseen, needs, broken, active, focusable, id, onSele
       className={cn(
         "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
         unseen && "animate-in duration-300 fade-in-0 zoom-in-90 motion-reduce:animate-none",
-        mark === "person" && "bg-warning/12 text-foreground ring-1 ring-warning/50 ring-inset"
+        open && "bg-foreground/6 text-foreground"
       )}
       data-active={active || undefined}
+      data-menu={open || undefined}
+      onContextMenu={(e) => {
+        if (!menu) return
+        e.preventDefault()
+        setOpen(true)
+      }}
       onMouseEnter={() => setEngaged(true)}
       onMouseLeave={(event) => {
         setEngaged(!!event.currentTarget.querySelector(":focus-visible"))
@@ -120,7 +160,13 @@ function Tab({ label, icon, unseen, needs, broken, active, focusable, id, onSele
         id={tabId(id)}
         aria-selected={active}
         aria-controls={contentId(id)}
+        ref={tab}
         tabIndex={focusable ? 0 : -1}
+        onKeyDown={(e) => {
+          if (!menu || !opensMenu(e)) return
+          e.preventDefault()
+          setOpen(true)
+        }}
         className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onSelect}
         title={[label, ...said].join("\n")}
@@ -145,27 +191,40 @@ function Tab({ label, icon, unseen, needs, broken, active, focusable, id, onSele
           className={cn(
             "pointer-events-none absolute left-[3px] grid size-[22px] place-items-center",
             pillMotion,
-            onClose &&
-              "group-hover/pill:scale-50 group-hover/pill:opacity-0 group-has-[:focus-visible]/pill:scale-50 group-has-[:focus-visible]/pill:opacity-0 [@media(hover:none)]:opacity-0"
+            menu &&
+              "group-hover/pill:scale-50 group-hover/pill:opacity-0 group-has-[:focus-visible]/pill:scale-50 group-has-[:focus-visible]/pill:opacity-0 group-data-[menu]/pill:scale-50 group-data-[menu]/pill:opacity-0 [@media(hover:none)]:opacity-0"
           )}
         >
           {icon}
           {mark && <span aria-hidden data-mark={mark} className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
         </span>
       </button>
-      {onClose && (
-        <button
-          type="button"
-          className={cn(
-            "pointer-events-none absolute top-[3px] left-[3px] grid size-[22px] scale-50 cursor-pointer place-items-center rounded-full text-foreground opacity-0 outline-none group-hover/pill:pointer-events-auto group-hover/pill:scale-100 group-hover/pill:opacity-100 group-has-[:focus-visible]/pill:pointer-events-auto group-has-[:focus-visible]/pill:scale-100 group-has-[:focus-visible]/pill:opacity-100 hover:bg-foreground/11 focus-visible:ring-2 focus-visible:ring-ring [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100",
-            pillMotion
-          )}
-          tabIndex={focusable ? 0 : -1}
-          aria-label={`Close ${label}`}
-          onClick={onClose}
+      {menu && (
+        <MenuDropdown
+          open={open}
+          setOpen={setOpen}
+          label={`Menu for ${label}`}
+          // Focus goes back to the tab, unless what was chosen opened a modal, which keeps it.
+          closed={() => {
+            if (!document.querySelector('[role="dialog"]:not([data-slot="sheet-content"])')) tab.current?.focus()
+          }}
+          trigger={
+            <button
+              type="button"
+              className={cn(
+                "pointer-events-none absolute top-[3px] left-[3px] grid size-[22px] scale-50 cursor-pointer place-items-center rounded-full text-foreground opacity-0 outline-none group-hover/pill:pointer-events-auto group-hover/pill:scale-100 group-hover/pill:opacity-100 group-has-[:focus-visible]/pill:pointer-events-auto group-has-[:focus-visible]/pill:scale-100 group-has-[:focus-visible]/pill:opacity-100 group-data-[menu]/pill:pointer-events-auto group-data-[menu]/pill:scale-100 group-data-[menu]/pill:opacity-100 hover:bg-foreground/11 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100",
+                pillMotion
+              )}
+              tabIndex={-1}
+              aria-label={`Menu for ${label}`}
+            >
+              <EllipsisIcon aria-hidden />
+              {mark && <span aria-hidden className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
+            </button>
+          }
         >
-          <XIcon aria-hidden />
-        </button>
+          {open && menu(() => setOpen(false))}
+        </MenuDropdown>
       )}
     </div>
   )
