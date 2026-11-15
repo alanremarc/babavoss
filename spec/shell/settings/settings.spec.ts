@@ -17,8 +17,8 @@ describe("the settings a file keeps", () => {
   it("drop a binding that is a command's default, and one that clashes, so no two commands share keys", () => {
     expect(settingsOf({ keys: { home: "mod+p" } }).keys).toEqual({})
     expect(settingsOf({ keys: { previous: "mod+p" } }).keys).toEqual({})
-    expect(settingsOf({ keys: { home: "mod+k", previous: "mod+p" } }).keys).toEqual({ home: "mod+k", previous: "mod+p" })
-    expect(settingsOf({ keys: { home: "mod+k" } }).keys).toEqual({})
+    expect(settingsOf({ keys: { home: "mod+j", previous: "mod+p" } }).keys).toEqual({ home: "mod+j", previous: "mod+p" })
+    expect(settingsOf({ keys: { home: "mod+j" } }).keys).toEqual({})
   })
 
   it("resolve the system mode by what the system asks for", () => {

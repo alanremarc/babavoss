@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.50.2
+
+- The tab shortcuts' defaults are swapped: `mod+j` goes to the previous tab, the one to the left, and `mod+k` to the next, to the right. A person who bound their own keys keeps them. Nothing to adapt.
+
 ## 0.50.1
 
 - A tab's menu opens from three dots that take the icon's place only while the pointer is on the icon, no longer from a caret shown wherever the tab is hovered. A click on the icon opens the menu; a click on the rest of the tab selects it, and a right click anywhere on it still opens the menu. Nothing to adapt.

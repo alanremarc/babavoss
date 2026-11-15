@@ -22,7 +22,7 @@ describe("the settings", () => {
       title: "Settings",
       how: expect.any(String),
       appearance: { mode: "system", light: "neutral", dark: "neutral" },
-      shortcuts: { at: "/shortcuts", home: "mod+p", next: "mod+j", previous: "mod+k", menu: "shift+f10" },
+      shortcuts: { at: "/shortcuts", home: "mod+p", next: "mod+k", previous: "mod+j", menu: "shift+f10" },
       logo: { animate: true },
       mode: expect.anything(),
       theme: expect.anything(),
@@ -75,9 +75,9 @@ describe("the settings", () => {
     expect(await person.call("/shortcuts", "bind", { command: "home", keys: "mod+shift+h" })).toMatchObject({ outcome: "written" })
     expect((agent.sees("/shortcuts")!.commands as unknown[])[0]).toEqual({ command: "home", does: expect.any(String), keys: "mod+shift+h", default: "mod+p" })
     expect(agent.sees()).toMatchObject({ shortcuts: { home: "mod+shift+h" } })
-    expect(await agent.call("/shortcuts", "bind", { command: "home", keys: "mod+j" })).toEqual({
+    expect(await agent.call("/shortcuts", "bind", { command: "home", keys: "mod+k" })).toEqual({
       outcome: "refused",
-      reason: "mod+j is bound to next already: bind next to other keys first, or choose others",
+      reason: "mod+k is bound to next already: bind next to other keys first, or choose others",
     })
     expect(await agent.call("/shortcuts", "bind", { command: "home", keys: "h" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("types text") })
     expect(await agent.call("/shortcuts", "bind", { command: "jump", keys: "mod+x" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("no command jump") })
@@ -90,7 +90,7 @@ describe("the settings", () => {
     await agent.call("/shortcuts", "bind", { command: "next", keys: "mod+p" })
     expect(await agent.call("/shortcuts", "reset", { command: "home" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("bound to next now") })
     expect(await agent.call("/shortcuts", "reset", { command: "all" })).toMatchObject({ outcome: "written" })
-    expect(agent.sees()).toMatchObject({ shortcuts: { home: "mod+p", next: "mod+j" } })
+    expect(agent.sees()).toMatchObject({ shortcuts: { home: "mod+p", next: "mod+k" } })
   })
 
   it("follow the file: what it says when read is what the tab says, but never over a change of the tab's own not yet written", async () => {

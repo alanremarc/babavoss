@@ -5,8 +5,8 @@
 
 export const COMMANDS = {
   home: { does: "go home, and from home back to the tab shown before", keys: "mod+p" },
-  next: { does: "go to the next tab in the strip, after the last to home", keys: "mod+j" },
-  previous: { does: "go to the previous tab in the strip, before home to the last", keys: "mod+k" },
+  next: { does: "go to the next tab in the strip, after the last to home", keys: "mod+k" },
+  previous: { does: "go to the previous tab in the strip, before home to the last", keys: "mod+j" },
   menu: { does: "open the shown tab's menu", keys: "shift+f10" },
 } as const
 

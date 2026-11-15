@@ -14,8 +14,8 @@ const press = (code: string, held: Partial<Pressed> = {}): Pressed => ({
 })
 
 describe("the shortcuts", () => {
-  it("bind home to mod+p, the next tab to mod+j and the previous to mod+k, and the shown tab's menu to shift+f10", () => {
-    expect(bindings({})).toEqual({ home: "mod+p", next: "mod+j", previous: "mod+k", menu: "shift+f10" })
+  it("bind home to mod+p, the next tab to mod+k and the previous to mod+j, and the shown tab's menu to shift+f10", () => {
+    expect(bindings({})).toEqual({ home: "mod+p", next: "mod+k", previous: "mod+j", menu: "shift+f10" })
     expect(Object.values(COMMANDS).every((c) => c.does.length > 0)).toBe(true)
   })
 
@@ -49,8 +49,8 @@ describe("the shortcuts", () => {
 
   it("match a key pressed to its command, by the person's bindings over the defaults", () => {
     expect(commandOf(press("KeyP", { metaKey: true }), {}, true)).toBe("home")
-    expect(commandOf(press("KeyJ", { ctrlKey: true }), {}, false)).toBe("next")
-    expect(commandOf(press("KeyK", { metaKey: true }), {}, true)).toBe("previous")
+    expect(commandOf(press("KeyJ", { ctrlKey: true }), {}, false)).toBe("previous")
+    expect(commandOf(press("KeyK", { metaKey: true }), {}, true)).toBe("next")
     expect(commandOf(press("KeyP", { ctrlKey: true }), {}, true)).toBeUndefined()
     expect(commandOf(press("KeyP", { metaKey: true }), { home: "mod+shift+h" }, true)).toBeUndefined()
     expect(commandOf(press("KeyH", { metaKey: true, shiftKey: true }), { home: "mod+shift+h" }, true)).toBe("home")
@@ -58,9 +58,9 @@ describe("the shortcuts", () => {
   })
 
   it("know a clash wherever two bindings are the same keys on some platform", () => {
-    expect(clashing({}, "home", "mod+j")).toBe("next")
-    expect(clashing({}, "home", "mod+j".replace("mod", "ctrl"))).toBe("next")
-    expect(clashing({}, "next", "mod+j")).toBeUndefined()
+    expect(clashing({}, "home", "mod+k")).toBe("next")
+    expect(clashing({}, "home", "mod+k".replace("mod", "ctrl"))).toBe("next")
+    expect(clashing({}, "next", "mod+k")).toBeUndefined()
     expect(same("ctrl+p", "mod+p")).toBe(true)
     expect(same("meta+p", "ctrl+p")).toBe(false)
   })
