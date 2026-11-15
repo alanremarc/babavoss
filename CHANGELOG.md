@@ -2,6 +2,14 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.23.0
+
+- The kit's theming tokens are now one named contract, listed in `framework/kit/defaults.css` and in the "Looks" section of `skill/making-surfaces.md`. Replace literal colours, fonts and sizes in a surface's page with them: `text-badge`, `text-meta`, `text-body` and `text-large` for UI text.
+- New colour tokens `success`, `warning` and `info` are defined for every palette and mode. Use `text-success`, `bg-warning/10` and so on instead of Tailwind's palette colours.
+- Breaking: `sidebar-foreground`, `sidebar-primary`, `sidebar-primary-foreground`, `sidebar-accent`, `sidebar-accent-foreground`, `sidebar-border` and `sidebar-ring` are removed. Use `foreground`, `primary`, `muted`, `border` and `ring`; `sidebar` remains.
+- A surface may add `ui/styles.css`. The root includes it after the shell's styles, scoped to the surface's own tabs with `@scope ([data-util="NAME"])`. Set custom tokens, or override shell tokens for those tabs, on `:scope`, and do not import the file from `ui/index.tsx`. A file whose braces do not balance is left out.
+- Every tab's content is now wrapped in an element carrying `data-util="NAME"`.
+
 ## 0.22.2
 
 - The shell's strip now starts with a "+", the launcher: it opens a palette to open a surface, switch to an open tab or reach settings, filtered as you type, also on ⌘K / Ctrl+K anywhere on the page.
