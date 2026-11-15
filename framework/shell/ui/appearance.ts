@@ -43,8 +43,8 @@ export function useSystemDark(): boolean {
   return dark
 }
 
-/** The person's settings, kept current, with the appearance applied to the page; and how to read them again. */
-export function useSettings(): { settings: Settings; again: () => void } {
+/** The person's settings, kept current, with the appearance applied to the page; the mode it resolves to; and how to read them again. */
+export function useSettings(): { settings: Settings; mode: Mode; again: () => void } {
   const [settings, setSettings] = useState(given)
   const systemDark = useSystemDark()
   const mode = resolveMode(settings.appearance, systemDark)
@@ -72,7 +72,7 @@ export function useSettings(): { settings: Settings; again: () => void } {
   }, [again])
   useEffect(() => applyAppearance(settings.appearance, mode), [settings.appearance, mode])
 
-  return { settings, again }
+  return { settings, mode, again }
 }
 
 export type { Appearance, Mode, Settings }

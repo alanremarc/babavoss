@@ -19,18 +19,18 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { DropdownKit, MenuItems, type MenuItem } from "../../kit/layouts/menu.tsx"
-import { call, changes, read, type Notice, type Turn } from "./client.ts"
+import { call, changes, read, type Turn } from "./client.ts"
 import { Actions, TabMenu, useTabAsks } from "./actions.tsx"
 import { noticesIn, type Offered } from "./commands.ts"
 import { Home, HomeTab, SEARCH, type TabEntry } from "./home.tsx"
 import { backTo, shortcut, type SurfaceEntry } from "./home.ts"
 import type { Drawers } from "./inputs.tsx"
-import { NOTICES, Notifications, unseenRows, useFeed, type Page as NoticesPage } from "./notifications.tsx"
+import { NOTICES, Notifications, unseenRows, useFeed, type Heard, type Page as NoticesPage } from "./notifications.tsx"
 import * as settingsPage from "../settings/ui/index.tsx"
 import { bindings, shown as keysShown } from "../settings/src/keys.ts"
 import { useSettings } from "./appearance.ts"
 import { mac, useShortcuts } from "./shortcuts.ts"
-import { ChangesContext, Ready, TabProvider, tabCache } from "./tab.tsx"
+import { ChangesContext, Ready, ServicesContext, TabProvider, tabCache, type ShellServices } from "./tab.tsx"
 import { boot, booted, servedAs } from "./boot.ts"
 import { Overlay, useSaid, type Connected } from "./connection.tsx"
 import { cachesBy } from "./live.ts"
@@ -77,7 +77,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
 
 export function Shell({ surfaces: project }: { surfaces: Registry }) {
   const surfaces = useMemo(() => ({ ...project, ...OWN }), [project])
-  const { settings, again: settingsAgain } = useSettings()
+  const { settings, mode, again: settingsAgain } = useSettings()
   // What the page was served with is its first frame: the shell at /, the turn, the notices, and the shown tab's views.
   const [root, setRoot] = useState<RootView | undefined>(() => booted<RootView>("/"))
   const [error, setError] = useState("")
@@ -134,10 +134,10 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
   }))
   const waits = (at: string) => asks.count(at) > 0 || noticesIn(at, unseen).length > 0
   // Who hears each notice as it comes: the notifications.
-  const [hearers] = useState(() => new Set<(notice: Notice) => void>())
+  const [hearers] = useState(() => new Set<(notice: Heard) => void>())
   const notices = useMemo(
     () => ({
-      subscribe: (fn: (notice: Notice) => void) => {
+      subscribe: (fn: (notice: Heard) => void) => {
         hearers.add(fn)
 
         return () => void hearers.delete(fn)
@@ -277,6 +277,34 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     if (opened) go(opened.at, "/")
   }
 
+  // What a page may ask of the shell (useShell), the same object while the appearance holds: it reaches what is current.
+  const now = useRef({ go, open, rows, root, setError })
+
+  now.current = { go, open, rows, root, setError }
+
+  const theme = settings.appearance.themes[mode]
+  const services = useMemo<ShellServices>(
+    () => ({
+      open: async (surface) => {
+        const { go, open, rows, root, setError } = now.current
+        const opened = newestFirst(rows.filter((r) => r.surface === surface))[0]
+        const handle = root?.surfaces.find((s) => s.name === surface)?.open
+
+        if (opened) go(opened.at)
+        else if (handle) await open(handle)
+        else setError(`there is no surface ${surface} to open`)
+      },
+      go: (at) => now.current.go(placeOf(at).key, placeOf(at).route),
+      toast: (address, text, at) => {
+        const row = now.current.rows.find((r) => r.at === address)
+
+        for (const fn of hearers) fn({ text, at: address + (at && at !== "/" ? at : ""), from: row?.title ?? row?.surface, by: "the surface", kept: false })
+      },
+      appearance: { mode, theme },
+    }),
+    [hearers, mode, theme]
+  )
+
   // Pointing: the agent's show moves `pointed` at /; the page goes there, or offers it while the person is busy.
   const [offer, setOffer] = useState<Pointed>()
   const pointedSeen = useRef<number>(undefined)
@@ -406,6 +434,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
 
   return (
     <ChangesContext.Provider value={stream}>
+    <ServicesContext.Provider value={services}>
     <div className="flex h-dvh min-h-64 flex-col overflow-hidden text-xs">
       <SurfaceTabs
         active={active}
@@ -550,6 +579,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
           })}
         </main>
     </div>
+    </ServicesContext.Provider>
     </ChangesContext.Provider>
   )
 }

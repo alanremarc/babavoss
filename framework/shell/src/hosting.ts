@@ -212,7 +212,14 @@ function pageUi(dir: string | URL): UiHosting {
   }
 }
 
-/** Bundle the same page for source hosting and dependency-free releases. */
+/** Every import of React, from any package: one copy for the page, the framework's, or a library's hooks would run on another. */
+const REACT = /^react(?:-dom)?(?:\/.*)?$/
+
+/**
+ * Bundle the same page for source hosting and dependency-free releases. React is the framework's wherever it is imported
+ * from, so a library installed in .baba/ that brought its own, or a framework installed with its own node_modules, still
+ * gives the page one.
+ */
 export async function buildUi(dir: string | URL, out: string): Promise<void> {
   const root = typeof dir === "string" ? resolve(dir) : fileURLToPath(dir)
 
@@ -231,6 +238,7 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
       {
         name: "tailwind",
         setup(build) {
+          build.onResolve({ filter: REACT }, (args) => ({ path: Bun.resolveSync(args.path, frameworkRoot) }))
           // Noted only: the framework is resolved as the package it is.
           build.onResolve({ filter: /^babavoss\/(?:shell\/ui|kit)\// }, () => {
             shell = true

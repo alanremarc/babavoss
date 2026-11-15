@@ -45,6 +45,26 @@ test("init makes .baba/ as a package that names the framework and provisions whe
   expect(run(["init"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 })
 
+test("init leaves .baba/ ready for shadcn's CLI: components.json puts components in components/ui, imported by @/, and names a css file the page never builds", () => {
+  const components = JSON.parse(readFileSync(join(baba, "components.json"), "utf8")) as { style: string; tailwind: { css: string; config: string }; aliases: Record<string, string> }
+  const tsconfig = () => JSON.parse(readFileSync(join(baba, "tsconfig.json"), "utf8")) as { compilerOptions: { paths?: Record<string, string[]>; strict: boolean } }
+
+  expect(components.style).toBe(JSON.parse(readFileSync(join(checkout, "framework/kit/components.json"), "utf8")).style)
+  expect(components.tailwind).toMatchObject({ config: "", css: "components/shadcn.css" })
+  expect(components.aliases).toMatchObject({ components: "@/components", ui: "@/components/ui", utils: "@/lib/utils" })
+  expect(tsconfig().compilerOptions.paths).toEqual({ "@/*": ["./*"] })
+  // A .baba/ made by an older release gains the alias as it provisions, the rest of its configuration left as it was.
+  const older = tsconfig()
+
+  delete older.compilerOptions.paths
+  writeFileSync(join(baba, "tsconfig.json"), JSON.stringify(older))
+  rmSync(join(baba, "components.json"))
+  expect(run(["provision"]).out).toContain("provisioned .baba/components.json")
+  expect(tsconfig().compilerOptions).toMatchObject({ strict: true, paths: { "@/*": ["./*"] } })
+  expect(existsSync(join(baba, "components.json"))).toBe(true)
+  expect(run(["provision"]).out).not.toContain("tsconfig.json")
+})
+
 test("new makes a surface from the template, with a passing spec, and the root is generated with it; a surface gets no skill and no file of instructions", () => {
   expect(run(["new", "Month Close"])).toMatchObject({ status: 2, err: expect.stringContaining("kebab-case") })
   expect(run(["new", "baba"])).toMatchObject({ status: 2, err: expect.stringContaining("not baba") })
@@ -90,9 +110,16 @@ test("a surface's own stylesheet joins the root's page after the shell's, scoped
   const css = styles()
 
   expect(css.indexOf('@import "babavoss/shell/ui/styles.css"')).toBeLessThan(css.indexOf("@scope"))
+  // Tailwind scans the whole of .baba/, the project's own components beside the surfaces.
+  expect(css).toContain('@source "..";')
   expect(css).toContain('@scope ([data-surface="lane-board"]) {\n:scope {\n  --lane-idle: var(--border);\n}\n.lane { content: "}"; }\n}\n')
   expect(css).toContain("surfaces/ledger/ui/styles.css is left out")
   expect(css).not.toContain("body { color: red; }")
+  // A @source line, which Tailwind takes only outside a scope, is lifted above the scopes, its path from the root's directory.
+  writeFileSync(join(baba, "surfaces/lane-board/ui/styles.css"), '@source "../../../node_modules/lanes";\n/* @source "commented"; */\n.lane { color: var(--primary); }\n')
+  expect(run(["provision"]).status).toBe(0)
+  expect(styles()).toContain('@source "..";\n@source "../node_modules/lanes";\n')
+  expect(styles()).toContain('@scope ([data-surface="lane-board"]) {\n/* @source "commented"; */\n.lane { color: var(--primary); }\n}\n')
   for (const name of ["lane-board", "ledger"]) rmSync(join(baba, "surfaces", name), { recursive: true })
   expect(run(["provision"]).status).toBe(0)
   expect(styles()).not.toContain("@scope")
