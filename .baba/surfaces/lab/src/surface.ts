@@ -2,19 +2,22 @@
 // watches. A run is a copy of a checkout as it is now, uncommitted changes included, with its own root and page, and an
 // agent under test in it with a home of its own, under a harness the lab reaches through the framework's adapter. Every
 // event of its stream joins the timeline: what entered the agent's context, chunk by chunk, with sizes, tokens and cost,
-// and what was done on its page as the person. A turn that ends, and a run that cannot go on, are noticed. A run's record
+// and what was done on its page as the person, by the developing agent or by the person's own clicks, which the lab
+// follows in the root under test's activity. A turn that ends, and a run that cannot go on, are noticed. A run's record
 // is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
 // left behind by a lab that is gone is cleared when the lab starts.
 import { randomBytes, randomUUID } from "node:crypto"
 import { action, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
-import { runs as onDisk, type Checkout, type Made, type Runs, type Said } from "./runs.ts"
+import { runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
 import { append, empty, line, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
 
 export const MODELS = ["haiku", "sonnet", "opus"]
 export const END_MOVE = "[The person ended their move on the page.]"
 const RECENT = 5
 const BUDGET_USD = 0.5
+/** How often the root under test's activity is read, in ms, for what the person did on its page. */
+const FOLLOW_MS = 1000
 /** How many runs' records are kept: past it, the oldest is forgotten. */
 export const KEEP = 20
 
@@ -42,6 +45,8 @@ export type Run = Timeline & {
   ended?: string
   /** The process of the lab that runs it, so another lab's start tells a live run from one left behind. */
   lab?: number
+  /** The last entry of the root under test's activity that was heard, so each is on the timeline once. */
+  heard?: number
 }
 /** A run as the list of runs has it. */
 export type Summary = { id: string; began: number; model: string; status: Status; checkout?: Checkout; turns: number; cost: number; entries: number }
@@ -49,7 +54,8 @@ export type Model = { next: number; run?: Run; runs: Summary[] }
 export type Event =
   | ({ kind: "made"; n: number; t: number; id: string; session: string; login: string; lab: number } & Made)
   | { kind: "stream"; n: number; t: number; event: HarnessEvent }
-  | { kind: "acted"; n: number; t: number; id: string; said: Said }
+  | { kind: "acted"; n: number; t: number; id: string; said: Said; own?: number[] }
+  | { kind: "heard"; n: number; entries: Heard[] }
   | { kind: "closed"; n: number; t: number; changed: string }
   | { kind: "listed"; runs: Json[] }
   | { kind: "read"; run: Json }
@@ -59,6 +65,7 @@ export type Command =
   | { kind: "say"; n: number; session: string; text: string }
   | { kind: "interrupt"; n: number; session: string }
   | { kind: "act"; n: number; id: string; project: string; home: string; session: string; at: string; handle?: string; args?: Json }
+  | { kind: "follow"; n: number; project: string; session: string }
   | { kind: "close"; n: number; session?: string; dir?: string; project?: string; home?: string }
   | { kind: "record"; dir: string; run: Run }
   | { kind: "list" }
@@ -364,7 +371,8 @@ function happened(run: Run, e: Exclude<Event, { kind: "listed" | "read" }>): Run
 
     return event.kind === "turn" && next.status === "working" ? { ...next, status: "idle" } : next
   }
-  if (e.kind === "acted") return { ...run, ...resolve(run, e.id, e.said.text, !e.said.ok) }
+  if (e.kind === "acted") return { ...run, ...resolve(run, e.id, e.said.text, !e.said.ok), heard: Math.max(run.heard ?? 0, ...(e.own ?? [])) }
+  if (e.kind === "heard") return heardOf(run, e.entries)
   if (e.kind === "closed") {
     const left = e.changed ? `what git said of it, against the commit it was copied at:\n${e.changed}` : "nothing changed against the commit it was copied at"
     const closed = note({ ...run, status: "closed" }, e.t, "the project at close", left)
@@ -379,6 +387,24 @@ function happened(run: Run, e: Exclude<Event, { kind: "listed" | "read" }>): Run
   if (e.command === "close") return { ...failed, status: "ended" }
 
   return failed
+}
+
+/** The run with what the person did on the page under test on its timeline, each once, in the order it was done. */
+function heardOf(run: Run, entries: Heard[]): Run {
+  let next = run
+
+  for (const e of entries.toSorted((a, b) => a.n - b.n)) {
+    if (e.n <= (next.heard ?? 0)) continue
+    if (e.who === "person") {
+      // Its time is the root's, to the second: never before what is already on the timeline.
+      const t = Math.max(e.when - run.began, next.entries.at(-1)?.t ?? 0)
+
+      next = { ...next, ...append(next, t, { kind: "person", title: `the person, on ${e.surface}`, call: `${e.what}${e.at ? ` at ${e.at}` : ""}`, text: "" }) }
+    }
+    next = { ...next, heard: e.n }
+  }
+
+  return next
 }
 
 /** What an event of the run's own command is worth noticing: a turn that ended, a run that could not go on. */
@@ -426,10 +452,30 @@ const summaries = (records: Json[]): Summary[] =>
     return s ? [s] : []
   })
 
-/** The lab, with its outside given: a harness and where runs live; the real ones by default, fakes in its specs. */
-export function lab(harness: Harness, place: Runs): Surface<Model, Event, Command> {
+/** Who follows a run's activity: what was heard up to, the turn its reads and acts take one at a time, and its end. */
+type Follower = { after: number; turn: Promise<unknown>; stop: AbortController }
+
+/** The lab, with its outside given: a harness, where runs live, and how often a run's activity is read; fakes in its specs. */
+export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): Surface<Model, Event, Command> {
   /** The sessions under test of this process, by id; a process does not outlive the runtime that started it. */
   const sessions = new Map<string, Session>()
+  /** Who follows each session under test's activity: a read of it and an act as the person never interleave. */
+  const followers = new Map<string, Follower>()
+  const serially = <T>(f: Follower, fn: () => Promise<T>): Promise<T> => {
+    const next = f.turn.then(fn, fn)
+
+    f.turn = next.catch(() => {})
+
+    return next
+  }
+  /** The activity after what `f` heard, which it has heard now; none where it cannot be read. */
+  const hear = async (f: Follower, project: string, session: string): Promise<Heard[]> => {
+    const entries = await place.activity(project, session, f.after).catch((): Heard[] => [])
+
+    f.after = Math.max(f.after, ...entries.map((e) => e.n))
+
+    return entries
+  }
 
   return surface<Model, Event, Command>({
     description:
@@ -450,7 +496,7 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
     // What a lab that is gone left of its runs is cleared: every run but the one shown here and those of a lab still running.
     start: (m) => [{ kind: "sweep", ...(m.run?.id && m.run.status !== "closed" && { keep: m.run.id }) }, { kind: "list" }],
     working: (m) => live(m.run),
-    session: (c) => c.kind === "harness",
+    session: (c) => c.kind === "harness" || c.kind === "follow",
     update(m, message) {
       if (message.kind === "call") return pages.update(m, message)
       if (message.kind === "listed") return kept({ model: { ...m, runs: summaries(message.runs) } })
@@ -467,7 +513,10 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
       const runs = s ? [...m.runs.filter((r) => r.id !== s.id), s].sort((a, b) => a.began - b.began) : m.runs
       const notices = noticed(m.run, run)
 
-      return kept({ model: { ...m, run, runs }, commands: run.dir ? [{ kind: "record", dir: run.dir, run }] : [], ...(notices.length && { notices }) })
+      const follow: Command[] = message.kind === "made" ? [{ kind: "follow", n: run.n, project: message.project, session: message.session }] : []
+      const commands: Command[] = [...(run.dir ? [{ kind: "record" as const, dir: run.dir, run }] : []), ...follow]
+
+      return kept({ model: { ...m, run, runs }, commands, ...(notices.length && { notices }) })
     },
     view: pages.view,
     async run(c, send, signal) {
@@ -515,7 +564,16 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
       }
       if (c.kind === "close") {
         const agent = c.session ? sessions.get(c.session) : undefined
+        const f = c.session ? followers.get(c.session) : undefined
 
+        // What the person did up to the close is heard, and then no more.
+        f?.stop.abort()
+        await f?.turn
+        if (f && c.project && c.session) {
+          const last = await hear(f, c.project, c.session)
+
+          if (last.length) send({ kind: "heard", n: c.n, entries: last })
+        }
         await agent?.end()
         const changed = c.project ? await place.close(c.project) : ""
 
@@ -524,11 +582,53 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
 
         return send({ kind: "closed", n: c.n, t: Date.now(), changed })
       }
-      if (c.kind === "act") {
-        const { project, home, session, at } = c
-        const said = c.handle ? await place.act(project, home, session, at, c.handle, c.args ?? {}) : await place.look(project, home, session, at)
+      if (c.kind === "follow") {
+        const f: Follower = { after: 0, turn: Promise.resolve(), stop: new AbortController() }
+        const ended = AbortSignal.any([signal, f.stop.signal])
 
-        return send({ kind: "acted", n: c.n, t: Date.now(), id: c.id, said })
+        followers.set(c.session, f)
+        try {
+          while (!ended.aborted) {
+            await serially(f, async () => {
+              const entries = await hear(f, c.project, c.session)
+
+              if (entries.length) send({ kind: "heard", n: c.n, entries })
+            })
+            await new Promise<void>((done) => {
+              const timer = setTimeout(done, every)
+
+              ended.addEventListener("abort", () => (clearTimeout(timer), done()), { once: true })
+            })
+          }
+        } finally {
+          if (followers.get(c.session) === f) followers.delete(c.session)
+        }
+
+        return
+      }
+      if (c.kind === "act") {
+        const { project, home, session, at, handle } = c
+
+        if (!handle) return send({ kind: "acted", n: c.n, t: Date.now(), id: c.id, said: await place.look(project, home, session, at) })
+
+        const f = followers.get(session)
+        const acting = async () => {
+          // What the person did before is heard first; what came of the act is its own, not the person's on the page.
+          const before = f ? await hear(f, project, session) : []
+
+          if (before.length) send({ kind: "heard", n: c.n, entries: before })
+
+          const said = await place.act(project, home, session, at, handle, c.args ?? {})
+          const after = f ? await hear(f, project, session) : []
+          const tab = /^\/tabs\/\d+/.exec(at)?.[0]
+          const mine = (e: Heard) => said.ok && e.who === "person" && (!tab || e.at === tab || e.at.startsWith(`${tab}/`))
+          const others = after.filter((e) => !mine(e))
+
+          if (others.length) send({ kind: "heard", n: c.n, entries: others })
+          send({ kind: "acted", n: c.n, t: Date.now(), id: c.id, said, own: after.filter(mine).map((e) => e.n) })
+        }
+
+        return f ? serially(f, acting) : acting()
       }
 
       const agent = sessions.get(c.session)

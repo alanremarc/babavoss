@@ -6,7 +6,7 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { findService, serviceClient, type Json } from "babavoss/core/index.ts"
+import { findService, SERVICE_HEADER, serviceClient, type Json } from "babavoss/core/index.ts"
 import { sessionEnv } from "babavoss/core/harness/index.ts"
 
 /** The checkout a run is a copy of: where, at which commit, and the paths that differed from it, changed or added. */
@@ -14,6 +14,8 @@ export type Checkout = { from: string; commit: string; dirty: string[] }
 export type Made = { dir: string; project: string; home: string; checkout: Checkout; ms: number; page?: string }
 /** An answer of the root under test: what it said, and whether it did what was asked. */
 export type Said = { ok: boolean; text: string }
+/** One line of the root under test's activity, as its /activity gives it: `when` in ms since the epoch, to the second. */
+export type Heard = { n: number; when: number; who: string; surface: string; at: string; what: string }
 
 export interface Runs {
   /** Makes run `id`'s directory: the project, a copy of the checkout at `from` (this repository where empty), its root started for `session`. */
@@ -22,6 +24,8 @@ export interface Runs {
   act(project: string, home: string, session: string, at: string, handle: string, args: Json): Promise<Said>
   /** What the person sees at a path of the root under test, with the handles offered to them. */
   look(project: string, home: string, session: string, at: string): Promise<Said>
+  /** The root under test's activity after entry `after`, oldest first; none where its runtime is not up, which is never woken for it. */
+  activity(project: string, session: string, after: number): Promise<Heard[]>
   /** Closes the project's roots, says what the agent under test left changed in it, and deletes it. */
   close(project: string): Promise<string>
   /** Deletes what a run's directory holds besides its record: its project and its home, a link there removed, never followed. */
@@ -209,6 +213,28 @@ export function runsAt(root: string = RUNS): Runs {
       const answer = await client(project, home, session).request(at)
 
       return { ok: answer.ok, text: JSON.stringify(await answer.json(), null, 2) }
+    },
+    async activity(project, session, after) {
+      const found = await findService(stateOf(project, session)).catch(() => undefined)
+      const heard: Heard[] = []
+
+      if (!found) return heard
+
+      // Newest first, a page at a time: read back until the page reaches what was heard before.
+      for (let at: string | undefined = "/activity"; at; ) {
+        const answer = await fetch(`http://127.0.0.1:${found.port}${at}`, {
+          headers: { accept: "application/json", [SERVICE_HEADER]: found.token },
+          signal: AbortSignal.timeout(5000),
+        })
+        const page = (await answer.json()) as { entries?: unknown; earlier?: { at?: string } }
+        const entries = Array.isArray(page.entries) ? (page.entries as (Omit<Heard, "when"> & { when: string })[]) : []
+
+        for (const { n, when, who, surface, at: where, what } of entries)
+          if (n > after) heard.push({ n, when: Date.parse(when), who, surface, at: where ?? "", what })
+        at = entries.length && entries.at(-1)!.n > after + 1 ? page.earlier?.at : undefined
+      }
+
+      return heard.sort((a, b) => a.n - b.n)
     },
     async close(project) {
       if (!within(dirname(project)) || basename(project) !== "project" || !existsSync(project)) return ""

@@ -3,7 +3,7 @@
 import { expect, test } from "bun:test"
 import { story, type Json } from "babavoss/core/index.ts"
 import { fakeHarness, type HarnessEvent } from "babavoss/core/harness/index.ts"
-import type { Made, Runs } from "../src/runs.ts"
+import type { Heard, Made, Runs } from "../src/runs.ts"
 import { END_MOVE, lab, type Model } from "../src/surface.ts"
 
 const DIR = "/repo/.babavoss/lab/runs/r1"
@@ -24,6 +24,10 @@ function place(kept: Json[] = []) {
     cleared: [] as string[],
     forgotten: [] as string[],
     swept: [] as { id: string; spared: boolean }[],
+    /** The root under test's activity, as its /activity has it. */
+    activity: [] as Heard[],
+    /** Something done on the page under test, as its activity keeps it. */
+    did: (who: string, at: string, what: string) => void world.activity.push({ n: world.activity.length + 1, when: Date.now(), who, surface: "queue", at, what }),
     records: new Map<string, Json>(kept.map((r) => [(r as { id: string }).id, r])),
     fail: "",
   }
@@ -36,9 +40,11 @@ function place(kept: Json[] = []) {
     },
     async act(_project, _home, _session, at, handle, args) {
       world.acts.push({ at, handle, args })
+      if (handle === "approve") world.did("person", at, `approve n=${(args as { n?: number }).n}`)
 
       return handle === "approve" ? { ok: true, text: `written: ${handle} at ${at}` } : { ok: false, text: "refused: approve is offered" }
     },
+    activity: async (_project, _session, after) => world.activity.filter((e) => e.n > after),
     async look(_project, _home, _session, at) {
       world.acts.push({ at })
 
@@ -90,7 +96,7 @@ const turn = (total: number): HarnessEvent => ({
 async function started(kept: Json[] = []) {
   const harness = fakeHarness()
   const where = place(kept)
-  const s = story(lab(harness.harness, where.runs), { effects: "real" })
+  const s = story(lab(harness.harness, where.runs, 5), { effects: "real" })
 
   expect(await s.agent.call("/", "start", { model: "haiku" })).toMatchObject({ outcome: "written" })
   await until(() => root(s.agent).status === "idle")
@@ -360,4 +366,31 @@ test("on start, what a lab that is gone left is swept: every run but the one sho
     { id: running.id, spared: true },
     { id: gone.id, spared: false },
   ])
+})
+
+test("what the person does on the page under test joins the timeline once each, in order; what the lab did there as the person is not doubled", async () => {
+  const { agent, where } = await started()
+  const kinds = () => (agent.sees("/entries") as { entries: Row[] }).entries.map((r) => [r.kind, r.line])
+
+  where.did("person", "/tabs/1", "open n=2")
+  where.did("agent", "/tabs/1", "take n=3")
+  await until(() => kinds().length === 2)
+  await agent.call("/", "act", { at: "/tabs/1", handle: "approve", args: '{"n":1}' })
+  await until(() => kinds().length === 3 && !(agent.sees("/entries/3") as { pending?: boolean }).pending)
+  where.did("person", "/", "closed")
+  await until(() => kinds().length === 4)
+  await Bun.sleep(30)
+  expect(kinds()).toEqual([
+    ["note", expect.any(String)],
+    ["person", "open n=2 at /tabs/1"],
+    ["act", 'approve {"n":1} at /tabs/1'],
+    ["person", "closed at /"],
+  ])
+  expect(agent.sees("/entries/2")).toMatchObject({ kind: "person", title: "the person, on queue" })
+
+  await agent.call("/", "close", {})
+  await until(() => root(agent).status === "closed")
+  where.did("person", "/tabs/1", "too late")
+  await Bun.sleep(30)
+  expect(kinds().filter(([kind]) => kind === "person")).toHaveLength(2)
 })
