@@ -1,5 +1,5 @@
-// The surface: what is true and what can be done, made for the agent first. The root of .baba/ runs it as a tab. It is
-// all an agent ever learns of this tool: `description` is how the picker lists it, and so how it is chosen; `how`, a fact
+// The surface: what is true and what can be done, made for the agent first. The shell runs it as a tab. It is all an
+// agent ever learns of this tool: `description` is how the shell lists it, and so how it is chosen; `how`, a fact
 // at /, is how it is to be worked, read each time. Here the agent proposes a greeting and the person, on the page,
 // accepts or declines it. Replace the greeting with the surface's own work and keep the shape: the agent does the work
 // through handles, a fact at / says what is waited for, and what only the person may decide is an ask.

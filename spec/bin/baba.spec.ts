@@ -40,7 +40,7 @@ test("init makes .baba/ as a package that names the framework and provisions whe
 
 test("new makes a surface from the template, with a passing spec, and the root is generated with it; a surface gets no skill and no file of instructions", () => {
   expect(run(["new", "Month Close"])).toMatchObject({ status: 2, err: expect.stringContaining("kebab-case") })
-  expect(run(["new", "surfaces"])).toMatchObject({ status: 2, err: expect.stringContaining("not baba or surfaces") })
+  expect(run(["new", "baba"])).toMatchObject({ status: 2, err: expect.stringContaining("not baba") })
 
   const made = run(["new", "month-close"])
 
@@ -81,7 +81,7 @@ test("a surface's own stylesheet joins the root's page after the shell's, scoped
   const css = styles()
 
   expect(css.indexOf('@import "babavoss/shell/ui/styles.css"')).toBeLessThan(css.indexOf("@scope"))
-  expect(css).toContain('@scope ([data-util="lane-board"]) {\n:scope {\n  --lane-idle: var(--border);\n}\n.lane { content: "}"; }\n}\n')
+  expect(css).toContain('@scope ([data-surface="lane-board"]) {\n:scope {\n  --lane-idle: var(--border);\n}\n.lane { content: "}"; }\n}\n')
   expect(css).toContain("surfaces/ledger/ui/styles.css is left out")
   expect(css).not.toContain("body { color: red; }")
   for (const name of ["lane-board", "ledger"]) rmSync(join(baba, "surfaces", name), { recursive: true })
@@ -141,12 +141,12 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
     expect(existsSync(join(baba, ".babavoss"))).toBe(false)
 
-    // The root lists the surface with what it says it is for, and offers to open it, to the agent and to the person.
+    // The shell lists the surface at / with what it says it is for, and offers to open it, to the agent and to the person.
     const word = join(project, ".babavoss/bin/baba")
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
     expect(started.stdout).toContain('"desk"\t"Keep a greeting the person has agreed to. Use when the greeting is to be changed."')
-    expect(started.stdout).toContain('.babavoss/bin/baba / open util="desk"')
+    expect(started.stdout).toContain('.babavoss/bin/baba / open surface="desk"')
 
     // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
     const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
@@ -158,21 +158,21 @@ test("a session's start gives what the skill baba gives and starts the root; a s
       })
 
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
-    expect((await person("/", "open", { util: "desk" })).status).toBe(200)
+    expect((await person("/", "open", { surface: "desk" })).status).toBe(200)
 
     const opened = hook("UserPromptSubmit").stdout
 
     expect(opened).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
-    expect(opened).toContain('+ tabs.1.util: "desk"')
-    expect(opened).toContain('+ tabs.1.facts.how: "Propose a greeting when the person asks for another.')
-    expect(opened).toContain('+ tabs.1.facts.greeting: "hello"')
+    expect(opened).toContain('+ tabs.0.surface: "desk"')
+    expect(opened).toContain('+ tabs.0.facts.how: "Propose a greeting when the person asks for another.')
+    expect(opened).toContain('+ tabs.0.facts.greeting: "hello"')
 
-    const tab = /\+ tabs\.1\.at: "(\/tabs\/\d+)"/.exec(opened)![1]!
+    const tab = /\+ tabs\.0\.at: "(\/tabs\/\d+)"/.exec(opened)![1]!
 
     // The tab's own path offers its actions, as the exact commands.
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
 
-    // The page holds the surface's component beside the picker's.
+    // The page holds the surface's component in its tab.
     const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
     const script = /\/_\/[^"]*\.js/.exec(html)![0]
 
@@ -195,22 +195,22 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)
     expect(hook("PostToolUse").stdout).toBe("")
 
-    // Fully from the surface: what its code says it is for is what the picker lists, as soon as the code says it; and a
+    // Fully from the surface: what its code says it is for is what the shell lists, as soon as the code says it; and a
     // surface made by hand is in the root as soon as it is on disk. Nothing is provisioned for either.
     const code = join(baba, "surfaces/desk/src/surface.ts")
 
     writeFileSync(code, readFileSync(code, "utf8").replace("Keep a greeting the person has agreed to.", "Keep the house greeting."))
-    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain("Keep the house greeting.")
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("Keep the house greeting.")
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/by-hand"), { recursive: true })
-    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"by-hand"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"')
 
     // surfaces/ made anew, as a checkout may leave it: the root follows the new one, and its next answer is of the code there.
     cpSync(join(baba, "surfaces"), join(baba, "surfaces.new"), { recursive: true })
     rmSync(join(baba, "surfaces"), { recursive: true })
     renameSync(join(baba, "surfaces.new"), join(baba, "surfaces"))
-    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"by-hand"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"')
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/after-checkout"), { recursive: true })
-    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"after-checkout"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"after-checkout"')
   } finally {
     command("start", "close")
   }

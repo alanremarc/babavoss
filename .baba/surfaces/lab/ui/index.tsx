@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Composer, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain, ToggleGroup, ToggleGroupItem } from "babavoss/kit/index.ts"
-import { useLive, useTab } from "babavoss/shell/ui/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "note"
 type Tokens = { input: number; cache_write: number; cache_read: number; output: number }

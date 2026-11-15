@@ -21,13 +21,13 @@ surfaces/NAME/
 
 Everything an agent learns of a surface, it learns from the surface. There is no file of instructions beside it.
 
-- `description` is how the picker lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
+- `description` is how the shell lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
 - How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what is waited for, what comes next. Keep it short, since it is read each time.
 - What is mechanical needs no words: what an input may be is in the handle's description, and an action that may not be taken now is not offered.
 
 The agent does the work through handles. What only the person may decide is an ask, offered to them alone on the page. The page shows what the surface says and offers the person their decisions; anything else they want changed, they tell the agent.
 
-The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.ts`; read its code in `framework/` there rather than guessing its interfaces.
+The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`; read its code in `framework/` there rather than guessing its interfaces.
 
 ## Looks
 
@@ -42,7 +42,7 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
   - frame: `h-menubar`, `h-bar` and `h-row`, the heights of the menu bar, a bar below it, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
 - Never hard-code a colour, a font or a size where a token fits.
 
-Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The root takes it after the shell's, inside `@scope ([data-util="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
+Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The root takes it after the shell's, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
 
 ## Updating
 

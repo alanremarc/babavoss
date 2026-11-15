@@ -6,7 +6,7 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
-import { BUILT, shellUi, buildUi } from "../../framework/shell/index.ts"
+import { BUILT, shellUi, buildUi } from "../../framework/shell/src/hosting.ts"
 
 const dirs: string[] = []
 

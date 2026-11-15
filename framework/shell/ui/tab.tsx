@@ -1,4 +1,4 @@
-// A util's component runs inside a tab: it knows its address, its route within, and reads, calls and watches below its address.
+// A surface's component runs inside a tab: it knows its address, its route within, and reads, calls and watches below its address.
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { Args, View } from "../../core/index.ts"
 import { call as callDoor, read as readDoor, type Answer } from "./client.ts"
@@ -6,7 +6,7 @@ import { call as callDoor, read as readDoor, type Answer } from "./client.ts"
 export type TabContext = {
   /** /tabs/N */
   address: string
-  util: string
+  surface: string
   route: string
   active: boolean
   navigate: (route: string) => void
@@ -18,7 +18,7 @@ export type TabContext = {
 
 const Context = createContext<TabContext | null>(null)
 
-/** The shell gives the paths a view names under `at` whole; a util's component works with its own, below its tab. */
+/** The shell gives the paths a view names under `at` whole; a surface's component works with its own, below its tab. */
 export function own<V>(value: V, address: string): V {
   if (Array.isArray(value)) return value.map((v) => own(v, address)) as V
   if (!value || typeof value !== "object") return value
@@ -37,7 +37,7 @@ export const ChangesContext = createContext<{ subscribe: (fn: () => void) => () 
   connected: () => false,
 })
 
-export function TabProvider({ address, util, route, active, navigate, children }: Omit<TabContext, "read" | "call" | "live"> & { children?: ReactNode }) {
+export function TabProvider({ address, surface, route, active, navigate, children }: Omit<TabContext, "read" | "call" | "live"> & { children?: ReactNode }) {
   const { subscribe, connected } = useContext(ChangesContext)
   const value = useMemo<TabContext>(() => {
     const full = (path: string) => {
@@ -48,7 +48,7 @@ export function TabProvider({ address, util, route, active, navigate, children }
 
     return {
       address,
-      util,
+      surface,
       route,
       active,
       navigate,
@@ -80,12 +80,12 @@ export function TabProvider({ address, util, route, active, navigate, children }
         }
       },
     }
-  }, [address, util, route, active, navigate, subscribe, connected])
+  }, [address, surface, route, active, navigate, subscribe, connected])
 
-  // The tab's own element, named by its util: a surface's stylesheet is scoped to it, so it styles its tab alone.
+  // The tab's own element, named by its surface: a surface's stylesheet is scoped to it, so it styles its tab alone.
   return (
     <Context.Provider value={value}>
-      <div data-util={util} className="flex min-h-0 flex-1 flex-col">
+      <div data-surface={surface} className="flex min-h-0 flex-1 flex-col">
         {children}
       </div>
     </Context.Provider>
@@ -95,7 +95,7 @@ export function TabProvider({ address, util, route, active, navigate, children }
 export function useTab(): TabContext {
   const tab = useContext(Context)
 
-  if (!tab) throw new Error("useTab is for a util's component inside the shell")
+  if (!tab) throw new Error("useTab is for a surface's component inside the shell")
 
   return tab
 }

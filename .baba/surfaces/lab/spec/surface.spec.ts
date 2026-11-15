@@ -109,7 +109,7 @@ test("a run starts in a sandbox, and the timeline fills from its stream, with th
 test("a hook injection and a word's answer are entries with their sizes, whole at their own paths", async () => {
   const { agent, emit } = await started()
   const present = "baba's words\nThe root of .baba/ was started for this session, and answered:\npage: http://127.0.0.1:5555"
-  const answer = 'title: "baba"\nutils: name\tdescription\n"greeting"\t"Keep a greeting"'
+  const answer = 'title: "baba"\nsurfaces: name\tdescription\n"greeting"\t"Keep a greeting"'
 
   expect(await agent.call("/", "say", { text: "What surfaces are there?" })).toMatchObject({ outcome: "written" })
   expect(agent.sees()).toMatchObject({ status: "working", waiting: expect.stringContaining("end its turn") })

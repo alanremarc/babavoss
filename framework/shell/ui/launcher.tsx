@@ -1,4 +1,4 @@
-// The launcher: one palette to open a util and to switch to an open tab, found by name. It drops from the strip's "+"
+// The launcher: one palette to open a surface and to switch to an open tab, found by name. It drops from the strip's "+"
 // and from ⌘K or Ctrl+K anywhere on the page; where no tab is open it is the page itself.
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "cn"
@@ -7,20 +7,20 @@ import type { Handle } from "../../core/index.ts"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Popover, PopoverContent, PopoverTrigger } from "../../kit/components/popover"
 
-/** A util as home lists it; one that is always open offers no `open`: its tab is there. */
-export type UtilEntry = { name: string; description: string; open?: Handle }
+/** A surface as the desktop lists it. */
+export type SurfaceEntry = { name: string; description: string; open: Handle }
 /** An open tab as the launcher offers it, newest first. */
-export type TabEntry = { at: string; n: number; util: string; label: string; icon: ReactNode }
+export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode }
 
 type Choices = {
-  utils: UtilEntry[]
+  surfaces: SurfaceEntry[]
   icons: Record<string, ReactNode | undefined>
   /** The open tabs, newest first. */
   tabs: TabEntry[]
   active: string
   disabled: boolean
   loading: boolean
-  launch: (util: UtilEntry) => void
+  launch: (surface: SurfaceEntry) => void
   select: (at: string) => void
   settings: () => void
 }
@@ -34,12 +34,12 @@ const about = (key: string): string | undefined => document.querySelector<HTMLMe
 const Glyph = ({ children }: { children: ReactNode }) => <span className="grid size-[22px] shrink-0 place-items-center">{children}</span>
 
 /** The palette: what can be opened, the open tabs to switch to, and settings; typing filters all three. */
-function Palette({ utils, icons, tabs, active, disabled, loading, launch, select, settings, search, setSearch, list }: Choices & {
+function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, select, settings, search, setSearch, list }: Choices & {
   search: string
   setSearch: (search: string) => void
   list?: string
 }) {
-  const openable = utils.filter((u) => u.open)
+  const openable = surfaces
 
   return (
     <Command loop>
@@ -49,10 +49,10 @@ function Palette({ utils, icons, tabs, active, disabled, loading, launch, select
         {openable.length > 0 && (
           <CommandGroup heading="Open">
             {openable.map((u) => {
-              const count = tabs.filter((tab) => tab.util === u.name).length
+              const count = tabs.filter((tab) => tab.surface === u.name).length
 
               return (
-                <CommandItem key={u.name} value={`util ${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u)}>
+                <CommandItem key={u.name} value={`surface ${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u)}>
                   <Glyph>{icons[u.name] ?? <BoxIcon aria-hidden />}</Glyph>
                   <span className="max-w-[45%] shrink-0 truncate text-foreground">{u.name}</span>
                   <span className="min-w-0 flex-1 truncate pl-1.5" title={u.description}>
@@ -68,10 +68,10 @@ function Palette({ utils, icons, tabs, active, disabled, loading, launch, select
         {tabs.length > 0 && (
           <CommandGroup heading="Switch to">
             {tabs.map((tab) => (
-              <CommandItem key={tab.at} value={`tab ${tab.at}`} keywords={[tab.label, tab.util, String(tab.n)]} onSelect={() => select(tab.at)}>
+              <CommandItem key={tab.at} value={`tab ${tab.at}`} keywords={[tab.label, tab.surface, String(tab.n)]} onSelect={() => select(tab.at)}>
                 <Glyph>{tab.icon}</Glyph>
                 <span className="min-w-0 flex-1 truncate text-foreground">{tab.label}</span>
-                <span className="max-w-[40%] truncate pl-2 text-meta">{tab.at === active ? "current" : `${tab.util} ${tab.n}`}</span>
+                <span className="max-w-[40%] truncate pl-2 text-meta">{tab.at === active ? "current" : `${tab.surface} ${tab.n}`}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -90,13 +90,14 @@ function Palette({ utils, icons, tabs, active, disabled, loading, launch, select
 }
 
 /** The launcher as the page, where no tab is open: the root's title, the palette, and whose page it is at the bottom. */
-export function Launcher({ title, ...choices }: Choices & { title?: string }) {
+export function Launcher({ title, notice, ...choices }: Choices & { title?: string; notice?: string }) {
   const [search, setSearch] = useState("")
 
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-4 pt-[max(16px,14vh)] pb-3" aria-label="Launcher">
       <div className="flex h-fit w-full max-w-[560px] flex-col gap-3">
         {title && <h1 className="truncate px-2 text-large font-medium">{title}</h1>}
+        {notice && <p className="px-2 text-muted-foreground">{notice}</p>}
         <Palette {...choices} search={search} setSearch={setSearch} list="max-h-none" />
       </div>
       <About className="mt-auto max-w-[560px] pt-6" />

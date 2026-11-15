@@ -1,6 +1,6 @@
 # babavoss
 
-A TypeScript framework for surfaces an agent works on. A surface is a tool the agent works with for a person: what is true now and what can be done now, read and acted on through a command, and a tab where the person watches and steers over the same thing. A project's surfaces are code in its `.baba/` directory, a Bun package that names this framework. `.baba/` has a root, one runtime and one page per session, whose first tab is the picker of surfaces and which holds each open surface as a tab. An agent is made aware by one piece of content, baba's words and the root's present, delivered by hooks and, where there are none, by the skill baba. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
+A TypeScript framework for surfaces an agent works on. A surface is a tool the agent works with for a person: what is true now and what can be done now, read and acted on through a command, and a tab where the person watches and steers over the same thing. A project's surfaces are code in its `.baba/` directory, a Bun package that names this framework. `.baba/` has a root, one runtime and one page per session: the shell, a surface the framework provides, which lists the surfaces and holds each open one as a tab. An agent is made aware by one piece of content, baba's words and the root's present, delivered by hooks and, where there are none, by the skill baba. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
 
 ## Rules
 
@@ -16,9 +16,10 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 package.json                the package babavoss, at the repository's root, where a git dependency finds it
 bin/baba.ts                 the package's command: init, new, start, provision, hook
 framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, hook.ts, update.ts
-framework/shell/            the shell: its surface, its page's tabs, launcher and settings, the tab hooks, page hosting and build
+framework/shell/            the shell, the root of a .baba/, laid out as a surface: src/surface.ts its surface, a function of the project's
+                            surfaces; ui/ its whole page, the tabs, launcher, settings and the tab hooks; scripts/open.ts its door,
+                            which finds, generates and follows .baba/; src/hosting.ts and scripts/build.ts host and build any root's page
 framework/kit/              the kit: the components, layouts and design language every page is built with; it imports no shell
-framework/root/             the root of a .baba/: the one runtime and page of a session, the picker and the surfaces as its tabs
 skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
 skill/making-surfaces.md    how a surface is made and changed; read from the package when needed
 template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
@@ -37,7 +38,7 @@ A project that uses it:
 ```text
 .baba/                      the surfaces' package: package.json names the framework, installing provisions
   surfaces/NAME/            a surface: src/surface.ts, ui/index.tsx, spec/
-  .root/                    generated from the surfaces: all of them as one module, and the root's page
+  .root/                    generated from the surfaces: all of them as one module, and the shell's page with each one's component
 .claude/skills/baba/  .agents/skills/baba/   generated: baba's SKILL.md
 .claude/settings.json       the person's, with the framework's hook written into it
 .babavoss/                  what the root's sessions write
@@ -47,7 +48,7 @@ A project that uses it:
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
 - A surface imports the framework only as the package, `babavoss/core/…`, the shell as `babavoss/shell/…` and the kit as `babavoss/kit/…`. Here the root package links itself.
-- In the core, a root is what a runtime serves: a name, a surface and a page. The root of a .baba/ is one; the specs' notes fixture is another.
+- In the core, a root is what a runtime serves: a name, a surface and a page. The shell, the root of a .baba/, is one; the specs' notes fixture is another, with the shell's hosting and none of its surface.
 - Production never imports spec.
 - The version is semantic, in package.json, set by hand. Every version on main is a release: a change to the package raises it and adds its section to CHANGELOG.md, written for the agent that adapts a project's surfaces to it. On main, the Release workflow tags a new version vX.Y.Z; tags are never moved.
 

@@ -2,6 +2,16 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.24.0
+
+- The shell is now the root surface of `.baba/`, and there is no picker tab. At `/`, `utils` is now `surfaces`, each `{ name, description, open }`. With no surfaces, `/` has `empty`, and with no `.baba/` it has `missing`.
+- A tab row's `util` is now `surface`: `tabs.N.util` → `tabs.N.surface`. `open util=NAME` → `open surface=NAME`.
+- Since the picker no longer takes tab 1 and `tabs.0`, the first surface opened in a new session is `/tabs/1` and `tabs.0`. A session's kept state is migrated: its picker tab is dropped and its other tabs keep their numbers.
+- Import paths: `babavoss/shell/ui/index.ts` → `babavoss/shell/ui/index.tsx`; change it in each surface's `ui/index.tsx`. `useTab().util` is now `useTab().surface`.
+- The element that wraps a tab's content carries `data-surface="NAME"`, no longer `data-util`; a surface's `ui/styles.css` is scoped with `@scope ([data-surface="NAME"])`.
+- `babavoss/shell/index.ts` is gone; hosting is `babavoss/shell/src/hosting.ts`. `babavoss/root/*` is gone.
+- `"surfaces"` is no longer a reserved surface name.
+
 ## 0.23.0
 
 - The kit's theming tokens are now one named contract, listed in `framework/kit/defaults.css` and in the "Looks" section of `skill/making-surfaces.md`. Replace literal colours, fonts and sizes in a surface's page with them: `text-badge`, `text-meta`, `text-body` and `text-large` for UI text.

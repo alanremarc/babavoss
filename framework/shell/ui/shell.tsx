@@ -1,4 +1,4 @@
-// The shell page: the surface's root view drives the tab strip and the launcher; each tab shows its util's component.
+// The shell page: the shell's view at / drives the tab strip and the launcher; each tab shows its surface's component.
 // The strip is the launcher's "+", then the open tabs newest first. A tab the person opens becomes theirs to look at; one
 // the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are.
 // The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
@@ -10,17 +10,17 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { call, changes, read } from "./client.ts"
-import { Launcher, LauncherButton, type TabEntry, type UtilEntry } from "./launcher.tsx"
+import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
 import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent } from "./tabs.tsx"
 
-/** A util's presentation: its component, and the icon the strip and the launcher show. */
-export type Registry = Record<string, { component: ComponentType; icon?: ReactNode }>
-/** A tab as home lists it; one whose util is always open offers no `close`; `broken` says why its util fails on what it keeps. */
-type Row = { at: string; n: number; util: string; title?: string; close?: Handle; broken?: string }
-type RootView = { title: string; utils: UtilEntry[]; tabs: Row[] }
+/** Each surface's page module: its component, the default export, and the icon the strip and the launcher show. */
+export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
+/** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
+type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
+type RootView = { title: string; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[] }
 type At = { key: string; route: string }
 
 const parse = (): At => {
@@ -44,7 +44,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
 
     return (
       <Alert variant="destructive" className="m-3 w-auto">
-        <AlertTitle>The util's page failed</AlertTitle>
+        <AlertTitle>The surface's page failed</AlertTitle>
         <AlertDescription>{this.state.error}</AlertDescription>
         <Button variant="outline" onClick={() => this.setState({ error: undefined })}>
           Try again
@@ -54,7 +54,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
   }
 }
 
-export function Shell({ utils }: { utils: Registry }) {
+export function Shell({ surfaces }: { surfaces: Registry }) {
   const [root, setRoot] = useState<RootView>()
   const [error, setError] = useState("")
   const [connected, setConnected] = useState(false)
@@ -76,14 +76,14 @@ export function Shell({ utils }: { utils: Registry }) {
   )
   const rows = root?.tabs ?? []
   const active = at.key === "new" || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : "new"
-  const icons = useMemo(() => Object.fromEntries(Object.entries(utils).map(([name, u]) => [name, u.icon])), [utils])
+  const icons = useMemo(() => Object.fromEntries(Object.entries(surfaces).map(([name, s]) => [name, s.icon])), [surfaces])
   const strip = useMemo(() => newestFirst(rows), [rows])
   const entries: TabEntry[] = strip.map((row) => ({
     at: row.at,
     n: row.n,
-    util: row.util,
-    label: row.title ?? `${row.util} ${row.n}`,
-    icon: icons[row.util] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
+    surface: row.surface,
+    label: row.title ?? `${row.surface} ${row.n}`,
+    icon: icons[row.surface] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
   }))
   // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
   const [seen, setSeen] = useState<ReadonlySet<string>>()
@@ -123,21 +123,6 @@ export function Shell({ utils }: { utils: Registry }) {
     return () => window.removeEventListener("popstate", navigate)
   }, [])
 
-  // A page opened at / lands in the first tab that is always open, where there is one: a root of one util is that util.
-  const landed = useRef(false)
-
-  useEffect(() => {
-    if (!root || landed.current) return
-    landed.current = true
-
-    const first = root.tabs.find((r) => !r.close)
-
-    if (first && at.key === "new") {
-      history.replaceState(null, "", urlOf(first.at))
-      setAt({ key: first.at, route: "/" })
-    }
-  }, [root, at.key])
-
   useEffect(() => {
     if (root) setSeen((s) => (!s ? new Set([...root.tabs.map((r) => r.at), active]) : s.has(active) ? s : new Set([...s, active])))
   }, [root, active])
@@ -174,19 +159,19 @@ export function Shell({ utils }: { utils: Registry }) {
   }
   const open = async (handle: Handle) => {
     const view = await act("/", handle)
-    const opened = newestFirst(view?.tabs.filter((r) => r.util === handle.args.util) ?? [])[0]
+    const opened = newestFirst(view?.tabs.filter((r) => r.surface === handle.args.surface) ?? [])[0]
 
     if (opened) go(opened.at, "/")
   }
 
   const choices = {
-    utils: root?.utils ?? [],
+    surfaces: root?.surfaces ?? [],
     icons,
     tabs: entries,
     active,
     disabled: pending || !root,
     loading: !root,
-    launch: (u: UtilEntry) => (u.open ? void open(u.open) : go(rows.find((r) => r.util === u.name)?.at ?? "new")),
+    launch: (s: SurfaceEntry) => void open(s.open),
     select: (at: string) => go(at),
     settings: () => go("settings"),
   }
@@ -218,11 +203,11 @@ export function Shell({ utils }: { utils: Registry }) {
           </TabContent>
           {active === "new" && (
             <TabContent address="new" hidden={false}>
-              <Launcher title={root?.title} {...choices} />
+              <Launcher title={root?.title} notice={root?.missing ?? root?.empty} {...choices} />
             </TabContent>
           )}
           {rows.map((row) => {
-            const Util = utils[row.util]?.component
+            const Page = surfaces[row.surface]?.default
 
             return (
               <TabContent key={row.at} address={row.at} hidden={active !== row.at}>
@@ -232,16 +217,16 @@ export function Shell({ utils }: { utils: Registry }) {
                       <AlertTitle>This tab is broken</AlertTitle>
                       <AlertDescription>{row.broken}</AlertDescription>
                     </Alert>
-                  ) : Util ? (
+                  ) : Page ? (
                     <TabError>
                       <TabProvider
                         address={row.at}
-                        util={row.util}
+                        surface={row.surface}
                         route={routes[row.at] ?? "/"}
                         active={active === row.at}
                         navigate={(route) => go(row.at, route)}
                       >
-                        <Util />
+                        <Page />
                       </TabProvider>
                     </TabError>
                   ) : (
@@ -250,8 +235,8 @@ export function Shell({ utils }: { utils: Registry }) {
                         <EmptyMedia variant="icon">
                           <CircleAlertIcon />
                         </EmptyMedia>
-                        <EmptyTitle>{row.util} has no page</EmptyTitle>
-                        <EmptyDescription>Register a component for it in the page's utils.</EmptyDescription>
+                        <EmptyTitle>{row.surface} has no page</EmptyTitle>
+                        <EmptyDescription>Give it one: the default export of its ui/index.tsx.</EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   )}

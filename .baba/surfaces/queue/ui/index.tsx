@@ -5,7 +5,7 @@ import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCirc
 import Markdown from "react-markdown"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain } from "babavoss/kit/index.ts"
-import { useLive, useTab } from "babavoss/shell/ui/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Status = "draft" | "backlog" | "lane" | "done"
 type Issue = { at: string; n: number; title: string; status: Status; lane?: number; note?: string }

@@ -8,7 +8,7 @@ This project has surfaces. A surface is a tool you work with for the person: wha
 
 ## The root
 
-`.baba/` has a root: one runtime for this session, with one page. Its first tab is the picker, which lists the surfaces; each surface is opened beside it as a tab. Where this session began with these words, the root is started and its answer follows them. Otherwise start it from `.baba/` with `bun run baba start`.
+`.baba/` has a root: one runtime for this session, with one page, the shell, which lists the surfaces and holds each one opened as a tab. Where this session began with these words, the root is started and its answer follows them. Otherwise start it from `.baba/` with `bun run baba start`.
 
 Its answer names the page's address, the command to use, the surfaces and the open tabs. Open the page in the harness's browser if it has one, and otherwise give its address to the person; do so again whenever an answer names a new address. The root sleeps when nothing has called it for a while, and any command wakes it where it was, its tabs and their state kept. There is nothing to keep running.
 
