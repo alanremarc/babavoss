@@ -179,7 +179,7 @@ export function TabContent({ address, hidden, children }: { address: string; hid
   )
 }
 
-/** `end`: what stands at the strip's right, after the tabs, such as the activity button. */
+/** `end`: what stands at the strip's right, after the tabs, such as the notifications button. */
 export function SurfaceTabs({ items, active, onSelect, home, end }: { items: TabItem[]; active: string; onSelect: (id: string) => void; home: ReactNode; end?: ReactNode }) {
   const strip = useRef<HTMLDivElement>(null)
   const [more, setMore] = useState(false)

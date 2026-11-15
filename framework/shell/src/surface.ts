@@ -4,7 +4,8 @@
 // own paths below it; the surface never knows: the paths its views name under `at`, and its notices, are given whole on the way
 // out, a notice with its surface's name. A tab whose surface says `attention` at / is needed: who, and why, gathered first at
 // / as `needs`, so who is needed is read before every tab. Every commit is kept as activity, who did what where, read on
-// demand at /activity and named at / by one fact that never changes (activity.ts). What
+// demand at /activity and named at / by one fact that never changes (activity.ts); what the person has seen of its
+// notices is marked by asks at /activity/notices, which are no activity and change nothing at /. What
 // a surface throws breaks only what it was asked for: a tab it cannot restore or show at / is listed as broken, with why
 // and what to do, and close stays offered; a path it cannot show says so, and the rest of the tab works; a tab it cannot
 // open is not made.
@@ -12,15 +13,18 @@
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
-import { action, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
-import { activityView, linesOf, record, restored, type Entry } from "./activity.ts"
+import { action, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
+import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenOf, type Entry, type Seen } from "./activity.ts"
 
 /** `broken`: why the tab's surface could not restore its kept model, which is then kept as it was saved. */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string }
 /** Where the agent last pointed the person, and how many times it has: the page goes there when the count moves. */
 export type Pointed = { at: string; n: number }
-/** `activity`: who did what in the session's tabs, oldest first (activity.ts); absent in state kept before it. */
-export type ShellModel = { tabs: Tab[]; next: number; pointed?: Pointed; activity?: Entry[] }
+/**
+ * `activity`: who did what in the session's tabs, oldest first (activity.ts); absent in state kept before it. `seen`: what
+ * the person has seen of its notices (activity.ts); absent in state kept before it.
+ */
+export type ShellModel = { tabs: Tab[]; next: number; pointed?: Pointed; activity?: Entry[]; seen?: Seen }
 /** `t`: when the shell's run heard the event, in ms since the epoch, for its activity. */
 export type ShellEvent = { kind: "tab"; n: number; event: { kind: string }; t?: number }
 export type ShellCommand = { n: number; surface: string; command: unknown }
@@ -100,7 +104,7 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
 
         const commands = (s.start?.(tab.model) ?? []).map((command: unknown) => ({ n: tab.n, surface: name, command }))
 
-        return { model: { tabs: [...model.tabs, tab], next: model.next + 1 }, commands }
+        return { model: { ...model, tabs: [...model.tabs, tab], next: model.next + 1 }, commands }
       } catch (error) {
         return { refused: `no ${name} tab is opened: its surface fails as it opens (${message(error)}); fix the surface's code` }
       }
@@ -197,7 +201,25 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       return { broken: `/tabs/${tab.n}${path} cannot be shown: ${failed}, while tab ${tab.n} works at /: fix the surface's code for this path` }
     }
   }
-  const desktop = view([open, close, show], {
+  // The person's marks of what they have seen of the notices: asks, so offered to them alone, at /activity/notices.
+  const seen = action({
+    name: "seen",
+    description: "the person saw every notice up to n, as on opening their notifications",
+    subject: {},
+    inputs: { n: "number" },
+    ask: true,
+    update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({ model: { ...model, seen: seeUpto(model.seen ?? { upto: 0, looked: [] }, n) } }),
+  })
+  const looked = action({
+    name: "looked",
+    description: "the person looked at notice n alone, as by clicking its toast",
+    subject: {},
+    inputs: { n: "number" },
+    ask: true,
+    update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({ model: { ...model, seen: lookAt(model.seen ?? { upto: 0, looked: [] }, n) } }),
+  })
+  const opened = (model: ShellModel) => new Set(model.tabs.map((t) => t.n))
+  const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
       title: "baba",
       ...(baba === undefined ? { missing: MISSING } : !held.size && { empty: EMPTY }),
@@ -207,8 +229,10 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       ...(model.pointed && { pointed: model.pointed }),
       activity: { at: "/activity" },
     }),
-    "/activity": (model) => activityView(model.activity ?? [], new Set(model.tabs.map((t) => t.n))),
-    "/activity/:n": (model, { n }) => activityView(model.activity ?? [], new Set(model.tabs.map((t) => t.n)), Number(n)),
+    "/activity": (model) => activityView(model.activity ?? [], opened(model)),
+    [NOTICES]: (model) => ({ ...activityView(model.activity ?? [], opened(model), undefined, true), seen: seen.bind({}), looked: looked.bind({}) }),
+    [`${NOTICES}/:n`]: (model, { n }) => activityView(model.activity ?? [], opened(model), Number(n), true),
+    "/activity/:n": (model, { n }) => activityView(model.activity ?? [], opened(model), Number(n)),
   })
   /**
    * A tab as the desktop lists it, for the actor: its surface's title and facts at /, the paths whole, and who it needs, which
@@ -279,15 +303,19 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
 
   return surface<ShellModel, ShellEvent, ShellCommand>({
     description: "The project's surfaces, each opened as a tab",
-    init: () => ({ tabs: [], next: 1 }),
+    // A fresh session has a seen mark from the start, so only state kept before marks were kept is without one.
+    init: () => ({ tabs: [], next: 1, seen: { upto: 0, looked: [] } }),
     restore(saved): ShellModel {
       const kept = saved as { tabs?: { n: number; surface?: string; util?: string; model: unknown }[]; next?: number } | undefined
 
       if (!kept || !Array.isArray(kept.tabs) || typeof kept.next !== "number") throw new Error("saved shell state has no tabs and next number")
 
+      const activity = restored((saved as { activity?: unknown }).activity)
+
       return {
         next: kept.next,
-        activity: restored((saved as { activity?: unknown }).activity),
+        activity,
+        seen: seenFrom((saved as { seen?: unknown }).seen, activity),
         tabs: kept.tabs.flatMap((t): Tab[] => {
           const name = t.surface ?? (t.util === PICKER ? undefined : t.util)
           const s = name === undefined ? undefined : held.get(name)
@@ -325,8 +353,11 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       const at = within(path)
 
       if (!at) {
-        const home = desktop.view(model, path)
+        const home = desktop.view(model, path, actor)
 
+        // How many notices the person has not seen is theirs alone, beside the asks that mark them.
+        if (home && path === NOTICES && actor !== undefined && isPerson(actor))
+          return { ...home, unseen: unseenOf(model.activity ?? [], model.seen ?? { upto: 0, looked: [] }) }
         if (!home || path !== "/") return home
 
         const rows = model.tabs.map((tab) => said(tab, actor))

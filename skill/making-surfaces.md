@@ -44,13 +44,13 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 ...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
 ```
 
-A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
+A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab, and keeps it in the person's notifications; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
 
 ```ts
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
-A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event.
+A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page under all activity, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person's notifications.
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
