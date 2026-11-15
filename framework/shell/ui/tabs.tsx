@@ -1,3 +1,4 @@
+// The bottom strip: the launcher's "+", then the open tabs as pills that scroll when they overflow; and a tab's panel.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
 import { XIcon } from "lucide-react"
@@ -7,11 +8,11 @@ const contentId = (key: string) => `content-${key.replaceAll("/", "-")}`
 const tabId = (key: string) => `tab-${key.replaceAll("/", "-")}`
 const fadeEnd = "mask-r-from-[calc(100%-32px)]"
 
-type TabItem = { id: string; label: string; icon: ReactNode; changed?: boolean; onClose?: () => void }
+type TabItem = { id: string; label: string; icon: ReactNode; unseen?: boolean; onClose?: () => void }
 
 const pillMotion = "transition-[scale,opacity] duration-[200ms,100ms] ease-[cubic-bezier(.3,1.6,.4,1),ease] motion-reduce:transition-none"
 
-function Tab({ label, icon, changed, active, focusable, id, onSelect, onClose }: { active: boolean; focusable: boolean; onSelect: () => void } & TabItem) {
+function Tab({ label, icon, unseen, active, focusable, id, onSelect, onClose }: { active: boolean; focusable: boolean; onSelect: () => void } & TabItem) {
   const labelRef = useRef<HTMLSpanElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const contentRef = useRef<HTMLSpanElement>(null)
@@ -65,7 +66,10 @@ function Tab({ label, icon, changed, active, focusable, id, onSelect, onClose }:
   return (
     <div
       data-slot="pill"
-      className="group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5"
+      className={cn(
+        "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
+        unseen && "animate-in duration-300 fade-in-0 zoom-in-90 motion-reduce:animate-none"
+      )}
       data-active={active || undefined}
       onMouseEnter={() => setEngaged(true)}
       onMouseLeave={(event) => {
@@ -97,9 +101,8 @@ function Tab({ label, icon, changed, active, focusable, id, onSelect, onClose }:
         className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onSelect}
         title={label}
-        aria-label={label}
+        aria-label={unseen ? `${label}, new` : label}
       >
-        {changed && <span aria-label="Changed since you last looked" className="ml-1 size-1.5 shrink-0 rounded-full bg-primary" />}
         <span
           ref={labelRef}
           data-slot="tab-label"
@@ -124,6 +127,7 @@ function Tab({ label, icon, changed, active, focusable, id, onSelect, onClose }:
           )}
         >
           {icon}
+          {unseen && <span aria-hidden className="absolute top-0 right-0 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
         </span>
       </button>
       {onClose && (
@@ -212,7 +216,6 @@ export function SurfaceTabs({ items, active, onSelect, home }: { items: TabItem[
         ref={strip}
         role="tablist"
         aria-label="Open tabs"
-        aria-owns="tab-new"
         className={cn("no-scrollbar flex h-full min-w-0 shrink items-center gap-1 overflow-x-auto overscroll-x-contain", more && fadeEnd)}
       >
         {items.map((item) => (

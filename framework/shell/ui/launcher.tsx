@@ -1,90 +1,189 @@
-import { useEffect, useState, type ReactNode } from "react"
-import { BoxIcon, SettingsIcon } from "lucide-react"
+// The launcher: one palette to open a util and to switch to an open tab, found by name. It drops from the strip's "+"
+// and from ⌘K or Ctrl+K anywhere on the page; where no tab is open it is the page itself.
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { cn } from "cn"
+import { BoxIcon, PlusIcon, SettingsIcon } from "lucide-react"
 import type { Handle } from "../../core/index.ts"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../../kit/components/command"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
+import { Popover, PopoverContent, PopoverTrigger } from "../../kit/components/popover"
 
 /** A util as home lists it; one that is always open offers no `open`: its tab is there. */
 export type UtilEntry = { name: string; description: string; open?: Handle }
+/** An open tab as the launcher offers it, newest first. */
+export type TabEntry = { at: string; n: number; util: string; label: string; icon: ReactNode }
+
+type Choices = {
+  utils: UtilEntry[]
+  icons: Record<string, ReactNode | undefined>
+  /** The open tabs, newest first. */
+  tabs: TabEntry[]
+  active: string
+  disabled: boolean
+  loading: boolean
+  launch: (util: UtilEntry) => void
+  select: (at: string) => void
+  settings: () => void
+}
+
+const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+const shortcut = mac ? "⌘K" : "Ctrl K"
 
 /** Whose page this is, from the meta tags the runtime serves the page with; presentation, never in a view. */
 const about = (key: string): string | undefined => document.querySelector<HTMLMetaElement>(`meta[name="babavoss:${key}"]`)?.content || undefined
 
-/** The launcher: the root's title, the utils as a command palette, the shortcuts, and whose page it is at the bottom. */
-export function Launcher({
-  title,
-  utils,
-  icons,
-  tabs,
-  disabled,
-  loading,
-  launch,
-  settings,
-}: {
-  title?: string
-  utils: UtilEntry[]
-  icons: Record<string, ReactNode | undefined>
-  tabs: { util: string }[]
-  disabled: boolean
-  loading: boolean
-  launch: (util: UtilEntry) => void
-  settings: () => void
+const Glyph = ({ children }: { children: ReactNode }) => <span className="grid size-[22px] shrink-0 place-items-center">{children}</span>
+
+/** The palette: what can be opened, the open tabs to switch to, and settings; typing filters all three. */
+function Palette({ utils, icons, tabs, active, disabled, loading, launch, select, settings, search, setSearch, list }: Choices & {
+  search: string
+  setSearch: (search: string) => void
+  list?: string
 }) {
+  const openable = utils.filter((u) => u.open)
+
+  return (
+    <Command loop>
+      <CommandInput autoFocus aria-label="Open or switch to" placeholder="Open or switch to…" value={search} onValueChange={setSearch} />
+      <CommandList className={list}>
+        <CommandEmpty>{loading ? "Loading…" : "Nothing found."}</CommandEmpty>
+        {openable.length > 0 && (
+          <CommandGroup heading="Open">
+            {openable.map((u) => {
+              const count = tabs.filter((tab) => tab.util === u.name).length
+
+              return (
+                <CommandItem key={u.name} value={`util ${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u)}>
+                  <Glyph>{icons[u.name] ?? <BoxIcon aria-hidden />}</Glyph>
+                  <span className="max-w-[45%] shrink-0 truncate text-foreground">{u.name}</span>
+                  <span className="min-w-0 flex-1 truncate pl-1.5" title={u.description}>
+                    {u.description}
+                  </span>
+                  {count > 0 && <span className="pl-2 text-meta whitespace-nowrap">{count} open</span>}
+                </CommandItem>
+              )
+            })}
+          </CommandGroup>
+        )}
+        {!loading && !openable.length && !search && <p className="my-2 ml-7 text-meta text-muted-foreground">Nothing to open yet.</p>}
+        {tabs.length > 0 && (
+          <CommandGroup heading="Switch to">
+            {tabs.map((tab) => (
+              <CommandItem key={tab.at} value={`tab ${tab.at}`} keywords={[tab.label, tab.util, String(tab.n)]} onSelect={() => select(tab.at)}>
+                <Glyph>{tab.icon}</Glyph>
+                <span className="min-w-0 flex-1 truncate text-foreground">{tab.label}</span>
+                <span className="max-w-[40%] truncate pl-2 text-meta">{tab.at === active ? "current" : `${tab.util} ${tab.n}`}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+        <CommandGroup heading="Page">
+          <CommandItem value="settings" keywords={["settings", "appearance", "theme"]} onSelect={settings}>
+            <Glyph>
+              <SettingsIcon aria-hidden />
+            </Glyph>
+            Settings
+          </CommandItem>
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  )
+}
+
+/** The launcher as the page, where no tab is open: the root's title, the palette, and whose page it is at the bottom. */
+export function Launcher({ title, ...choices }: Choices & { title?: string }) {
   const [search, setSearch] = useState("")
 
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-4 pt-[max(16px,14vh)] pb-3" aria-label="Launcher">
       <div className="flex h-fit w-full max-w-[560px] flex-col gap-3">
         {title && <h1 className="truncate px-2 text-large font-medium">{title}</h1>}
-        <Command loop>
-          <CommandInput
-            autoFocus
-            aria-label="Search utils"
-            placeholder="Search utils…"
-            value={search}
-            onValueChange={setSearch}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault()
-                setSearch("")
-              }
-            }}
-          />
-          <CommandList className="max-h-none">
-            <CommandEmpty>{loading ? "Loading…" : "No utils found."}</CommandEmpty>
-            <div className="flex flex-col gap-3">
-              <CommandGroup heading="Utils">
-                {utils.map((u) => {
-                  const count = tabs.filter((tab) => tab.util === u.name).length
-
-                  return (
-                    <CommandItem key={u.name} value={`util-${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u)}>
-                      <span className="grid size-[22px] shrink-0 place-items-center">{icons[u.name] ?? <BoxIcon aria-hidden />}</span>
-                      <span className="min-w-0 flex-1 truncate">{u.name}</span>
-                      <span className="min-w-0 flex-1 truncate text-muted-foreground">{u.description}</span>
-                      {count > 0 && <span className="pl-2 text-[11px] whitespace-nowrap text-muted-foreground">{u.open ? `${count} open` : "open"}</span>}
-                    </CommandItem>
-                  )
-                })}
-              </CommandGroup>
-              <CommandGroup heading="Shortcuts">
-                <CommandItem value="settings" onSelect={settings}>
-                  <span className="grid size-[22px] shrink-0 place-items-center">
-                    <SettingsIcon />
-                  </span>
-                  Settings
-                </CommandItem>
-              </CommandGroup>
-            </div>
-          </CommandList>
-        </Command>
+        <Palette {...choices} search={search} setSearch={setSearch} list="max-h-none" />
       </div>
-      <About />
+      <About className="mt-auto max-w-[560px] pt-6" />
     </section>
   )
 }
 
+/** The strip's "+": the launcher dropped above it. A choice closes it; Escape clears what is typed, then closes. */
+export function LauncherButton({ launch, select, settings, ...choices }: Choices) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState("")
+  const chose = useRef(false)
+  const choose =
+    <A extends unknown[]>(fn: (...args: A) => void) =>
+    (...args: A) => {
+      chose.current = true
+      setOpen(false)
+      fn(...args)
+    }
+
+  useEffect(() => {
+    const toggle = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+      event.preventDefault()
+      setOpen((was) => !was)
+    }
+
+    window.addEventListener("keydown", toggle)
+
+    return () => window.removeEventListener("keydown", toggle)
+  }, [])
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) setSearch("")
+      }}
+    >
+      <PopoverTrigger
+        id="tab-new"
+        aria-label="Open or switch to"
+        title={`Open or switch to (${shortcut})`}
+        className={cn(
+          "grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground",
+          choices.active === "new" && "bg-foreground/11 text-foreground"
+        )}
+      >
+        <PlusIcon className="size-4" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        collisionPadding={8}
+        aria-label="Launcher"
+        className="w-[min(28rem,calc(100vw-16px))] gap-1.5 p-1.5"
+        onOpenAutoFocus={() => (chose.current = false)}
+        onCloseAutoFocus={(event) => {
+          if (chose.current) event.preventDefault()
+        }}
+        onEscapeKeyDown={(event) => {
+          if (!search) return
+          event.preventDefault()
+          setSearch("")
+        }}
+      >
+        <Palette
+          {...choices}
+          launch={choose(launch)}
+          select={choose(select)}
+          settings={choose(settings)}
+          search={search}
+          setSearch={setSearch}
+          list="max-h-[min(24rem,60dvh)]"
+        />
+        <About className="justify-between px-2.5 pt-0.5 pb-0.5">
+          <CommandShortcut className="ml-0 tracking-normal">{shortcut}</CommandShortcut>
+        </About>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /** One muted line: the root and its version, then the session shortened, whole on hover and copied on a click. */
-function About() {
+function About({ className, children }: { className?: string; children?: ReactNode }) {
   const [facts] = useState(() => ({ root: about("root"), version: about("version"), session: about("session") }))
   const [copied, setCopied] = useState(false)
   const { root, version, session } = facts
@@ -97,22 +196,25 @@ function About() {
     return () => clearTimeout(timer)
   }, [copied])
 
-  if (!root && !session) return null
+  if (!root && !session && !children) return null
 
   return (
-    <footer className="mt-auto flex w-full max-w-[560px] flex-wrap justify-center gap-x-3 px-2 pt-6 text-meta text-muted-foreground">
-      {root && <span>{version ? `${root} ${version}` : root}</span>}
-      {session && (
-        <button
-          type="button"
-          title={session}
-          aria-label={`Copy session id ${session}`}
-          className="cursor-pointer rounded-sm hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
-          onClick={() => void navigator.clipboard?.writeText(session).then(() => setCopied(true))}
-        >
-          {copied ? "Copied" : `session ${session.slice(0, 8)}`}
-        </button>
-      )}
+    <footer className={cn("flex w-full flex-wrap justify-center gap-x-3 px-2 text-meta text-muted-foreground", className)}>
+      <span className="flex min-w-0 gap-x-3">
+        {root && <span className="truncate">{version ? `${root} ${version}` : root}</span>}
+        {session && (
+          <button
+            type="button"
+            title={session}
+            aria-label={`Copy session id ${session}`}
+            className="cursor-pointer rounded-sm whitespace-nowrap hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            onClick={() => void navigator.clipboard?.writeText(session).then(() => setCopied(true))}
+          >
+            {copied ? "Copied" : `session ${session.slice(0, 8)}`}
+          </button>
+        )}
+      </span>
+      {children}
     </footer>
   )
 }
