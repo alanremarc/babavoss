@@ -60,7 +60,7 @@ export default function Queue() {
                 <span className="tabular-nums">#{selected.n}</span>
               </div>
               <h1 className="text-lg leading-snug font-medium text-balance">{selected.title}</h1>
-              <p className="text-muted-foreground text-sm leading-relaxed">{selected.about}</p>
+              <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-line">{selected.about}</p>
               {selected.note && (
                 <p className="border-primary/50 border-l-2 pl-3 text-sm">
                   <span className="text-muted-foreground">Now: </span>
