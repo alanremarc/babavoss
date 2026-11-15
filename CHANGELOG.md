@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.40.1
+
+- In a menu the mark of what waits on the person stands at an entry's right, so a menu keeps no room at its left for it. Nothing to adapt.
+
 ## 0.40.0
 
 - `sessionDir()` from `babavoss/core/state/session-dir.ts` gives a surface's command the session's own directory under the project's `.babavoss/`, where a surface may keep what belongs to the session and not to a tab; it gives nothing outside a runtime. Nothing to adapt.
