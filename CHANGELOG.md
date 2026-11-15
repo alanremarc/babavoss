@@ -2,6 +2,15 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.45.0
+
+- A session resumed, forked or compacted is given a short reminder of baba's words (`skill/reminder.md`, also in the plugin) and then the whole present, instead of the whole words again. A new or cleared session still gets them whole.
+- The first answer names the page and the command, and no longer says where `bv` and `baba` were put or repeats the skill's help.
+- A command's answer says once when this session's hooks have gone quiet, or never spoke, and calls alone no longer keep the page's turn reading as working.
+- While changed surface code loads, reads and calls are held, up to about 40s, and answered by the new code. A call the old code took as it stopped is given to the new one. The agent is told of a reload only when work was cut or the new code did not start.
+- A call whose answer was lost says its outcome is unknown: read before retrying.
+- The client is version 11 and replaces installed copies.
+
 ## 0.44.1
 
 - Home is one list with each thing once, and no headings: the open tabs, the surfaces with no tab open, then the shell's commands. A line names the thing and says what kind it is; the chosen line and the foot say what Enter does on it, Go to tab, Open or Run. Enter with the command key opens another tab of an open tab's surface. Nothing to adapt.
