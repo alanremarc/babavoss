@@ -1,11 +1,11 @@
-// The queue: the work on babavoss as issues, each in the backlog, in a lane or done. The agent orchestrates up to five
+// The queue: the work on babavoss as issues, each a draft, in the backlog, in a lane or done. The agent orchestrates up to five
 // lanes, each a subagent in its own worktree delivering one issue at a time, and keeps this current as the work moves;
 // the person reads it on the page. Nothing here does the work: it says who is delivering what.
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
 
 export const LANES = 5
 
-export type Issue = { n: number; title: string; note?: string; status: "backlog" | "lane" | "done"; lane?: number; at: number }
+export type Issue = { n: number; title: string; about: string; note?: string; status: "draft" | "backlog" | "lane" | "done"; lane?: number; at: number }
 export type Model = { issues: Issue[]; next: number; clock: number }
 type Event = { kind: "none" }
 type Result = Update<Model, never>
@@ -17,15 +17,39 @@ const moved = (m: Model, n: number, change: (issue: Issue) => Issue): Model => (
   issues: m.issues.map((issue) => (issue.n === n ? { ...change(issue), at: m.clock } : issue)),
 })
 
+const made = (m: Model, title: string, about: string, status: Issue["status"]): Result =>
+  title.trim() && about.trim()
+    ? { model: { issues: [...m.issues, { n: m.next, title: title.trim(), about: about.trim(), status, at: m.clock }], next: m.next + 1, clock: m.clock + 1 } }
+    : { refused: "An issue needs a title and a line about it" }
 const add = action({
   name: "add",
-  description: "Add an issue to the bottom of the backlog: one deliverable change, titled in the imperative",
+  description: "Add an issue the person asked for to the bottom of the backlog: a short imperative title, and about, a sentence or two on what changes and why",
   subject: {},
-  inputs: { title: "string" },
-  update: (m: Model, { title }): Result =>
-    title.trim()
-      ? { model: { issues: [...m.issues, { n: m.next, title: title.trim(), status: "backlog", at: m.clock }], next: m.next + 1, clock: m.clock + 1 } }
-      : { refused: "An issue needs a title" },
+  inputs: { title: "string", about: "string" },
+  update: (m: Model, { title, about }): Result => made(m, title, about, "backlog"),
+})
+const draft = action({
+  name: "draft",
+  description: "Suggest an issue the person has not asked for, as a draft: title and about as for add; it waits for their approval on the page",
+  subject: {},
+  inputs: { title: "string", about: "string" },
+  update: (m: Model, { title, about }): Result => made(m, title, about, "draft"),
+})
+const approve = action({
+  name: "approve",
+  description: ({ n }) => `Approve draft ${n}: it joins the backlog`,
+  subject: { n: "number" },
+  inputs: {},
+  ask: true,
+  update: (m: Model, { n }): Result => ({ model: moved(m, n, (issue) => ({ ...issue, status: "backlog" })) }),
+})
+const describe = action({
+  name: "describe",
+  description: ({ n }) => `Rewrite what issue ${n} is about, in a sentence or two`,
+  subject: { n: "number" },
+  inputs: { about: "string" },
+  update: (m: Model, { n, about }): Result =>
+    about.trim() ? { model: { ...m, issues: m.issues.map((issue) => (issue.n === n ? { ...issue, about: about.trim() } : issue)) } } : { refused: "Say what it is about" },
 })
 const note = action({
   name: "note",
@@ -33,7 +57,7 @@ const note = action({
   subject: { n: "number" },
   inputs: { text: "string" },
   update: (m: Model, { n, text }): Result => ({
-    model: { ...m, issues: m.issues.map(({ note: _note, ...issue }) => (issue.n === n ? { ...issue, ...(text.trim() && { note: text.trim() }) } : { ...issue, ...(_note && { note: _note }) })) },
+    model: { ...m, issues: m.issues.map((issue) => (issue.n === n ? { ...issue, note: text.trim() } : issue)) },
   }),
 })
 const start = action({
@@ -79,26 +103,32 @@ const row = (issue: Issue) => ({
   title: issue.title,
   status: issue.status,
   ...(issue.lane && { lane: issue.lane }),
+  about: issue.about,
   ...(issue.note && { note: issue.note }),
+  ...(issue.status === "draft" && { approve: approve.bind({ n: issue.n }) }),
+  describe: describe.bind({ n: issue.n }),
   note_: note.bind({ n: issue.n }),
   ...(issue.status === "backlog" && { start: start.bind({ n: issue.n }) }),
   ...(issue.status === "lane" && { done: done.bind({ n: issue.n }) }),
-  ...(issue.status !== "backlog" && { back: back.bind({ n: issue.n }) }),
+  ...((issue.status === "lane" || issue.status === "done") && { back: back.bind({ n: issue.n }) }),
   drop: drop.bind({ n: issue.n }),
 })
-const pages = view([add, note, start, done, back, drop], {
+const pages = view([add, draft, approve, describe, note, start, done, back, drop], {
   "/": (m) => {
     const lanes = m.issues.filter((issue) => issue.status === "lane").sort((a, b) => a.lane! - b.lane!)
     const backlog = m.issues.filter((issue) => issue.status === "backlog").sort(by)
+    const drafts = m.issues.filter((issue) => issue.status === "draft").sort(by)
     const finished = m.issues.filter((issue) => issue.status === "done").sort((a, b) => b.at - a.at)
 
     return {
       title: "Queue",
-      how: `Keep this true as the work moves: add an issue when work is asked for or found, start it when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
+      how: `Keep this true as the work moves: add an issue the person asks for, draft one you would suggest and leave it until they approve it on the page, start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
-      issues: [...lanes, ...backlog, ...finished].map(row),
+      issues: [...lanes, ...backlog, ...drafts, ...finished].map(row),
+      ...(drafts.length && { waiting: `the person, to approve or drop ${drafts.length} draft${drafts.length > 1 ? "s" : ""} on the page` }),
       add: add.bind({}),
+      draft: draft.bind({}),
     }
   },
 })
@@ -107,7 +137,7 @@ export default surface<Model, Event, never>({
   description: "Track the work on babavoss as issues: the backlog, the lanes delivering, and what is done. Use when work is asked for, starts, moves or lands.",
   init: () => ({ issues: [], next: 1, clock: 0 }),
   // State kept from a tab that is not a queue's, as when the surface was still the template it began as, starts empty.
-  restore: (saved) => (Array.isArray((saved as Partial<Model> | undefined)?.issues) ? (saved as Model) : { issues: [], next: 1, clock: 0 }),
+  restore: (saved) => (Array.isArray((saved as Partial<Model> | undefined)?.issues) && (saved as Model).issues.every((issue) => typeof issue.about === "string") ? (saved as Model) : { issues: [], next: 1, clock: 0 }),
   update: (m, message) => (message.kind === "call" ? pages.update(m, message) : { model: m }),
   view: pages.view,
   run: async () => {},

@@ -1,88 +1,140 @@
-// The queue's page: one vertical stack of issues, the lanes delivering first, then the backlog, then what is done. The
-// person reads it; what they want changed in it, they tell the agent.
-import { ListTodoIcon } from "lucide-react"
-import { Plain, useLive } from "babavoss/shell/ui/index.ts"
+// The queue's page: the issues as one-liners in a sidebar on the right, grouped by where they stand, and the selected
+// one in the content, with what it is about. The person approves or drops a draft here; anything else, they tell the agent.
+import { useState } from "react"
+import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCircleIcon } from "lucide-react"
+import type { Handle } from "babavoss/core/index.ts"
+import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain, useLive, useTab } from "babavoss/shell/ui/index.ts"
 
-type Issue = { n: number; title: string; status: "backlog" | "lane" | "done"; lane?: number; note?: string }
+type Status = "draft" | "backlog" | "lane" | "done"
+type Issue = { n: number; title: string; about: string; status: Status; lane?: number; note?: string; approve?: Handle; drop?: Handle }
 type Root = { lanes: number; free: number[]; issues: Issue[] }
 
 export const icon = <ListTodoIcon aria-hidden />
 
-const chip = "inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11px] font-medium tabular-nums"
+const GROUPS: { status: Status; label: string }[] = [
+  { status: "lane", label: "In progress" },
+  { status: "backlog", label: "Backlog" },
+  { status: "draft", label: "Drafts" },
+  { status: "done", label: "Done" },
+]
+const NAMES: Record<Status, string> = { lane: "In progress", backlog: "Backlog", draft: "Draft", done: "Done" }
 
-function Row({ issue }: { issue: Issue }) {
-  const working = issue.status === "lane"
-  const finished = issue.status === "done"
+function Mark({ status }: { status: Status }) {
+  const size = "size-3.5 shrink-0"
 
-  return (
-    <li className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${working ? "border-primary/40 bg-primary/5" : ""} ${finished ? "opacity-60" : ""}`}>
-      <span className="text-muted-foreground w-8 shrink-0 pt-px text-right text-xs tabular-nums">#{issue.n}</span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className={finished ? "line-through decoration-1" : ""}>{issue.title}</span>
-        {issue.note && <span className="text-muted-foreground text-xs">{issue.note}</span>}
-      </div>
-      {working ? (
-        <span className={`${chip} bg-primary text-primary-foreground gap-1.5`}>
-          <span className="size-1.5 animate-pulse rounded-full bg-current" aria-hidden />
-          Lane {issue.lane}
-        </span>
-      ) : (
-        <span className={`${chip} bg-secondary text-secondary-foreground`}>{finished ? "Done" : "Backlog"}</span>
-      )}
-    </li>
-  )
+  if (status === "lane") return <LoaderCircleIcon className={`${size} text-primary animate-spin [animation-duration:2.5s]`} aria-hidden />
+  if (status === "done") return <CircleCheckIcon className={`${size} text-muted-foreground`} aria-hidden />
+  if (status === "draft") return <CircleDashedIcon className={`${size} text-muted-foreground`} aria-hidden />
+
+  return <CircleIcon className={size} aria-hidden />
 }
 
-function Section({ label, count, children }: { label: string; count: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2" aria-label={label}>
-      <h2 className="text-muted-foreground flex items-baseline justify-between text-xs font-medium tracking-wide uppercase">
-        {label}
-        <span className="tabular-nums normal-case">{count}</span>
-      </h2>
-      <ul className="flex flex-col gap-1.5">{children}</ul>
-    </section>
-  )
-}
+const Lane = ({ lane }: { lane: number }) => (
+  <span className="bg-primary text-primary-foreground inline-flex h-4 shrink-0 items-center rounded-sm px-1 text-[10px] font-medium tabular-nums">L{lane}</span>
+)
 
 export default function Queue() {
   const { view, error } = useLive<Root>("/")
+  const { call } = useTab()
+  const [picked, setPicked] = useState<number>()
+  const [refused, setRefused] = useState("")
   const issues = view?.issues ?? []
-  const of = (status: Issue["status"]) => issues.filter((issue) => issue.status === status)
-  const [working, backlog, finished] = [of("lane"), of("backlog"), of("done")]
+  const selected = issues.find((issue) => issue.n === picked) ?? issues[0]
+  const busy = (view?.lanes ?? 0) - (view?.free.length ?? 0)
+  const decide = async (handle: Handle) => {
+    const answer = await call("/", handle.name, handle.args)
+
+    setRefused(answer.outcome === "refused" ? answer.reason : "")
+  }
 
   return (
     <Plain label="Queue">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-7 overflow-auto p-6">
-        <Section label="In progress" count={`${working.length} of ${view?.lanes ?? 0} lanes`}>
-          {working.map((issue) => (
-            <Row key={issue.n} issue={issue} />
-          ))}
-          {(view?.free ?? []).map((lane) => (
-            <li key={lane} className="text-muted-foreground flex items-center justify-between rounded-lg border border-dashed px-3 py-2 text-xs">
-              <span className="pl-11">idle</span>
-              <span className={`${chip} border`}>Lane {lane}</span>
-            </li>
-          ))}
-        </Section>
-        <Section label="Backlog" count={String(backlog.length)}>
-          {backlog.map((issue) => (
-            <Row key={issue.n} issue={issue} />
-          ))}
-          {!backlog.length && <li className="text-muted-foreground px-3 text-sm">Nothing waits. Tell the agent what to do next.</li>}
-        </Section>
-        {finished.length > 0 && (
-          <Section label="Done" count={String(finished.length)}>
-            {finished.map((issue) => (
-              <Row key={issue.n} issue={issue} />
-            ))}
-          </Section>
-        )}
-        {error && (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        )}
+      <div className="flex min-h-0 flex-1">
+        <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+          {selected ? (
+            <article className="flex max-w-2xl flex-col gap-4 p-6">
+              <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                <Mark status={selected.status} />
+                <span>{NAMES[selected.status]}</span>
+                {selected.lane && <Lane lane={selected.lane} />}
+                <span className="tabular-nums">#{selected.n}</span>
+              </div>
+              <h1 className="text-lg leading-snug font-medium text-balance">{selected.title}</h1>
+              <p className="text-muted-foreground text-sm leading-relaxed">{selected.about}</p>
+              {selected.note && (
+                <p className="border-primary/50 border-l-2 pl-3 text-sm">
+                  <span className="text-muted-foreground">Now: </span>
+                  {selected.note}
+                </p>
+              )}
+              {selected.status === "draft" && (
+                <div className="flex gap-2 pt-1">
+                  {selected.approve && <Button onClick={() => void decide(selected.approve!)}>Approve</Button>}
+                  {selected.drop && (
+                    <Button variant="ghost" onClick={() => void decide(selected.drop!)}>
+                      Drop
+                    </Button>
+                  )}
+                </div>
+              )}
+              {(refused || error) && (
+                <p role="alert" className="text-destructive text-sm">
+                  {refused || error}
+                </p>
+              )}
+            </article>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No issues</EmptyTitle>
+                <EmptyDescription>Tell the agent what to do next.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </main>
+        <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l py-2" aria-label="Issues">
+          {GROUPS.map(({ status, label }) => {
+            const rows = issues.filter((issue) => issue.status === status)
+
+            if (!rows.length && status !== "lane") return null
+
+            return (
+              <section key={status} aria-label={label} className="pb-2">
+                <h2 className="text-muted-foreground flex h-6 items-center justify-between px-3 text-[11px] font-medium">
+                  {label}
+                  {status === "lane" ? (
+                    <span className="flex items-center gap-0.5" aria-label={`${busy} of ${view?.lanes ?? 0} lanes busy`}>
+                      {Array.from({ length: view?.lanes ?? 0 }, (_, i) => (
+                        <span key={i} className={`h-1.5 w-3 rounded-full ${view?.free.includes(i + 1) ? "bg-border" : "bg-primary"}`} />
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="tabular-nums">{rows.length}</span>
+                  )}
+                </h2>
+                {!rows.length && <p className="text-muted-foreground/70 px-3 text-xs">All lanes idle</p>}
+                <ul>
+                  {rows.map((issue) => (
+                    <li key={issue.n}>
+                      <button
+                        type="button"
+                        onClick={() => setPicked(issue.n)}
+                        aria-current={issue.n === selected?.n}
+                        title={issue.title}
+                        className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-xs outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
+                      >
+                        <Mark status={issue.status} />
+                        <span className="min-w-0 flex-1 truncate">{issue.title}</span>
+                        {issue.lane && <Lane lane={issue.lane} />}
+                        <span className="text-muted-foreground/70 text-[10px] tabular-nums">#{issue.n}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+        </aside>
       </div>
     </Plain>
   )
