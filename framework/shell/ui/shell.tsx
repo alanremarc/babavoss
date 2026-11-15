@@ -36,7 +36,7 @@ import { Overlay, useSaid, type Connected } from "./connection.tsx"
 import { cachesBy } from "./live.ts"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { cycled, newestFirst, successor } from "./strip.ts"
-import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
+import { markOf, SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
 import { standingOf } from "./turn.ts"
 
 /**
@@ -510,8 +510,10 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
                 notice={root?.missing ?? root?.empty}
                 surfaces={root?.surfaces ?? []}
                 icons={icons}
-                tabs={entries}
-                back={entries.find((e) => e.at === back)}
+                tabs={entries.map((entry) => ({
+                  ...entry,
+                  mark: markOf({ needs: entry.needs, broken: entry.broken, unseen: !!seen && !seen.has(entry.at) && entry.at !== active, waits: waits(entry.at) }),
+                }))}
                 keys={homeKeys}
                 disabled={pending || !root}
                 loading={!root}

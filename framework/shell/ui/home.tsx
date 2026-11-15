@@ -15,10 +15,10 @@ import { doesOf, rowsOf, type HomeRow, type SurfaceEntry } from "./home.ts"
 import { named } from "./commands.ts"
 import { HOME } from "./pointing.ts"
 import { SEARCH_MARK } from "./shortcuts.ts"
-import { standing, type TabNeed } from "./tabs.tsx"
+import { MARK, standing, type TabNeed } from "./tabs.tsx"
 
 /** An open tab as home offers it, newest first. */
-export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode; needs?: TabNeed[]; broken?: string }
+export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode; needs?: TabNeed[]; broken?: string; mark?: keyof typeof MARK }
 
 /** Home's search, which the shortcut focuses. */
 export const SEARCH = `#content-${HOME} [cmdk-input]`
@@ -73,8 +73,6 @@ type Props = {
   icons: Record<string, ReactNode | undefined>
   /** The open tabs, newest first. */
   tabs: TabEntry[]
-  /** The tab shown before home, which Escape returns to. */
-  back?: TabEntry
   /** Home's shortcut, as the person reads it. */
   keys: string
   /** Ending the person's move, while their changes wait for the agent: `run` says what it did. */
@@ -103,7 +101,7 @@ function Does({ row }: { row: HomeRow }) {
  * none open. A line names the thing and says at its end what Enter does on it. Enter with the
  * command key opens another tab of an open tab's surface.
  */
-export function Home({ title, notice, surfaces, icons, tabs, back, keys, disabled, loading, launch, select, leave }: Props) {
+export function Home({ title, notice, surfaces, icons, tabs, keys, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
   const [picked, setPicked] = useState("")
   const rows = rowsOf(surfaces, tabs)
@@ -147,11 +145,10 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, disable
 
                     return (
                       <CommandItem key={row.value} value={row.value} keywords={[row.label, row.surface, description ?? "", String(tab.n), "tab", "go"]} onSelect={() => select(row.at)}>
-                        <Glyph>{tab.icon}</Glyph>
+                        <TabGlyph tab={tab} />
                         <span className="min-w-0 shrink truncate text-foreground" title={description}>
                           {row.label}
                         </span>
-                        <Standing tab={tab} previous={tab.at === back?.at} />
                         <span className="flex-1" />
                         <Does row={row} />
                       </CommandItem>
@@ -196,27 +193,12 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, disable
   )
 }
 
-/** What the row of an open tab says at its end: broken, or who it needs and why, else which it is. */
-function Standing({ tab, previous }: { tab: TabEntry; previous: boolean }) {
-  const said = standing(tab)
-  const person = tab.needs?.find((n) => n.who === "person")
-  const first = tab.broken !== undefined ? "broken" : (person ?? tab.needs?.[0])?.why
-
-  // A tab that needs nobody and was not the one shown before says nothing more than its name.
-  if (first === undefined && !previous) return null
-
+/** The tab's icon with its mark in the corner, as its pill in the strip has it: broken, waiting on the person, or needing the agent. */
+function TabGlyph({ tab }: { tab: TabEntry }) {
   return (
-    <span
-      title={said.join("\n") || undefined}
-      className={cn(
-        "flex max-w-[50%] min-w-0 items-center gap-1.5 pl-2 text-meta",
-        tab.broken !== undefined ? "text-destructive" : person ? "text-foreground" : undefined
-      )}
-    >
-      {first !== undefined && (
-        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", tab.broken !== undefined ? "bg-destructive" : person ? "bg-primary" : "bg-muted-foreground/70")} />
-      )}
-      <span className="truncate">{first ?? "previous"}</span>
+    <span className="relative grid size-[22px] shrink-0 place-items-center" title={standing(tab).join("\n") || undefined}>
+      {tab.icon}
+      {tab.mark && <span aria-hidden data-mark={tab.mark} className={cn("absolute top-0 right-0 rounded-full", MARK[tab.mark])} />}
     </span>
   )
 }
