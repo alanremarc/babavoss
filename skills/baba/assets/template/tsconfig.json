@@ -25,7 +25,6 @@
     "src",
     "spec",
     "ui",
-    "scenarios",
     "node_modules/babavoss/framework/shell/ui/css.d.ts"
   ]
 }

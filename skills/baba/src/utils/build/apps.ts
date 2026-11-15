@@ -3,20 +3,16 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join, relative } from "node:path"
 import { frontmatter } from "../promptware/promptware.ts"
-import { PRESETS_DIR, SCENARIOS_DIR, EMPTY } from "./scenarios.ts"
 
-/** An app as the playground names it: `id` is url-safe, from `dir`, its directory relative to the project ("." for the project itself). */
+/** An app by name: `id` is url-safe, from `dir`, its directory relative to the project ("." for the project itself). */
 export type AppRef = { id: string; name: string; version?: string; dir: string }
-/** An app as found: where it is, and its counts of scenarios and of its own presets, the built-in one aside. */
-export type FoundApp = AppRef & { path: string; description?: string; scenarios: number; presets: number }
+/** An app as found: where it is. */
+export type FoundApp = AppRef & { path: string; description?: string }
 
 /** Dependencies, installed apps, state and templates are outside discovery. */
 const SKIPPED = new Set(["node_modules", "framework", ".git", ".babavoss", ".claude", ".codex", ".agents", ".local", ".state", "template"])
 const skipped = (name: string) => SKIPPED.has(name)
 const isApp = (dir: string) => existsSync(join(dir, "SKILL.md")) && existsSync(join(dir, "scripts", "open.ts"))
-
-const count = (dir: string, keep: (entry: { name: string; isDirectory(): boolean }) => boolean) =>
-  existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter(keep).length : 0
 
 const slug = (text: string) => text.replaceAll(/[^A-Za-z0-9._-]+/g, "-").replaceAll(/^-+|-+$/g, "") || "app"
 
@@ -48,8 +44,6 @@ export function discoverApps(project: string): FoundApp[] {
         dir: rel,
         path: dir,
         ...(fields.description && { description: fields.description }),
-        scenarios: count(join(dir, SCENARIOS_DIR), (e) => !e.isDirectory() && e.name.endsWith(".ts") && !e.name.endsWith(".d.ts")),
-        presets: count(join(dir, PRESETS_DIR), (e) => e.isDirectory() && e.name !== EMPTY),
       })
 
       return

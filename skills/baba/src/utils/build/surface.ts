@@ -68,7 +68,7 @@ export function nextOf(b: Entry): string {
   if (doing) return `step ${doing.n} is under way: ${doing.text}; mark it done once the person can see it on the app's page`
   if (todo) return `start step ${todo.n}: ${todo.text}`
 
-  return "every step is done: try the first task in the playground with the person"
+  return "every step is done: try the first task with the person"
 }
 
 const state = (b: Entry) => (b.dir ? (b.approved ? "being built" : "changed, to approve again") : b.approved ? "approved" : "draft")

@@ -1,6 +1,6 @@
 // App promptware, selected from the project; open is computed afresh on selection and refresh.
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
-import type { FoundApp } from "../playground/apps.ts"
+import type { FoundApp } from "../build/apps.ts"
 import { size, type Promptware } from "./promptware.ts"
 import type { OpenResult } from "./open.ts"
 export type Entry = FoundApp & { promptware: Promptware }

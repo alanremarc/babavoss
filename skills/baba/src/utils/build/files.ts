@@ -5,7 +5,7 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmS
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { SKILL_FOLDERS } from "babavoss/core/skill-folders.ts"
-import { discoverApps } from "../playground/apps.ts"
+import { discoverApps } from "./apps.ts"
 import type { Brief, BuildPorts, Entry } from "./surface.ts"
 
 export const BRIEF_FILE = "brief.json"

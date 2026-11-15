@@ -45,8 +45,7 @@ it("opens on the build tab, presents its utils, opens promptware as a tab throug
   expect(start.out).toContain("baba 0.21.0")
   expect(start.out).toContain('"promptware"\t')
   expect(start.out).toContain('utils.1.open: baba / open util="promptware"')
-  expect(start.out).toContain('"playground"\t')
-  expect(start.out).not.toContain("utils.3.")
+  expect(start.out).not.toContain("utils.2.")
   expect(start.out).toContain("page: http://127.0.0.1:")
   // Build is always open: its tab is there from the start, never offered to open, and says what to do first.
   expect(start.out).not.toContain("utils.0.open")
@@ -87,6 +86,5 @@ it("works on the session's directory, whoever wakes its runtime and from whereve
 
   const cli = (...args: string[]) => run("scripts/open.ts", ["--session", "S", ...args], "", state, worktree).out
 
-  cli("/", "open", "util=playground")
   expect(cli("/tabs/1")).toContain(`project: ${JSON.stringify(project)}`)
 })

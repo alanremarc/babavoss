@@ -1,6 +1,6 @@
 // The promptware util: an app's skill and references as the agent reads them, and what its door answers at open.
 import { util } from "babavoss/shell/index.ts"
-import { discoverApps } from "../playground/apps.ts"
+import { discoverApps } from "../build/apps.ts"
 import { runOpen } from "./open.ts"
 import { readPromptware } from "./promptware.ts"
 import { promptwareSurface, type PromptwarePorts } from "./surface.ts"

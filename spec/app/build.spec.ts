@@ -153,7 +153,7 @@ test("the steps of building it say what is next, one at a time, and noting them 
     reason: expect.stringContaining("todo, doing, done"),
   })
   await agent.call(at, "mark", { ...it, n: 2, status: "done" })
-  expect(agent.sees(at)!.next).toContain("playground")
+  expect(agent.sees(at)!.next).toContain("every step is done")
 })
 
 test("a brief not yet an app is kept by the session, one that is an app is read from its directory again, and a draft can be dropped", async () => {
