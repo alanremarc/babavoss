@@ -5,9 +5,16 @@ import { spawnSync } from "node:child_process"
 import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-import { afterEach, expect, it } from "bun:test"
-import { ACTOR_HEADER, CALL_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
-import { ACTOR_HEADER as actorHeader, CALL_HEADER as callHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../framework/core/runtime/service.ts"
+import { afterEach, describe, expect, it } from "bun:test"
+import type { Subprocess } from "bun"
+import { ACTOR_HEADER, CALL_HEADER, DEAF_MS, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
+import {
+  ACTOR_HEADER as actorHeader,
+  CALL_HEADER as callHeader,
+  DEAF_MS as deafMs,
+  SERVICE_HEADER as serviceHeader,
+  endpointFile,
+} from "../../framework/core/runtime/service.ts"
 
 const client = resolve("framework/core/bv/bv.ts")
 const roots: string[] = []
@@ -314,7 +321,121 @@ it("duplicates the framework's constants exactly", () => {
   expect(SERVICE_HEADER).toBe(serviceHeader)
   expect(ACTOR_HEADER).toBe(actorHeader)
   expect(CALL_HEADER).toBe(callHeader)
+  expect(DEAF_MS).toBe(deafMs)
   expect(endpointFile("state")).toBe(join("state", ENDPOINT_FILE))
+})
+
+describe("a runtime alive with nothing listening at its port", () => {
+  const fakes: Subprocess[] = []
+  /**
+   * A process that holds the session's lock and service file, as its runtime does. `deaf` listens on nothing, having said it
+   * began closing a minute ago, as a runtime whose close hangs does; `holding` answers a probe at once and the rest late, as a
+   * runtime holding requests while changed code loads does. Its command line is the session's runtime's unless `as` says another.
+   */
+  const fake = async (s: ReturnType<typeof setup>, mode: "deaf" | "holding", as = [s.entry, "--serve", "S"]) => {
+    const script = join(s.root, "fake.ts")
+    const service = resolve("framework/core/runtime/service.ts")
+
+    writeFileSync(
+      script,
+      `// A session's runtime as its client finds it, without the runtime.
+import { createServer } from "node:http"
+import { ownService } from ${JSON.stringify(service)}
+const [dir, mode] = process.argv.slice(-2)
+const owner = ownService(dir)!
+const server = createServer((req, res) => {
+  res.setHeader("babavoss-service", owner.identity.token)
+  if (req.headers["babavoss-probe"]) return res.end("{}")
+  setTimeout(() => res.end("held answer"), 1500)
+})
+await new Promise<void>((done) => server.listen(0, "127.0.0.1", () => done()))
+const port = (server.address() as { port: number }).port
+if (mode === "deaf") await new Promise<void>((done) => server.close(() => done()))
+owner.publish(port, mode === "deaf" ? Date.now() - 60_000 : undefined)
+console.log("ready")
+setInterval(() => {}, 60_000)
+`,
+    )
+
+    const state = join(s.root, "sessions/S/demo")
+    const child = Bun.spawn([process.execPath, script, ...as, state, mode], { stdout: "pipe", stderr: "inherit" })
+
+    const reader = child.stdout.getReader()
+
+    fakes.push(child)
+    await reader.read()
+    reader.releaseLock()
+
+    return child
+  }
+  const settle = async (s: ReturnType<typeof setup>) => {
+    s.open()
+    expect(s.run(["/", "add", "text=Pharmacy"]).status).toBe(0)
+
+    const { pid } = s.endpoint()
+
+    s.run(["close"])
+    await poll(() => existsSync(join(s.root, "sessions/S/demo/service.json"))).toBe(false)
+    await poll(() => {
+      try {
+        process.kill(pid, 0)
+
+        return true
+      } catch {
+        return false
+      }
+    }).toBe(false)
+  }
+  const alive = (child: Subprocess) => child.exitCode === null && child.signalCode === null
+
+  afterEach(() => {
+    for (const child of fakes.splice(0)) child.kill("SIGKILL")
+  })
+
+  it("is ended, once it refuses past the time a runtime takes to close, and a fresh one answers with the state kept, saying so", async () => {
+    const s = setup()
+
+    await settle(s)
+
+    const deaf = await fake(s, "deaf")
+    // Run apart, so this process reaps the fake it started once the client ends it, as the system reaps a runtime.
+    const command = Bun.spawn([process.execPath, client, "/notes"], { env: s.env, stdout: "pipe", stderr: "pipe" })
+    const [out, err] = await Promise.all([new Response(command.stdout).text(), new Response(command.stderr).text()])
+
+    expect(await command.exited, err).toBe(0)
+    expect(out).toStartWith("demo: the runtime had stopped answering and was started again; its state is kept\n")
+    expect(out).toContain("Pharmacy")
+    await deaf.exited
+    expect(s.endpoint().pid).not.toBe(deaf.pid)
+    // Replaced once: the next command finds the fresh one, and says nothing of it.
+    expect(s.run(["/notes"]).out).not.toContain("stopped answering")
+  })
+
+  it("is never signalled where its command line is not this session's runtime of this root: the command fails as before", async () => {
+    const s = setup()
+
+    await settle(s)
+
+    const other = await fake(s, "deaf", [s.entry, "--serve", "another"])
+    const answer = s.run(["/notes"])
+
+    expect(answer.status).toBe(1)
+    expect(answer.err).toContain("cannot listen on or reach this machine’s runtime")
+    expect(alive(other)).toBe(true)
+  })
+
+  it("is left alone while it listens, however long it holds a request", async () => {
+    const s = setup()
+
+    await settle(s)
+
+    const holding = await fake(s, "holding")
+    const answer = s.run(["/notes"])
+
+    expect(answer.out).toContain("held answer")
+    expect(answer.out).not.toContain("stopped answering")
+    expect(alive(holding)).toBe(true)
+  })
 })
 
 it("refused registry names what the harness must allow", () => {

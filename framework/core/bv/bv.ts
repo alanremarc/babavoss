@@ -1,20 +1,22 @@
 #!/bin/sh
 // 2>/dev/null; exec bun --loader :ts "$0" --word "${0##*/}" "$@"
 // The standalone session client, copied into the home’s bin or beside Bun; no root code or framework imports.
-import { readFileSync, mkdirSync, writeFileSync, renameSync, openSync, closeSync, statSync } from "node:fs"
+import { readFileSync, mkdirSync, writeFileSync, renameSync, openSync, closeSync, statSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 11
+export const VERSION = 12
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
 export const STALE_HEADER = "babavoss-stale"
 export const CALL_HEADER = "babavoss-call"
 export const ENDPOINT_FILE = "service.json"
+/** How long a live runtime may refuse connections before it is taken for deaf: longer than one takes to close its door. */
+export const DEAF_MS = 10_000
 export type OpenRoot = { directory: string; entry: string; state: string; command?: string; page?: string }
 export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".babavoss"), "sessions", session, "open.json")
 export const load = <T>(file: string): T | undefined => {
@@ -152,8 +154,21 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         body = JSON.stringify({ handle, args: inputs })
       }
     }
-    type Endpoint = { port: number; token: string; dir: string; pid: number }
+    type Endpoint = { port: number; token: string; dir: string; pid: number; closing?: number }
 
+    const refused = (error: unknown) =>
+      [error, (error as { cause?: unknown } | undefined)?.cause].some((e) => (e as { code?: string } | undefined)?.code === "ECONNREFUSED")
+    const alive = (pid: number) => {
+      try {
+        process.kill(pid, 0)
+
+        return true
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === "EPERM"
+      }
+    }
+    // A runtime alive with nothing listening at its port, since it said it was closing or since it was first seen so.
+    let deaf: { endpoint: Endpoint; since: number } | undefined
     const find = async () => {
       const endpoint = load<Endpoint>(join(root.state, ENDPOINT_FILE))
 
@@ -165,9 +180,47 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         })
 
         await response.body?.cancel()
+        deaf = undefined
         if (response.headers.get(SERVICE_HEADER) === endpoint.token && !response.headers.has(STALE_HEADER)) return endpoint
-      } catch {}
+      } catch (error) {
+        // A probe is answered at once, even while requests are held: only a refused connection says nothing listens.
+        if (refused(error) && alive(endpoint.pid)) {
+          const seen = deaf?.endpoint.token === endpoint.token ? deaf.since : Date.now()
+
+          deaf = { endpoint, since: typeof endpoint.closing === "number" ? Math.min(endpoint.closing, seen) : seen }
+        } else deaf = undefined
+      }
     }
+    /**
+     * Ends the deaf runtime the service file names: only that process, and only where its command line says it is this
+     * session's runtime of this root; SIGTERM, then SIGKILL. Answers whether it is gone, leaving the session's lock free.
+     */
+    const replace = async ({ pid }: Endpoint) => {
+      const listed = spawnSync("ps", ["-ww", "-o", "command=", "-p", String(pid)], { encoding: "utf8", timeout: 1000 })
+      const entries = new Set([root.entry])
+      const gone = async () => {
+        for (const until = Date.now() + 2000; Date.now() < until; await sleep(50)) if (!alive(pid)) return true
+
+        return !alive(pid)
+      }
+
+      try {
+        entries.add(realpathSync(root.entry))
+      } catch {}
+      if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid || listed.status !== 0) return false
+      if (![...entries].some((entry) => listed.stdout.includes(`${entry} --serve ${session}`))) return false
+      for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+        try {
+          process.kill(pid, signal)
+        } catch {}
+        if (await gone()) return true
+      }
+
+      return false
+    }
+    // Replaced once in a run, and said once; a fresh runtime deaf too is not for the client to fix.
+    let replaced = false
+    let told = false
     /** The session's runtime for this root: the one up, or one woken. */
     const reach = async (): Promise<Endpoint> => {
       let endpoint = await find()
@@ -197,7 +250,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
 
         return child
       }
-      const until = Date.now() + 10_000
+      let until = Date.now() + 10_000
       let child = wake()
       let woken = Date.now()
 
@@ -209,6 +262,21 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         await sleep(50)
         endpoint = await find()
         if (endpoint) continue
+        // The runtime named is alive with nothing at its port: one that closes lets go within DEAF_MS, and woken ones wait it
+        // out; one whose door is gone never does, and is replaced, once.
+        if (deaf) {
+          if (Date.now() - deaf.since < DEAF_MS) {
+            until = Math.max(until, deaf.since + DEAF_MS + 1000)
+            continue
+          }
+          if (replaced || !(await replace(deaf.endpoint))) break
+          replaced = true
+          deaf = undefined
+          child = wake()
+          woken = Date.now()
+          until = Date.now() + 10_000
+          continue
+        }
         if (child.exitCode === null && child.signalCode === null) {
           // Under hot reload a process whose code does not load stays, waiting for a change: it is ended, and its words said.
           if (erred) {
@@ -233,6 +301,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         throw new Error(
           `cannot listen on or reach this machine’s runtime; allow resident processes and loopback listening and connections (under a sandbox, in the harness settings); see ${join(root.state, "service.log")}`
         )
+      if (replaced && !told) console.log(`${name}: the runtime had stopped answering and was started again; its state is kept`)
+      told = replaced
 
       return endpoint
     }
@@ -240,8 +310,6 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     let page = `http://127.0.0.1:${endpoint.port}`
     // One run of the command, one tool call of the agent's: the runtime tells by it whether the hooks speak between calls.
     const call = randomUUID()
-    const refused = (error: unknown) =>
-      [error, (error as { cause?: unknown } | undefined)?.cause].some((e) => (e as { code?: string } | undefined)?.code === "ECONNREFUSED")
     const request = async (url: string, method = "GET", body?: string, accept = "text/plain") => {
       const send = () =>
         fetch(`${page}${url}`, {

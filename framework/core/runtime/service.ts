@@ -1,6 +1,8 @@
 // The resident process's identity and discovery. The lock says who owns the state directory; the endpoint file is
 // discovery, never a lock. A client finds a live service or wakes one, and treats a lost response as an uncertain outcome.
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+// A service whose process lives on with nothing listening at its port, longer than one takes to close, is deaf: its
+// client ends that process, once and only where it is this session's runtime, and wakes a fresh one, which takes the state.
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
@@ -9,7 +11,8 @@ import { fileURLToPath } from "node:url"
 import { sessionCwd } from "../state/state.ts"
 
 export type Identity = { dir: string; token: string; pid: number }
-export type Endpoint = Identity & { port: number }
+/** `closing`: since when the service has been closing its door, as it does before it lets go of the session. */
+export type Endpoint = Identity & { port: number; closing?: number }
 /** The response header every answer of a service carries: its token. */
 export const SERVICE_HEADER = "babavoss-service"
 /** The request header naming the actor; the person when absent. */
@@ -22,6 +25,11 @@ export const STALE_HEADER = "babavoss-stale"
 export const CALL_HEADER = "babavoss-call"
 export const STARTUP_MS = 10_000
 export const REQUEST_MS = 30_000
+/**
+ * How long a live service may refuse connections before its client takes it for deaf: longer than a runtime takes to close
+ * its door and let go of the session, CLOSE_MS, counted from when it said it was closing, or else from the first refusal seen.
+ */
+export const DEAF_MS = 10_000
 
 export const endpointFile = (dir: string) => join(dir, "service.json")
 export const logFile = (dir: string) => join(dir, "service.log")
@@ -53,7 +61,8 @@ export const deniedState = (error: unknown, dir: string): unknown =>
     ? new Denied(`the sandbox refuses writing its state in ${dir}`)
     : error
 
-const failedWith = (error: unknown, code: string) => error instanceof TypeError && (error.cause as { code?: string } | undefined)?.code === code
+const failedWith = (error: unknown, code: string) =>
+  error instanceof TypeError && [error, error.cause].some((e) => (e as { code?: string } | undefined)?.code === code)
 
 /** BSD flock locks follow the open descriptor across the short-lived locking utility and release on process death. */
 export function ownService(dir: string) {
@@ -86,16 +95,24 @@ export function ownService(dir: string) {
 
   return {
     identity,
-    publish(port: number) {
+    publish(port: number, closing?: number) {
       const temporary = `${endpointFile(dir)}.${identity.token}.tmp`
 
       try {
-        writeFileSync(temporary, JSON.stringify({ ...identity, port }), { mode: 0o600 })
+        writeFileSync(temporary, JSON.stringify({ ...identity, port, ...(closing && { closing }) }), { mode: 0o600 })
         renameSync(temporary, endpointFile(dir))
         writeFileSync(portFile(dir), String(port), { mode: 0o600 })
       } finally {
         rmSync(temporary, { force: true })
       }
+    },
+    /** Its door is closing from now: said in the endpoint file it published, if it is still this one's. */
+    closing() {
+      try {
+        const endpoint = JSON.parse(readFileSync(endpointFile(dir), "utf8")) as Endpoint
+
+        if (endpoint.token === identity.token && !released) this.publish(endpoint.port, Date.now())
+      } catch {}
     },
     release() {
       if (released) return
@@ -115,22 +132,85 @@ export function ownService(dir: string) {
 
 /** The live service of this directory, or undefined. A health check is a GET that answers with the endpoint's token. */
 export async function findService(dir: string, signal?: AbortSignal): Promise<Endpoint | undefined> {
+  const found = await probeService(dir, signal)
+
+  return found?.up ? found.endpoint : undefined
+}
+
+/**
+ * The service the endpoint file names, and whether it is up; `refused` where its process is alive and nothing listens at
+ * its port, as when it closes, or when its door is gone. A probe is answered at once, even while requests are held.
+ */
+async function probeService(dir: string, signal?: AbortSignal): Promise<{ endpoint: Endpoint; up?: true; refused?: true } | undefined> {
+  let endpoint: Endpoint
+
   try {
-    const endpoint = JSON.parse(readFileSync(endpointFile(dir), "utf8")) as Endpoint
-
-    if (endpoint.dir !== dir || typeof endpoint.token !== "string" || !Number.isInteger(endpoint.port) || endpoint.port < 1) return
-
+    endpoint = JSON.parse(readFileSync(endpointFile(dir), "utf8")) as Endpoint
+  } catch {
+    return
+  }
+  if (endpoint.dir !== dir || typeof endpoint.token !== "string" || !Number.isInteger(endpoint.port) || endpoint.port < 1) return
+  try {
     const response = await fetch(`http://127.0.0.1:${endpoint.port}/`, {
       headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token, [PROBE_HEADER]: "1" },
       signal: AbortSignal.any([AbortSignal.timeout(300), ...(signal ? [signal] : [])]),
     })
 
     await response.body?.cancel()
-    if (response.headers.get(SERVICE_HEADER) === endpoint.token && !response.headers.has(STALE_HEADER)) return endpoint
+    if (response.headers.get(SERVICE_HEADER) === endpoint.token && !response.headers.has(STALE_HEADER)) return { endpoint, up: true }
   } catch (error) {
     if (failedWith(error, "EPERM")) throw new Denied(LOOPBACK_REFUSED)
+    if (failedWith(error, "ECONNREFUSED") && alive(endpoint.pid)) return { endpoint, refused: true }
+  }
+
+  return { endpoint }
+}
+
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM"
   }
 }
+/** Whether a process is this session's runtime of this entry, by its command line: it was woken as `--hot ENTRY --serve SESSION`. */
+export const isRuntime = (pid: number, entry: string, session: string): boolean => {
+  if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return false
+
+  const listed = spawnSync("ps", ["-ww", "-o", "command=", "-p", String(pid)], { encoding: "utf8", timeout: 1000 })
+  const paths = new Set([entry])
+
+  try {
+    paths.add(realpathSync(entry))
+  } catch {}
+
+  return listed.status === 0 && [...paths].some((path) => listed.stdout.includes(`${path} --serve ${session}`))
+}
+/**
+ * Ends a deaf runtime: only the process the endpoint names, only where it is this session's runtime of this entry, SIGTERM
+ * and then SIGKILL. Answers whether it is gone, so its lock is free for a fresh one.
+ */
+export async function endDeaf(endpoint: Endpoint, entry: string, session: string): Promise<boolean> {
+  const gone = async (ms: number) => {
+    for (const until = Date.now() + ms; Date.now() < until; await sleep(50)) if (!alive(endpoint.pid)) return true
+
+    return !alive(endpoint.pid)
+  }
+
+  if (!isRuntime(endpoint.pid, entry, session)) return false
+  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+    try {
+      process.kill(endpoint.pid, signal)
+    } catch {}
+    if (await gone(2000)) return true
+  }
+
+  return false
+}
+/** Since when a refusing service has refused: since it said it was closing, or since `seen`, the first refusal its client saw. */
+const deafSince = (endpoint: Endpoint, seen: number) => (typeof endpoint.closing === "number" ? Math.min(endpoint.closing, seen) : seen)
 
 /**
  * Starts the root's runtime entry for a session, detached, logging to the session's state directory; it owns that directory
@@ -172,11 +252,19 @@ const deniedReason = (dir: string): string => {
   }
 }
 
-const logSize = (dir: string) => {
+export const logSize = (dir: string) => {
   try {
     return statSync(logFile(dir)).size
   } catch {
     return 0
+  }
+}
+/** Whether the log says, after `offset`, that code did not load: bun writes a line beginning with `error: ` when a hot reload fails. */
+export const failedSince = (dir: string, offset: number): boolean => {
+  try {
+    return /^error: /m.test(readFileSync(logFile(dir)).subarray(offset).toString("utf8"))
+  } catch {
+    return false
   }
 }
 /** What a runtime that did not start logged after `offset`, as bun says why code does not load: the file and the error, its last lines. */
@@ -190,18 +278,42 @@ const saidSince = (dir: string, offset: number): string => {
 
 /** A client of a session's service: finds it or wakes it with `entry`, then requests. */
 export function serviceClient(dir: string, session: string, entry: string | URL, env?: NodeJS.ProcessEnv) {
+  const path = typeof entry === "string" ? entry : fileURLToPath(entry)
+  // A deaf runtime is ended once by this client; a second one that is deaf too is not for it to fix.
+  let replaced = false
   const ready = async (signal?: AbortSignal): Promise<Endpoint> => {
-    const bounded = AbortSignal.any([AbortSignal.timeout(STARTUP_MS), ...(signal ? [signal] : [])])
+    let bounded = AbortSignal.any([AbortSignal.timeout(STARTUP_MS), ...(signal ? [signal] : [])])
     let child: ChildProcess | undefined
     let nextLaunch = 0
     let logged = 0
     let erred = false
+    let refusing: { token: string; seen: number } | undefined
 
     try {
       while (!bounded.aborted) {
-        const endpoint = await findService(dir, bounded)
+        const found = await probeService(dir, bounded)
 
-        if (endpoint) return endpoint
+        if (found?.up) return found.endpoint
+        // Alive with nothing at its port: it closes, which ends within CLOSE_MS, or its door is gone, which never ends.
+        if (found?.refused) {
+          const { endpoint } = found
+
+          if (refusing?.token !== endpoint.token) {
+            refusing = { token: endpoint.token, seen: Date.now() }
+            bounded = AbortSignal.any([AbortSignal.timeout(DEAF_MS + STARTUP_MS), ...(signal ? [signal] : [])])
+          }
+          if (Date.now() - deafSince(endpoint, refusing.seen) < DEAF_MS) {
+            await sleep(50, undefined, { signal: bounded })
+            continue
+          }
+          if (replaced || !(await endDeaf(endpoint, path, session))) throw new Error(`its runtime, process ${endpoint.pid}, does not answer at 127.0.0.1:${endpoint.port}`)
+          replaced = true
+          refusing = undefined
+          bounded = AbortSignal.any([AbortSignal.timeout(STARTUP_MS), ...(signal ? [signal] : [])])
+          appendFileSync(logFile(dir), `${new Date().toISOString()} its runtime, process ${endpoint.pid}, had stopped answering and was ended; a fresh one takes the state\n`)
+          continue
+        }
+        refusing = undefined
         if (child?.exitCode === DENIED_EXIT) throw new Denied(deniedReason(dir) || "the environment refuses what its runtime requires")
         if (child && !child.pid) throw new Denied("the environment refuses starting its runtime as a process of its own")
         if (child && (child.signalCode !== null || (child.exitCode !== null && child.exitCode !== 0)))
