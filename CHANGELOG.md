@@ -2,6 +2,15 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.54.0
+
+- Breaking: the kit's palettes are generated. A theme is three numbers, `{ hue, tint, vivid }`: a hue from 0 to 360, how strongly the greys are tinted toward it and how vivid the accent is, each from 0 to 100. Every colour token is derived from them in CSS, over lightness fixed per mode, so text keeps its contrast at any hue; `framework/kit/theme.ts` is the source and `theme.css` is written from it. The token names are unchanged, so a component that reads them, shadcn's among them, follows the theme as before.
+- Breaking: the root's `data-theme` no longer selects a palette and `:root[data-theme="claude"]` rules are gone: the colours come from `--theme-hue`, `--theme-tint` and `--theme-vivid`. A surface's stylesheet that keyed on `data-theme` must stop. Any element with `data-theme` and those three variables takes that theme's tokens, in its own mode where it has the class `dark` or `light`.
+- The presets are neutral, claude, slate, sand, moss, ocean and plum, a row each in `PRESETS`; "dynamic" is a theme whose numbers are the person's. The generated claude keeps its accent; its light ground is white where it was cream, and its dark ground is darker. Light `success`, `warning` and the thread's context colour are a little darker, and `chart-1` to `chart-5` are a ramp of the accent: greys under neutral.
+- The person's settings: `appearance` is `{ mode, same, themes: { light, dark } }`, a theme a preset's id or `{ hue, tint, vivid }`; with `same`, the default, `themes.light` is both modes'. A file from before reads as it was. The settings surface's actions: `theme mode=both|light|dark theme=PRESET|dynamic`, `dynamic mode= hue= tint= vivid=`, and `same on=`; `mode=both` is for modes that are the same, `light` and `dark` for distinct ones.
+- `useShell().appearance` is `{ mode, theme, numbers }`: `theme` a preset's id or "dynamic", `numbers` the theme's three numbers, current while a dynamic theme is dragged.
+- The kit has `ThemePicker` (`babavoss/kit/components/theme-picker.tsx`): `value`, `onChange` on every move, `onCommit` on release; and exports `PRESETS`, `presetOf`, `derive` and `varsOf`.
+
 ## 0.53.2
 
 - The mark takes the two eyes it draws and moves: `pair` on `Logo` and `Eyes`, and as `orbiting`'s third argument, the brand's `EYES` by default, so a variant of the mark can be tried. This repository's Design Guide shows such variants at `/guide/mark/variants`, eyes of one size among them. The mark in the shell is unchanged. Nothing to adapt.
