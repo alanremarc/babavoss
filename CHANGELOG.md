@@ -2,6 +2,27 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.40.1
+
+- In a menu the mark of what waits on the person stands at an entry's right, so a menu keeps no room at its left for it. Nothing to adapt.
+
+## 0.40.0
+
+- `sessionDir()` from `babavoss/core/state/session-dir.ts` gives a surface's command the session's own directory under the project's `.babavoss/`, where a surface may keep what belongs to the session and not to a tab; it gives nothing outside a runtime. Nothing to adapt.
+- In this repository the queue and the map are one surface, the session's work seen as a list and as a map, kept in the session's directory and shared by its tabs.
+
+## 0.39.5
+
+- A tab's menu hangs from the strip: its top is square and on the strip's lower border. It opens from a caret that takes the tab's icon's place and turns over as it opens, and from a right click anywhere on the tab. The surface's own actions stand in it without the surface's title, which the tab has. `MenuDropdown` in the kit takes `sideOffset`, `alignOffset` and `className`. Nothing to adapt.
+
+## 0.39.4
+
+- A tab under the keyboard's focus has no ring: it reads as one hovered, with its ground and its dots. Nothing to adapt.
+
+## 0.39.3
+
+- A menu keeps room at its left only where it has something to put there, a mark of what waits on the person or a tick; without one its entries start at its edge. The kit's `menuItem` class is now `menuRow`, without the padding. Nothing else to adapt.
+
 ## 0.39.2
 
 - A working agent unheard by the hooks for 90 seconds, with no call of its own under way, reads as unknown; it was five minutes. So a turn whose end the hooks missed stops showing as work soon. The mark's eyes settle to rest from wherever they were. Nothing to adapt.

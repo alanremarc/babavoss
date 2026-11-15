@@ -1,5 +1,9 @@
-// The map's first state: the real history of babavoss as issues on five narratives, each with the reasoning of its iterations.
-import type { Iteration, Narrative, Node } from "./surface.ts"
+// What the map of the work knew before the queue kept it: the real history of babavoss as issues on five narratives, each
+// with what it came out of and the reasoning of its iterations. A queue kept from before is merged with it once (migrate.ts).
+import type { Iteration, Narrative, Status } from "./work.ts"
+
+/** An issue as the map had it. */
+export type Seeded = { n: number; title: string; status: Status; narrative: string; from: number[]; iterations: Iteration[] }
 
 const it = (title: string, why: string, decided: string, outcome: string): Iteration => ({ title, why, decided, outcome })
 
@@ -11,7 +15,7 @@ export const narratives: Narrative[] = [
   { id: "queue", title: "Tracking the work", about: "This queue itself." },
 ]
 
-export const nodes: Node[] = [
+export const nodes: Seeded[] = [
   {
     n: 9,
     title: "Track the work in a queue surface",
@@ -324,4 +328,12 @@ export const nodes: Node[] = [
       ),
     ],
   },
+]
+
+/** Where the issues the queue took after the map stand: their narrative, and what they plainly came out of. */
+export const later: { n: number; narrative: string; from: number[] }[] = [
+  { n: 35, narrative: "shell", from: [31, 33] },
+  { n: 36, narrative: "told", from: [30] },
+  { n: 37, narrative: "queue", from: [] },
+  { n: 38, narrative: "queue", from: [34] },
 ]
