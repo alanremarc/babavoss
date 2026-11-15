@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.32.0
+
+- The present is told as events on things. Each open tab is one heading, `PATH SURFACE "TITLE"`, with its facts under it and its actions by name. List rows are named by `at`, `n`, `id`, `name` or `key`, so a reorder is one line and a changed row is one line of what changed. `how` is told in a change only by where to read it, long texts are cut with where to read them, and a telling stops at 40 lines. `needs` is a table first at `/`, and each need added, gone or changed is one line. One `open` per surface is printed once as `open surface=NAME`. A read of `/`, by the word or by a program's `root.read("/")`, gives the present whole, and changes are counted from it.
+- During work the agent is told only what was heard: notices, and "the person acted on SURFACE PATH" once per tab. The present's changes come with the person's message, at the end of a wait, or whole on a read of `/`. A call answers with its own change and what was heard. A wait ends on a notice or a change to `needs`, not on a fact a surface changed by itself.
+- A surface whose change should reach the agent mid-turn should give a notice; a fact alone waits for the boundary. A fact that is not at `/` is in no telling: only a notice or a read reaches it.
+- Breaking: `flatten` and `changes` are no longer exported from `babavoss/core/index.ts`; `whole`, `diff` and `tell` are. A story's `told()` uses the new shapes, so a spec matching `issues.0.status: …` now matches `/issues/1: status …`, and `- attention.who` reads `- attention`.
+
 ## 0.31.0
 
 - The strip's right has one notifications button: a bell counting the notices others caused that the person has not seen. Its panel opens on Notifications, with a switch to All activity. A toast hides into the button when it passes.
