@@ -1,7 +1,9 @@
 // The strip's order: the newest tab beside home, and where the person lands when the tab they look at closes; a tab's
-// one dot for what waits on the person, and the keys that open its menu.
+// one dot for what waits on the person, and the keys that open its menu; the next and previous tab the shortcuts go to,
+// and where the shortcuts give way to a field.
 import { describe, expect, it } from "bun:test"
-import { newestFirst, successor } from "../../framework/shell/ui/strip.ts"
+import { cycled, newestFirst, successor } from "../../framework/shell/ui/strip.ts"
+import { yields, RECORDING_MARK, SEARCH_MARK, type Focused } from "../../framework/shell/ui/shortcuts.ts"
 import { markOf, opensMenu } from "../../framework/shell/ui/tabs.tsx"
 
 const tab = (n: number) => ({ at: `/tabs/${n}`, n })
@@ -44,5 +46,34 @@ describe("a tab in the strip", () => {
     expect(opensMenu({ key: "F10", shiftKey: true })).toBe(true)
     expect(opensMenu({ key: "F10", shiftKey: false })).toBe(false)
     expect(opensMenu({ key: "Enter", shiftKey: true })).toBe(false)
+  })
+})
+
+describe("the next and previous tab", () => {
+  const order = ["home", "/tabs/3", "/tabs/2", "/tabs/1"]
+
+  it("go along the strip as it is shown, home first, and round from either end", () => {
+    expect(cycled(order, "home", 1)).toBe("/tabs/3")
+    expect(cycled(order, "/tabs/2", 1)).toBe("/tabs/1")
+    expect(cycled(order, "/tabs/1", 1)).toBe("home")
+    expect(cycled(order, "home", -1)).toBe("/tabs/1")
+    expect(cycled(order, "/tabs/3", -1)).toBe("home")
+    expect(cycled(["home"], "home", 1)).toBe("home")
+  })
+})
+
+describe("the shortcuts", () => {
+  const focused = (tagName: string, more: Partial<Focused> = {}, marks: string[] = []): Focused => ({ tagName, marked: (m) => marks.includes(m), ...more })
+
+  it("work from anywhere but a field that takes text, home's search excepted, and give way to a binding being recorded", () => {
+    expect(yields(undefined)).toBe(false)
+    expect(yields(focused("BUTTON"))).toBe(false)
+    expect(yields(focused("DIV"))).toBe(false)
+    expect(yields(focused("INPUT", { type: "checkbox" }))).toBe(false)
+    expect(yields(focused("INPUT", { type: "text" }))).toBe(true)
+    expect(yields(focused("TEXTAREA"))).toBe(true)
+    expect(yields(focused("DIV", { isContentEditable: true }))).toBe(true)
+    expect(yields(focused("INPUT", { type: "text" }, [SEARCH_MARK]))).toBe(false)
+    expect(yields(focused("BUTTON", {}, [RECORDING_MARK]))).toBe(true)
   })
 })

@@ -90,7 +90,10 @@ describe("the shell surface", () => {
     try {
       expect(r.read("/")).toEqual({
         title: "baba",
-        surfaces: [{ name: "counter", description: "counts things", open: expect.objectContaining({ name: "open", args: { surface: "counter" } }) }],
+        surfaces: [
+          { name: "counter", description: "counts things", open: expect.objectContaining({ name: "open", args: { surface: "counter" } }) },
+          { name: "settings", description: expect.stringContaining("Use when"), open: expect.objectContaining({ name: "open", args: { surface: "settings" } }) },
+        ],
         tabs: [],
         activity: { at: "/activity" },
       })
@@ -117,9 +120,11 @@ describe("the shell surface", () => {
   })
 
   it("is an empty desktop with no surfaces, which says how one is made, and says where there is no .baba/", () => {
-    expect(story(shell({}, BABA)).agent.sees("/")).toEqual({ title: "baba", empty: EMPTY, surfaces: [], tabs: [], activity: { at: "/activity" } })
+    const own = [{ name: "settings", description: expect.any(String), open: expect.objectContaining({ name: "open" }) }]
+
+    expect(story(shell({}, BABA)).agent.sees("/")).toEqual({ title: "baba", empty: EMPTY, surfaces: own, tabs: [], activity: { at: "/activity" } })
     expect(EMPTY).toContain("bun run baba new NAME")
-    expect(story(shell({})).agent.sees("/")).toEqual({ title: "baba", missing: MISSING, surfaces: [], tabs: [], activity: { at: "/activity" } })
+    expect(story(shell({})).agent.sees("/")).toEqual({ title: "baba", missing: MISSING, surfaces: own, tabs: [], activity: { at: "/activity" } })
   })
 
   it("restores its tabs with their surfaces' models and starts their commands again", async () => {
@@ -474,6 +479,7 @@ describe("a surface whose code does not load", () => {
 
     expect(home.surfaces).toEqual([
       { name: "counter", description: "counts things", open: expect.objectContaining({ name: "open" }) },
+      { name: "settings", description: expect.any(String), open: expect.objectContaining({ name: "open" }) },
       { name: "queue", broken: `the queue surface does not load (${why}); fix its code, and it is loaded again` },
     ])
     expect(home).not.toHaveProperty("empty")

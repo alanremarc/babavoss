@@ -1,55 +1,47 @@
-// Home: the shell's first tab, at /, and what the page shows where no tab is. It is the palette, filling the page under
-// the strip: a search focused at once, then the commands of the tab shown before home, the surfaces to open, the open tabs
-// to switch to, and the page's own, among them ending the person's move while their changes wait. Typing filters them all; arrows and Enter choose. Escape clears what is typed, then
-// returns to the tab shown before. ⌘K or Ctrl+K goes home from anywhere, and from home back. A surface that does not load
-// is listed, broken, and cannot be opened. Its footer says whose page it is, and when a later babavoss is out.
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+// Home: the shell's first tab, at /, and what the page shows where no tab is. It is the shell's own page, as a surface's
+// page is its surface's, filling the page under the strip: a search focused at once, then what the shell offers at /, the
+// surfaces to open, the settings among them, the open tabs to switch to, and the shell's own commands, among them ending
+// the person's move while their changes wait. A surface's actions and places are in its tab's menu, never here. Typing
+// filters them; arrows and Enter choose. Escape clears what is typed, then returns to the tab shown before. Its shortcut,
+// ⌘P or Ctrl+P by default, goes home from anywhere, and from home back. A surface that does not load is listed, broken,
+// and cannot be opened. Its footer says whose page it is, and when a later babavoss is out.
+import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "cn"
 import type { Handle } from "../../core/index.ts"
-import { BoxIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BoxIcon, SendIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
-import { named, type Command as TabCommand } from "./commands.ts"
-import type { TabCommands } from "./actions.tsx"
 import { Logo } from "./mark.tsx"
 import type { Standing as TurnStanding } from "./turn.ts"
 import { choices, type SurfaceEntry } from "./home.ts"
 import { HOME } from "./pointing.ts"
+import { SEARCH_MARK } from "./shortcuts.ts"
 import { standing, type TabNeed } from "./tabs.tsx"
 
 /** An open tab as home offers it, newest first. */
 export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode; needs?: TabNeed[]; broken?: string }
 
-const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
-const keys = mac ? "⌘K" : "Ctrl K"
 /** Home's search, which the shortcut focuses. */
-const SEARCH = `#content-${HOME} [cmdk-input]`
+export const SEARCH = `#content-${HOME} [cmdk-input]`
 
 /** Whose page this is, from the meta tags the runtime serves the page with; presentation, never in a view. */
 const about = (key: string): string | undefined => document.querySelector<HTMLMetaElement>(`meta[name="babavoss:${key}"]`)?.content || undefined
 
 const Glyph = ({ children }: { children?: ReactNode }) => <span className="grid size-[22px] shrink-0 place-items-center">{children}</span>
 
-/** ⌘K or Ctrl+K anywhere on the page: `go` says where; on home the search takes focus. */
-export function useHomeKey(go: () => void) {
-  const latest = useRef(go)
-
-  latest.current = go
-  useEffect(() => {
-    const press = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
-      event.preventDefault()
-      latest.current()
-      requestAnimationFrame(() => document.querySelector<HTMLInputElement>(SEARCH)?.focus())
-    }
-
-    window.addEventListener("keydown", press)
-
-    return () => window.removeEventListener("keydown", press)
-  }, [])
-}
-
 /** Home's place in the strip, first: a tab like the others, selected while home is shown, the mark that says whose move it is. */
-export function HomeTab({ active, standing, onSelect }: { active: boolean; standing: TurnStanding; onSelect: () => void }) {
+export function HomeTab({
+  active,
+  standing,
+  animate,
+  keys,
+  onSelect,
+}: {
+  active: boolean
+  standing: TurnStanding
+  animate: boolean
+  keys: string
+  onSelect: () => void
+}) {
   return (
     <button
       type="button"
@@ -61,10 +53,10 @@ export function HomeTab({ active, standing, onSelect }: { active: boolean; stand
       title={`Home: open, switch to or run (${keys})\n${standing.said}`}
       tabIndex={active ? 0 : -1}
       data-active={active || undefined}
-      className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-foreground/11 data-[active]:text-foreground not-hover:not-data-[active]:has-[[data-turn=working]]:bg-foreground/3"
+      className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:bg-foreground/6 focus-visible:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground not-hover:not-data-[active]:has-[[data-turn=working]]:bg-foreground/3"
       onClick={onSelect}
     >
-      <Logo standing={standing} />
+      <Logo standing={standing} animate={animate} />
     </button>
   )
 }
@@ -76,21 +68,21 @@ type Props = {
   icons: Record<string, ReactNode | undefined>
   /** The open tabs, newest first. */
   tabs: TabEntry[]
-  /** The tab shown before home, which Escape returns to and whose commands come first. */
+  /** The tab shown before home, which Escape returns to. */
   back?: TabEntry
-  commands: TabCommands
+  /** Home's shortcut, as the person reads it. */
+  keys: string
   /** Ending the person's move, while their changes wait for the agent: `run` says what it did. */
   end?: { drivable: boolean; run: () => Promise<string> }
   disabled: boolean
   loading: boolean
   launch: (open: Handle) => void
   select: (at: string) => void
-  settings: () => void
   leave?: () => void
 }
 
-/** Home's page: the root's title, the palette, and whose page it is at the bottom. */
-export function Home({ title, notice, surfaces, icons, tabs, back, commands, end, disabled, loading, launch, select, settings, leave }: Props) {
+/** Home's page: the root's title, what the shell offers, and whose page it is at the bottom. */
+export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
   const [ended, setEnded] = useState<string>()
   const offered = choices(surfaces)
@@ -114,10 +106,9 @@ export function Home({ title, notice, surfaces, icons, tabs, back, commands, end
             else leave?.()
           }}
         >
-          <CommandInput autoFocus aria-label="Run, open or switch to" placeholder="Run, open or switch to…" value={search} onValueChange={setSearch} />
+          <CommandInput autoFocus {...{ [SEARCH_MARK]: "" }} aria-label="Run, open or switch to" placeholder="Run, open or switch to…" value={search} onValueChange={setSearch} />
           <CommandList className="max-h-none">
             <CommandEmpty>{loading ? "Loading…" : "Nothing found."}</CommandEmpty>
-            {back && <BackCommands commands={commands} tab={back} select={select} />}
             {offered.length > 0 && (
               <CommandGroup heading="Open">
                 {offered.map((u) => {
@@ -157,14 +148,8 @@ export function Home({ title, notice, surfaces, icons, tabs, back, commands, end
                 ))}
               </CommandGroup>
             )}
-            <CommandGroup heading="Page">
-              <CommandItem value="settings" keywords={["settings", "appearance", "theme"]} onSelect={settings}>
-                <Glyph>
-                  <SettingsIcon aria-hidden />
-                </Glyph>
-                Settings
-              </CommandItem>
-              {end && (
+            {end && (
+              <CommandGroup heading="Shell">
                 <CommandItem value="end move" keywords={["end my move", "agent", "turn", "changes"]} onSelect={() => void end.run().then(setEnded)}>
                   <Glyph>
                     <SendIcon aria-hidden />
@@ -172,8 +157,8 @@ export function Home({ title, notice, surfaces, icons, tabs, back, commands, end
                   {end.drivable ? "End my move" : "Copy the message that ends my move"}
                   <span className="min-w-0 flex-1 truncate pl-1.5">{ended ?? (end.drivable ? "start the agent's turn with your changes" : "nothing here can start the agent's turn")}</span>
                 </CommandItem>
-              )}
-            </CommandGroup>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </div>
@@ -181,41 +166,6 @@ export function Home({ title, notice, surfaces, icons, tabs, back, commands, end
         <CommandShortcut className="ml-0 tracking-normal">{keys}</CommandShortcut>
       </About>
     </section>
-  )
-}
-
-/**
- * The commands of the tab shown before home, as its actions give them, under the tab's name: what waits on the person
- * first. Its actions stay live while home is shown, so they are current. A command goes back to its tab, then runs, so
- * what it opens, such as its prompt, opens there.
- */
-function BackCommands({ commands: store, tab, select }: { commands: TabCommands; tab: TabEntry; select: (at: string) => void }) {
-  const commands = useSyncExternalStore(store.subscribe, () => store.get(tab.at)) ?? []
-  const own = new Set([tab.label, named(tab.surface)])
-  const list = [...commands.filter((c) => c.ask), ...commands.filter((c) => !c.ask)]
-  const choose = (command: TabCommand) => {
-    select(tab.at)
-    requestAnimationFrame(command.run)
-  }
-
-  if (!list.length) return null
-
-  return (
-    <CommandGroup heading={tab.label}>
-      {list.map((c) => (
-        <CommandItem key={c.id} value={`command ${c.id}`} keywords={[c.label, c.hint ?? "", c.group, tab.label]} disabled={c.disabled} onSelect={() => choose(c)}>
-          <Glyph>{c.ask && <span className="size-1.5 rounded-full bg-primary" aria-hidden />}</Glyph>
-          <span className="max-w-[45%] shrink-0 truncate text-foreground">{c.label}</span>
-          {c.hint && c.hint !== c.label && (
-            <span className="min-w-0 flex-1 truncate pl-1.5" title={c.hint}>
-              {c.hint}
-            </span>
-          )}
-          {!own.has(c.group) && <span className="ml-auto pl-2 text-meta whitespace-nowrap">{c.group}</span>}
-          {c.keys && <CommandShortcut>{c.keys}</CommandShortcut>}
-        </CommandItem>
-      ))}
-    </CommandGroup>
   )
 }
 

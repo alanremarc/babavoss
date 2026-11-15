@@ -1,56 +1,78 @@
-export type Mode = "light" | "dark"
-export type Appearance = { mode: Mode | "system"; themes: Record<Mode, string> }
-export const appearanceKey = "babavoss.appearance"
+// The person's settings as the page applies them: given with the page as it is served, read again from /_/settings.json
+// when the page is looked at again or when the shell asks, and told at once by a settings tab on this page as they change
+// there. The settings are their file's (settings/src/store.ts); the appearance is applied before the first paint by
+// index.html, by the same rules as here.
+import { useEffect, useState } from "react"
+import { resolveMode, settingsOf, type Appearance, type Mode, type Settings } from "../settings/src/settings.ts"
 
-// Each mode has its own choices and remembered selection; palettes live in styles.css. index.html applies the
-// remembered appearance before the first paint, by the same rules.
-export const themes = {
-  light: [
-    { id: "neutral", label: "Neutral" },
-    { id: "claude", label: "Claude" },
-  ],
-  dark: [
-    { id: "neutral", label: "Neutral" },
-    { id: "claude", label: "Claude" },
-  ],
-} as const
+const SETTINGS_ID = "babavoss-settings"
+/** The window event a settings tab tells its settings by, as its view changes. */
+const CHANGED = "babavoss:settings"
 
-const theme = (mode: Mode, id: unknown) => themes[mode].find((t) => t.id === id)?.id ?? themes[mode][0].id
-
-// Every session's page is its own origin, by port, while cookies on 127.0.0.1 ignore the port: the choice is kept in a cookie,
-// so it holds across sessions and across the pages one page embeds. index.html reads the same cookie before the first paint.
-const COOKIE_MAX_AGE = 365 * 24 * 3600
-
-const stored = (): string | undefined => {
-  const found = document.cookie.split("; ").find((c) => c.startsWith(`${appearanceKey}=`))
-
-  return found ? decodeURIComponent(found.slice(appearanceKey.length + 1)) : undefined
-}
-
-export function writeAppearance(appearance: Appearance): void {
-  document.cookie = `${appearanceKey}=${encodeURIComponent(JSON.stringify(appearance))}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`
-}
-
-export function readAppearance(): Appearance {
-  let p: { mode?: unknown; themes?: Partial<Record<Mode, unknown>> } | null = null
-
+/** The settings the page was served with. */
+export const given = (): Settings => {
   try {
-    p = JSON.parse(stored() ?? "null")
+    return settingsOf(JSON.parse(document.getElementById(SETTINGS_ID)?.textContent || "null"))
   } catch {
-    /* A broken cookie: the defaults. */
-  }
-
-  return {
-    mode: p?.mode === "dark" || p?.mode === "light" ? p.mode : "system",
-    themes: { light: theme("light", p?.themes?.light), dark: theme("dark", p?.themes?.dark) },
+    return settingsOf(undefined)
   }
 }
 
-export const resolveMode = (appearance: Appearance, systemDark: boolean): Mode =>
-  appearance.mode === "system" ? (systemDark ? "dark" : "light") : appearance.mode
+/** Tells the page the settings, as a settings tab reads them. */
+export const announce = (settings: Settings) => window.dispatchEvent(new CustomEvent<Settings>(CHANGED, { detail: settings }))
 
 export function applyAppearance(appearance: Appearance, mode: Mode): void {
   document.documentElement.classList.toggle("dark", mode === "dark")
   document.documentElement.dataset.theme = appearance.themes[mode]
   document.documentElement.style.colorScheme = mode
 }
+
+/** Whether the system asks for dark, kept current. */
+export function useSystemDark(): boolean {
+  const [dark, setDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches)
+
+  useEffect(() => {
+    const system = matchMedia("(prefers-color-scheme: dark)")
+    const change = () => setDark(system.matches)
+
+    system.addEventListener("change", change)
+
+    return () => system.removeEventListener("change", change)
+  }, [])
+
+  return dark
+}
+
+/** The person's settings, kept current, with the appearance applied to the page; and how to read them again. */
+export function useSettings(): { settings: Settings; again: () => void } {
+  const [settings, setSettings] = useState(given)
+  const systemDark = useSystemDark()
+  const mode = resolveMode(settings.appearance, systemDark)
+  const [again] = useState(() => () => {
+    if (document.hidden) return
+    void fetch("/_/settings.json", { headers: { accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((value: unknown) => setSettings(settingsOf(value)), () => undefined)
+  })
+
+  useEffect(() => {
+    const told = (event: Event) => setSettings((event as CustomEvent<Settings>).detail)
+
+    window.addEventListener(CHANGED, told)
+    window.addEventListener("focus", again)
+    document.addEventListener("visibilitychange", again)
+    // Read once as the page opens too: it takes in what an older page kept in its cookie.
+    again()
+
+    return () => {
+      window.removeEventListener(CHANGED, told)
+      window.removeEventListener("focus", again)
+      document.removeEventListener("visibilitychange", again)
+    }
+  }, [again])
+  useEffect(() => applyAppearance(settings.appearance, mode), [settings.appearance, mode])
+
+  return { settings, again }
+}
+
+export type { Appearance, Mode, Settings }

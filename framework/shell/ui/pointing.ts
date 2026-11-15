@@ -1,12 +1,12 @@
 // Where the page stands, and what it does when the agent points the person to a place. The URL is the surface path:
-// / home, /settings the appearance, /tabs/N/route a tab and the place within it. Pointing goes there at once,
+// / home, /tabs/N/route a tab and the place within it. Pointing goes there at once,
 // unless the person is in the middle of something: they are writing in a field, or acted on the page within QUIET_MS.
 // Then the page offers the place instead, to click to go, until they go, dismiss it, or the agent points again.
 
 /** Home's key: the page at /, where no tab is shown. */
 export const HOME = "home"
 
-/** A place on the page: the tab's key, /tabs/N, or HOME or "settings", and the route within it. */
+/** A place on the page: the tab's key, /tabs/N, or HOME, and the route within it. */
 export type Place = { key: string; route: string }
 /** The shell's `pointed` at /: the place and how many times the agent has pointed. */
 export type Pointed = { at: string; n: number }
@@ -20,7 +20,6 @@ export function placeOf(path: string): Place {
   const tab = /^(\/tabs\/\d+)(\/.*)?$/.exec(clean)
 
   if (tab) return { key: tab[1]!, route: tab[2] || "/" }
-  if (clean === "/settings") return { key: "settings", route: "/" }
 
   return { key: HOME, route: "/" }
 }

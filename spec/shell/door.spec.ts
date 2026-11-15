@@ -99,7 +99,7 @@ const started = async (dir = mkdtempSync(join(tmpdir(), "shell-door-"))) => {
 it("says a tab's change once in the answer to a call there, and still tells at / what the person did in the tab", async () => {
   const { request } = await started()
 
-  expect(await request("/?open")).toContain('/ open surface="counter"   open a counter tab')
+  expect(await request("/?open")).toContain("/ open surface=NAME   open a NAME tab")
   expect(await request("/", { handle: "open", args: { surface: "counter" } })).toContain('\n+ /tabs/1 counter "Counter"\nactions: bump, note')
   // The agent's own call: its change is in the answer once, not again under the tab's heading.
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")

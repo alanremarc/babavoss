@@ -6,7 +6,7 @@
 // have not looked at; needing the agent, quietly; and why, as its tooltip. At its right stands what is the session's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
-import { EllipsisIcon } from "lucide-react"
+import { ChevronDownIcon } from "lucide-react"
 import { MenuDropdown } from "../../kit/layouts/menu.tsx"
 import { tabScrollOffset } from "./tab-scroll"
 
@@ -123,16 +123,18 @@ function Tab({
     <div
       data-slot="pill"
       className={cn(
-        "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
+        "group/pill relative flex h-7 min-w-0 shrink-0 items-center rounded-full text-muted-foreground hover:bg-foreground/6 hover:text-foreground has-focus-visible:not-data-[active]:bg-foreground/6 has-focus-visible:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground [&_svg:not([class*='size-'])]:size-3.5",
         unseen && "animate-in duration-300 fade-in-0 zoom-in-90 motion-reduce:animate-none",
         open && "bg-foreground/6 text-foreground"
       )}
       data-active={active || undefined}
       data-menu={open || undefined}
+      // A right click anywhere on the tab opens its menu, once the click itself is over, so nothing of it closes the menu again.
       onContextMenu={(e) => {
         if (!menu) return
         e.preventDefault()
-        setOpen(true)
+        e.stopPropagation()
+        requestAnimationFrame(() => setOpen(true))
       }}
       onMouseEnter={() => setEngaged(true)}
       onMouseLeave={(event) => {
@@ -167,7 +169,7 @@ function Tab({
           e.preventDefault()
           setOpen(true)
         }}
-        className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="relative flex h-full max-w-48 min-w-0 cursor-pointer items-center rounded-full pr-2.5 pl-[3px] outline-none"
         onClick={onSelect}
         title={[label, ...said].join("\n")}
         aria-label={[unseen ? `${label}, new` : label, ...said].join(". ")}
@@ -204,6 +206,10 @@ function Tab({
           open={open}
           setOpen={setOpen}
           label={`Menu for ${label}`}
+          // The menu hangs from the strip: its top square, on the strip's lower border, its left on the tab's.
+          sideOffset={11}
+          alignOffset={-3}
+          className="rounded-t-none"
           // Focus goes back to the tab, unless what was chosen opened a modal, which keeps it.
           closed={() => {
             if (!document.querySelector('[role="dialog"]:not([data-slot="sheet-content"])')) tab.current?.focus()
@@ -218,7 +224,7 @@ function Tab({
               tabIndex={-1}
               aria-label={`Menu for ${label}`}
             >
-              <EllipsisIcon aria-hidden />
+              <ChevronDownIcon aria-hidden className={cn("transition-[rotate] duration-200 ease-[cubic-bezier(.3,1.6,.4,1)] motion-reduce:transition-none", open && "rotate-180")} />
               {mark && <span aria-hidden className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
             </button>
           }

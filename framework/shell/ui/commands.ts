@@ -1,14 +1,12 @@
 // What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers and
 // which are asks, ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
 // below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
-// input form's fields make of the inputs; and every menu entry as one command of the palette.
-import type { Menu, MenuItem } from "../../kit/layouts/menu.tsx"
+// input form's fields make of the inputs.
+import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import { handles, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
 
 /** An action offered at a path: the handle, and whether it is an ask, the person's alone. */
 export type Offered = { path: string; handle: Handle; ask: boolean }
-/** One command of the palette: from a menu, or an action the view offers. */
-export type Command = { id: string; group: string; label: string; hint?: string; keys?: string; ask?: boolean; disabled?: boolean; run: () => void }
 /** A place a view names: its path within the tab, and what it is called, by its row's `title` or `name`, else its path's last part. */
 export type Place = { at: string; label: string }
 
@@ -34,7 +32,7 @@ export const named = (name: string): string => {
 }
 
 /**
- * Offered actions as entries of a menu or the palette: each by its name, or by its description where several share
+ * Offered actions as entries of a menu: each by its name, or by its description where several share
  * one, the same handle bound to different subjects; with "…" where it asks for input first. Asks first.
  */
 export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; ask: boolean; run: () => void }[] {
@@ -116,36 +114,6 @@ export function labelOf(path: string, view: View | undefined, listed: Place[] = 
 /** The path above one within a tab, `/` at the top; none above `/`. */
 export const parentOf = (path: string): string | undefined => (path === "/" ? undefined : path.replace(/\/[^/]*$/, "") || "/")
 
-/** Every entry of the menus as a command, grouped by its menu and named by the path to it: a check toggles, a choice's option sets it. */
-export function commandsOf(menus: Menu[]): Command[] {
-  const walk = (group: string, trail: string[], items: MenuItem[], off: boolean): Command[] =>
-    items.flatMap((item): Command[] => {
-      const label = (text: string) => [...trail, text].join(" › ")
-      const disabled = off || ("disabled" in item && item.disabled === true)
-
-      switch (item.kind) {
-        case "action":
-          return [{ id: `${group}/${item.id}`, group, label: label(item.label), hint: item.hint, keys: item.keys, disabled, run: item.run, ...(item.mark && { ask: true }) }]
-        case "check": {
-          const verb = item.checked ? "Uncheck" : "Check"
-
-          return [{ id: `${group}/${item.id}`, group, label: label(`${verb} ${item.label}`), keys: item.keys, disabled, run: () => item.set(!item.checked) }]
-        }
-        case "choice":
-          return item.options
-            .filter((o) => o.id !== item.value)
-            .map((o) => ({ id: `${group}/${item.id}/${o.id}`, group, label: label(`${item.label}: ${o.label}`), disabled, run: () => item.set(o.id) }))
-        case "submenu":
-          return walk(group, [...trail, item.label], item.items, disabled)
-        case "separator":
-        case "label":
-          return []
-      }
-    })
-
-  return menus.flatMap((menu) => walk(menu.label, [], menu.items, menu.disabled === true))
-}
-
 /** What an input form's fields hold, as the action's arguments: each open input of its type, or undefined while one is not. */
 export function argsOf(open: Schema, fields: Record<string, string | boolean | undefined>): Args | undefined {
   const args: Args = {}
@@ -211,19 +179,48 @@ export async function indexOf(read: (path: string) => Promise<View | undefined>,
   return found
 }
 
-/** What the search finds for a query: places and actions whose words hold every word of it, the places first, at most `cap`. */
+/** The menu a place is found under: Go, where the tab's menu lists the places. */
+export const GO = "Go"
+
+/**
+ * How well one word of a query is met by a found entry, lower the better, or nothing where it is not: by its label
+ * whole, at a word's start or within; then by its way in the menu, Go for a place and where an action is offered; then
+ * by what else says it, a place's path or an action's description.
+ */
+function met(f: Found, word: string): number | undefined {
+  const starts = (text: string) => text.split(/[^a-z0-9]+/).some((w) => w.startsWith(word))
+  const label = f.label.toLowerCase()
+  const way = (f.kind === "place" ? GO : f.where).toLowerCase()
+  const rest = (f.kind === "place" ? f.at : f.action.handle.description).toLowerCase()
+
+  if (label === word) return 0
+  if (starts(label)) return 1
+  if (label.includes(word)) return 2
+  if (starts(way)) return 3
+  if (way.includes(word)) return 4
+
+  return rest.includes(word) ? 5 : undefined
+}
+
+/**
+ * What the search finds for a query: the places and actions that meet every word of it, by their label, their way in
+ * the menu or what else says them, the best met first; among equals what waits on the person, then the order they were
+ * read in, nearest `/` first. At most `cap`.
+ */
 export function search(found: Found[], query: string, cap = 30): Found[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
 
   if (!words.length) return []
 
-  const hit = (f: Found) => {
-    const text = (f.kind === "place" ? `${f.label} ${f.at}` : `${f.label} ${f.action.handle.description} ${f.where}`).toLowerCase()
+  return found
+    .flatMap((f, order) => {
+      const scores = words.map((w) => met(f, w))
 
-    return words.every((w) => text.includes(w))
-  }
-
-  return [...found.filter((f) => f.kind === "place" && hit(f)), ...found.filter((f) => f.kind === "action" && hit(f))].slice(0, cap)
+      return scores.some((score) => score === undefined) ? [] : [{ f, order, score: scores.reduce<number>((sum, score) => sum + score!, 0), ask: f.kind === "action" && f.action.ask }]
+    })
+    .sort((a, b) => a.score - b.score || Number(b.ask) - Number(a.ask) || a.order - b.order)
+    .slice(0, cap)
+    .map(({ f }) => f)
 }
 
 /** Whether `path` is `place` or below it, within one tab. */
@@ -264,16 +261,19 @@ export type TabMenuParts = {
 export const MANY = 8
 
 /**
- * The tab's menu, top to bottom: the surface's actions at `/` under its title; where the tab is below `/`, the place's
+ * The tab's menu, top to bottom: the surface's actions at `/`, with no title, the tab having it; where the tab is below `/`, the place's
  * actions under its name; Go, the places and the way back up, a submenu with a field where there are more than MANY;
  * then the shell's own controls. Asks stand first in their group, marked, and so does the label over them; Go and the
  * places in it carry a dot on the way to what waits elsewhere.
  */
 export function tabMenu({ surface, place, go, dots, start, navigate, controls }: TabMenuParts): MenuItem[] {
-  const section = (id: string, s: { label: string; actions: Offered[]; menu?: Json }): MenuItem[] => {
+  // The surface's own actions stand without a heading: the tab the menu hangs from names it already.
+  const section = (id: string, s: { label: string; actions: Offered[]; menu?: Json }, titled = true): MenuItem[] => {
     const items = grouped(s.actions, s.menu, start)
 
-    return items.length ? [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items] : []
+    if (!items.length || !titled) return items
+
+    return [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items]
   }
   const ups = go.filter((g) => g.up)
   const places = go.filter((g) => !g.up)
@@ -287,7 +287,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
   })
   const goItems: MenuItem[] = [...ups.map(entry), ...(ups.length && places.length ? [{ kind: "separator" as const, id: "places-edge" }] : []), ...places.map(entry)]
   const parts: MenuItem[][] = [
-    section("surface", surface),
+    section("surface", surface, false),
     place ? section("place", place) : [],
     goItems.length
       ? [{ kind: "submenu" as const, id: "go", label: "Go", items: goItems, ...(places.length > MANY && { search: "Filter places" }), ...(go.some((g) => dots.has(g.at)) && { mark: true }) }]
@@ -302,7 +302,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
 export function foundItems(found: Found[], navigate: (at: string) => void, start: (action: Offered) => void): MenuItem[] {
   return found.map((f) =>
     f.kind === "place"
-      ? { kind: "action", id: `place ${f.at}`, label: f.label, hint: f.at, run: () => navigate(f.at) }
+      ? { kind: "action", id: `place ${f.at}`, label: f.label, note: GO, hint: f.at, run: () => navigate(f.at) }
       : {
           kind: "action",
           id: `action ${f.action.path} ${key(f.action.handle)}`,

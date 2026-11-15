@@ -12,3 +12,12 @@ export function successor<T extends { at: string }>(strip: readonly T[], at: str
 
   return (strip[i + 1] ?? strip[i - 1])?.at
 }
+
+/** Where the next or previous tab is from `active`, in the strip's order, home first: one step along it, round from the end. */
+export function cycled(order: readonly string[], active: string, step: 1 | -1): string | undefined {
+  const i = order.indexOf(active)
+
+  if (!order.length) return undefined
+
+  return order[(((i < 0 ? 0 : i + step) % order.length) + order.length) % order.length]
+}

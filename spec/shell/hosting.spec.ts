@@ -6,7 +6,9 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
-import { BUILT, shellUi, buildUi } from "../../framework/shell/src/hosting.ts"
+import { BUILT, shellUi, buildUi, migrated, withSettings } from "../../framework/shell/src/hosting.ts"
+import { readSettings, writeSettings } from "../../framework/shell/settings/src/store.ts"
+import { DEFAULTS } from "../../framework/shell/settings/src/settings.ts"
 
 const dirs: string[] = []
 
@@ -179,3 +181,33 @@ it("serves the last page that built while the page does not build, through a rel
   expect(next).not.toBe(good!)
   await reloaded.close()
 }, 30_000)
+
+describe("the person's settings in the page", () => {
+  const scratch = () => join(mkdtempSync(join(tmpdir(), "babavoss-page-settings-")), "settings.json")
+  const given = (html: string) => JSON.parse(/<script type="application\/json" id="babavoss-settings">(.*?)<\/script>/.exec(html)![1]!) as Record<string, unknown>
+
+  it("are given in its head as it is served, before what reads them, and no markup in them can close the script", () => {
+    const file = scratch()
+
+    writeSettings(file, { ...DEFAULTS, appearance: { mode: "dark", themes: { light: "neutral", dark: "claude" } } })
+
+    const html = withSettings("<html><head><script>paint()</script></head></html>", file)
+
+    expect(html.indexOf("babavoss-settings")).toBeLessThan(html.indexOf("paint()"))
+    expect(given(html)).toMatchObject({ appearance: { mode: "dark", themes: { dark: "claude" } }, logo: { animate: true } })
+    writeFileSync(file, JSON.stringify({ appearance: { mode: "</script><b>" } }))
+    expect(withSettings("<head></head>", file)).not.toContain("</script><b>")
+  })
+
+  it("give no appearance while the file has none, so the page paints by an older page's cookie, which is taken into the file once", () => {
+    const file = scratch()
+    const cookie = `other=1; babavoss.appearance=${encodeURIComponent(JSON.stringify({ mode: "light", themes: { light: "claude", dark: "neutral" } }))}`
+
+    expect(given(withSettings("<head></head>", file))).not.toHaveProperty("appearance")
+    expect(migrated(cookie, file)).toBe(true)
+    expect(readSettings(file).appearance).toEqual({ mode: "light", themes: { light: "claude", dark: "neutral" } })
+    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", themes: { light: "claude", dark: "neutral" } } })
+    expect(migrated(cookie, file)).toBe(false)
+    expect(readSettings(file).appearance.mode).toBe("dark")
+  })
+})
