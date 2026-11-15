@@ -6,7 +6,7 @@
 // ⌘P or Ctrl+P by default, goes home from anywhere, and from home back. A surface that does not load is listed, broken,
 // and cannot be opened. Its footer says whose page it is, and when a later babavoss is out.
 import { useEffect, useState, type ReactNode } from "react"
-import { cn } from "cn"
+import { cn } from "../../kit/cn.ts"
 import type { Handle } from "../../core/index.ts"
 import { BoxIcon, SendIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"

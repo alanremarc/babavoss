@@ -12,11 +12,12 @@ export function object<S, Id extends Args>(identity: (subject: S) => Id, project
 /** Caller and subject arguments use the same scalar vocabulary as handles. */
 export type Inputs<S extends Schema> = { [K in keyof S]: { string: string; number: number; boolean: boolean }[S[K]] }
 
-type Action<M, C> = { name: string; ask: boolean; update(model: M, call: Call): Update<M, C> }
+type Action<M, C> = { name: string; ask: boolean; quiet?: boolean; update(model: M, call: Call): Update<M, C> }
 
 /**
  * Define the contract and pure transition once, then bind the subject wherever the action is offered. An ask is offered to
  * the person only: bind it where the decision stands, and say `attention` at / with who is waited for and why, so the agent knows to wait.
+ * A quiet action is the page's own bookkeeping, of no event in the work: what it changes is told to the agent in no way.
  */
 export function action<M, const S extends Schema, const I extends Schema, C = never>(definition: {
   name: string
@@ -24,6 +25,7 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
   subject: S
   inputs: I
   ask?: boolean
+  quiet?: boolean
   update(model: M, args: Inputs<S> & Inputs<I>, call: Call): Update<M, C>
 }) {
   for (const key of Object.keys(definition.subject)) {
@@ -33,6 +35,7 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
   return {
     name: definition.name,
     ask: definition.ask ?? false,
+    quiet: definition.quiet ?? false,
     bind: (subject: Inputs<S>) =>
       handle(
         definition.name,
@@ -82,6 +85,14 @@ export function view<M, C>(actions: readonly Action<M, C>[], routes: Routes<M>) 
 
       return shown && asks.size && !(actor !== undefined && isPerson(actor)) ? (unasked(shown) as View) : shown
     },
-    update: (model: M, call: Call): Update<M, C> => named.get(call.handle)?.update(model, call) ?? { refused: `${call.handle} is not a handle of this view` },
+    update: (model: M, call: Call): Update<M, C> => {
+      const a = named.get(call.handle)
+
+      if (!a) return { refused: `${call.handle} is not a handle of this view` }
+
+      const r = a.update(model, call)
+
+      return a.quiet && !("refused" in r) ? { ...r, quiet: true } : r
+    },
   }
 }

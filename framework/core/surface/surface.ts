@@ -20,8 +20,12 @@ export interface Call {
  */
 export type Notice = string | { text: string; at?: string; from?: string }
 
-/** What an update returns: the next model with the commands to start and the notices to tell, or a refusal that changes nothing. */
-export type Update<M, C> = { model: M; commands?: C[]; notices?: Notice[] } | { refused: string }
+/**
+ * What an update returns: the next model with the commands to start and the notices to tell, or a refusal that changes
+ * nothing. `quiet`: the commit is the page's own bookkeeping, such as what the person has seen, and is told to the agent
+ * in no way: not heard, not among the changes, not counted as waiting for it.
+ */
+export type Update<M, C> = { model: M; commands?: C[]; notices?: Notice[]; quiet?: true } | { refused: string }
 
 export interface Surface<M, E extends { kind: string }, C> {
   description: string

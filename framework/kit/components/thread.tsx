@@ -3,7 +3,7 @@
 // turn ends, its figures sit quietly under it; what happened to the session itself is a quiet line in the middle. Every
 // fold follows the thread's "all" until it is toggled.
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "../cn.ts"
 
 import {
   MessageScroller,
@@ -76,7 +76,8 @@ const TONE = {
  * Without children it is only the line. `status` marks it running or failed. `tone` tells whose it is where that
  * matters: `accent` one of particular concern, such as what a root did among an agent's steps, its icon in the accent
  * and its title in full ink; `user` what the user side did beside its messages; `context` what was put into the
- * agent's context, such as a hook's output. Those two take their voice's colour.
+ * agent's context, such as a hook's output. Those two take their voice's colour. `onOpenChange` is told when the
+ * person opens or folds it, as a page that keeps the open step in its route needs.
  */
 function ThreadStep({
   icon,
@@ -86,6 +87,7 @@ function ThreadStep({
   status,
   tone,
   initial,
+  onOpenChange,
   children,
 }: {
   icon?: React.ReactNode
@@ -95,9 +97,14 @@ function ThreadStep({
   status?: "running" | "error"
   tone?: "accent" | "user" | "context"
   initial?: boolean
+  onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
 }) {
-  const [open, setOpen] = useThreadFold(initial)
+  const [open, setFold] = useThreadFold(initial)
+  const setOpen = (next: boolean) => {
+    setFold(next)
+    onOpenChange?.(next)
+  }
   const line = (
     <TraceLine status={status} className={tone && TONE[tone]}>
       {icon && <TraceIcon>{icon}</TraceIcon>}
@@ -121,7 +128,7 @@ function ThreadStep({
 
 /**
  * The steps between two messages under one line: `summary` says how much was done, the steps show on opening. Open by
- * itself while `running`, closed once done, unless the person or "all" said otherwise.
+ * itself while `running`, or where `initial` says, closed once done, unless the person or "all" said otherwise.
  */
 function ThreadSteps({
   icon,
@@ -130,6 +137,7 @@ function ThreadSteps({
   aside,
   running,
   error,
+  initial,
   children,
 }: {
   icon?: React.ReactNode
@@ -138,6 +146,7 @@ function ThreadSteps({
   aside?: React.ReactNode
   running?: boolean
   error?: boolean
+  initial?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -147,7 +156,7 @@ function ThreadSteps({
       description={description}
       aside={aside}
       status={running ? "running" : error ? "error" : undefined}
-      initial={running}
+      initial={initial ?? running}
     >
       {children}
     </ThreadStep>

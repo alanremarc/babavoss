@@ -15,7 +15,7 @@
 // its notices, and they stay dotted until it is left; Mark all seen sees them all. Escape, Backspace or the left arrow go
 // back; Escape on the first level closes.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
-import { cn } from "cn"
+import { cn } from "../../kit/cn.ts"
 import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LayersIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"

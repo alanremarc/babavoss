@@ -1,9 +1,10 @@
 // The demo project's tasks, for the design document's scenarios: rows by identity, actions for both sides, an ask that is
 // the person's alone, attention while they are waited for, a notice when a task moves, and a path per task. A task in
-// review carries its asks in the list too, so the person decides from the list; the agent is never offered them.
-import { action, surface, view, type Update } from "babavoss/core/index.ts"
+// review carries its asks in the list too, so the person decides from the list; the agent is never offered them. The
+// list is ordered by what is to be done: in review first, then to do, then done, so an approval moves a row.
+import { action, detail, surface, view, type Update } from "babavoss/core/index.ts"
 
-export type Task = { n: number; title: string; status: "todo" | "review" | "done" }
+export type Task = { n: number; title: string; status: "todo" | "review" | "done"; note?: string }
 export type Model = { tasks: Task[]; next: number }
 type Result = Update<Model, never>
 
@@ -12,6 +13,17 @@ const moved = (m: Model, n: number, status: Task["status"], what: string): Resul
 
   return { model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, status } : t)) }, notices: [{ text: `Task ${n}, ${task.title}, ${what}`, at: `/tasks/${n}` }] }
 }
+
+const ORDER: Record<Task["status"], number> = { review: 0, todo: 1, done: 2 }
+/** A task as / lists it; a done one is detail there, counted at / and read whole at the tab's path. */
+const row = (t: Task) => ({
+  at: `/tasks/${t.n}`,
+  n: t.n,
+  title: t.title,
+  status: t.status,
+  ...(t.note && { note: t.note }),
+  ...(t.status === "review" && { approve: approve.bind({ n: t.n }), reopen: reopen.bind({ n: t.n }) }),
+})
 
 const add = action({
   name: "add",
@@ -44,20 +56,21 @@ const reopen = action({
   ask: true,
   update: (m: Model, { n }): Result => moved(m, n, "todo", "is reopened"),
 })
-const pages = view([add, done, approve, reopen], {
+const annotate = action({
+  name: "annotate",
+  description: ({ n }) => `Note on task ${n} what was done or found: a line`,
+  subject: { n: "number" },
+  inputs: { text: "string" },
+  update: (m: Model, { n, text }): Result => ({ model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, note: text.trim() } : t)) } }),
+})
+const pages = view([add, done, approve, reopen, annotate], {
   "/": (m) => {
     const review = m.tasks.filter((t) => t.status === "review")
 
     return {
       title: "Tasks",
       how: "Add what the person asks for and mark a task done when it is; they approve it on the page.",
-      tasks: m.tasks.map(({ n, title, status }) => ({
-        at: `/tasks/${n}`,
-        n,
-        title,
-        status,
-        ...(status === "review" && { approve: approve.bind({ n }), reopen: reopen.bind({ n }) }),
-      })),
+      tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
       ...(review.length && { attention: { who: "person", why: `to review ${review.length === 1 ? `task ${review[0]!.n}` : `${review.length} tasks`}` } }),
       add: add.bind({}),
     }
@@ -68,6 +81,7 @@ const pages = view([add, done, approve, reopen], {
     return (
       t && {
         ...t,
+        annotate: annotate.bind({ n: t.n }),
         ...(t.status === "todo" && { done: done.bind({ n: t.n }) }),
         ...(t.status === "review" && { approve: approve.bind({ n: t.n }), reopen: reopen.bind({ n: t.n }) }),
       }

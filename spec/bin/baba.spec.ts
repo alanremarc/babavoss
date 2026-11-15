@@ -354,14 +354,15 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const opened = hook("UserPromptSubmit").stdout
 
-    expect(opened).toStartWith(
-      "In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nnotices:\nthe person acted on /\nchanged by the person:\n"
+    // A tab the person opened is told in one line, its heading, its actions by name and where to read it, which the agent does.
+    expect(opened).toMatch(
+      /^In the shell of .baba\/: what was heard, then what changed at \/ since you were last told it, by who changed it:\nnotices:\nthe person opened \/desk\nchanged by the person:\n\+ \/desk "Greeting" \(tab \d+\), actions: propose; read \/desk\n?$/
     )
-    expect(opened).toMatch(/\n\+ \/desk "Greeting" \(tab \d+\)\nactions: propose /)
-    expect(opened).toContain('\nhow: "Propose a greeting when the person asks for another.')
-    expect(opened).toContain('\ngreeting: "hello"')
 
     const tab = /\+ (\/desk) "Greeting"/.exec(opened)![1]!
+
+    expect(call(tab).stdout).toContain('how: "Propose a greeting when the person asks for another.')
+    expect(call(tab).stdout).toContain('greeting: "hello"')
 
     // The tab's own path offers its actions, as the exact commands.
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
@@ -388,7 +389,9 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     expect(told).toStartWith("In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
     expect(told).toContain(`+ need: the person, at ${tab}, to accept or decline the proposed greeting`)
-    expect(told).toContain("good morning")
+    // The agent has not worked in the tab this turn or the last: it is told in one line, who changed it, and to read it.
+    expect(told).toMatch(new RegExp(`\\n\\${tab} "Greeting" \\(tab \\d+\\): changed by the person; read it`))
+    expect(call(tab).stdout).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")
     expect(hook("PostToolUse").stdout).toBe("")

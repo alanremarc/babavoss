@@ -11,7 +11,7 @@ test("a note the agent keeps is seen by the person, who is told of it once", asy
   expect(await agent.call("/", "add", { text: "Call the landlord" })).toMatchObject({ outcome: "written" })
 
   expect(person.sees("/notes/1")).toMatchObject({ n: 1, text: "Call the landlord" })
-  expect(person.told()).toEqual(["notes.count: 0 → 1", 'latest: null → "Call the landlord"', "+ clear: clear"])
+  expect(person.told()).toEqual(["notes.count: 0 → 1", 'latest: null → "Call the landlord"', "+ action clear"])
   expect(person.told()).toEqual([])
 })
 
@@ -37,7 +37,7 @@ test("the agent learns of a note the person removed", async () => {
   agent.told()
   await person.call("/notes/1", "remove", { n: 1 })
 
-  expect(agent.told()).toEqual(["notes.count: 1 → 0", 'latest: "Pharmacy" → null', "- clear"])
+  expect(agent.told()).toEqual(["notes.count: 1 → 0", 'latest: "Pharmacy" → null', "- action clear"])
   expect(agent.sees("/notes/1")).toBeUndefined()
 })
 

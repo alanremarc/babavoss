@@ -53,7 +53,15 @@ update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! },
 
 A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page under all activity, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person's notifications.
 
-The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there.
+The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
+
+What is there to be looked up rather than followed, rows that are finished or counters, wrap in `detail(value)` from `babavoss/core/index.ts`, a fact or a row of a list. The page and a read of the tab see it as an ordinary value; the shell's present at `/` leaves it out and counts it in one line, `+19 more in issues; read /tabs/3`, and a change to it there is one line too.
+
+```ts
+issues: [...open.map(row), ...done.map((issue) => detail(row(issue)))],
+```
+
+An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way. An update may return `quiet: true` for an event of the same kind.
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 

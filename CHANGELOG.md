@@ -2,6 +2,17 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.48.0
+
+- What the agent is told is cut to what it needs. A quiet action, `action({ quiet: true })`, or an update returning `quiet: true`, is the page's own bookkeeping, told to the agent in no way and kept out of the activity; the shell's seen and looked and every settings change are quiet. A change no one made, as changed code or a restored state makes, is not told. A notice stands for the changes of the update that gave it; a need of the agent's is told all the same. A tab the agent neither read nor called in this turn or the last, and that does not need it, is one line at a boundary.
+- `detail(value)` from `babavoss/core/index.ts` marks a fact or a row as detail: read whole at the tab's path and by the page, counted in one line in the present at `/`. Mark finished rows and counters with it.
+- Breaking for specs that match tellings: a tab opened is one line, `+ PATH "TITLE", actions: a, b; read PATH`; an action offered or withdrawn reads `+ action NAME` and `- action NAME`, also in a story's `told()`; a reorder reads `PATH moved up` and never `order now …`. A path names one fact of the view above it, as `/queue/issues`.
+
+## 0.47.0
+
+- Kit: `DropdownMenu` and its parts, `Badge`, `Marker`, an inline line or labelled separator in a conversation, and `ResizablePanelGroup`, `ResizablePanel` and `ResizableHandle`, from shadcn, in the type scale. `ThreadStep` takes `onOpenChange` and `ThreadSteps` takes `initial`, so a page can keep the open step in its route. The kit's class merger keeps a type-scale size, `text-meta` and the others, beside a text colour; it used to drop it, so some small labels in messages, the composer and the shell were the wrong size. Nothing to adapt.
+- In this repository the lab shows a run as a conversation: bubbles for what is said, folded steps for what entered the context between, a divider per turn, a header for the run's lifecycle and the runs kept, and a composer that picks the model and starts a run from its first message.
+
 ## 0.46.0
 
 - Breaking: a tab stands at its surface's name. The tab opened while no other tab of its surface holds the name is `/NAME` until it closes, so `/queue/issues/42` survives the tab being closed and opened again; a second tab of a surface is `/tabs/N`, and `/tabs/N` still reaches any tab. Reads, calls, `show at=` and the page's URLs take either; every path the shell gives, tab rows, `at` facts, notices, needs, `pointed` and activity, is said by the address. At `/` a tab's heading is `/queue "Queue" (tab 10)`, and a second one `/tabs/11 queue "Queue"`. A spec matching `/tabs/1 NAME "Title"`, `at: "/tabs/1…"` or `NAME /tabs/1` in what the agent is told now matches `/NAME "Title" (tab 1)`, `at: "/NAME…"` and `/NAME`.
