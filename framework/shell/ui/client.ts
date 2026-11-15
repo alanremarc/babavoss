@@ -64,13 +64,25 @@ export function changes(
 
 const RENEWED = "babavoss-renewed"
 const RENEW_MS = 10_000
+/** How often a page whose runtime is gone asks whether it is back. */
+const RETRY_MS = 2000
 
-/** Loads the page again, at most once in RENEW_MS, so a runtime that keeps refusing does not spin the tab. */
+/**
+ * Loads the page again, at most once in RENEW_MS, so a runtime that keeps refusing does not spin the tab; and only once
+ * the page is there to load: while nothing answers at its address the page stays as it is, saying it is reconnecting,
+ * and asks again, so a runtime that is gone never turns the tab into the browser's own error page.
+ */
 function renew() {
   const last = Number(sessionStorage.getItem(RENEWED) ?? 0)
   const wait = last + RENEW_MS - Date.now()
 
   if (wait > 0) return void setTimeout(renew, wait)
-  sessionStorage.setItem(RENEWED, String(Date.now()))
-  location.reload()
+  fetch(location.href, { cache: "no-store", headers: { accept: "text/html" } }).then(
+    (response) => {
+      if (!response.ok) return void setTimeout(renew, RETRY_MS)
+      sessionStorage.setItem(RENEWED, String(Date.now()))
+      location.reload()
+    },
+    () => void setTimeout(renew, RETRY_MS)
+  )
 }

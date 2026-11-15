@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.42.2
+
+- A page whose runtime is gone stays as it is, reconnecting, and loads again only once its address answers; it used to load into the browser's own error page. Nothing to adapt.
+
 ## 0.42.1
 
 - A page that lost its runtime says so in a small bubble under the mark, Reconnecting, and the mark's eyes shut until it is back; the bar under the strip is gone, and a page still loading shows neither. The dot on a tab stands still while its icon gives way to the caret. Nothing to adapt.
