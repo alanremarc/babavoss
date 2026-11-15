@@ -28,9 +28,9 @@ type Compare = "text" | "diff" | "side"
 
 export const icon = <BookOpenTextIcon aria-hidden />
 
-/** A text longer than this is folded to its first FOLD lines. */
+/** A text longer than this is folded, to the height of about eight lines. */
 const LONG = 12
-const FOLD = 8
+const FOLDED = "max-h-38 overflow-hidden"
 const COMPARES: [Compare, string, string][] = [
   ["text", "Now", "Now only"],
   ["diff", "Diff", "Line diff against the pin"],
@@ -127,7 +127,6 @@ function Entry(props: { step: Step; telling: Telling; total: number; compare: Co
   const diff = pinned !== undefined && compare === "diff" ? lineDiff(pinned, telling.text) : undefined
   const all = diff ? diff.map((d) => `${d.op} ${d.line}`) : telling.text.split("\n")
   const long = all.length > LONG
-  const shown = long && !open ? all.slice(0, FOLD) : all
   const body =
     pinned !== undefined && compare === "side" ? (
       <div className="grid grid-cols-2 divide-x">
@@ -137,12 +136,12 @@ function Entry(props: { step: Step; telling: Telling; total: number; compare: Co
         ].map(([label, text]) => (
           <div key={label} className="min-w-0">
             <div className="text-muted-foreground px-3 pt-1 text-badge uppercase">{label}</div>
-            <Lines lines={long && !open ? text!.split("\n").slice(0, FOLD) : text!.split("\n")} wrap={wrap} />
+            <Lines lines={text!.split("\n")} wrap={wrap} />
           </div>
         ))}
       </div>
     ) : (
-      <Lines lines={shown} wrap={wrap} mark={diff && ((i) => (diff[i]!.op === "+" ? "bg-success/10 text-success" : diff[i]!.op === "-" ? "bg-destructive/10 text-destructive" : ""))} />
+      <Lines lines={all} wrap={wrap} mark={diff && ((i) => (diff[i]!.op === "+" ? "bg-success/10 text-success" : diff[i]!.op === "-" ? "bg-destructive/10 text-destructive" : ""))} />
     )
 
   return (
@@ -154,7 +153,7 @@ function Entry(props: { step: Step; telling: Telling; total: number; compare: Co
         </span>
         {tag && <span className="text-muted-foreground shrink-0 rounded-sm border px-1 text-badge whitespace-nowrap">{tag}</span>}
         <span className="text-muted-foreground ml-auto shrink-0 text-meta tabular-nums whitespace-nowrap">
-          {telling.lines} lines · {telling.chars.toLocaleString("en")} chars · ~{telling.tokens.toLocaleString("en")} tok
+          {telling.lines} {telling.lines === 1 ? "line" : "lines"} · {telling.chars.toLocaleString("en")} chars · ~{telling.tokens.toLocaleString("en")} tok
         </span>
         <Delta delta={telling.delta} />
         <span className="text-muted-foreground w-20 shrink-0 text-right text-meta tabular-nums whitespace-nowrap" title="Tokens given so far in the scenario">
@@ -162,7 +161,7 @@ function Entry(props: { step: Step; telling: Telling; total: number; compare: Co
         </span>
       </div>
       <div className="bg-card relative min-w-0 overflow-hidden rounded-md border">
-        {body}
+        <div className={long && !open ? FOLDED : ""}>{body}</div>
         {long && (
           <div className={`flex justify-center ${open ? "border-t" : "from-card via-card/90 absolute inset-x-0 bottom-0 bg-gradient-to-t to-transparent pt-8"}`}>
             <button
@@ -178,7 +177,6 @@ function Entry(props: { step: Step; telling: Telling; total: number; compare: Co
             </button>
           </div>
         )}
-        {long && !open && <div className="h-6" />}
       </div>
     </div>
   )
@@ -238,7 +236,7 @@ function PagePreview({ step, before }: { step?: Step; before?: Step }) {
         <span className="rounded-sm border px-1 text-badge font-normal">snapshot</span>
         {page?.asleep && <span className="text-badge font-normal">the root is asleep: as it last was</span>}
       </h2>
-      <div className="bg-background flex h-56 flex-col overflow-hidden rounded-md border shadow-xs">
+      <div className="bg-background flex h-48 flex-col overflow-hidden rounded-md border shadow-xs">
         <div className="bg-muted/40 flex h-7 shrink-0 items-center gap-0.5 border-b px-1">
           <span className="text-muted-foreground px-1.5 text-meta">Home</span>
           {tabs.map((t) => {
@@ -358,7 +356,10 @@ export default function Design() {
   }
   const go = (n: number) => current && navigate(`/scenarios/${current.name}/${n}`)
 
-  useEffect(() => focused.current?.scrollIntoView({ block: "nearest" }), [picked, timeline?.name])
+  // Braced: in some browsers scrolling gives a promise, which an effect may not return.
+  useEffect(() => {
+    focused.current?.scrollIntoView({ block: "nearest" })
+  }, [picked, timeline?.name])
   useEffect(() => {
     if (!active || !selected) return
 
@@ -435,7 +436,7 @@ export default function Design() {
                 ref={here ? focused : undefined}
                 onClick={() => go(step.n)}
                 aria-current={here ? "step" : undefined}
-                className={`flex scroll-mt-28 gap-2 rounded-md border-l-2 py-0.5 pr-2 ${here ? "border-primary bg-accent/40" : "hover:bg-muted/30 border-transparent"}`}
+                className={`flex scroll-mt-32 scroll-mb-24 gap-2 rounded-md border-l-2 py-0.5 pr-2 ${here ? "border-primary bg-accent/40" : "hover:bg-muted/30 border-transparent"}`}
               >
                 <span className={`w-6 shrink-0 pt-2 text-right text-meta tabular-nums ${here ? "text-primary font-medium" : "text-muted-foreground/70"}`}>{step.n}</span>
                 <div className="flex min-w-0 flex-1 flex-col">

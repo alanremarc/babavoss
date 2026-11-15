@@ -43,7 +43,7 @@ export default function TasksPage({ view, call }: Props) {
                   {[t.approve, t.reopen].map(
                     (h) =>
                       h && (
-                        <Button key={h.name} size="xs" variant={h.name === "approve" ? "default" : "ghost"} title={`${h.description}: yours to decide`} onClick={() => call?.(t.at, h)}>
+                        <Button key={h.name} size="sm" variant={h.name === "approve" ? "default" : "ghost"} title={`${h.description}: yours to decide`} onClick={() => call?.(t.at, h)}>
                           {h.name === "approve" ? "Approve" : "Reopen"}
                         </Button>
                       ),
