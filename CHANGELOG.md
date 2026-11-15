@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.50.0
+
+- A session's runtime no longer stays alive and deaf after changed code is loaded. After a failed hot reload, a file gone for a moment in a checkout or code that does not parse, bun stops waking the process for its timers, and a runtime restarting for the framework's changed code then waited for ever with its port closed. A runtime now gives way to a fresh process once bun has said a reload failed in it. Its close is bounded by the clock, and after every load in place it checks that its door still answers; where it does not, it ends and a fresh runtime takes the state. Nothing to adapt.
+- A command whose runtime is alive but refuses connections for longer than a close takes ends that process, only if it is this session's runtime, starts a fresh one with the state kept, and says so in one line. The client is version 12 and replaces installed copies.
+
 ## 0.49.0
 
 - A surface's page may use any React library: `bun add NAME` in `.baba/` and import it. The page always has one React, the framework's, whatever a library or the install brings, so "Invalid hook call … more than one copy of React" no longer happens.
