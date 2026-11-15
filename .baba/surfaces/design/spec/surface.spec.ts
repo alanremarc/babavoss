@@ -13,7 +13,7 @@ import tasks from "../demo/surfaces/tasks/src/surface.ts"
 import { lineDiff } from "../src/measure.ts"
 import { parts } from "../ui/told.ts"
 
-type Row = { at: string; name: string; steps: number; lines: number; chars: number; tokens: number; delta?: string }
+type Row = { at: string; name: string; about: string; steps: number; lines: number; chars: number; tokens: number; delta?: string }
 type Telling = { carrier: string; lines: number; chars: number; tokens: number; delta?: string; text: string; pinned?: string }
 type Step = { at: string; n: number; who: string; did: string; changed: string[] | string; tellings: Telling[] }
 
@@ -45,12 +45,12 @@ test("every scenario plays to its end, each step told by who moved and what the 
   for (const p of plays) expect(p.steps.flatMap((s) => s.tellings).some((t) => t.text)).toBe(true)
 })
 
-test("/ lists the scenarios with their sizes and an at each, and a session start is played as its hook gives it", async () => {
+test("/ lists the scenarios with what each is about, their sizes and an at each, and a session start is played as its hook gives it", async () => {
   const { agent } = await played()
   const rows = (agent.sees() as { scenarios: Row[] }).scenarios
 
   expect(agent.sees()).toMatchObject({ title: "Design Document" })
-  expect(rows.map((r) => [r.at, r.name])).toEqual(SCENARIOS.map((s) => [`/scenarios/${s.name}`, s.name]))
+  expect(rows.map((r) => [r.at, r.name, r.about])).toEqual(SCENARIOS.map((s) => [`/scenarios/${s.name}`, s.name, s.about]))
   for (const r of rows) {
     expect(r.tokens).toBeGreaterThan(0)
     expect(r.tokens).toBeGreaterThanOrEqual(r.chars / 4)
