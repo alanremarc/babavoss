@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.34.0
+
+- Claude Code's adapter hands on no account, organisation or user id and no address, in any field or text, the process's stderr included. An adapter for another harness should do the same.
+- In this repository's lab, a closed run keeps only its record, `run.json` and the timeline: its project and home, the harness's transcripts among them, are deleted. `/runs` offers `forget id=`, and only the last 20 records are kept. When the lab starts, it clears what a lab that is gone left behind.
+- What the person does on the page under test joins the lab's timeline as entries of kind `person`, read from the root's `/activity`. A run's first entry says the lab is left out of the copy.
+
 ## 0.33.0
 
 - A handle the person alone may call carries `ask: true` in the view the person reads, and the frame knows an ask from that view alone. `action({ ask: true })` sets it. A surface that offers a person-only handle through its own `view` instead of `action` should pass `ask` as `handle()`'s fifth argument, or the frame shows it as an ordinary action. The agent's views and text are unchanged.
