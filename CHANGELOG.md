@@ -2,6 +2,30 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.46.0
+
+- Breaking: a tab stands at its surface's name. The tab opened while no other tab of its surface holds the name is `/NAME` until it closes, so `/queue/issues/42` survives the tab being closed and opened again; a second tab of a surface is `/tabs/N`, and `/tabs/N` still reaches any tab. Reads, calls, `show at=` and the page's URLs take either; every path the shell gives, tab rows, `at` facts, notices, needs, `pointed` and activity, is said by the address. At `/` a tab's heading is `/queue "Queue" (tab 10)`, and a second one `/tabs/11 queue "Queue"`. A spec matching `/tabs/1 NAME "Title"`, `at: "/tabs/1…"` or `NAME /tabs/1` in what the agent is told now matches `/NAME "Title" (tab 1)`, `at: "/NAME…"` and `/NAME`.
+- A path into a tab that is closed, or into a surface with no tab open, is answered with what happened and where to go, `/tabs/3, the queue tab 3, was closed by the person; queue is now at /queue (tab 10)`, instead of `nothing at`. A surface may say the same for its own paths with the optional `absent(model, path)`.
+- Breaking: `tabs` and `activity` are reserved names, like `baba` and `settings`. Rename a project surface called either.
+
+## 0.45.0
+
+- A session resumed, forked or compacted is given a short reminder of baba's words (`skill/reminder.md`, also in the plugin) and then the whole present, instead of the whole words again. A new or cleared session still gets them whole.
+- The first answer names the page and the command, and no longer says where `bv` and `baba` were put or repeats the skill's help.
+- A command's answer says once when this session's hooks have gone quiet, or never spoke, and calls alone no longer keep the page's turn reading as working.
+- While changed surface code loads, reads and calls are held, up to about 40s, and answered by the new code. A call the old code took as it stopped is given to the new one. The agent is told of a reload only when work was cut or the new code did not start.
+- A call whose answer was lost says its outcome is unknown: read before retrying.
+- The client is version 11 and replaces installed copies.
+
+## 0.44.1
+
+- Home is one list with each thing once, and no headings: the open tabs, the surfaces with no tab open, then the shell's commands. A line names the thing and says what kind it is; the chosen line and the foot say what Enter does on it, Go to tab, Open or Run. Enter with the command key opens another tab of an open tab's surface. Nothing to adapt.
+
+## 0.44.0
+
+- The activity is gathered into channels, one a tab, as a messaging app lists its conversations. A channel shows its surface's icon, its name and when it last said something, then a preview of that, or what the tab needs of the person. Channels go newest first, and a tab that needs the person is pinned above. The shell's own opening and closing of tabs is one more channel, named after the root. A closed tab's channel stays, marked closed. Choosing a channel shows its history, newest first, grouped by when, each entry opening to its whole. Escape, Backspace or the left arrow go back, and Go to tab brings the tab forward. Notices · All stays, and Needs you is gone, since a need is shown on its channel. The agent sees next is one folded item at the top that opens into the person's waiting calls. Nothing to adapt.
+- Seeing is per channel: opening the activity no longer sees everything. Opening a channel sees its notices, which stay dotted until it is left. Mark all seen sees them all, and clicking a toast opens the activity on its channel. For the person, `/activity/notices` also gives `fresh`, the numbers of the notices not yet seen. Every row of `/activity` gives `tab`, the tab it was in, even once that tab is closed; the shell's own opening, closing and showing of tabs has none. Nothing to adapt.
+
 ## 0.43.8
 
 - A submenu stands a little off its parent, by the gap a tab's menu keeps from the strip, and no longer over it. Nothing to adapt.

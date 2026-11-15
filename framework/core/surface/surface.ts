@@ -42,6 +42,8 @@ export interface Surface<M, E extends { kind: string }, C> {
   update(model: M, message: Call | E): Update<M, C>
   /** The view at `path` for an actor, `/` the whole; undefined when nothing stands at the path. An actor may receive different handles. */
   view(model: M, path: string, actor?: string): View | undefined
+  /** Why nothing stands at a path, where the surface can say more than that: what stood there and where it went. */
+  absent?(model: M, path: string): string | undefined
   /** A command: the long or outside work. It sends events; it never writes the model. */
   run(command: C, send: (event: E) => void, signal: AbortSignal): Promise<void>
   /** The event for a command that threw, so a status written when it started is not left running. */

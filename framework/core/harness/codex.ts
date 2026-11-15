@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { Json } from "../surface/view.ts"
 import { postToolUse } from "./claude.ts"
-import type { Adapter, HookEvent, Moment, SetUp } from "./harness.ts"
+import { sourceOf, type Adapter, type HookEvent, type Moment, type SetUp } from "./harness.ts"
 import { editJson, removed, SKILL, withHooks, without, written, type Group, type Hooks } from "./setup.ts"
 
 /** Codex's hook events the framework is told at: an interrupted turn ends as a stop does. */
@@ -134,7 +134,7 @@ export const codex: Adapter<CodexOptions> = {
     const moment = (event === "Interrupt" ? "Stop" : (CODEX_EVENTS as readonly string[]).includes(event) ? event : undefined) as Moment | undefined
     const session = typeof i.session_id === "string" && i.session_id ? i.session_id : undefined
 
-    return moment && { session, event, moment, ...(event === "SessionStart" && i.source === "compact" && { compact: true }) }
+    return moment && { session, event, moment, ...sourceOf(event, i.source) }
   },
   // As Claude Code's: plain text adds context at a session's start and with a prompt, and after a tool call only JSON does.
   hookOutput: postToolUse,

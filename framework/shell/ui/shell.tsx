@@ -6,7 +6,8 @@
 // they are. A tab that is broken, needs someone, offers an ask or holds a notice not yet seen is marked in the strip and
 // on home, from / where the shell gathers who is needed. Each notice heard while the page is open is a toast that then
 // goes into the notifications' button, and their drawer keeps the notices and all activity (notifications.tsx).
-// The URL is the surface path: / home, also where no tab is, /tabs/N/route a tab. When the agent points to a place, the
+// The URL is the surface path: / home, also where no tab is, a tab's address and its route; the address is /NAME where
+// the tab holds its surface's name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the agent points to a place, the
 // page goes there, or offers it while the person is busy (pointing.ts). The person's settings, their own surface's that
 // comes with the shell, are applied here: the appearance, the shortcuts (shortcuts.ts) and the mark's animation
 // (appearance.ts). It loads no stylesheet: the root's page does, one, which imports the shell's styles.css, so the
@@ -114,7 +115,9 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
   const settingsOpen = useRef(false)
 
   settingsOpen.current = rows.some((r) => r.surface === "settings")
-  const active = at.key === HOME || rows.some((r) => r.at === at.key) ? at.key : HOME
+  // A tab's number in the URL, where the tab stands at its surface's name: the page goes on at that address.
+  const numbered = rows.find((r) => at.key === `/tabs/${r.n}` && r.at !== at.key)?.at
+  const active = at.key === HOME || rows.some((r) => r.at === at.key) ? at.key : (numbered ?? HOME)
   // The tab shown before home, which home returns to.
   const [shown, setShown] = useState<string>()
   const back = backTo(shown, rows.map((r) => r.at))
@@ -150,7 +153,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
   const [servedNotices] = useState(() => booted<NoticesPage>(NOTICES))
   const told = useFeed(NOTICES, stream, true, servedNotices)
   const served = useRef(root !== undefined)
-  const unseen = useMemo(() => unseenRows(told.rows, told.unseen), [told.rows, told.unseen])
+  const unseen = useMemo(() => unseenRows(told.rows, told.fresh), [told.rows, told.fresh])
 
   useEffect(() => asks.subscribe(asksMoved), [asks])
 
@@ -223,10 +226,17 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     setDrawn((d) => (d.has(active) ? d : new Set([...d, active])))
   }, [active])
 
+  useLayoutEffect(() => {
+    if (!numbered) return
+    setRoutes((previous) => ({ ...previous, [numbered]: at.route }))
+    setAt({ key: numbered, route: at.route })
+    history.replaceState(null, "", urlOf(numbered, at.route))
+  }, [numbered])
+
   // A closed tab in the URL falls back to home.
   useEffect(() => {
-    if (root && at.key !== active) history.replaceState(null, "", urlOf(active, routes[active]))
-  }, [root, at.key, active, routes])
+    if (root && at.key !== active && !numbered) history.replaceState(null, "", urlOf(active, routes[active]))
+  }, [root, at.key, active, routes, numbered])
 
   const go = (key: string, route?: string) => {
     const url = urlOf(key, route ?? routes[key])
@@ -401,7 +411,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
         active={active}
         onSelect={(key) => go(key)}
         home={<HomeTab active={active === HOME} standing={standingOf(turn)} animate={settings.logo.animate} keys={homeKeys} lost={lost} onSelect={() => go(HOME)} />}
-        end={<Notifications changes={stream} notices={notices} told={told} title={root?.title ?? "baba"} waiting={standingOf(turn).waiting} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
+        end={<Notifications changes={stream} notices={notices} told={told} title={root?.title ?? "baba"} tabs={entries} icons={icons} waiting={standingOf(turn).waiting} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
         items={[
           ...strip.map((row, i) => ({
             id: row.at,
@@ -488,7 +498,8 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
             const visible = active === row.at
 
             return (
-              <TabContent key={row.at} address={row.at} hidden={active !== row.at}>
+              // By number too: a tab opened again at its surface's name is another, drawn anew.
+              <TabContent key={`${row.at} ${row.n}`} address={row.at} hidden={active !== row.at}>
                 <Activity mode={visible ? "visible" : "hidden"}>
                   {!visible && !drawn.has(row.at) ? null : row.broken !== undefined ? (
                     <Alert variant="destructive" className="m-3 w-auto">

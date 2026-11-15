@@ -152,7 +152,7 @@ describe("the shell's settings", () => {
     })
     await agent.call("/", "open", { surface: "settings" })
     expect(await agent.call("/", "open", { surface: "settings" })).toMatchObject({ outcome: "written" })
-    expect(agent.sees()).toMatchObject({ tabs: [{ at: "/tabs/1", surface: "settings", title: "Settings" }], pointed: { at: "/tabs/1", n: 1 } })
+    expect(agent.sees()).toMatchObject({ tabs: [{ at: "/settings", surface: "settings", title: "Settings" }], pointed: { at: "/settings", n: 1 } })
   })
 
   it("take the name settings from a project's surface", () => {

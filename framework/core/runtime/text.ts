@@ -42,7 +42,9 @@ export const whoOf = (cause: Cause | undefined, actor: string): string | undefin
 
 /** A notice in one line: who says it and where, what happened, and by whom. */
 export const noticeLine = (notice: Noticed, who: string) => {
-  const where = [notice.from, notice.at].filter(Boolean).join(" ")
+  // A place at its surface's name says the surface already.
+  const named = !!notice.from && !!notice.at && (notice.at === `/${notice.from}` || notice.at.startsWith(`/${notice.from}/`))
+  const where = [!named && notice.from, notice.at].filter(Boolean).join(" ")
 
   return `${where && `${where}: `}${notice.text} (by ${BY[who] ?? who})`
 }
@@ -149,7 +151,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
       if (before !== undefined) writeJsonFile(file, before)
     }
     // A tab the agent opened is one it works in.
-    if (who === "you") for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => x.at === t.at)) touched.add(t.at)
+    if (who === "you") for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => same(x, t))) touched.add(t.at)
     // The person's call that gave no notice is still heard: in a tab, as where they acted, which the agent reads if it
     // matters; outside every tab, as the tabs they opened or closed.
     if (who === "person" && cause?.path !== undefined) {
@@ -157,8 +159,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
 
       if (tab || !tabsIn(view).length) heard.acted(place(cause.path), true)
       else {
-        for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => x.at === t.at)) heard.line(`the person opened ${[t.surface, t.at].filter(Boolean).join(" ")}`)
-        for (const t of tabsIn(last)) if (!tabsIn(view).some((x) => x.at === t.at)) heard.line(`the person closed ${[t.surface, t.at].filter(Boolean).join(" ")}`)
+        for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => same(x, t))) heard.line(`the person opened ${placeOf(view, t.at)}`)
+        for (const t of tabsIn(last)) if (!tabsIn(view).some((x) => same(x, t))) heard.line(`the person closed ${placeOf(last, t.at)}`)
       }
     }
     marks = now
@@ -269,6 +271,9 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     },
   }
 }
+
+/** One tab in two versions of /: a tab is its path and its number, so one closed and another opened at its path are two. */
+const same = (a: { at: string; n?: number }, b: { at: string; n?: number }) => a.at === b.at && a.n === b.n
 
 /** A root that gathers who is needed. */
 const isNeeds = (view: Json | undefined): view is { needs: { at: string; who: string }[] } =>

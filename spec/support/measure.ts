@@ -7,8 +7,8 @@
 // The turn, before notices were split from the present: 31 lines and 1057 characters during the work, 18 and 663 in the
 // word's answers, 13 and 394 after tool calls, and nothing with the person's next message.
 // Before an action was told by its name, a reorder by what moved and a notice let stand for its commit's changes: the
-// steps' diffs summed 29 lines and 1011 characters; the turn's call answers 11 and 375, the person's next message 12 and 405.
-// After: 29 and 884; 11 and 344; 9 and 324.
+// steps' diffs summed 29 lines and 1011 characters; the turn's call answers 11 and 359, the person's next message 12 and 405.
+// After: 29 and 884; 11 and 328; 9 and 324.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

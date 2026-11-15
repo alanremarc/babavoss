@@ -1,27 +1,27 @@
 // The shell's activity: entries from notices, marked so, and from calls that gave none, the shell's own open, close and
 // show, the bound, what is kept from before, /activity and /activity/notices and their pages, what the agent is told of it,
-// what the person has seen of the notices and its asks, and the activity log's grouping, times, views, what is new, badge and toasts.
+// what the person has seen of the notices, one by one or up to a mark, and its asks; and the drawer's channels, their order,
+// previews and places, what the agent sees next, the levels' keys, grouping, times, what arrived, badge and toasts.
 import { describe, expect, it } from "bun:test"
 import { action, story, surface, view, type Call, type Update } from "../../framework/core/index.ts"
-import { KEPT, PAGE, linesOf, lookAt, record, restored, said, seenFrom, seeUpto, unseenOf, type Entry, type Line } from "../../framework/shell/src/activity.ts"
+import { KEPT, PAGE, linesOf, lookAt, record, restored, said, seenFrom, seeUpto, unseenIn, unseenOf, type Entry, type Line } from "../../framework/shell/src/activity.ts"
 import { shell, type ShellModel } from "../../framework/shell/src/surface.ts"
+import { badgeOf, inView, needsOf, toastsAfter, unseenRows, whoBy, waitingRows } from "../../framework/shell/ui/notifications.tsx"
 import {
   agoOf,
-  badgeOf,
-  entryOf,
+  arrived,
+  channelOf,
+  channelsOf,
   groupOf,
   groupsOf,
-  inView,
-  isNew,
+  levelKey,
   needLine,
-  needsOf,
-  openedOn,
-  toastsAfter,
-  unseenRows,
-  whoBy,
-  waitingRows,
+  placeIn,
+  previewOf,
+  tabIn,
+  type Need,
   type Row,
-} from "../../framework/shell/ui/notifications.tsx"
+} from "../../framework/shell/ui/channels.ts"
 
 type Model = { n: number }
 type Event = { kind: "rang" }
@@ -84,11 +84,12 @@ describe("the activity log", () => {
   })
 
   it("takes the shell's own open, close and show", () => {
-    expect(linesOf(held, call("/", "open", { surface: "lab" }, "person"), T)).toEqual([{ when: T, who: "person", surface: "lab", at: "/tabs/3", what: "opened" }])
-    expect(linesOf(held, call("/", "close", { n: 2 }), T)).toEqual([{ when: T, who: "agent", surface: "queue", at: "/tabs/2", what: "closed" }])
+    expect(linesOf(held, call("/", "open", { surface: "lab" }, "person"), T)).toEqual([{ when: T, who: "person", surface: "lab", at: "/tabs/3", what: "opened", own: true }])
+    expect(linesOf(held, call("/", "close", { n: 2 }), T)).toEqual([{ when: T, who: "agent", surface: "queue", at: "/tabs/2", what: "closed", own: true }])
     expect(linesOf(held, call("/", "show", { at: "/tabs/2/issues/4" }), T)).toEqual([
-      { when: T, who: "agent", surface: "queue", at: "/tabs/2/issues/4", what: "shown to the person" },
+      { when: T, who: "agent", surface: "queue", at: "/tabs/2/issues/4", what: "shown to the person", own: true },
     ])
+    expect(restored([{ n: 1, when: T, who: "agent", surface: "queue", at: "/tabs/2", what: "closed", own: true }])[0]).toHaveProperty("own", true)
   })
 
   it("numbers entries on from the last and keeps the newest KEPT", () => {
@@ -146,13 +147,13 @@ describe("the shell's activity", () => {
     })
 
     expect(rows).toEqual([
-      { n: 3, who: "person", kind: "notice", surface: "things", at: "/tabs/1/things/12", what: "Approved #12" },
-      { n: 2, who: "agent", kind: "call", surface: "things", at: "/tabs/1", what: 'bump by=2 why="two more"' },
-      { n: 1, who: "person", kind: "call", surface: "things", at: "/tabs/1", what: "opened" },
+      { n: 3, who: "person", kind: "notice", surface: "things", at: "/things/things/12", tab: "/things", what: "Approved #12" },
+      { n: 2, who: "agent", kind: "call", surface: "things", at: "/things", tab: "/things", what: 'bump by=2 why="two more"' },
+      { n: 1, who: "person", kind: "call", surface: "things", at: "/things", what: "opened" },
     ])
   })
 
-  it("keeps a command's notices as the surface's, and names no place in a tab once it is closed", async () => {
+  it("keeps a command's notices as the surface's, and names no place in a tab once it is closed, but still the tab it was in", async () => {
     const { agent, world } = story(shell({ things }))
 
     await agent.call("/", "open", { surface: "things" })
@@ -160,11 +161,11 @@ describe("the shell's activity", () => {
     await world.settle({ kind: "tab", n: 1, event: { kind: "rang" } })
     await agent.call("/", "close", { n: 1 })
 
-    expect((agent.sees("/activity")!.entries as Row[]).map((r) => [r.who, r.at, r.what])).toEqual([
-      ["agent", null, "closed"],
-      ["surface", null, "Rang"],
-      ["agent", null, "ring"],
-      ["agent", null, "opened"],
+    expect((agent.sees("/activity")!.entries as Row[]).map((r) => [r.who, r.at, r.tab, r.what])).toEqual([
+      ["agent", null, undefined, "closed"],
+      ["surface", null, "/tabs/1", "Rang"],
+      ["agent", null, "/tabs/1", "ring"],
+      ["agent", null, undefined, "opened"],
     ])
   })
 
@@ -241,7 +242,9 @@ describe("what the person has seen", () => {
   const entry = (n: number, who: Entry["who"], notice = true): Entry => ({ n, when: T, who, surface: "queue", at: "/tabs/1", what: "x", ...(notice && { notice: true as const }) })
   const entries = [entry(1, "agent"), entry(2, "agent", false), entry(3, "person"), entry(4, "surface"), entry(5, "agent")]
 
-  it("counts the notices others caused, newer than the mark and not looked at one by one", () => {
+  it("counts the notices others caused, newer than the mark and not looked at one by one, and names them", () => {
+    expect(unseenIn(entries, { upto: 0, looked: [] })).toEqual([1, 4, 5])
+    expect(unseenIn(entries, { upto: 1, looked: [5] })).toEqual([4])
     expect(unseenOf(entries, { upto: 0, looked: [] })).toBe(3)
     expect(unseenOf(entries, { upto: 1, looked: [] })).toBe(2)
     expect(unseenOf(entries, { upto: 1, looked: [5] })).toBe(1)
@@ -276,14 +279,15 @@ describe("the person's notifications", () => {
     await agent.call("/tabs/1", "approve", { n: 12 })
     await person.call("/tabs/1", "approve", { n: 12 })
 
-    expect(person.sees("/activity/notices")!.unseen).toBe(2)
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 3] })
     expect(person.offered("/activity/notices")).toEqual(["seen", "looked"])
     expect(agent.sees("/activity/notices")).not.toHaveProperty("unseen")
+    expect(agent.sees("/activity/notices")).not.toHaveProperty("fresh")
     expect(agent.offered("/activity/notices")).toEqual([])
     expect(await agent.call("/activity/notices", "seen", { n: 4 })).toMatchObject({ outcome: "refused" })
 
     await person.call("/activity/notices", "looked", { n: 3 })
-    expect(person.sees("/activity/notices")!.unseen).toBe(1)
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 1, fresh: [2] })
     await person.call("/activity/notices", "seen", { n: 4 })
     expect(person.sees("/activity/notices")!.unseen).toBe(0)
   })
@@ -318,10 +322,10 @@ describe("the person's notifications", () => {
   })
 })
 
-describe("the activity log", () => {
+describe("the activity drawer", () => {
   const now = new Date(2026, 10, 15, 16, 0, 0)
   const at = (minutes: number) => new Date(now.getTime() - minutes * 60_000)
-  const row = (n: number, when: Date, who: Row["who"] = "agent", surface = "queue"): Row => ({ n, when: when.toISOString(), who, surface, at: "/tabs/1", what: "x" })
+  const row = (n: number, when: Date, who: Row["who"] = "agent", surface = "queue"): Row => ({ n, when: when.toISOString(), who, surface, at: "/tabs/1", tab: "/tabs/1", what: "x" })
 
   it("groups by when, in runs, newest first", () => {
     expect(groupOf(at(1), now)).toBe("Now")
@@ -346,15 +350,96 @@ describe("the activity log", () => {
     expect(agoOf(at(7 * 60), now)).toBe(at(7 * 60).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))
   })
 
-  it("shows the notices, all activity, or none where it shows what waits alone", () => {
+  it("lists the notices, or all activity", () => {
     const rows = [row(4, at(1), "surface", "lab"), { ...row(3, at(1), "person"), kind: "call" as const }, { ...row(2, at(1)), kind: "notice" as const }, row(1, at(1))]
 
     expect(inView(rows, "notices").map((r) => r.n)).toEqual([4, 2, 1])
     expect(inView(rows, "all").map((r) => r.n)).toEqual([4, 3, 2, 1])
-    expect(inView(rows, "needs")).toEqual([])
   })
 
-  it("pins what needs the person, not the agent, as a line", () => {
+  describe("its channels", () => {
+    const tabs = [
+      { at: "/tabs/1", surface: "queue", label: "Queue" },
+      { at: "/tabs/3", surface: "queue", label: "Releases" },
+      { at: "/tabs/4", surface: "design", label: "design 4" },
+    ]
+    const r = (n: number, tab: string | undefined, who: Row["who"] = "agent", surface = "queue"): Row => ({
+      n,
+      when: at(10 - n).toISOString(),
+      who,
+      surface,
+      at: tab ? `${tab}/issues/${n}` : "/tabs/9",
+      ...(tab && { tab }),
+      what: `said ${n}`,
+    })
+    const need: Need = { at: "/tabs/4", surface: "design", who: "person", why: "to pick a scenario" }
+
+    it("are a tab each, two tabs of one surface two, the shell's own one more, named by the tab, newest first", () => {
+      const rows = [r(6, "/tabs/3"), r(5, undefined, "person", "lab"), r(4, "/tabs/1"), r(3, "/tabs/3"), r(2, "/tabs/2", "surface", "lab")]
+      const channels = channelsOf(rows, tabs, [], new Set(), "babavoss")
+
+      expect(channels.map((c) => [c.key, c.name, c.surface, c.closed, c.rows.map((x) => x.n)])).toEqual([
+        ["/tabs/3", "Releases", "queue", false, [6, 3]],
+        ["/", "babavoss", undefined, false, [5]],
+        ["/tabs/1", "Queue", "queue", false, [4]],
+        ["/tabs/2", "lab", "lab", true, [2]],
+      ])
+      expect(channelOf(r(5, undefined))).toBe("/")
+      expect(channelsOf([r(2, "/tabs/2")], tabs, [], new Set(), "babavoss", { "/tabs/2": "Lab" })[0]).toMatchObject({ name: "Lab", closed: true })
+    })
+
+    it("count what the person has not seen in each, and pin a tab that needs them, with its need, messages or not", () => {
+      const rows = [r(6, "/tabs/3"), r(5, "/tabs/1"), r(4, "/tabs/1")]
+      const channels = channelsOf(rows, tabs, [need], new Set([4, 5]), "babavoss")
+
+      expect(channels.map((c) => [c.key, c.unseen, c.need?.why])).toEqual([
+        ["/tabs/4", 0, "to pick a scenario"],
+        ["/tabs/3", 0, undefined],
+        ["/tabs/1", 2, undefined],
+      ])
+      expect(channels[0]).toMatchObject({ name: "design 4", surface: "design", rows: [] })
+    })
+
+    it("preview their latest message, saying who where it was the person or the agent", () => {
+      expect(previewOf({ ...r(1, "/tabs/1"), who: "person" })).toEqual({ by: "You", text: "said 1" })
+      expect(previewOf(r(1, "/tabs/1"))).toEqual({ by: "Agent", text: "said 1" })
+      expect(previewOf({ ...r(1, "/tabs/1"), who: "surface" })).toEqual({ text: "said 1" })
+      expect(previewOf({ ...r(1, undefined), at: null, what: "closed" })).toEqual({ by: "Agent", text: "closed · queue" })
+      expect(previewOf({ ...r(1, undefined), at: "/", surface: "baba", what: "open surface=x" }).text).toBe("open surface=x")
+    })
+
+    it("name an entry's place where it is more specific than the tab", () => {
+      expect(placeIn(r(12, "/tabs/1"), "/tabs/1")).toBe("issues/12")
+      expect(placeIn({ ...r(1, "/tabs/1"), at: "/tabs/1" }, "/tabs/1")).toBeUndefined()
+      expect(placeIn({ ...r(1, "/tabs/1"), at: null }, "/tabs/1")).toBeUndefined()
+      expect(placeIn({ ...r(1, "/tabs/12"), at: "/tabs/12/x" }, "/tabs/1")).toBeUndefined()
+      expect(placeIn({ ...r(1, undefined), at: "/tabs/4" }, "/")).toBe("queue")
+    })
+
+    it("are opened from a toast by the tab its place is in, or on the shell's own", () => {
+      expect(tabIn("/tabs/2/issues/12")).toBe("/tabs/2")
+      expect(tabIn("/tabs/2")).toBe("/tabs/2")
+      expect(tabIn("/queue/issues/12")).toBe("/queue")
+      expect(tabIn("/settings")).toBe("/settings")
+      expect(tabIn("/activity/notices")).toBe("/")
+      expect(tabIn(undefined)).toBe("/")
+    })
+  })
+
+  it("lights what arrived since, a notice by someone else", () => {
+    expect(arrived(row(6, at(0)), 5)).toBe(true)
+    expect(arrived(row(5, at(0)), 5)).toBe(false)
+    expect(arrived(row(7, at(0), "person"), 5)).toBe(false)
+    expect(arrived({ ...row(8, at(0)), kind: "call" }, 5)).toBe(false)
+  })
+
+  it("goes back from a channel by Escape, Backspace or the left arrow, and leaves the list's keys to it", () => {
+    expect(["Escape", "Backspace", "ArrowLeft", "ArrowRight", "Enter"].map((k) => levelKey(k, "channel"))).toEqual(["back", "back", "back", undefined, undefined])
+    expect(levelKey("Escape", "list")).toBeUndefined()
+    expect(levelKey("ArrowLeft", "list")).toBeUndefined()
+  })
+
+  it("marks what needs the person, not the agent, by a line", () => {
     const needs = [
       { at: "/tabs/1", surface: "queue", who: "person" as const, why: "to approve or drop 1 draft" },
       { at: "/tabs/2", surface: "lab", who: "agent" as const, why: "to answer" },
@@ -365,27 +450,14 @@ describe("the activity log", () => {
     expect(needLine("review the plan")).toBe("Review the plan")
   })
 
-  it("takes as unseen the newest notices others caused, as many as the shell counts, which dot where they are", () => {
+  it("takes as unseen the notices the shell names", () => {
     const rows = [row(5, at(1), "person"), row(4, at(1), "surface"), row(3, at(1)), row(2, at(1))]
 
-    expect(unseenRows(rows, 2).map((r) => r.n)).toEqual([4, 3])
-    expect(unseenRows(rows, 0)).toEqual([])
+    expect(unseenRows(rows, [2, 4]).map((r) => r.n)).toEqual([4, 2])
+    expect(unseenRows(rows, [])).toEqual([])
   })
 
-  it("keeps new what was unseen as it opened, and a notice by another heard while open, until it closes", () => {
-    const rows = [row(5, at(1), "person"), row(4, at(1), "surface"), row(3, at(1)), row(2, at(1))]
-    const opened = openedOn(rows, 2)
-
-    expect([...opened.fresh]).toEqual([4, 3])
-    expect(opened.newest).toBe(5)
-    expect(rows.filter((r) => isNew(r, opened)).map((r) => r.n)).toEqual([4, 3])
-    expect(isNew(row(6, at(0)), opened)).toBe(true)
-    expect(isNew(row(7, at(0), "person"), opened)).toBe(false)
-    expect(isNew({ ...row(8, at(0)), kind: "call" }, opened)).toBe(false)
-    expect(isNew(row(6, at(0)), openedOn([], 0))).toBe(true)
-  })
-
-  it("shows no toast while the log is open, and the newest few while it is closed", () => {
+  it("shows no toast while the drawer is open, and the newest few while it is closed", () => {
     expect(toastsAfter([1, 2], 3, true)).toEqual([1, 2])
     expect(toastsAfter([1, 2], 3, false)).toEqual([1, 2, 3])
     expect(toastsAfter([1, 2, 3, 4], 5, false)).toEqual([2, 3, 4, 5])
@@ -402,19 +474,13 @@ describe("the activity log", () => {
     expect(whoBy("the surface")).toBe("surface")
     expect(whoBy("the agent")).toBe("agent")
   })
-
-  it("finds the entry a toast was, the newest that reads the same", () => {
-    const rows = [{ ...row(5, at(1)), what: "Approved #12", at: "/tabs/1/things/12" }, row(4, at(1)), { ...row(3, at(1)), what: "Approved #12", at: "/tabs/1/things/12" }]
-
-    expect(entryOf(rows, { text: "Approved #12", at: "/tabs/1/things/12", from: "queue" })?.n).toBe(5)
-    expect(entryOf(rows, { text: "Approved #12", at: "/tabs/1/things/12", from: "lab" })).toBeUndefined()
-  })
 })
 
-it("what the agent sees next is the person's latest calls, as many as wait for its turn", () => {
+it("what the agent sees next is the person's latest calls, a notice where one gave it, as many as wait for its turn", () => {
   const row = (n: number, who: Row["who"], kind: Row["kind"]): Row => ({ n, when: "2026-01-01T00:00:00Z", who, kind, surface: "queue", at: "/tabs/1", what: `call ${n}` })
   const rows = [row(6, "agent", "call"), row(5, "person", "call"), row(4, "person", "notice"), row(3, "person", "call"), row(2, "person", "call")]
 
-  expect(waitingRows(rows, 2).map((r) => r.n)).toEqual([5, 3])
+  expect(waitingRows(rows, 2).map((r) => r.n)).toEqual([5, 4])
+  expect(waitingRows([{ ...rows[1]!, kind: undefined }], 1)).toEqual([])
   expect(waitingRows(rows, 0)).toEqual([])
 })

@@ -77,7 +77,6 @@ export async function main(root: RootDefinition) {
       if (version < VERSION) {
         copyFileSync(new URL("./bv.ts", import.meta.url), target)
         chmodSync(target, 0o755)
-        console.log(`bv is now a command on this machine, at ${target}; call it as ${client}`)
       }
     } catch {
       command = `bun '${resolve(process.argv[1]!).replaceAll("'", "'\"'\"'")}'`
@@ -96,12 +95,8 @@ export async function main(root: RootDefinition) {
       }
 
       if (command === `${client} ${root.name}` && (!existing || ours(existing))) {
-        if (!ours(word)) {
-          symlinkSync(target, word)
-          console.log(
-            `${root.name} is now a command on this machine, at ${word}; call it as ${called}${local ? ", from the project directory" : ""}`
-          )
-        }
+        // Said by the answer that follows, which names the command; where it was put is not the agent's to know.
+        if (!ours(word)) symlinkSync(target, word)
         command = called
       }
     } catch {}

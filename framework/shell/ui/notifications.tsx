@@ -1,157 +1,90 @@
-// The notifications: one button at the strip's right and the activity log it pulls in from the right edge, under the strip
-// and over the content, the same for every surface; Escape, the button or a press outside it closes it. Each notice heard
-// while the log is closed is a toast, once, one line: who did it, what happened, and its surface; clicking it goes where it
-// happened and counts it seen. A toast that passes goes into the button, which carries one dot while the person has not
-// seen something: the notices others caused since they last opened the log, less those they looked at by their toast. The
-// count and the mark are the shell's, at /activity/notices, so a refresh or a page opened later counts from the log, and
-// no old toast is shown again; the shell reads the notices once, for the tabs they dot too. While the log is open no toast
-// is shown: a toast on screen leaves into it, and a notice heard comes in as its newest line, lit a moment.
+// The notifications: one button at the strip's right and the activity it pulls in from the right edge, under the strip and
+// over the content, the same for every surface; Escape, the button or a press outside it closes it. Each notice heard while
+// the activity is closed is a toast, once, one line: who did it, what happened, and its surface; clicking it opens the
+// activity on its channel. A toast that passes goes into the button, which carries one dot while the person has not seen
+// something, and the count of their calls that wait for the agent. What they have seen is the shell's, at
+// /activity/notices, so a refresh or a page opened later counts from the log, and no old toast is shown again; the shell
+// reads the notices once, for the tabs they dot too. While the activity is open no toast is shown: a toast on screen
+// leaves into it, and a notice heard comes in on its channel, lit a moment.
 //
-// The log is one line an entry, newest first, grouped by when: who did it as a small mark, what, where as a quiet token
-// that goes there, and how long ago. What waits on the person, a tab that needs them, is pinned above, under Needs you.
-// Hierarchy is type and colour alone: what was new when the log opened stays in the foreground with a dot until it closes;
-// the rest is muted. It shows the notices, what the surfaces chose to say; All adds a line for every call; Needs you shows
-// what waits alone. A line too long is cut; clicking it shows it whole.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+// The activity has two levels. The first is what the agent sees next, one item that opens in place, and the channels, as a
+// messaging app lists its conversations (channels.ts): one a tab, two lines beside its surface's icon, its name and when it
+// last said something, then a preview of that or what the tab needs of the person; newest first, a tab that needs them
+// pinned above. It lists the notices, what the surfaces chose to say; All adds every call. Choosing a channel goes to the
+// second: its history, newest first, grouped by when, one line an entry that opens to its whole. Opening a channel sees
+// its notices, and they stay dotted until it is left; Mark all seen sees them all. Escape, Backspace or the left arrow go
+// back; Escape on the first level closes.
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "cn"
-import { AppWindowIcon, BotIcon, CircleDotIcon, LayersIcon, UserRoundIcon } from "lucide-react"
+import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LayersIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
+import { BY, ChannelIcon, ChannelItem, Heading, HistoryLine, keepFocus, MARK, Mark, moveIn, NextTurn } from "./activity.tsx"
+import { arrived, channelOf, channelsOf, groupsOf, levelKey, needLine, placeIn, SHELL, tabIn, type Channel, type Need, type Row, type TabInfo, type Who } from "./channels.ts"
 import { call, read, type Notice } from "./client.ts"
 
-export type Who = "person" | "agent" | "surface"
-/** An entry as /activity gives it: `when` UTC to the second, `at` null where its tab is closed; `kind` absent at /activity/notices, all notices. */
-export type Row = { n: number; when: string; who: Who; kind?: "notice" | "call"; surface: string; at: string | null; what: string }
-/** What the log shows: the notices, all activity, or only what waits on the person. */
-export type Shown = "notices" | "all" | "needs"
-/** A tab that needs someone, as / gathers it. */
-export type Need = { at: string; surface: string; who: "person" | "agent"; why: string }
-/** What was new as the log opened: the entries the person had not seen, and the newest entry then, after which all is new. */
-export type Opened = { fresh: ReadonlySet<number>; newest: number }
-export type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number }
-export type Group = { label: string; rows: Row[] }
+/** What the activity lists: the notices, or all activity. */
+export type Shown = "notices" | "all"
+/** A page of /activity: its entries, the page before, and for the person how many and which notices they have not seen. */
+export type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number; fresh?: number[] }
 type Stream<T = void> = { subscribe: (fn: (value: T) => void) => () => void }
+/** The channel the second level shows: its key, the notices unseen as it was entered, and the newest entry then. */
+type Entered = { key: string; stay: ReadonlySet<number>; since: number }
 
 export const NOTICES = "/activity/notices"
 const ALL = "/activity"
-const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-/** Who did it, in words, for a tooltip and a reader. */
-export const BY: Record<Who, string> = { person: "by you", agent: "by the agent", surface: "by the surface" }
-const MARK: Record<Who, ReactNode> = { person: <UserRoundIcon />, agent: <BotIcon />, surface: <AppWindowIcon /> }
 const SHOWN: { value: Shown; label: string }[] = [
-  { value: "all", label: "All" },
   { value: "notices", label: "Notices" },
-  { value: "needs", label: "Needs you" },
+  { value: "all", label: "All" },
 ]
 const THROTTLE_MS = 400
-/** How long a line heard while the log is open stays lit. */
-const LIT_MS = 1600
 /** The most toasts shown at once; an older one goes first. */
 const TOASTS = 4
 
-const dayOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-const dateOf = (when: Date, now: Date) =>
-  `${MONTHS[when.getMonth()]} ${when.getDate()}${when.getFullYear() === now.getFullYear() ? "" : `, ${when.getFullYear()}`}`
-
-/** The group a time falls in, seen at `now`: the last hour, earlier today, yesterday, or its date. */
-export function groupOf(when: Date, now: Date): string {
-  if (now.getTime() - when.getTime() < HOUR) return "Now"
-
-  const days = Math.round((dayOf(now) - dayOf(when)) / (24 * HOUR))
-
-  if (days <= 0) return "Earlier today"
-  if (days === 1) return "Yesterday"
-
-  return dateOf(when, now)
-}
-
-/** Rows, newest first, in runs of the same group, in their order. */
-export function groupsOf(rows: Row[], now: Date): Group[] {
-  const groups: Group[] = []
-
-  for (const row of rows) {
-    const label = groupOf(new Date(row.when), now)
-    const last = groups.at(-1)
-
-    if (last?.label === label) last.rows.push(row)
-    else groups.push({ label, rows: [row] })
-  }
-
-  return groups
-}
-
-/** How long ago, as the log's right edge says it: now, minutes, hours up to six, then the clock time. */
-export function agoOf(when: Date, now: Date): string {
-  const ago = now.getTime() - when.getTime()
-
-  if (ago < MINUTE) return "now"
-  if (ago < HOUR) return `${Math.floor(ago / MINUTE)}m`
-  if (ago < 6 * HOUR) return `${Math.floor(ago / HOUR)}h`
-
-  return when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-}
-
-/** The rows the log shows: the notices, or all activity; none where it shows what waits alone. */
-export const inView = (rows: Row[], shown: Shown): Row[] => (shown === "needs" ? [] : shown === "notices" ? rows.filter((r) => r.kind !== "call") : rows)
+/** The rows the activity lists: the notices, or all activity. */
+export const inView = (rows: Row[], shown: Shown): Row[] => (shown === "notices" ? rows.filter((r) => r.kind !== "call") : rows)
 
 /** What waits on the person: the tabs that need them, not the agent. */
 export const needsOf = (needs: Need[]): Need[] => needs.filter((n) => n.who === "person")
 
-/** Why a tab needs the person, as a line: "to approve or drop 1 draft" reads "Approve or drop 1 draft". */
-export const needLine = (why: string): string => {
-  const line = why.replace(/^to\s+/i, "")
-
-  return line.charAt(0).toUpperCase() + line.slice(1)
-}
-
 /** The count the button shows: what the shell counts unseen, less the toasts still showing, which count once they go into it. */
 export const badgeOf = (unseen: number, showing: number, open: boolean): number => (open ? 0 : Math.max(0, unseen - showing))
 
+/** The notices the person has not seen, of the rows kept: those the shell names, by number. */
+export const unseenRows = (rows: Row[], fresh: readonly number[]): Row[] => rows.filter((r) => fresh.includes(r.n))
+
 /**
- * The notices the person has not seen, of the newest kept: the newest `unseen` that others caused. The shell counts them
- * from its mark, which may skip one looked at alone; these are the newest of that count, near enough to dot where they are.
+ * The person's latest calls, as many as the agent has not been told of: what it is told with their next message, newest
+ * first; a call that gave a notice is that notice. Read from all activity, where every row has its kind.
  */
-export const unseenRows = (rows: Row[], unseen: number): Row[] => rows.filter((r) => r.kind !== "call" && r.who !== "person").slice(0, Math.max(0, unseen))
+export const waitingRows = (rows: Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.kind !== undefined).slice(0, Math.max(0, waiting))
 
-/** The person's latest calls, as many as the agent has not been told of: what it is told with their next message, newest first. */
-export const waitingRows = (rows: Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.kind === "call").slice(0, Math.max(0, waiting))
-
-/** What was new as the log opened on `rows`, the shell counting `unseen`: kept so, though opening sees it all. */
-export const openedOn = (rows: Row[], unseen: number): Opened => ({ fresh: new Set(unseenRows(rows, unseen).map((r) => r.n)), newest: rows[0]?.n ?? 0 })
-
-/** Whether a row reads as new while the log is open: unseen as it opened, or a notice by another heard since. */
-export const isNew = (row: Row, opened: Opened): boolean => opened.fresh.has(row.n) || (row.n > opened.newest && row.kind !== "call" && row.who !== "person")
-
-/** The toasts after a notice is heard: none added while the log is open, which shows it as a line; else the newest few. */
+/** The toasts after a notice is heard: none added while the activity is open, which shows it on its channel; else the newest few. */
 export const toastsAfter = <T,>(toasts: T[], toast: T, open: boolean): T[] => (open ? toasts : [...toasts, toast].slice(-TOASTS))
 
 /** Who caused a notice heard, from its `by`: absent where the person did, "the surface" where it did it by itself. */
 export const whoBy = (by: string | undefined): Who => (by === undefined ? "person" : by === "the surface" ? "surface" : "agent")
-
-/** The entry a notice heard as a toast is, the newest that reads the same; undefined where none does. */
-export const entryOf = (rows: Row[], notice: Notice): Row | undefined =>
-  rows.find((r) => r.what === notice.text && (notice.from === undefined || r.surface === notice.from) && (notice.at === undefined || r.at === notice.at))
 
 /** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking; `served` what the page was served there, so it is not read at first. */
 export function useFeed(path: string, changes: Stream, live: boolean, served?: Page) {
   const [rows, setRows] = useState<Row[]>(() => (Array.isArray(served?.entries) ? served.entries : []))
   const [earlier, setEarlier] = useState<string | undefined>(served?.earlier?.at)
   const [unseen, setUnseen] = useState(served?.unseen ?? 0)
-  const fresh = useRef(served !== undefined)
+  const [fresh, setFresh] = useState<number[]>(served?.fresh ?? [])
+  const first = useRef(served !== undefined)
   const older = useRef<Row[]>([])
   const load = useCallback(async () => {
     const page = await read<Page>(path).catch(() => undefined)
 
     if (!page) return
 
-    const fresh = Array.isArray(page.entries) ? page.entries : []
-    const oldest = fresh.at(-1)?.n ?? Infinity
+    const latest = Array.isArray(page.entries) ? page.entries : []
+    const oldest = latest.at(-1)?.n ?? Infinity
     const kept = older.current.filter((r) => r.n < oldest)
 
-    setRows([...fresh, ...kept])
+    setRows([...latest, ...kept])
     setUnseen(page.unseen ?? 0)
+    setFresh(page.fresh ?? [])
     if (!kept.length) setEarlier(page.earlier?.at)
   }, [path])
   const more = async () => {
@@ -170,8 +103,8 @@ export function useFeed(path: string, changes: Stream, live: boolean, served?: P
 
     let timer: ReturnType<typeof setTimeout> | undefined
 
-    if (!fresh.current) void load()
-    fresh.current = false
+    if (!first.current) void load()
+    first.current = false
 
     const off = changes.subscribe(() => {
       timer ??= setTimeout(() => {
@@ -186,7 +119,7 @@ export function useFeed(path: string, changes: Stream, live: boolean, served?: P
     }
   }, [changes, load, live])
 
-  return { rows, earlier, unseen, more, load }
+  return { rows, earlier, unseen, fresh, more, load }
 }
 
 /** The notices as the shell reads them once, for the drawer and for the tabs they dot. */
@@ -209,150 +142,12 @@ function useNeeds(changes: Stream, live: boolean): Need[] {
   return needs
 }
 
-/** The small sign of who did it, or of what waits, before a line. */
-const Mark = ({ children, className, label }: { children: ReactNode; className?: string; label: string }) => (
-  <span title={label} className={cn("flex size-3 shrink-0 items-center justify-center text-muted-foreground/70 [&_svg]:size-3", className)}>
-    {children}
-    <span className="sr-only">{label}</span>
-  </span>
-)
-
-/** Where a line is about, a quiet token that goes there; plain where its tab is closed. */
-function Place({ name, at, go }: { name: string; at: string | null; go: (at: string) => void }) {
-  if (at === null)
-    return (
-      <span title={`${name}, closed`} className="max-w-24 shrink-0 truncate text-meta text-muted-foreground/50 line-through decoration-muted-foreground/30">
-        {name}
-      </span>
-    )
-
-  return (
-    <button
-      type="button"
-      tabIndex={-1}
-      title={`Go to ${name}`}
-      className="max-w-24 shrink-0 cursor-pointer truncate text-meta text-muted-foreground/70 outline-none hover:text-foreground hover:underline hover:underline-offset-2"
-      onClick={(e) => {
-        e.stopPropagation()
-        go(at)
-      }}
-    >
-      {name}
-    </button>
-  )
-}
-
-const LINE = "group/line relative flex min-h-7 w-full cursor-default items-center gap-2 rounded-sm px-3 outline-none hover:bg-foreground/4 focus-visible:bg-foreground/6"
-
-/** One entry of the log: who, what, where and when, on one line until it is opened whole. */
-function Line({ row, fresh, lit, open, toggle, go }: { row: Row; fresh: boolean; lit: boolean; open: boolean; toggle: () => void; go: (at: string) => void }) {
-  const self = useRef<HTMLDivElement>(null)
-  const text = useRef<HTMLSpanElement>(null)
-  const when = new Date(row.when)
-
-  // A line heard while the log is open is lit a moment, unless motion is reduced.
-  useLayoutEffect(() => {
-    if (!lit || !self.current || typeof self.current.animate !== "function" || matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    self.current.animate([{ backgroundColor: "color-mix(in oklab, var(--primary) 10%, transparent)" }, { backgroundColor: "transparent" }], {
-      duration: LIT_MS,
-      easing: "ease-out",
-    })
-  }, [lit])
-
-  const cut = () => !!text.current && text.current.scrollWidth > text.current.clientWidth
-
-  return (
-    <div
-      ref={self}
-      data-line
-      tabIndex={-1}
-      aria-expanded={open}
-      className={cn(LINE, open ? "py-1.5" : "h-7")}
-      onClick={() => (open || cut() ? toggle() : row.at !== null && go(row.at))}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && row.at !== null) go(row.at)
-        else if (e.key === " ") {
-          e.preventDefault()
-          toggle()
-        }
-      }}
-    >
-      <span
-        aria-hidden
-        className={cn("absolute left-1 size-1 rounded-full", fresh ? "bg-primary" : "bg-transparent", open ? "top-3" : "top-1/2 -translate-y-1/2")}
-      />
-      <Mark label={BY[row.who]} className={open ? "self-start mt-0.5" : undefined}>
-        {MARK[row.who]}
-      </Mark>
-      <span
-        ref={text}
-        className={cn(
-          "min-w-0 flex-1",
-          open ? "break-words whitespace-normal" : "truncate",
-          row.kind === "call" ? "font-mono text-muted-foreground/60" : fresh ? "text-foreground" : "text-muted-foreground"
-        )}
-      >
-        {fresh && <span className="sr-only">New: </span>}
-        {row.what}
-      </span>
-      <span className={cn("flex shrink-0 items-center gap-2", open && "self-start")}>
-        <Place name={row.surface} at={row.at} go={go} />
-        <time dateTime={row.when} title={when.toLocaleString()} className="w-10 text-right text-meta text-muted-foreground/60 tabular-nums">
-          {agoOf(when, new Date())}
-        </time>
-      </span>
-    </div>
-  )
-}
-
-/** A tab that waits on the person, pinned above the log. */
-function NeedLine({ need, go }: { need: Need; go: (at: string) => void }) {
-  return (
-    <div data-line tabIndex={-1} className={cn(LINE, "h-7 cursor-pointer")} onClick={() => go(need.at)} onKeyDown={(e) => e.key === "Enter" && go(need.at)}>
-      <Mark label="Needs you" className="text-primary">
-        <CircleDotIcon />
-      </Mark>
-      <span className="min-w-0 flex-1 truncate text-foreground">{needLine(need.why)}</span>
-      <Place name={need.surface} at={need.at} go={go} />
-      <span className="w-10" aria-hidden />
-    </div>
-  )
-}
-
-const Heading = ({ children }: { children: ReactNode }) => <div className="px-3 pt-3 pb-1 text-meta font-medium text-muted-foreground/70">{children}</div>
-
-/** The arrow keys move through the lines, Home and End to either end. */
-function moveIn(e: KeyboardEvent<HTMLElement>) {
-  const lines = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-line]")]
-  const at = lines.indexOf(document.activeElement as HTMLElement)
-  const to = { ArrowDown: at + 1, ArrowUp: at < 0 ? lines.length - 1 : at - 1, Home: 0, End: lines.length - 1 }[e.key]
-
-  if (to === undefined || !lines.length) return
-  e.preventDefault()
-  lines[Math.max(0, Math.min(lines.length - 1, to))]!.focus()
-}
-
-/** Tab stays within the drawer while it is open, round from its last stop to its first. */
-function keepFocus(e: KeyboardEvent<HTMLElement>) {
-  if (e.key !== "Tab") return
-
-  const stops = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([tabindex='-1']), [data-lines]")]
-  const first = stops[0]
-  const last = stops.at(-1)
-
-  if (!first || !last) return
-  if (e.shiftKey && (document.activeElement === first || document.activeElement === e.currentTarget)) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault()
-    first.focus()
-  }
-}
+const QUIET = "cursor-pointer text-meta text-muted-foreground/70 outline-none hover:text-foreground focus-visible:underline focus-visible:underline-offset-4"
 
 /**
  * The button, its drawer and the toasts. `changes` tells of every change, `notices` of each notice as it is heard, `told`
- * is the feed of notices; `go` goes to a place, a tab and the route within it; `title` names a toast whose notice names no surface.
+ * is the feed of notices; `go` goes to a place, a tab and the route within it; `title` names the shell's own channel and a
+ * toast whose notice names no surface; `tabs` are the open tabs and `icons` each surface's icon, the strip's.
  */
 export function Notifications({
   changes,
@@ -360,6 +155,8 @@ export function Notifications({
   told,
   go,
   title,
+  tabs,
+  icons,
   waiting = 0,
 }: {
   changes: Stream
@@ -367,92 +164,131 @@ export function Notifications({
   told: Feed
   go: (at: string) => void
   title: string
+  tabs: TabInfo[]
+  icons: Record<string, ReactNode | undefined>
   /** How many of the person's own calls the agent has not been told of yet: it is, with their next message. */
   waiting?: number
 }) {
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState<Shown>("notices")
-  const [opened, setOpened] = useState<Opened>({ fresh: new Set(), newest: Infinity })
+  const [entered, setEntered] = useState<Entered>()
+  const [nextOpen, setNextOpen] = useState(false)
+  // Whether the list was come back to from a channel, which it slides in from the left for.
+  const [backed, setBacked] = useState(false)
   const [expanded, setExpanded] = useState<number>()
+  // The newest entry as the drawer opened: what arrives after it lights its channel.
+  const [since, setSince] = useState(Infinity)
   const [toasts, setToasts] = useState<(ToastItem & { counts: boolean })[]>([])
-  // Toasts clicked through, until the shell has taken them as seen.
-  const [looking, setLooking] = useState(0)
   const button = useRef<HTMLButtonElement>(null)
   const content = useRef<HTMLDivElement>(null)
+  const lines = useRef<HTMLDivElement>(null)
   // Whether the drawer closes back to the button: by Escape, not by a press elsewhere or by going to a place.
   const back = useRef(false)
+  // Where focus goes once a level is drawn: a channel's item on coming back, the history on going in.
+  const focus = useRef<string>(undefined)
   const all = useFeed(ALL, changes, open && (shown === "all" || waiting > 0))
-  // What the agent is told next: the person's latest calls, as many as wait for its next turn.
-  const next = waitingRows(all.rows, waiting)
   const needs = useNeeds(changes, open)
-  const marked = useRef(0)
   const isOpen = useRef(open)
-  const newest = told.rows[0]?.n ?? 0
+  const looking = useRef(new Set<number>())
+  const feed = shown === "all" ? all : told
+  const rows = inView(feed.rows, shown)
+  const fresh = new Set(told.fresh)
+  // The title each tab had while the page saw it open, which names its channel once it is closed.
+  const titles = useRef<Record<string, string>>({})
+
+  for (const t of tabs) titles.current[t.at] = t.label
+
+  const channels = channelsOf(rows, tabs, needs, fresh, title, titles.current)
+  const channel = entered && (channels.find((c) => c.key === entered.key) ?? emptyChannel(entered.key, tabs, told.rows, title, titles.current))
+  const next = waitingRows(all.rows, waiting)
+  const newest = Math.max(told.rows[0]?.n ?? 0, all.rows[0]?.n ?? 0)
 
   isOpen.current = open
 
-  // Opening the drawer sees every notice in it, and so does one heard while it is open.
+  // The channel shown is seen, its notices looked at one by one, and so is each that arrives while it is shown.
   useEffect(() => {
-    if (!open || newest <= marked.current) return
-    marked.current = newest
-    void call(NOTICES, "seen", { n: newest }).catch(() => undefined)
-  }, [open, newest])
+    if (!open || !entered) return
 
-  // A toast clicked through was seen: the shell marks its entry, read fresh, since the toast may come before the feed has it.
-  const look = async (notice: Notice) => {
-    setLooking((n) => n + 1)
-    try {
-      const page = await read<Page>(NOTICES)
-      const entry = entryOf(Array.isArray(page.entries) ? page.entries : [], notice)
+    const mine = told.rows.filter((r) => channelOf(r) === entered.key && told.fresh.includes(r.n) && !looking.current.has(r.n))
 
-      if (entry) await call(NOTICES, "looked", { n: entry.n })
-      await told.load()
-    } catch {
-      // Not marked: it counts as unseen until the panel is opened.
-    } finally {
-      setLooking((n) => n - 1)
+    if (!mine.length) return
+    for (const r of mine) looking.current.add(r.n)
+    void Promise.all(mine.map((r) => call(NOTICES, "looked", { n: r.n })))
+      .then(() => told.load(), () => undefined)
+      .finally(() => mine.forEach((r) => looking.current.delete(r.n)))
+  }, [open, entered, told.rows, told.fresh])
+
+  // Focus lands where the level just drawn asks.
+  useEffect(() => {
+    const to = focus.current
+
+    if (to === undefined || !open) return
+    focus.current = undefined
+    requestAnimationFrame(() => {
+      const item = to === "" ? null : lines.current?.querySelector<HTMLElement>(`[data-channel="${CSS.escape(to)}"]`)
+      const target = item ?? lines.current
+
+      target?.focus()
+    })
+  })
+
+  const enter = (key: string) => {
+    const stay = new Set(told.rows.filter((r) => channelOf(r) === key && told.fresh.includes(r.n)).map((r) => r.n))
+
+    setEntered({ key, stay, since: newest })
+    setExpanded(undefined)
+    focus.current = ""
+  }
+  const leave = () => {
+    if (!entered) return
+    focus.current = entered.key
+    setBacked(true)
+    setEntered(undefined)
+    setExpanded(undefined)
+  }
+  const toggle = (to: boolean, on?: string) => {
+    if (to) {
+      setSince(newest)
+      setBacked(false)
+      setExpanded(undefined)
+      if (on !== undefined) enter(on)
+    } else {
+      setEntered(undefined)
+      setNextOpen(false)
     }
+    setOpen(to)
   }
   const heard = useRef<(notice: Notice) => void>(() => {})
 
-  // A notice names its tab by `at`, where it goes on a click; while the drawer is open it is a line there, not a toast.
+  // A notice opens the activity on its channel, by its tab; while the drawer is open it comes in there, not as a toast.
   heard.current = (notice) => {
+    const who = whoBy(notice.by)
     const toast = {
       id: Date.now() + Math.random(),
       text: notice.text,
       title: notice.from ?? title,
-      mark: <Mark label={BY[whoBy(notice.by)]}>{MARK[whoBy(notice.by)]}</Mark>,
+      mark: <Mark label={BY[who]}>{MARK[who]}</Mark>,
       counts: notice.by !== undefined,
-      ...(notice.at && {
-        onSelect: () => {
-          go(notice.at!)
-          if (notice.by !== undefined) void look(notice)
-        },
-      }),
+      onSelect: () => toggle(true, tabIn(notice.at)),
     }
 
     setToasts((all) => toastsAfter(all, toast, isOpen.current))
   }
   useEffect(() => notices.subscribe((notice) => heard.current(notice)), [notices])
 
-  const toggle = (to: boolean) => {
-    if (to) {
-      setOpened(openedOn(told.rows, told.unseen))
-      setExpanded(undefined)
-    }
-    setOpen(to)
-  }
   const goTo = (at: string) => {
     back.current = false
-    setOpen(false)
+    toggle(false)
     go(at)
   }
-  const badge = badgeOf(told.unseen, toasts.filter((t) => t.counts).length + looking, open)
-  const feed = shown === "all" ? all : told
-  const rows = inView(feed.rows, shown)
+  const badge = badgeOf(told.unseen, toasts.filter((t) => t.counts).length, open)
   const said = ["Activity", badge ? `${badge} new` : "", waiting ? `${waiting} of your changes wait for the agent's next turn` : ""].filter(Boolean).join(", ")
-  const groups = groupsOf(rows, new Date())
-  const fresh = feed.rows.some((r) => isNew(r, opened))
+  const elsewhere = !!entered && channels.some((c) => c.key !== entered.key && c.rows.some((r) => arrived(r, entered.since)))
+  const seeAll = () => {
+    const last = told.rows[0]?.n
+
+    if (last) void call(NOTICES, "seen", { n: last }).then(() => told.load(), () => undefined)
+  }
 
   return (
     <>
@@ -479,17 +315,20 @@ export function Notifications({
         {waiting > 0 && <span className="text-meta tabular-nums">{waiting > 9 ? "9+" : waiting}</span>}
         {badge > 0 && <span aria-hidden data-unseen={badge} className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
       </button>
-      <Sheet open={open} onOpenChange={toggle}>
+      <Sheet open={open} onOpenChange={(to) => toggle(to)}>
         <SheetContent
           ref={content}
           top="top-11"
           aria-label="Activity"
           onOpenAutoFocus={(e) => {
             e.preventDefault()
-            content.current?.focus()
+            if (focus.current === undefined) content.current?.focus()
           }}
-          onEscapeKeyDown={() => {
-            back.current = true
+          onEscapeKeyDown={(e) => {
+            if (entered) {
+              e.preventDefault()
+              leave()
+            } else back.current = true
           }}
           onCloseAutoFocus={(e) => {
             e.preventDefault()
@@ -502,108 +341,170 @@ export function Notifications({
           }}
           onKeyDown={(e) => {
             keepFocus(e)
+            if (e.key !== "Escape" && levelKey(e.key, entered ? "channel" : "list") === "back") {
+              e.preventDefault()
+              leave()
+
+              return
+            }
             // From the drawer itself, as it opens focused, the arrows go into the lines.
             if (e.target === content.current && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
               e.preventDefault()
-              content.current.querySelector<HTMLElement>("[data-line]")?.focus()
+              lines.current?.querySelector<HTMLElement>("[data-line]")?.focus()
             }
           }}
         >
-          <div className="flex h-9 shrink-0 items-center gap-3 px-3">
-            <SheetTitle className="text-body font-medium">Activity</SheetTitle>
-            <div role="tablist" aria-label="Show" className="flex items-center gap-2.5">
-              {SHOWN.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={shown === s.value}
-                  className={`relative cursor-pointer text-meta outline-none hover:text-foreground focus-visible:underline focus-visible:underline-offset-4 ${shown === s.value ? "text-foreground" : "text-muted-foreground/70"}`}
-                  onClick={() => setShown(s.value)}
-                >
-                  {s.label}
-                  {s.value === "needs" && needs.length > 0 && <span aria-hidden className="ml-1 inline-block size-1 rounded-full bg-primary align-middle" />}
+          {channel ? (
+            <ChannelHeader channel={channel} icon={channel.surface && icons[channel.surface]} elsewhere={elsewhere} back={leave} go={() => goTo(channel.key)} />
+          ) : (
+            <div className="flex h-9 shrink-0 items-center gap-3 px-3">
+              <SheetTitle className="text-body font-medium">Activity</SheetTitle>
+              <div role="tablist" aria-label="Show" className="flex items-center gap-2.5">
+                {SHOWN.map((s) => (
+                  <button key={s.value} type="button" role="tab" aria-selected={shown === s.value} className={cn(QUIET, shown === s.value && "text-foreground")} onClick={() => setShown(s.value)}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              {told.unseen > 0 && (
+                <button type="button" className={cn(QUIET, "ml-auto")} onClick={seeAll}>
+                  Mark all seen
                 </button>
-              ))}
+              )}
             </div>
-            {fresh && (
-              <button
-                type="button"
-                className="ml-auto cursor-pointer text-meta text-muted-foreground/70 outline-none hover:text-foreground focus-visible:underline focus-visible:underline-offset-4"
-                onClick={() => {
-                  setOpened({ fresh: new Set(), newest: Infinity })
-                  if (newest > 0) void call(NOTICES, "seen", { n: newest }).catch(() => undefined)
-                }}
-              >
-                Mark all seen
-              </button>
-            )}
-          </div>
+          )}
           <div
+            ref={lines}
+            key={channel ? `in-${channel.key}` : "list"}
             data-lines
             role="list"
-            aria-label="Entries"
+            aria-label={channel ? `${channel.name}, newest first` : "Channels"}
             tabIndex={0}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-2 outline-none"
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-2 outline-none duration-150 animate-in fade-in-0 motion-reduce:animate-none",
+              channel ? "slide-in-from-right-2" : backed && "slide-in-from-left-2"
+            )}
             onKeyDown={moveIn}
           >
-            {next.length > 0 && (
-              <section aria-label="The agent sees next" className="border-b border-border/60 pb-2">
-                <Heading>
-                  The agent sees next <span className="font-normal">· with your next message</span>
-                </Heading>
-                {next.map((row) => (
-                  <div role="listitem" key={`next-${row.n}`}>
-                    <Line row={row} fresh={false} lit={false} open={expanded === -row.n} toggle={() => setExpanded((n) => (n === -row.n ? undefined : -row.n))} go={goTo} />
+            {channel ? (
+              <History channel={channel} entered={entered!} expanded={expanded} expand={setExpanded} goTo={goTo} />
+            ) : (
+              <>
+                {next.length > 0 && <NextTurn rows={next} tabs={tabs} open={nextOpen} toggle={() => setNextOpen((o) => !o)} />}
+                {channels.map((c) => (
+                  <div role="listitem" key={c.key}>
+                    <ChannelItem channel={c} icon={c.surface && icons[c.surface]} lit={!!c.rows[0] && arrived(c.rows[0], since)} enter={() => enter(c.key)} />
                   </div>
                 ))}
-              </section>
+                {!channels.length && <p className="px-3 py-6 text-center text-muted-foreground/70">{shown === "all" ? "Nothing has happened yet" : "Nothing new to say yet"}</p>}
+              </>
             )}
-            {needs.length > 0 && (
-              <section aria-label="Needs you" className="border-b border-border/60 pb-2">
-                <Heading>Needs you</Heading>
-                {needs.map((need, i) => (
-                  <div role="listitem" key={`${need.at}-${i}`}>
-                    <NeedLine need={need} go={goTo} />
-                  </div>
-                ))}
-              </section>
-            )}
-            {shown !== "needs" &&
-              groups.map((group) => (
-                <section key={`${group.label}-${group.rows[0]!.n}`} aria-label={group.label}>
-                  <Heading>{group.label}</Heading>
-                  {group.rows.map((row) => (
-                    <div role="listitem" key={row.n}>
-                      <Line
-                        row={row}
-                        fresh={isNew(row, opened)}
-                        lit={row.n > opened.newest}
-                        open={expanded === row.n}
-                        toggle={() => setExpanded((n) => (n === row.n ? undefined : row.n))}
-                        go={goTo}
-                      />
-                    </div>
-                  ))}
-                </section>
-              ))}
-            {(shown === "needs" ? !needs.length : !rows.length) && (
-              <p className="px-3 py-6 text-center text-muted-foreground/70">
-                {shown === "needs" ? "Nothing waits on you" : shown === "all" ? "Nothing has happened yet" : "Nothing new to say yet"}
-              </p>
-            )}
-            {shown !== "needs" && feed.earlier && (
-              <button
-                type="button"
-                className="mx-3 mt-2 cursor-pointer text-meta text-muted-foreground/70 outline-none hover:text-foreground focus-visible:underline"
-                onClick={() => void feed.more()}
-              >
+            {feed.earlier && (
+              <button type="button" className={cn(QUIET, "mx-2 mt-2")} onClick={() => void feed.more()}>
                 Show earlier
               </button>
             )}
           </div>
         </SheetContent>
       </Sheet>
+    </>
+  )
+}
+
+/** A channel the list no longer has, as when the lens leaves it empty: its name from its tab or its notices, with no rows. */
+function emptyChannel(key: string, tabs: TabInfo[], rows: Row[], shell: string, titles: Record<string, string>): Channel {
+  const tab = tabs.find((t) => t.at === key)
+  const surface = key === SHELL ? undefined : (tab?.surface ?? rows.find((r) => channelOf(r) === key)?.surface)
+
+  return { key, name: key === SHELL ? shell : (tab?.label ?? titles[key] ?? surface ?? key), ...(surface && { surface }), closed: key !== SHELL && !tab, rows: [], unseen: 0 }
+}
+
+/** The second level's header: back, with a dot where another channel heard something meanwhile; the channel; and the way to its tab. */
+function ChannelHeader({ channel, icon, elsewhere, back, go }: { channel: Channel; icon: ReactNode; elsewhere: boolean; back: () => void; go: () => void }) {
+  return (
+    <div className="flex h-9 shrink-0 items-center gap-2 pr-3 pl-1.5">
+      <button
+        type="button"
+        aria-label={elsewhere ? "Back to the channels, something new there" : "Back to the channels"}
+        title="Back"
+        className="relative grid size-6 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={back}
+      >
+        <ChevronLeftIcon className="size-3.5" aria-hidden />
+        {elsewhere && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary ring-2 ring-popover" />}
+      </button>
+      <ChannelIcon channel={channel} icon={icon} small />
+      <SheetTitle className="min-w-0 truncate text-body font-medium">{channel.name}</SheetTitle>
+      {channel.closed && <span className="shrink-0 text-meta text-muted-foreground/60">closed</span>}
+      {!channel.closed && channel.key !== SHELL && (
+        <button type="button" className={cn(QUIET, "ml-auto flex shrink-0 items-center gap-0.5")} onClick={go}>
+          Go to tab
+          <ArrowUpRightIcon className="size-3" aria-hidden />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** A channel's history: newest first, grouped by when; what was unseen as it was entered, and what arrives, dotted until it is left. */
+function History({
+  channel,
+  entered,
+  expanded,
+  expand,
+  goTo,
+}: {
+  channel: Channel
+  entered: Entered
+  expanded: number | undefined
+  expand: (n: number | undefined) => void
+  goTo: (at: string) => void
+}) {
+  const groups = groupsOf(channel.rows, new Date())
+  const need = channel.need && (
+    <div className="mx-1 mt-1 flex h-7 items-center gap-1.5 rounded-md bg-primary/6 px-2 text-foreground">
+      <CircleDotIcon className="size-3 shrink-0 text-primary" aria-hidden />
+      <span className="min-w-0 truncate">
+        <span className="sr-only">Needs you: </span>
+        {needLine(channel.need.why)}
+      </span>
+    </div>
+  )
+
+  if (!channel.rows.length)
+    return (
+      <>
+        {need}
+        <p className="px-3 py-6 text-center text-muted-foreground/70">Nothing said here yet</p>
+      </>
+    )
+
+  return (
+    <>
+      {need}
+      {groups.map((group) => (
+    <section key={`${group.label}-${group.rows[0]!.n}`} aria-label={group.label}>
+      <Heading>{group.label}</Heading>
+      {group.rows.map((row) => {
+        const place = placeIn(row, channel.key)
+        const at = row.at
+
+        return (
+          <div role="listitem" key={row.n}>
+            <HistoryLine
+              row={row}
+              {...(place && { place })}
+              {...(place && at !== null && at !== SHELL && { go: () => goTo(at) })}
+              fresh={entered.stay.has(row.n) || arrived(row, entered.since)}
+              lit={arrived(row, entered.since)}
+              open={expanded === row.n}
+              toggle={() => expand(expanded === row.n ? undefined : row.n)}
+            />
+          </div>
+        )
+      })}
+    </section>
+      ))}
     </>
   )
 }

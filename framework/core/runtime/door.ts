@@ -6,7 +6,8 @@
 //                                 caused it; a line about the root's own code is one too, and is given to a page that connects
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
 //                                 turn { agent, since, waiting, drivable }, whose move it is (turn.ts), as it changes and on connect
-//   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone
+//   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
+//                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
@@ -16,7 +17,7 @@
 // Only this machine's clients: loopback host, own origin, the service token on everything but the page, as a header or
 // as the cookie the page response sets, named after the port. A runtime that gives way answers 503 with STALE_HEADER, having
 // done nothing, and ends: its clients ask again, of the one in its place. A client's probe for whether it is up never waits.
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -25,9 +26,9 @@ import { textArgs, textSession, textView } from "./text.ts"
 import { NEEDS } from "../present/present.ts"
 import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
-import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
+import { ACTOR_HEADER, CALL_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
-import { driverOf, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unknownTurn, type TurnEvent } from "./turn.ts"
+import { answered, driverOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
 export type UiHosting = (
@@ -118,8 +119,11 @@ export type Door = {
   replace(ui: Ui): Promise<void>
   /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
   refresh(file: string): Promise<void>
-  /** A line about the root's own code, said first in the agent's next answer, and to the open pages as a notice; a later one takes its place. */
-  note(line: string): void
+  /**
+   * A line about the root's own code, told to the open pages as a notice, and said first in the agent's next answer unless
+   * `agent` is false, as for what does not change what the agent should do; a later one takes its place.
+   */
+  note(line: string, agent?: boolean): void
 }
 
 export function door<M>(running: Running<M>, options: DoorOptions): Door {
@@ -195,8 +199,28 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   let busy = 0
   let turnSent = ""
   let stale: ReturnType<typeof setTimeout> | undefined
+  // Whether the hooks speak between the agent's runs of the word (turn.ts); whether any did, and whether it was told they
+  // are quiet, kept beside the session's state so a runtime that starts again tells it once.
+  const hooksFile = join(options.identity.dir, "hooks.json")
+  let hooks: Hooks = unheardHooks()
+
+  try {
+    const kept = JSON.parse(readFileSync(hooksFile, "utf8")) as Partial<Hooks>
+
+    hooks = { ever: kept.ever === true, told: kept.told === true }
+  } catch {}
+
+  const keepHooks = (next: Hooks) => {
+    const changed = next.ever !== hooks.ever || next.told !== hooks.told
+
+    hooks = next
+    if (changed)
+      try {
+        writeFileSync(hooksFile, JSON.stringify({ ever: next.ever, told: next.told }))
+      } catch {}
+  }
   const turnNow = () => {
-    const { agent, since } = reading(turn, Date.now(), busy > 0)
+    const { agent, since } = reading(turn, Date.now(), busy > 0 && !hooks.told)
 
     return { agent, since, waiting: text.waiting(), drivable: !!driverOf(options.about?.session ?? "session") }
   }
@@ -242,9 +266,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     }
 
     if (wants(req, "text/plain")) {
+      let hush: string | undefined
       const reply = (status: number, value: string) => {
         res.writeHead(status, { "content-type": "text/plain" })
-        res.end(value)
+        res.end(hush ? `${hush}\n${value}` : value)
       }
 
       if (tokenOf(req, port) !== options.identity.token) return reply(401, "service token required")
@@ -252,11 +277,22 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         const event = (await body(req)).trim() as TurnEvent
 
         if (!TURN_EVENTS.includes(event)) return reply(400, `the turn is told as one of ${TURN_EVENTS.join(", ")}`)
+        keepHooks(hooksHeard())
         turn = turned(turn, event, Date.now())
         if (event === "started") text.turned()
         pushTurn()
 
         return reply(200, "")
+      }
+
+      const call = req.headers[CALL_HEADER]
+
+      if (typeof call === "string") {
+        const now = hushed(hooks, call, Date.now())
+
+        keepHooks(now.hooks)
+        hush = now.line
+        res.once("finish", () => keepHooks(answered(hooks, call, Date.now())))
       }
       busy += 1
       res.once("close", () => {
@@ -304,7 +340,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         if (req.method === "GET") {
           const view = running.read(path, actorText) ?? factAt(path)
           const open = path === "/" && url.searchParams.has("open")
-          const lines = view === undefined ? [`nothing at ${path}`] : textView(view, path, options.command ?? "bv root")
+          const lines = view === undefined ? [running.absent(path)] : textView(view, path, options.command ?? "bv root")
 
           if (path !== "/") text.touch(path)
           const use = open ? [`${options.about?.root} ${options.about?.version}`] : []
@@ -418,7 +454,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         else if (actor === actorText) text.touch(path)
 
         // A client reads detail as ordinary values: only the agent's present at / tells it apart.
-        return view === undefined ? json(res, 404, { error: `nothing at ${path}` }) : json(res, 200, revealed(view))
+        return view === undefined ? json(res, 404, { error: running.absent(path) }) : json(res, 200, revealed(view))
       } catch (error) {
         return json(res, 500, { error: error instanceof Error ? error.message : String(error) })
       }
@@ -470,8 +506,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
       if (differs) for (const res of streams) res.write("event: page\ndata: {}\n\n")
     },
-    note(line) {
-      said = line
+    note(line, agent = true) {
+      if (agent) said = line
       health = { line, at: Date.now() }
       for (const res of streams) res.write(notice({ text: line, ...(options.about?.root && { from: options.about.root }) }))
       for (const finish of Array.from(noted)) finish()
