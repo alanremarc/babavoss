@@ -83,10 +83,11 @@ const ORBIT_RADIUS = 34
 /**
  * The eyes of a page that lost its runtime: the larger one comes to the mark's centre and the smaller goes round it.
  * `into` is how far into that they are, 0 the eyes at rest and 1 the orbit, and `angle` where on its round the smaller
- * one is, in radians from the right, clockwise. At 0 and no angle both are exactly at rest.
+ * one is, in radians from the right, clockwise. At 0 and no angle both are exactly at rest. `pair` is the eyes, the
+ * brand's unless a variant of the mark is tried.
  */
-export function orbiting(into: number, angle: number): [Drawn, Drawn] {
-  const [large, small] = EYES as [Eye, Eye]
+export function orbiting(into: number, angle: number, pair: Eye[] = EYES): [Drawn, Drawn] {
+  const [large, small] = pair as [Eye, Eye]
   const cx = large.x + (SPHERE.x - large.x) * into
   const away = small.x - large.x + (ORBIT_RADIUS - (small.x - large.x)) * into
 

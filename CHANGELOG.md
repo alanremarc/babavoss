@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.53.2
+
+- The mark takes the two eyes it draws and moves: `pair` on `Logo` and `Eyes`, and as `orbiting`'s third argument, the brand's `EYES` by default, so a variant of the mark can be tried. This repository's Design Guide shows such variants at `/guide/mark/variants`, eyes of one size among them. The mark in the shell is unchanged. Nothing to adapt.
+
 ## 0.53.1
 
 - This repository's Design Document surface opens on a scenario picker, and a scenario is two screens of one frame over a strip of its steps: the person's page after the chosen step, and what the agent was given at it. The scenario and the step are the tab's route, `/design/scenarios/NAME/N`. Each scenario's row at `/design` carries `about` as detail. The package is unchanged. Nothing to adapt.
