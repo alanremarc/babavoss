@@ -2,6 +2,15 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.49.0
+
+- A surface's page may use any React library: `bun add NAME` in `.baba/` and import it. The page always has one React, the framework's, whatever a library or the install brings, so "Invalid hook call … more than one copy of React" no longer happens.
+- `.baba/` is ready for shadcn: `bunx shadcn@latest add NAME` in `.baba/` writes the component to `components/ui/`, shared by every surface and imported as `@/components/ui/NAME`. It reads the shell's tokens, so it follows the palette and the mode. `baba init` writes `components.json` and the `@/` alias in `tsconfig.json`; provisioning adds both to an existing `.baba/` where they are missing. Commit them.
+- Tailwind scans the whole of `.baba/` except `node_modules`, so the project's own components are styled. A `@source` line in a surface's `ui/styles.css` now works, its path from that file, for a package whose classes must be generated.
+- `useShell()` from `babavoss/shell/ui/index.tsx` gives a page the shell's services by convention: `toast(text, at?)`, a toast from the tab that is not kept and not told to the agent; `open(surface)`; `go(at)`; and `appearance`, `{ mode, theme }`. A surface's notices from `update` remain how both sides are told what happened.
+- The kit's theme defines shadcn's `sidebar-*` tokens from each palette.
+- Nothing to adapt.
+
 ## 0.48.0
 
 - What the agent is told is cut to what it needs. A quiet action, `action({ quiet: true })`, or an update returning `quiet: true`, is the page's own bookkeeping, told to the agent in no way and kept out of the activity; the shell's seen and looked and every settings change are quiet. A change no one made, as changed code or a restored state makes, is not told. A notice stands for the changes of the update that gave it; a need of the agent's is told all the same. A tab the agent neither read nor called in this turn or the last, and that does not need it, is one line at a boundary.
