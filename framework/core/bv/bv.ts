@@ -55,7 +55,7 @@ bv                         list open roots and their commands
 NAME PATH                  read a view: demo /notes (or bv demo /notes)
 NAME PATH HANDLE name=value  call: demo / add text=Pharmacy; text=@- reads standard input
 bv NAME PATH               select a root: bv demo /notes
-bv wait [SECONDS]          wait for changes: bv wait 60
+bv wait [SECONDS]          wait for the person: until something is heard or who is needed changes, then what changed: bv wait 60
 bv close                   close: bv close; the next call wakes the root
 bv -e CODE                 async program: bv -e 'for (let i=0;i<3;i++) console.log(await root.call("/", "add", {text:String(i)}))'
 bv -e -                    code from standard input: echo 'console.log(await root.read("/"))' | bv -e -
@@ -313,7 +313,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       console.log(
         [
           `${command} PATH — read; ${command} PATH HANDLE name=value — call (name=@- reads stdin)`,
-          `${command} wait [SECONDS] — wait for changes`,
+          `${command} wait [SECONDS] — wait for the person, then what changed`,
           `${command} close — close the root`,
           `${command} -e CODE — run an async program with root`,
         ].join("\n")

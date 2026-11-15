@@ -50,6 +50,8 @@ A notice is one short line on what just happened, in answer to a call or to a co
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
+The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there.
+
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`; read its code in `framework/` there rather than guessing its interfaces.

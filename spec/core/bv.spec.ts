@@ -257,7 +257,7 @@ it("prints the full help", () => expect(setup().run(["help"]).out).toContain("St
 it("opens with the commands and no pointer to a fuller guide: what an agent is pointed to, it reads", () => {
   const out = setup().open().out
 
-  expect(out).toContain("wait for changes")
+  expect(out).toContain("wait for the person")
   expect(out).not.toContain("help")
 })
 it("door installs bv", () => {
