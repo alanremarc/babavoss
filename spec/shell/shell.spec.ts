@@ -159,6 +159,108 @@ describe("the shell surface", () => {
     await second.stop()
   })
 
+  it("keeps a tab whose util fails on what it keeps to that tab: home lists it as broken, with why, and it can be closed", async () => {
+    const issues = view([], { "/": (m: { issues: string[] }) => ({ title: "Queue", open: m.issues.filter(Boolean).length }) })
+    const queue = (restore?: (saved: unknown) => { issues: string[] }) =>
+      util(
+        "queue",
+        "keeps issues",
+        surface<{ issues: string[] }, { kind: "none" }, never>({
+          description: "issues",
+          init: () => ({ issues: [] }),
+          ...(restore && { restore }),
+          update: (m) => ({ model: m }),
+          view: issues.view,
+          run: async () => {},
+          failed: () => ({ kind: "none" }),
+        })
+      )
+    const ports = memory<unknown>()
+    const first = run(shell({ title: "Test", utils: [counter] }), ports)
+
+    await first.call("/", "open", { util: "counter" }, "agent")
+    await settled(first)
+    await first.stop()
+
+    // The surface named counter was rewritten: what tab 1 keeps is no longer understood by its code.
+    const rewritten = util("counter", "counts things", queue().surface)
+    const second = run(shell({ title: "Test", utils: [rewritten, queue()] }), ports)
+
+    try {
+      await second.call("/", "open", { util: "queue" }, "agent")
+
+      const home = second.read("/", "agent")!
+
+      expect(home.tabs).toMatchObject([
+        {
+          at: "/tabs/1",
+          util: "counter",
+          broken: expect.stringMatching(/^tab 1 is broken: .*m\.issues\.filter.*closing the tab drops it$/),
+          close: { name: "close", args: { n: 1 } },
+        },
+        { at: "/tabs/2", util: "queue", title: "Queue", facts: { open: 0 } },
+      ])
+      expect(second.read("/tabs/1")).toMatchObject({ at: "/tabs/1", broken: expect.stringContaining("tab 1 is broken") })
+      expect(await second.call("/", "open", { util: "queue" }, "agent")).toMatchObject({ outcome: "written" })
+      expect(second.failure()).toBeUndefined()
+      expect(await second.call("/", "close", { n: 1 }, "agent")).toMatchObject({ outcome: "written", view: { tabs: [{ util: "queue" }, { util: "queue" }] } })
+      expect(second.read("/tabs/2")).toMatchObject({ open: 0 })
+    } finally {
+      await second.stop()
+    }
+
+    // A util whose restore throws breaks its tab, not the shell's restore.
+    const unrestorable = queue(() => {
+      throw new Error("saved issues are not a list")
+    })
+    const third = run(shell({ title: "Test", utils: [unrestorable] }), ports)
+
+    try {
+      expect(third.failure()).toBeUndefined()
+      expect(third.read("/")!.tabs).toMatchObject([
+        { at: "/tabs/2", broken: expect.stringContaining("saved issues are not a list"), close: { name: "close" } },
+        { at: "/tabs/3", broken: expect.stringContaining("tab 3 is broken") },
+      ])
+    } finally {
+      await third.stop()
+    }
+  })
+
+  it("refuses a call into a broken tab with why, and lets its events land nowhere", () => {
+    const fragile = util("counter", "counts things", {
+      ...counter.surface,
+      start: (m: Model) => {
+        if (m.n < 0) throw new Error("negative")
+
+        return [{ kind: "later" }]
+      },
+      working: (m: Model) => {
+        if (m.n < 0) throw new Error("negative")
+
+        return true
+      },
+      update: (m: Model, msg) => {
+        if (m.n < 0) throw new Error("negative")
+
+        return counter.surface.update(m, msg)
+      },
+      view: (m: Model, path, actor) => {
+        if (m.n < 0) throw new Error("negative")
+
+        return pages.view(m, path, actor)
+      },
+    })
+    const program = shell({ title: "Test", utils: [fragile] })
+    const model = { tabs: [{ n: 1, util: "counter", model: { title: "Counter", n: -1 } }], next: 2 }
+
+    expect(program.update(model, { kind: "call", path: "/tabs/1", handle: "bump", args: { by: 1 }, actor: "agent" })).toEqual({
+      refused: expect.stringContaining("tab 1 is broken: its counter surface fails on the state the tab keeps (negative)"),
+    })
+    expect(program.update(model, { kind: "tab", n: 1, event: { kind: "bumped" } })).toEqual({ model })
+    expect(program.working?.(model)).toBe(false)
+    expect(program.start?.(model)).toEqual([])
+  })
+
   it("names tabs and paths, and refuses bad util names", () => {
     expect(within("/tabs/3")).toEqual({ n: 3, path: "/" })
     expect(within("/tabs/3/notes/2/")).toEqual({ n: 3, path: "/notes/2" })
