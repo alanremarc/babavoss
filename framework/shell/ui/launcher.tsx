@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { BoxIcon, SettingsIcon } from "lucide-react"
 import type { Handle } from "../../core/index.ts"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./components/command"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../../kit/components/command"
 
 /** A util as home lists it; one that is always open offers no `open`: its tab is there. */
 export type UtilEntry = { name: string; description: string; open?: Handle }

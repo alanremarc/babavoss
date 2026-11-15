@@ -7,7 +7,7 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 - Read docs/DESIGN.md before a change. Design leads code: use its vocabulary and name any divergence.
 - A change to docs/DESIGN.md needs proposed wording and a reason, then the person's approval, before it is written.
 - Before each commit run `bun check && bun test`. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
-- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, bin, skill. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
+- Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, kit, bin, skill. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
 - Every file and concept earns its keep.
 
 ## Layout
@@ -16,13 +16,14 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 package.json                the package babavoss, at the repository's root, where a git dependency finds it
 bin/baba.ts                 the package's command: init, new, start, provision, hook
 framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, hook.ts, update.ts
-framework/shell/            the shell: tabs, page hosting and build, layouts, components
+framework/shell/            the shell: its surface, its page's tabs, launcher and settings, the tab hooks, page hosting and build
+framework/kit/              the kit: the components, layouts and design language every page is built with; it imports no shell
 framework/root/             the root of a .baba/: the one runtime and page of a session, the picker and the surfaces as its tabs
 skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
 skill/making-surfaces.md    how a surface is made and changed; read from the package when needed
 template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
-spec/{core,shell,bin}/      the specs, mirroring the code
+spec/{core,shell,kit,bin}/  the specs, mirroring the code
 spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network
 docs/DESIGN.md              the design
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
@@ -45,7 +46,7 @@ A project that uses it:
 ## Code
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
-- A surface imports the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`. Here the root package links itself.
+- A surface imports the framework only as the package, `babavoss/core/…`, the shell as `babavoss/shell/…` and the kit as `babavoss/kit/…`. Here the root package links itself.
 - In the core, a root is what a runtime serves: a name, a surface and a page. The root of a .baba/ is one; the specs' notes fixture is another.
 - Production never imports spec.
 - The version is semantic, in package.json, set by hand. Every version on main is a release: a change to the package raises it and adds its section to CHANGELOG.md, written for the agent that adapts a project's surfaces to it. On main, the Release workflow tags a new version vX.Y.Z; tags are never moved.
@@ -60,7 +61,7 @@ Style, which no tool enforces:
 
 ## Specs
 
-- Specs mirror the code: spec/core/ one per layer, spec/shell/, spec/bin/.
+- Specs mirror the code: spec/core/ one per layer, spec/shell/, spec/kit/, spec/bin/.
 - A surface's rules are stories, with `story()` from the framework: actors see, call and are told; the test settles the world's effects; the model is never read.
 
 ## Skills

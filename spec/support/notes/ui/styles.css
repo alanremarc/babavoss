@@ -1,4 +1,4 @@
-/* The notes fixture uses the shell styles. */
-@import "babavoss/shell/ui/styles.css";
+/* The notes fixture uses the kit's design language. */
+@import "babavoss/kit/styles.css";
 
 @source ".";

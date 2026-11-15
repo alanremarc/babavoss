@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
 import { SunIcon, MoonIcon, MonitorIcon } from "lucide-react"
-import { ToggleGroup, ToggleGroupItem } from "./components/toggle-group"
+import { ToggleGroup, ToggleGroupItem } from "../../kit/components/toggle-group"
 import { applyAppearance, readAppearance, resolveMode, themes, writeAppearance, type Appearance } from "./appearance"
-import { Plain } from "./layouts/plain.tsx"
+import { Plain } from "../../kit/layouts/plain.tsx"
 
 /** Appearance: color mode and the theme per mode, kept in this browser for every babavoss page on this machine. */
 export function Settings({ title }: { title: string }) {

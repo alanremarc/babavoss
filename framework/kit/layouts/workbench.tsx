@@ -24,7 +24,6 @@ import { GripHorizontalIcon, GripVerticalIcon, SearchIcon, XIcon } from "lucide-
 import { ContextMenu as Context } from "radix-ui"
 import { Group, Panel, useDefaultLayout, type PanelImperativeHandle } from "react-resizable-panels"
 import { Popover, PopoverAnchor, PopoverContent } from "../components/popover"
-import { useTab } from "../tab.tsx"
 import { BAND, EXPANDED, STRIP, UNFOLD, edges, moveBar, moveTool, names, ordered, settle, type Bar, type Drop, type Edge, type Float } from "./arrange.ts"
 import { ContextKit, MenuBar, MenuItems, menuContent, type Menu, type MenuItem } from "./menu.tsx"
 import {
@@ -895,6 +894,8 @@ function Floating({
  * arranges them, which documents are open, and the welcome page.
  */
 export function Workbench({
+  address,
+  util,
   scopes,
   label,
   tools,
@@ -903,6 +904,9 @@ export function Workbench({
   menus = [],
   viewMenu = [],
 }: {
+  /** The tab's address and its util's name, from useTab(): what the workbench keeps the person's arrangement under. */
+  address: string
+  util: string
   /** The util's name: the menu bar's, where there are no scopes. */
   label: string
   tools: WorkbenchTool[]
@@ -915,7 +919,6 @@ export function Workbench({
   viewMenu?: MenuItem[]
   scopes?: Scopes
 }) {
-  const { address, util } = useTab()
   // The toolbars are the util's: every tab of it opens as the person last arranged it.
   const [kept, setKept] = useStored<{ bars?: Bar[] }>(`babavoss.toolbars.${util}`, {})
   const bars = settle(kept.bars, tools)

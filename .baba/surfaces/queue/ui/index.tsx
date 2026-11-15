@@ -4,7 +4,8 @@ import { useState } from "react"
 import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCircleIcon } from "lucide-react"
 import Markdown from "react-markdown"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain, useLive, useTab } from "babavoss/shell/ui/index.ts"
+import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain } from "babavoss/kit/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.ts"
 
 type Status = "draft" | "backlog" | "lane" | "done"
 type Issue = { at: string; n: number; title: string; status: Status; lane?: number; note?: string }

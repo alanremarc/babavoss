@@ -123,7 +123,7 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
         name: "tailwind",
         setup(build) {
           // Noted only: the framework is resolved as the package it is.
-          build.onResolve({ filter: /^babavoss\/shell\/ui\// }, () => {
+          build.onResolve({ filter: /^babavoss\/(?:shell\/ui|kit)\// }, () => {
             shell = true
 
             return undefined
@@ -165,7 +165,7 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
   if (!result.success) throw new AggregateError(result.logs, "page build failed")
   // The shell's page brings no styles of its own, so that they are compiled once: without the root's, it would show bare.
   if (shell && !styles.size)
-    throw new Error("the page has no stylesheet: import one from its entry, such as ./styles.css, which imports the shell's ui/styles.css")
+    throw new Error("the page has no stylesheet: import one from its entry, such as ./styles.css, which imports the kit's styles.css")
   for (const [name, css] of styles) await Bun.write(join(out, name), css)
 
   const index = join(out, "index.html")

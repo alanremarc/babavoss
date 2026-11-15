@@ -1,0 +1,57 @@
+@import "tailwindcss" source(".");
+@import "./defaults.css";
+
+/* Anthropic palette anchors, adapted to warm shell surfaces:
+   https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md */
+:root[data-theme="claude"] {
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
+  --ring: var(--primary);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --chart-1: #d97757;
+  --chart-2: #6a9bcc;
+  --chart-3: #788c5d;
+  --chart-4: #c08c3a;
+  --chart-5: #9b7a91;
+}
+
+:root[data-theme="claude"]:not(.dark) {
+  --background: #faf9f5;
+  --foreground: #29251f;
+  --card: #fffdf8;
+  --popover: #fffdf8;
+  --primary: #b45233;
+  --primary-foreground: #fffaf5;
+  --secondary: #f0eee6;
+  --muted: #efe3d7;
+  --muted-foreground: #6b6259;
+  --destructive: #b7333d;
+  --border: #ded7cc;
+  --input: #c8bfb2;
+  --sidebar: #f0eee6;
+}
+
+:root.dark[data-theme="claude"] {
+  --background: #211d1a;
+  --foreground: #faf9f5;
+  --card: #2b2521;
+  --popover: #302923;
+  --primary: #d97757;
+  --primary-foreground: #211810;
+  --secondary: #38312b;
+  --muted: #453027;
+  --muted-foreground: #b7aaa0;
+  --destructive: #ed8b87;
+  --border: #494039;
+  --input: #5a4e43;
+  --sidebar: #2b2521;
+}
