@@ -3,7 +3,7 @@
 // the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the activity. The eyes sit on an invisible sphere, gaze.ts; here they are moved, a frame at a time and
 // only while they turn.
 import { useEffect, useRef } from "react"
-import { cn } from "cn"
+import { cn } from "../../kit/cn.ts"
 import { between, drawn, eased, EYES, next, ORBIT_MS, orbiting, REST, within, type Drawn, type Gaze } from "./gaze.ts"
 import type { Standing } from "./turn.ts"
 

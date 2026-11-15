@@ -3,7 +3,8 @@
 // person's, not a tab's nor a session's: its state is their file (store.ts), which every settings tab, in any session,
 // watches and follows; the model is what the file said last, with what this tab changed and is writing. A change is
 // written by a command, and a read while one is being written waits for it, so the tab never shows an older value back.
-// The shell's page applies what they say. Nothing is noticed but a write that failed.
+// The shell's page applies what they say. Nothing is noticed but a write that failed, and every change is quiet: the page's
+// own, of no event in the agent's work, so it is told to the agent in no way; the agent reads the tab when asked to change one.
 import { action, surface, view, type Update } from "../../../core/index.ts"
 import { bindings, clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
 import { isMode, isTheme, MODES, settingsOf, THEMES, type Mode, type Settings } from "./settings.ts"
@@ -22,6 +23,7 @@ const themes = (mode: Mode) => THEMES[mode].map((t) => t.id)
 
 const mode = action({
   name: "mode",
+  quiet: true,
   description: `set the colour mode: ${MODES.join(", ")}`,
   subject: {},
   inputs: { mode: "string" },
@@ -30,6 +32,7 @@ const mode = action({
 })
 const theme = action({
   name: "theme",
+  quiet: true,
   description: `set the theme of a mode: mode light or dark, theme ${themes("light").join(" or ")}`,
   subject: {},
   inputs: { mode: "string", theme: "string" },
@@ -42,6 +45,7 @@ const theme = action({
 })
 const animate = action({
   name: "animate",
+  quiet: true,
   description: "whether the mark looks about while the agent works; off, it stays still and shows the work by its tint alone",
   subject: {},
   inputs: { on: "boolean" },
@@ -49,6 +53,7 @@ const animate = action({
 })
 const bind = action({
   name: "bind",
+  quiet: true,
   description: `bind a command to keys, written as mod+p or mod+shift+k, mod being ⌘ on a Mac and Ctrl elsewhere; command is ${Object.keys(COMMANDS).join(", ")}`,
   subject: {},
   inputs: { command: "string", keys: "string" },
@@ -70,6 +75,7 @@ const bind = action({
 })
 const reset = action({
   name: "reset",
+  quiet: true,
   description: "bind a command to its default keys again; command=all for every command",
   subject: {},
   inputs: { command: "string" },
@@ -122,8 +128,8 @@ export function settings(file: () => string = () => settingsFile()) {
     session: (c) => c.kind === "watch",
     update(m, message): Update<Model, Command> {
       if (message.kind === "call") return pages.update(m, message)
-      if (message.kind === "read") return { model: m.writing > 0 ? m : { settings: message.settings, writing: 0 } }
-      if (message.kind === "wrote") return { model: { settings: m.settings, writing: Math.max(0, m.writing - 1) } }
+      if (message.kind === "read") return { model: m.writing > 0 ? m : { settings: message.settings, writing: 0 }, quiet: true }
+      if (message.kind === "wrote") return { model: { settings: m.settings, writing: Math.max(0, m.writing - 1) }, quiet: true }
 
       return {
         model: { ...m, writing: Math.max(0, m.writing - (message.writing ? 1 : 0)), unsaved: message.why },

@@ -379,9 +379,9 @@ export default function Design() {
   const go = (n: number) => current && navigate(`/scenarios/${current.name}/${n}`)
   /** A path clicked in a text: the step's page shows the tab it is in, where the page has it. */
   const pathIn = (step: Step) => (path: string) => {
-    const tab = /^\/tabs\/\d+/.exec(path)?.[0]
+    const tab = step.page.tabs.find((t) => path === t.at || path.startsWith(`${t.at}/`))?.at
 
-    if (!tab || !step.page.tabs.some((t) => t.at === tab)) return false
+    if (!tab) return false
     go(step.n)
     setPeek({ step: step.n, at: tab })
 

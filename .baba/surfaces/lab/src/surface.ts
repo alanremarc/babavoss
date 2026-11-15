@@ -7,7 +7,7 @@
 // is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
 // left behind by a lab that is gone is cleared when the lab starts.
 import { randomBytes, randomUUID } from "node:crypto"
-import { action, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
+import { action, detail, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
 import { LEFT_OUT, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
 import { append, empty, line, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
@@ -294,11 +294,12 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             ...(run.page && run.status !== "closed" && { page: run.page }),
             ...(run.ended && { ended: run.ended }),
             turns: run.turns,
-            tokens: run.tokens,
-            cost: Math.round(run.cost * 10_000) / 10_000,
+            // The run's counters are detail: read at the tab's path, and only counted in the shell's present.
+            tokens: detail(run.tokens),
+            cost: detail(Math.round(run.cost * 10_000) / 10_000),
             ...(working && { turn: { since: run.since, at: `/entries/since/${run.since}` } }),
             ...(!still && {
-              entries: run.entries.length,
+              entries: detail(run.entries.length),
               ...(run.turns > 0 && { last_turn: { at: `/entries/since/${run.since}` } }),
               timeline: { at: "/entries" },
               recent: run.entries.slice(-RECENT).map(row),

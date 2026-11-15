@@ -20,8 +20,12 @@ export interface Call {
  */
 export type Notice = string | { text: string; at?: string; from?: string }
 
-/** What an update returns: the next model with the commands to start and the notices to tell, or a refusal that changes nothing. */
-export type Update<M, C> = { model: M; commands?: C[]; notices?: Notice[] } | { refused: string }
+/**
+ * What an update returns: the next model with the commands to start and the notices to tell, or a refusal that changes
+ * nothing. `quiet`: the commit is the page's own bookkeeping, such as what the person has seen, and is told to the agent
+ * in no way: not heard, not among the changes, not counted as waiting for it.
+ */
+export type Update<M, C> = { model: M; commands?: C[]; notices?: Notice[]; quiet?: true } | { refused: string }
 
 export interface Surface<M, E extends { kind: string }, C> {
   description: string
@@ -38,6 +42,8 @@ export interface Surface<M, E extends { kind: string }, C> {
   update(model: M, message: Call | E): Update<M, C>
   /** The view at `path` for an actor, `/` the whole; undefined when nothing stands at the path. An actor may receive different handles. */
   view(model: M, path: string, actor?: string): View | undefined
+  /** Why nothing stands at a path, where the surface can say more than that: what stood there and where it went. */
+  absent?(model: M, path: string): string | undefined
   /** A command: the long or outside work. It sends events; it never writes the model. */
   run(command: C, send: (event: E) => void, signal: AbortSignal): Promise<void>
   /** The event for a command that threw, so a status written when it started is not left running. */

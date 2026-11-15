@@ -33,6 +33,21 @@ describe("the settings", () => {
     expect(agent.sees("/shortcuts")).toMatchObject({ commands: [{ command: "home", keys: "mod+p", does: expect.any(String) }, {}, {}, {}] })
   })
 
+  it("are the page's own: a change of one, or of the file, is quiet, told to the agent in no way", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "settings-quiet-"))
+    const running = run(settings(() => join(dir, "settings.json")), { load: () => undefined, save: () => {} })
+
+    try {
+      expect(await running.call("/", "mode", { mode: "dark" }, "person")).toMatchObject({ outcome: "written" })
+      expect(running.cause()).toMatchObject({ actor: "person", quiet: true })
+      expect(await running.call("/shortcuts", "reset", { command: "all" }, "person")).toMatchObject({ outcome: "written" })
+      expect(running.cause()).toMatchObject({ quiet: true })
+    } finally {
+      await running.stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it("change the mode, a theme and the mark's animation, each written to the file", async () => {
     const { agent, world } = story(settings(() => "unused"))
 
@@ -137,7 +152,7 @@ describe("the shell's settings", () => {
     })
     await agent.call("/", "open", { surface: "settings" })
     expect(await agent.call("/", "open", { surface: "settings" })).toMatchObject({ outcome: "written" })
-    expect(agent.sees()).toMatchObject({ tabs: [{ at: "/tabs/1", surface: "settings", title: "Settings" }], pointed: { at: "/tabs/1", n: 1 } })
+    expect(agent.sees()).toMatchObject({ tabs: [{ at: "/settings", surface: "settings", title: "Settings" }], pointed: { at: "/settings", n: 1 } })
   })
 
   it("take the name settings from a project's surface", () => {

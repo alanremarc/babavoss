@@ -180,8 +180,8 @@ it("7: a session never told receives the whole root at its first boundary, then 
 
   const next = await start()
 
-  // What was heard is held in memory alone; the present told is kept.
-  expect(await (await next.request("/_/wait?seconds=0")).text()).toContain("changed:\nn: 0 → 9")
+  // The present told is kept, and who changed what since, so the next runtime still says it was the person.
+  expect(await (await next.request("/_/wait?seconds=0")).text()).toContain("changed by the person:\nn: 0 → 9")
   expect(await (await next.request("/_/wait?seconds=0")).text()).toBe("nothing changed")
 })
 it("8: says who changed each fact: the person, the surface by a command's event, or the agent along with them", async () => {

@@ -45,6 +45,26 @@ export { Popover, PopoverContent, PopoverTrigger } from "./components/popover"
 export { Toasts, TOAST_MS, type ToastItem } from "./components/toast"
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip"
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group"
+export { Badge, badgeVariants } from "./components/badge"
+export { Marker, MarkerContent, MarkerIcon, markerVariants } from "./components/marker"
+export { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/resizable"
+export {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "./components/dropdown-menu"
 export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./components/command"
 export {
   Trace,

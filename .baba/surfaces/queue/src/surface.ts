@@ -5,7 +5,7 @@
 // and why. The work is the session's, not a tab's: every queue tab of the session opens the one record (store.ts) and
 // writes through to it, so a second tab shows the same work and a closed one loses nothing. A tab keeps a copy of the work
 // as it last heard it, so it shows at once; a tab kept from before brings its issues into the record once (migrate.ts).
-import { action, admit, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
+import { action, admit, detail, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
 import { sessionDir } from "babavoss/core/state/session-dir.ts"
 import { adopt, isLegacy } from "./migrate.ts"
 import { fileIn, store as kept, type Store } from "./store.ts"
@@ -307,7 +307,8 @@ const pages = view(actions, {
 
         return { at: `/narratives/${x.id}`, id: x.id, title: x.title, issues: mine.length, open: mine.filter(open).length }
       }),
-      issues: [...lanes, ...backlog, ...drafts, ...finished].map(row),
+      // What is done is detail: read at the tab's path, and only counted in the shell's present.
+      issues: [...[...lanes, ...backlog, ...drafts].map(row), ...finished.map((issue) => detail(row(issue)))],
       ...(drafts.length && { attention: { who: "person", why: `to approve or drop ${drafts.length} draft${drafts.length > 1 ? "s" : ""}` } }),
       add: add.bind({}),
       add_from: addFrom.bind({}),

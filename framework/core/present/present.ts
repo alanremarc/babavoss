@@ -2,8 +2,9 @@
 // facts, lists of objects as tables and each handle as the command that calls it; the root's tabs are each one heading
 // with its facts under it. A change is told as an event on a thing: a row of a list by its identity, not its index; a
 // tab once, as its heading; a need once, as who is needed, where and why; standing prose and long texts by where to read
-// them. Who made a change is the caller's to say.
-import type { Handle, Json } from "../surface/view.ts"
+// them; a reorder by what moved; detail by how much of it there is, and where to read it. Who made a change is the
+// caller's to say.
+import { isDetail, revealed, type Handle, type Json } from "../surface/view.ts"
 
 /** The fields that name a row of a list, in order: the first every row has, unique in its list, is its identity; else its index. */
 export const IDENTITY = ["at", "n", "id", "name", "key"]
@@ -18,8 +19,11 @@ const CUT = 100
 
 /** How handles are said: as the command that calls them at `path`; without a command, as their name and arguments. */
 export type Say = { command?: string; path?: string }
-/** One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; and its tab's heading. */
-export type Change = { line: string; keys: string[]; where: string; tab?: string }
+/**
+ * One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; and its tab's
+ * heading. `waits`: it is of what waits on the agent, which is told however else the change is explained.
+ */
+export type Change = { line: string; keys: string[]; where: string; tab?: string; waits?: true }
 
 type Row = { [key: string]: Json | undefined }
 
@@ -27,6 +31,8 @@ const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "obje
 const isRow = (v: Json | undefined): v is Row => !!v && typeof v === "object" && !Array.isArray(v) && !isHandle(v)
 const isScalar = (v: Json | undefined) => v === null || v === undefined || typeof v !== "object"
 const rowsOf = (v: Json | undefined): Row[] | undefined => (Array.isArray(v) && v.every(isRow) ? (v as Row[]) : undefined)
+/** A row as it reads through its mark of detail. */
+const inner = (row: Row): Row => (isDetail(row as Json) ? ((isRow(row.value) ? row.value : {}) as Row) : row)
 const same = (a: Json | undefined, b: Json | undefined) => JSON.stringify(a) === JSON.stringify(b)
 const join = (label: string, key: string) => (label ? `${label}.${key}` : key)
 
@@ -147,7 +153,7 @@ const needsOf = (v: Json | undefined): Need[] | undefined => {
 }
 /** A need's identity: its tab and who; a tab may need both. */
 const needKey = (n: Need) => keyOf(NEEDS, `${n.at} ${n.who}`)
-const needed = (n: Need) => `${n.who === "agent" ? "you" : `the ${n.who}`}, at ${[n.at, n.surface].filter(Boolean).join(" ")}`
+const needed = (n: Need) => `${n.who === "agent" ? "you" : `the ${n.who}`}, at ${[n.at, n.at !== `/${n.surface}` && n.surface].filter(Boolean).join(" ")}`
 
 /** Needs changed, each as an event on one need: added or gone, who, where and why; a why changed, the new one. */
 function needsChanged(a: Need[], b: Need[]): Change[] {
@@ -155,12 +161,14 @@ function needsChanged(a: Need[], b: Need[]): Change[] {
   const now = new Map(b.map((n) => [needKey(n), n]))
   const out: Change[] = []
 
-  for (const [key, n] of before) if (!now.has(key)) out.push({ line: `- need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at })
+  const waits = (n: Need) => (n.who === "agent" ? { waits: true as const } : {})
+
+  for (const [key, n] of before) if (!now.has(key)) out.push({ line: `- need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at, ...waits(n) })
   for (const [key, n] of now) {
     const old = before.get(key)
 
-    if (!old) out.push({ line: `+ need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at })
-    else if (old.why !== n.why) out.push({ line: `need: ${needed(n)}, now ${n.why}`, keys: [key], where: n.at })
+    if (!old) out.push({ line: `+ need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at, ...waits(n) })
+    else if (old.why !== n.why) out.push({ line: `need: ${needed(n)}, now ${n.why}`, keys: [key], where: n.at, ...waits(n) })
   }
 
   return out
@@ -170,7 +178,7 @@ function needsChanged(a: Need[], b: Need[]): Change[] {
 function namer(lists: Row[][]): ((row: Row) => string) | undefined {
   const id = identity(lists.filter((rows) => rows.length))
 
-  if (id) return (row) => JSON.stringify(row[id])
+  if (id) return (row) => JSON.stringify(inner(row)[id])
   if (lists.every((rows) => needsOf(rows))) return (row) => needKey(row as Need)
 
   return undefined
@@ -213,43 +221,109 @@ export function rebase(known: Json | undefined, was: Json | undefined, now: Json
   return now
 }
 
-/** Where in the root a path is: the open tab it is in, by its surface and path; else the path itself. */
-export function placeOf(view: Json | undefined, path: string): string {
-  const tab = tabsOf(view)?.find((t) => path === t.at || path.startsWith(`${t.at}/`))
+/** The root's open tabs, each by its path, its number and its heading; none where the view is not shaped as the shell's. */
+export const tabsIn = (view: Json | undefined): { at: string; n?: number; heading: string }[] =>
+  (tabsOf(view) ?? []).map((t) => ({ at: t.at, ...(typeof t.n === "number" && { n: t.n }), heading: heading(t) }))
+/** The path of the open tab a path is in, by its address or its number; undefined where it is in none. */
+export const tabAt = (view: Json | undefined, path: string): string | undefined => {
+  const under = (at: string) => path === at || path.startsWith(`${at}/`)
 
-  return tab ? [typeof tab.surface === "string" && tab.surface, tab.at].filter(Boolean).join(" ") : path
+  return tabsOf(view)?.find((t) => under(t.at) || (typeof t.n === "number" && under(`/tabs/${t.n}`)))?.at
 }
 
-/** A tab's one line: its path, its surface and its title. */
+/** Where in the root a path is: the open tab it is in, by its address or its number, said by its surface and address; else the path itself. */
+export function placeOf(view: Json | undefined, path: string): string {
+  const under = (at: string) => path === at || path.startsWith(`${at}/`)
+  const tab = tabsOf(view)?.find((t) => under(t.at) || (typeof t.n === "number" && under(`/tabs/${t.n}`)))
+
+  return tab ? (named(tab) ? tab.at : [typeof tab.surface === "string" && tab.surface, tab.at].filter(Boolean).join(" ")) : path
+}
+
+/** Whether a tab stands at its surface's name, /NAME, which then says its surface. */
+const named = (tab: Tab) => typeof tab.surface === "string" && tab.at === `/${tab.surface}`
+
+/**
+ * A tab's one line: its path, its surface where the path does not say it, its title; and where it stands at its surface's
+ * name, its number, so a tab opened again at the name reads as another.
+ */
 export const heading = (tab: Tab) =>
-  [tab.at, typeof tab.surface === "string" && tab.surface, typeof tab.title === "string" && JSON.stringify(tab.title)].filter(Boolean).join(" ")
+  [
+    tab.at,
+    !named(tab) && typeof tab.surface === "string" && tab.surface,
+    typeof tab.title === "string" && JSON.stringify(tab.title),
+    named(tab) && typeof tab.n === "number" && `(tab ${tab.n})`,
+  ]
+    .filter(Boolean)
+    .join(" ")
 const names = (v: Json | undefined) => (Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ") : "")
 const SAID = new Set(["at", "n", "surface", "title", "actions", "facts"])
+
+/** What was left out as detail, by where: a list's label with how many of its rows, and each fact's label; and their keys. */
+type Hid = { rows: Map<string, number>; facts: string[]; keys: string[] }
+
+const hid = (): Hid => ({ rows: new Map(), facts: [], keys: [] })
+/** How much detail was left out, in a few words: how many rows in which list, and which facts. */
+const counted = (h: Hid, rows = "more in") =>
+  [...[...h.rows].map(([label, n]) => `${n} ${rows} ${label || "the list"}`), ...(h.facts.length ? [`${[...new Set(h.facts)].join(", ")} in detail`] : [])].join(", ")
+/** A view with its detail left out, as the present says it whole, and what was left out noted in `h`. */
+function hidden(value: Json | undefined, h: Hid, label = ""): Json | undefined {
+  if (Array.isArray(value)) {
+    const kept = value.filter((v) => !isDetail(v))
+
+    if (kept.length < value.length) h.rows.set(label, (h.rows.get(label) ?? 0) + value.length - kept.length)
+
+    return kept.map((v) => hidden(v, h, label) ?? null)
+  }
+  if (!isRow(value)) return value
+
+  const out: Row = {}
+
+  for (const [k, v] of Object.entries(value))
+    if (isDetail(v)) h.facts.push(join(label, k))
+    else out[k] = hidden(v, h, join(label, k))
+
+  return out as Json
+}
+/** A view's lines whole, its detail left out and counted in one line that says where it is read. */
+function told(value: Json | undefined, say: Say, where: string, label = "", out: string[] = []): string[] {
+  const h = hid()
+
+  lines(hidden(value, h, label), say, label, out)
+  if (h.rows.size || h.facts.length) out.push(`+${counted(h)}; read ${where}`)
+
+  return out
+}
 
 /** A tab under its heading, as the whole present says it: its actions by name, the rest of its row, then its facts relative to it. */
 function tabLines(tab: Tab, say: Say): string[] {
   const out: string[] = []
 
   if (Array.isArray(tab.actions) && tab.actions.length) out.push(`actions: ${names(tab.actions)}   each one's command is at ${tab.at}`)
-  for (const [k, v] of Object.entries(tab)) if (!SAID.has(k) && v !== undefined) lines(v, say, k, out)
-  if (tab.facts !== undefined) lines(tab.facts, say, "", out)
+  for (const [k, v] of Object.entries(tab)) if (!SAID.has(k) && v !== undefined) lines(revealed(v), say, k, out)
+  if (tab.facts !== undefined) told(tab.facts, say, tab.at, "", out)
 
   return out
 }
 
-/** The present whole: the root's own facts, then each open tab under its heading. A view not shaped as the shell's is told as it is. */
+/**
+ * The present whole: the root's own facts, then each open tab under its heading. A view not shaped as the shell's is told
+ * as it is. Detail is left out, and how much of it there is said in one line with where to read it.
+ */
 export function whole(view: Json | undefined, say: Say = {}): string[] {
   const tabs = tabsOf(view)
 
-  if (!tabs) return lines(view, say)
+  if (!tabs) return told(view, say, say.path ?? "/")
 
-  return [...lines(own(view as Row), say), ...tabs.flatMap((tab) => ["", heading(tab), ...tabLines(tab, say)])]
+  return [...told(own(view as Row), say, "/"), ...tabs.flatMap((tab) => ["", heading(tab), ...tabLines(tab, say)])]
 }
 
 /** The identity of a list's rows across its versions: the first of IDENTITY that every row has, as a scalar, unique in each. */
 function identity(lists: Row[][]): string | undefined {
   return IDENTITY.find((k) =>
-    lists.every((rows) => rows.every((r) => typeof r[k] === "string" || typeof r[k] === "number") && new Set(rows.map((r) => r[k])).size === rows.length)
+    lists.every(
+      (rows) =>
+        rows.every((r) => typeof inner(r)[k] === "string" || typeof inner(r)[k] === "number") && new Set(rows.map((r) => inner(r)[k])).size === rows.length
+    )
   )
 }
 /** A name as it reads after a label: bare where it is one word, quoted otherwise. */
@@ -261,6 +335,8 @@ const keyOf = (key: string, id: Json | undefined) => `${key}[${JSON.stringify(id
  * row moved keeps its keys; and a key per list of rows for its order. A change covers the keys of `entries` below its own.
  */
 export function entries(value: Json | undefined, key = "", out = new Map<string, string>()): Map<string, string> {
+  if (!key) value = revealed(value)
+
   const rows = rowsOf(value)
   const id = rows?.length ? identity([rows]) : undefined
 
@@ -309,13 +385,15 @@ function walk(a: Json | undefined, b: Json | undefined, at: At, out: Change[]): 
 
     return out
   }
+  // An action offered or withdrawn is told by its name: its command is read where it is offered.
   if (a === undefined) {
-    for (const line of lines(b, at.say, at.label)) push(`+ ${long(b) ? `${at.label}: ${shown(b, at)}` : line}`)
+    if (isHandle(b)) push(`+ action ${at.label}`)
+    else for (const line of lines(b, at.say, at.label)) push(`+ ${long(b) ? `${at.label}: ${shown(b, at)}` : line}`)
 
     return out
   }
   if (b === undefined) {
-    push(`- ${at.label}`)
+    push(isHandle(a) ? `- action ${at.label}` : `- ${at.label}`)
 
     return out
   }
@@ -328,7 +406,7 @@ function walk(a: Json | undefined, b: Json | undefined, at: At, out: Change[]): 
 
     if (id) return rowsChanged(ra, rb, id, at, out)
   }
-  if (isHandle(b)) push(`${at.label}: ${call(b, at.say)}`)
+  if (isHandle(b) || isHandle(a)) push(isHandle(a) && isHandle(b) ? `action ${at.label} changed; read ${at.where}` : `${at.label}: now ${isHandle(b) ? "an action" : cell(b, at.say)}`)
   else if (isRow(a) && isRow(b)) {
     for (const k of [...Object.keys(b), ...Object.keys(a).filter((k) => !Object.hasOwn(b, k))])
       walk(a[k], b[k], { ...at, label: join(at.label, k), key: join(at.key, k) }, out)
@@ -346,7 +424,6 @@ function rowsChanged(a: Row[], b: Row[], id: string, at: At, out: Change[]): Cha
   const label = (r: Row) => (id === "at" ? String(r.at) : `${at.label} ${bare(r[id])}`)
   const where = (r: Row) => (typeof r.at === "string" ? r.at : at.where)
   const push = (line: string, keys: string[], here = at.where) => out.push({ line, keys, where: here, ...(at.tab !== undefined && { tab: at.tab }) })
-  const short = (r: Row) => bare(r.n ?? r.id ?? r.name ?? r.key ?? (id === "at" ? String(r.at).split("/").at(-1) : r[id]))
   const added = b.filter((r) => !before.has(JSON.stringify(r[id])))
 
   for (const r of a.filter((r) => !now.has(JSON.stringify(r[id])))) {
@@ -388,32 +465,120 @@ function rowsChanged(a: Row[], b: Row[], id: string, at: At, out: Change[]): Cha
   }
 
   const kept = (rows: Row[], other: Map<string, Row>) => rows.map((r) => JSON.stringify(r[id])).filter((k) => other.has(k))
+  const was = kept(a, now)
   const order = kept(b, before)
 
-  if (!same(kept(a, now), order)) {
-    const ids = b.map(short)
+  // A reorder by what moved: the rows outside the longest run kept in order, each one line, or how many where many moved.
+  if (!same(was, order)) {
+    const stayed = longestKept(was, order)
+    const moved = order.filter((k) => !stayed.has(k))
+    const where = (k: string) => {
+      const to = order.indexOf(k)
 
-    push(`${at.label}: order now ${ids.length > 20 ? `${ids.slice(0, 20).join(", ")}, …` : ids.join(", ")}`, [`${at.key}#order`])
+      return to === 0 ? "to the top" : to === order.length - 1 ? "to the end" : to < was.indexOf(k) ? "up" : "down"
+    }
+
+    if (moved.length > MOVED) push(`${at.label}: ${moved.length} rows moved; read ${at.where} for the order`, [`${at.key}#order`])
+    else for (const k of moved) push(`${label(now.get(k)!)} moved ${where(k)}`, [`${at.key}#order`])
   }
 
   return out
 }
 
+/** How many rows moved are told one by one; more are told as how many. */
+const MOVED = 3
+
+/** The identities of the longest run that two orders share, in order: what stayed while the rest moved. */
+function longestKept(a: string[], b: string[]): Set<string> {
+  const run = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0))
+
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) run[i]![j] = a[i] === b[j] ? run[i + 1]![j + 1]! + 1 : Math.max(run[i + 1]![j]!, run[i]![j + 1]!)
+
+  const out = new Set<string>()
+
+  for (let i = 0, j = 0; i < a.length && j < b.length; )
+    if (a[i] === b[j]) {
+      out.add(a[i]!)
+      i++
+      j++
+    } else if (run[i + 1]![j]! >= run[i]![j + 1]!) i++
+    else j++
+
+  return out
+}
+
 /**
- * A tab changed: opened, whole under its heading, its standing prose with it, since the agent has not read it; closed, in
- * one line; otherwise its row's changes, and its facts' relative to it.
+ * Two versions of a value with their detail made plain where it is detail in only one, so that a row which became detail
+ * is told as what changed in it; and left out of both where it is detail in each, or came or went as detail, noted in `h`
+ * where it changed, under `key` as `entries` names it.
+ */
+function paired(a: Json | undefined, b: Json | undefined, h: Hid, key: string, label = "", row = false): [Json | undefined, Json | undefined] {
+  const da = isDetail(a)
+  const db = isDetail(b)
+
+  if ((da || a === undefined) && (db || b === undefined) && (da || db)) {
+    if (!same(a, b)) {
+      if (row) h.rows.set(label, (h.rows.get(label) ?? 0) + 1)
+      else h.facts.push(label)
+      h.keys.push(key)
+    }
+
+    return [undefined, undefined]
+  }
+  if (da || db) return paired(da ? a.value : a, db ? b.value : b, h, key, label)
+
+  const ra = a === undefined ? [] : rowsOf(a)
+  const rb = b === undefined ? [] : rowsOf(b)
+
+  if (ra && rb && (Array.isArray(a) || Array.isArray(b))) {
+    const id = identity([ra, rb].filter((rows) => rows.length))
+
+    if (!id) return [revealed(a), revealed(b)]
+
+    const named = (rows: Row[]) => new Map(rows.map((r) => [JSON.stringify(inner(r)[id]), r]))
+    const ma = named(ra)
+    const mb = named(rb)
+    const pairs = new Map([...new Set([...ma.keys(), ...mb.keys()])].map((k) => [k, paired(ma.get(k), mb.get(k), h, keyOf(key, JSON.parse(k)), label, true)]))
+    const side = (rows: Row[], i: 0 | 1) => rows.flatMap((r) => (pairs.get(JSON.stringify(inner(r)[id]))![i] === undefined ? [] : [pairs.get(JSON.stringify(inner(r)[id]))![i]!]))
+
+    return [a === undefined ? undefined : side(ra, 0), b === undefined ? undefined : side(rb, 1)]
+  }
+  if ((isRow(a) || a === undefined) && (isRow(b) || b === undefined)) {
+    const oa: Row = {}
+    const ob: Row = {}
+
+    for (const k of new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])) {
+      const [x, y] = paired((a as Row | undefined)?.[k], (b as Row | undefined)?.[k], h, join(key, k), join(label, k))
+
+      if (x !== undefined) oa[k] = x
+      if (y !== undefined) ob[k] = y
+    }
+
+    return [a === undefined ? undefined : (oa as Json), b === undefined ? undefined : (ob as Json)]
+  }
+
+  return [revealed(a), revealed(b)]
+}
+
+/**
+ * A tab changed: opened, in one line, its heading and its actions by name, and where to read it; closed, in one line;
+ * otherwise its row's changes, and its facts' relative to it, where detail that stays detail is only counted.
  */
 function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
-  const before = new Map(a.map((t) => [t.at, t]))
-  const now = new Set(b.map((t) => t.at))
+  // A tab is its path and its number: one closed and another opened at the same path are two.
+  const id = (t: Tab) => `${t.at} ${String(t.n)}`
+  const before = new Map(a.map((t) => [id(t), t]))
+  const now = new Set(b.map(id))
 
-  for (const t of a.filter((t) => !now.has(t.at))) out.push({ line: `- ${heading(t)} closed`, keys: [keyOf("tabs", t.at)], where: "/" })
+  for (const t of a.filter((t) => !now.has(id(t)))) out.push({ line: `- ${heading(t)} closed`, keys: [keyOf("tabs", t.at)], where: "/" })
   for (const t of b) {
-    const old = before.get(t.at)
+    const old = before.get(id(t))
     const key = keyOf("tabs", t.at)
 
     if (!old) {
-      for (const line of tabLines(t, say)) out.push({ line, keys: [key], where: t.at, tab: `+ ${heading(t)}` })
+      const actions = Array.isArray(t.actions) && t.actions.length ? `, actions: ${names(t.actions)}` : ""
+
+      out.push({ line: `+ ${heading(t)}${actions}; read ${t.at}`, keys: [key], where: t.at })
       continue
     }
     if (same(old, t)) continue
@@ -430,7 +595,12 @@ function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
         out.push({ line: `actions: ${moved.join(", ") || `order now ${is.join(", ")}`}`, keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
       } else walk(old[k], t[k], { ...at, label: k, key: `${key}.${k}` }, out)
     }
-    walk(old.facts, t.facts, { ...at, key: `${key}.facts` }, out)
+
+    const h = hid()
+    const [fa, fb] = paired(old.facts, t.facts, h, `${key}.facts`)
+
+    walk(fa, fb, { ...at, key: `${key}.facts` }, out)
+    if (h.keys.length) out.push({ line: `detail changed: ${counted(h, "in")}; read ${t.at}`, keys: h.keys, where: t.at, tab: at.tab! })
   }
 
   return out
@@ -441,10 +611,20 @@ export function diff(before: Json | undefined, now: Json | undefined, say: Say =
   const ta = tabsOf(before)
   const tb = tabsOf(now)
 
-  if (!ta || !tb) return walk(before, now, { label: "", key: "", where: say.path ?? "/", say }, [])
+  if (!ta || !tb) {
+    const h = hid()
+    const [a, b] = paired(before, now, h, "")
+    const out = walk(a, b, { label: "", key: "", where: say.path ?? "/", say }, [])
 
-  const { [NEEDS]: na, ...a } = own(before as Row)
-  const { [NEEDS]: nb, ...b } = own(now as Row)
+    if (h.keys.length) out.push({ line: `detail changed: ${counted(h, "in")}; read ${say.path ?? "/"}`, keys: h.keys, where: say.path ?? "/" })
+
+    return out
+  }
+
+  // The root's own actions are the shell's standing ones, told whole: one offered once a tab is open is no event.
+  const unhandled = (row: Row) => Object.fromEntries(Object.entries(row).filter(([, v]) => !isHandle(v))) as Row
+  const { [NEEDS]: na, ...a } = unhandled(own(before as Row))
+  const { [NEEDS]: nb, ...b } = unhandled(own(now as Row))
   const ma = needsOf(na ?? [])
   const mb = needsOf(nb ?? [])
   const out = ma && mb ? needsChanged(ma, mb) : walk(na, nb, { label: NEEDS, key: NEEDS, where: "/", say }, [])

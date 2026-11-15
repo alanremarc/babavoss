@@ -128,8 +128,6 @@ function drawn(value: Json | undefined, address: string): Json {
     Object.entries(value).map(([k, v]) => [k, k === "at" && typeof v === "string" && (v === address || v.startsWith(`${address}/`)) ? v.slice(address.length) || "/" : drawn(v, address)]),
   )
 }
-/** The tab a path is in, /tabs/N. */
-const tabIn = (path: string) => /^\/tabs\/\d+/.exec(path)?.[0]
 
 /** Plays `scenario` on a demo project of its own, made and removed here; aborted, it stops after the step under way. */
 export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
@@ -213,7 +211,13 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       return undefined
     }
   }
-  const tabsOf = (root: Json | undefined) => (root as { tabs?: { at: string; surface: string }[] } | undefined)?.tabs ?? []
+  const tabsOf = (root: Json | undefined) => (root as { tabs?: { at: string; n: number; surface: string }[] } | undefined)?.tabs ?? []
+  /** The address of the open tab a path is in, by that address or by its number, /tabs/N. */
+  const tabIn = (root: Json | undefined, path: string) => {
+    const under = (at: string) => path === at || path.startsWith(`${at}/`)
+
+    return tabsOf(root).find((t) => under(t.at) || under(`/tabs/${t.n}`))?.at
+  }
   /** The project as the page has it: /, what /activity added since the last look, and each open tab at /. */
   let seen = 0
   const look = async () => {
@@ -233,8 +237,8 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
   const shownAfter = (step: Step, root: Json | undefined, tabs: Drawn[]) => {
     const point = (root as { pointed?: { at: string; n: number } } | undefined)?.pointed
 
-    if (step.kind === "act") front = tabIn(step.path)
-    else if (point && point.n !== pointed) front = tabIn(point.at)
+    if (step.kind === "act") front = tabIn(root, step.path)
+    else if (point && point.n !== pointed) front = tabIn(root, point.at)
     pointed = point?.n ?? pointed
     if (front && !tabs.some((t) => t.at === front)) front = undefined
 
@@ -321,9 +325,10 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         }
       }
       case "go": {
-        const point = ((await page("/")) as { pointed?: { at: string } } | undefined)?.pointed
+        const root = await page("/")
+        const point = (root as { pointed?: { at: string } } | undefined)?.pointed
 
-        front = point && tabIn(point.at)
+        front = point && tabIn(root, point.at)
 
         return { who: "person", did: `goes where the agent pointed them${point ? `: ${point.at}` : ", but it pointed nowhere"}`, tellings: [] }
       }

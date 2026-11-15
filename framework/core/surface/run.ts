@@ -9,9 +9,9 @@ export type Answer = { outcome: "written"; view: View } | { outcome: "refused"; 
 export type Saved = { model: unknown }
 /**
  * A commit's cause: an actor's call, at its path, or an event reported by a command, which carries the actor that started
- * it. A commit and the notices it gave share one cause.
+ * it. A commit and the notices it gave share one cause. `quiet` where the update said the commit is bookkeeping.
  */
-export type Cause = { actor: string; call: boolean; path?: string }
+export type Cause = { actor: string; call: boolean; path?: string; quiet?: true }
 /** A notice as heard: its text, the path it is about and who says it where given, and the cause of the commit that gave it. */
 export type Noticed = { text: string; at?: string; from?: string; cause: Cause }
 export type Ports<M> = {
@@ -30,6 +30,8 @@ export interface Running<M> {
   cause(): Cause | undefined
   /** The view at `path` as an actor sees it; the person by default. */
   read(path: string, actor?: string): View | undefined
+  /** What a read or a call of a path with nothing at it is answered with: the surface's word for it, else that nothing is there. */
+  absent(path: string): string
   /** An actor's call: refused unless the view at `path` offers the handle with these fixed args and the open args fit. */
   call(path: string, name: string, args: Args, actor: string): Promise<Answer>
   /** Told after every change of the model, every command started or ended, and once on failure. */
@@ -113,6 +115,13 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     return p
   }
   const read = (path: string, actor = "person") => surface.view(model, path, actor)
+  const absent = (path: string) => {
+    try {
+      return surface.absent?.(model, path) ?? `nothing at ${path}`
+    } catch {
+      return `nothing at ${path}`
+    }
+  }
   const commit = (next: M, by: Cause) => {
     ports.save({ model: next })
     model = next
@@ -148,7 +157,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
   const event = (e: E, actor: string) => {
     if (stopped) return
 
-    const by: Cause = { actor, call: false }
+    let by: Cause = { actor, call: false }
     let r: ReturnType<typeof surface.update>
 
     try {
@@ -159,6 +168,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         return
       }
+      if (r.quiet) by = { ...by, quiet: true }
       commit(r.model, by)
     } catch (error) {
       fail(error)
@@ -239,6 +249,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     cause: () => cause,
     failure: () => failure,
     read,
+    absent,
     call: (path, name, args, actor) =>
       enqueue((): Answer => {
         if (stopped) return refused(failure ?? "surface stopped")
@@ -252,14 +263,13 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
           return refused(failure!)
         }
-        if (!view) return refused(`nothing at ${path}`)
+        if (!view) return refused(absent(path))
 
         const admitted = admit(view, path, name, args)
 
         if (typeof admitted === "string") return refused(admitted)
 
         const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now() }
-        const by: Cause = { actor, call: true, path }
         let r: ReturnType<typeof surface.update>
 
         try {
@@ -268,6 +278,8 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
           return refused(message(e))
         }
         if ("refused" in r) return refused(r.refused)
+
+        const by: Cause = { actor, call: true, path, ...(r.quiet && { quiet: true as const }) }
 
         let answer: View
 

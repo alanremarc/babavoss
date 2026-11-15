@@ -7,7 +7,7 @@
 import { watch, type FSWatcher } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { action, surface, view, type Notice, type Update } from "babavoss/core/index.ts"
+import { action, detail, surface, view, type Notice, type Update } from "babavoss/core/index.ts"
 import { delta, masked, said, size, sum, together, type Delta, type Size } from "./measure.ts"
 import { play, type Play, type Played } from "./play.ts"
 import { GROUPS, SCENARIOS, slow, type Scenario } from "./scenarios.ts"
@@ -98,7 +98,8 @@ const row = (m: Model, scenario: Scenario) => {
     group: GROUPS[scenario.group],
     title: scenario.title,
     steps: scenario.steps.length,
-    ...total,
+    // A scenario's totals are detail: read at the tab's path, and only counted in the shell's present; how they moved is not.
+    ...(total && { lines: detail(total.lines), chars: detail(total.chars), tokens: detail(total.tokens) }),
     ...(moved && { delta: against(m, play, moved.delta, moved.texts) }),
     ...(play?.error && { error: play.error }),
   }
