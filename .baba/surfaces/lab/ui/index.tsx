@@ -1,6 +1,7 @@
 // The lab's page: the timeline of what entered the agent under test's context as the main column, a chat to drive it at
 // its foot, and the sandbox's own root page beside it, live, where the person acts as the person. Hook injections and
-// the word's answers stand out and open in full; other tool calls stay folded. What is open is this tab's own.
+// the word's answers stand out and open in full; other tool calls stay folded. What is open is this tab's own; the entry
+// in the tab's route, /entries/N, is open too and scrolled to, so a refresh or the agent's pointing lands on it.
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
@@ -75,14 +76,19 @@ const Pre = ({ children, tone }: { children: string; tone?: "error" }) => (
   </pre>
 )
 
-function Entry({ row, open, toggle }: { row: Row; open: boolean; toggle: () => void }) {
+function Entry({ row, open, toggle, here }: { row: Row; open: boolean; toggle: () => void; here?: boolean }) {
   const look = LOOK[row.kind]
   const inline = INLINE.has(row.kind)
   const entry = useEntry(row.at, row.size, open || inline)
+  const item = useRef<HTMLLIElement>(null)
+
+  useEffect(() => {
+    if (here) item.current?.scrollIntoView({ block: "center" })
+  }, [here])
 
   if (row.kind === "turn")
     return (
-      <li className="text-muted-foreground flex items-center gap-2 px-3 py-1.5 text-[11px] tabular-nums">
+      <li ref={item} className="text-muted-foreground flex items-center gap-2 px-3 py-1.5 text-[11px] tabular-nums">
         <span className="bg-border h-px flex-1" />
         <span className={entry?.error ? "text-destructive" : "font-medium"}>{row.title}</span>
         <TurnFacts row={row} />
@@ -91,7 +97,7 @@ function Entry({ row, open, toggle }: { row: Row; open: boolean; toggle: () => v
     )
 
   return (
-    <li className={`border-l-2 ${look.edge}`}>
+    <li ref={item} aria-current={here || undefined} className={`border-l-2 ${look.edge} ${here ? "bg-accent/40" : ""}`}>
       <button
         type="button"
         onClick={inline ? undefined : toggle}
@@ -152,7 +158,8 @@ function TurnFacts({ row }: { row: Row }) {
 export default function Lab() {
   const { view, error } = useLive<Root>("/")
   const { view: timeline } = useLive<{ entries: Row[] }>("/entries")
-  const { call } = useTab()
+  const { call, route, navigate } = useTab()
+  const routed = Number(/^\/entries\/(\d+)$/.exec(route)?.[1] ?? NaN)
   const [model, setModel] = useState("haiku")
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [refused, setRefused] = useState("")
@@ -169,14 +176,21 @@ export default function Lab() {
 
     return reason
   }
-  const toggle = (i: number) =>
+  // Opening an entry puts it in the route; folding the routed one takes it out.
+  const toggle = (i: number) => {
+    const opening = !open.has(i) && i !== routed
+
+    if (opening) navigate(`/entries/${i}`)
+    else if (i === routed) navigate("/")
     setOpen((was) => {
       const next = new Set(was)
 
-      if (!next.delete(i)) next.add(i)
+      if (opening) next.add(i)
+      else next.delete(i)
 
       return next
     })
+  }
   const injections = entries.filter((e) => e.kind === "hook" || e.kind === "word").map((e) => e.i)
   const allOpen = injections.length > 0 && injections.every((i) => open.has(i))
 
@@ -237,7 +251,13 @@ export default function Lab() {
             {entries.length ? (
               <ol className="flex flex-col gap-px py-2">
                 {entries.map((row) => (
-                  <Entry key={`${view?.run}-${row.i}`} row={row} open={open.has(row.i)} toggle={() => toggle(row.i)} />
+                  <Entry
+                    key={`${view?.run}-${row.i}`}
+                    row={row}
+                    open={open.has(row.i) || row.i === routed}
+                    here={row.i === routed}
+                    toggle={() => toggle(row.i)}
+                  />
                 ))}
               </ol>
             ) : (
