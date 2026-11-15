@@ -1,22 +1,23 @@
 // The design document's page. The content is what the agent is given, and when: the selected scenario as one timeline,
-// an entry per text that reached the agent, its moment in plain words, its carrier, its size and the tokens given so far,
-// the text verbatim and folded where long; between them, quiet lines for what happened without the agent being told. At
-// the right: the person's page as it stood after the selected step, drawn by the demo surfaces' own pages from what the
-// play recorded; the scenarios; the demo project's shape, read from its surfaces; and the pin. The scenario and step are
-// the tab's route, /scenarios/NAME/N, so a refresh and the agent's pointing land on them; up and down, or j and k, move
-// the step. How a changed text is compared with the pin, wrapping and folding are the page's own, in the timeline's toolbar.
+// an entry per text that reached the agent, its moment in plain words and its tokens, the text shown as it reads: its
+// prose as markdown, what the framework prints dense and coloured (text.tsx), or its source exactly; between them, quiet
+// lines for what happened without the agent being told. At the right: the person's page as it stood after the selected
+// step, drawn by the demo surfaces' own pages from what the play recorded; the scenarios, canonical and noise; the demo
+// project's shape, folded; and the pin, in a line. The scenario and step are the tab's route, /scenarios/NAME/N, so a
+// refresh and the agent's pointing land on them; up and down, or j and k, move the step. Preview or source, wrapping,
+// folding and how a changed text is compared are the page's own, in one menu; what is not needed at a glance is on hover.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { BellIcon, BookOpenTextIcon, ChevronDownIcon, ChevronRightIcon, PinIcon, UserIcon } from "lucide-react"
+import { BellIcon, BookOpenTextIcon, ChevronDownIcon, ChevronRightIcon, EllipsisIcon, UserIcon } from "lucide-react"
 import type { Handle, Json } from "babavoss/core/index.ts"
-import { Button } from "babavoss/kit/index.ts"
+import { Popover, PopoverContent, PopoverTrigger } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
-import { lineDiff } from "../src/measure.ts"
 import type { Page } from "../src/play.ts"
 import type { Shape } from "../src/shape.ts"
 import BuildPage, { type BuildView } from "../demo/surfaces/build/ui/view.tsx"
 import { icon as buildIcon } from "../demo/surfaces/build/ui/index.tsx"
 import TasksPage, { type TasksView } from "../demo/surfaces/tasks/ui/view.tsx"
 import { icon as tasksIcon } from "../demo/surfaces/tasks/ui/index.tsx"
+import { Preview, Source, type Compare } from "./text.tsx"
 
 type Row = { at: string; name: string; group: string; title: string; steps: number; lines?: number; chars?: number; tokens?: number; delta?: string; error?: string }
 type Root = { scenarios: Row[]; playing?: true; failure?: string; pinned?: string; play?: Handle; pin?: Handle; unpin?: Handle }
@@ -24,17 +25,17 @@ type Demo = { about: string; surfaces: Shape[] | string }
 type Telling = { carrier: string; lines: number; chars: number; tokens: number; delta?: string; text: string; pinned?: string }
 type Step = { at: string; n: number; who: string; did: string; timing?: string; unhooked?: string; tellings: Telling[]; page: Page }
 type Timeline = { name: string; title: string; about: string; lines?: number; chars?: number; tokens?: number; delta?: string; error?: string; steps: Step[] }
-type Compare = "text" | "diff" | "side"
+type Mode = "preview" | "source"
 
 export const icon = <BookOpenTextIcon aria-hidden />
 
-/** A text longer than this is folded, to the height of about eight lines. */
-const LONG = 12
-const FOLDED = "max-h-38 overflow-hidden"
-const COMPARES: [Compare, string, string][] = [
-  ["text", "Now", "Now only"],
-  ["diff", "Diff", "Line diff against the pin"],
-  ["side", "Side by side", "Pinned and now side by side"],
+/** A text longer than this many lines is folded, to a height of about ten. */
+const LONG = 14
+const FOLDED = "max-h-52 overflow-hidden [mask-image:linear-gradient(to_bottom,black_75%,transparent)]"
+const COMPARES: [Compare, string][] = [
+  ["diff", "Line diff"],
+  ["side", "Side by side"],
+  ["text", "Now only"],
 ]
 /** The demo surfaces' own pages, each a function of its view at /, and their tabs' icons. */
 const PAGES: Record<string, { icon: ReactNode; draw: (view: Json) => ReactNode }> = {
@@ -46,6 +47,7 @@ const WORD = /^\S*\/baba\b/
 /** The word as the person reads it: `baba …`, wherever the project keeps it. */
 const call = (text: string) => text.replace(WORD, "baba")
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const quiet = "text-muted-foreground hover:text-foreground outline-none focus-visible:text-foreground"
 
 /** The moment a text reached the agent, in plain words, the call in it apart, and what carried it, as a quiet tag. */
 function momentOf(step: Step, telling: Telling): { when: string; code?: string; tag: string } {
@@ -119,81 +121,74 @@ function gapOf(step: Step): ReactNode {
   return <>{capital(step.did)} — nothing told</>
 }
 
-const Delta = ({ delta }: { delta?: string }) =>
-  delta === undefined ? null : (
-    <span className={`text-meta tabular-nums whitespace-nowrap ${delta === "same" ? "text-muted-foreground/70" : delta === "new" ? "text-info" : "text-warning"}`}>
-      {delta === "same" ? "= pin" : delta === "new" ? "new: not pinned" : delta}
+const Delta = ({ delta, short }: { delta?: string; short?: boolean }) =>
+  delta === undefined || (short && delta === "same") ? null : (
+    <span
+      title={delta === "new" ? "Not there when the pin was taken: pin again to take it in" : delta === "same" ? "The same as the pin" : delta}
+      className={`text-meta tabular-nums whitespace-nowrap ${delta === "same" ? "text-muted-foreground/60" : delta === "new" ? "text-info" : "text-warning"}`}
+    >
+      {delta === "same" ? "= pin" : delta === "new" ? "new" : short ? (/^([+-]\d+) tokens/.exec(delta)?.[1]?.concat(" tok") ?? "changed") : delta}
     </span>
   )
 
-/** Lines of text, each as it is; wrapped at the block's edge, a wrapped line hangs, or kept whole and scrolled sideways. */
-function Lines({ lines, wrap, mark }: { lines: string[]; wrap: boolean; mark?: (i: number) => string }) {
+/** A choice of two or three, as quiet words; the chosen one in the foreground. */
+function Choice<T extends string>({ value, options, set, label }: { value: T; options: [T, string][]; set: (v: T) => void; label: string }) {
   return (
-    <pre className={`px-3 py-2 font-mono text-meta leading-relaxed ${wrap ? "whitespace-pre-wrap break-words" : "overflow-x-auto whitespace-pre"}`}>
-      {lines.map((line, i) => (
-        <div key={i} className={`${wrap ? "pl-[2ch] -indent-[2ch]" : ""} ${mark?.(i) ?? ""}`}>
-          {line || " "}
-        </div>
+    <span role="group" aria-label={label} className="flex items-center gap-1.5">
+      {options.map(([id, name]) => (
+        <button key={id} type="button" aria-pressed={value === id} onClick={() => set(id)} className={`${quiet} aria-pressed:text-foreground text-meta`}>
+          {name}
+        </button>
       ))}
-    </pre>
+    </span>
   )
 }
+const MODES: [Mode, string][] = [
+  ["preview", "Preview"],
+  ["source", "Source"],
+]
 
-/** One text the agent was given: when, what carried it, its size and the tokens by then; then the text, now or against the pin, folded where long. */
-function Entry(props: { step: Step; telling: Telling; total: number; compare: Compare; wrap: boolean; open: boolean; toggle: () => void }) {
-  const { step, telling, total, compare, wrap, open, toggle } = props
+/** One text the agent was given: when, what carried it, its tokens; then the text, as it reads or as it is, folded where long. */
+function Entry(props: { step: Step; telling: Telling; total: number; mode: Mode; setMode: (m: Mode) => void; compare: Compare; wrap: boolean; open: boolean; toggle: () => void; onPath: (path: string) => boolean }) {
+  const { step, telling, total, mode, setMode, compare, wrap, open, toggle, onPath } = props
   const { when, code, tag } = momentOf(step, telling)
   const pinned = telling.pinned
-  const diff = pinned !== undefined && compare === "diff" ? lineDiff(pinned, telling.text) : undefined
-  const all = diff ? diff.map((d) => `${d.op} ${d.line}`) : telling.text.split("\n")
-  const long = all.length > LONG
-  const body =
-    pinned !== undefined && compare === "side" ? (
-      <div className="grid grid-cols-2 divide-x">
-        {[
-          ["pinned", pinned],
-          ["now", telling.text],
-        ].map(([label, text]) => (
-          <div key={label} className="min-w-0">
-            <div className="text-muted-foreground px-3 pt-1 text-badge uppercase">{label}</div>
-            <Lines lines={text!.split("\n")} wrap={wrap} />
-          </div>
-        ))}
-      </div>
-    ) : (
-      <Lines lines={all} wrap={wrap} mark={diff && ((i) => (diff[i]!.op === "+" ? "bg-success/10 text-success" : diff[i]!.op === "-" ? "bg-destructive/10 text-destructive" : ""))} />
-    )
+  const long = telling.lines > LONG
 
   return (
-    <div className="flex flex-col gap-1 py-1.5">
-      <div className="flex min-w-0 items-center gap-2 text-body">
+    <div className="group/entry flex flex-col gap-1 py-1.5">
+      <div className="flex min-w-0 items-baseline gap-2 text-body">
         <span className="min-w-0 truncate">
           <span className="font-medium">{when}</span>
           {code && <code className="bg-muted ml-1.5 rounded-sm px-1 py-px font-mono text-meta">{code}</code>}
         </span>
-        {tag && <span className="text-muted-foreground shrink-0 rounded-sm border px-1 text-badge whitespace-nowrap">{tag}</span>}
-        <span className="text-muted-foreground ml-auto shrink-0 text-meta tabular-nums whitespace-nowrap">
-          {telling.lines} {telling.lines === 1 ? "line" : "lines"} · {telling.chars.toLocaleString("en")} chars · ~{telling.tokens.toLocaleString("en")} tok
-        </span>
-        <Delta delta={telling.delta} />
-        <span className="text-muted-foreground w-20 shrink-0 text-right text-meta tabular-nums whitespace-nowrap" title="Tokens given so far in the scenario">
-          Σ {total.toLocaleString("en")}
+        {tag && <span className="text-muted-foreground/70 shrink-0 text-badge whitespace-nowrap max-sm:hidden">{tag.replace(/ hook$/, "")}</span>}
+        <span className="ml-auto flex shrink-0 items-baseline gap-2.5">
+          <span className="opacity-0 transition-opacity group-focus-within/entry:opacity-100 group-hover/entry:opacity-100">
+            <Choice value={mode} options={MODES} set={setMode} label="Show the text" />
+          </span>
+          <Delta delta={telling.delta} />
+          <span className="text-muted-foreground text-meta tabular-nums whitespace-nowrap" title={`${telling.lines} lines · ${telling.chars.toLocaleString("en")} chars · ${total.toLocaleString("en")} tokens given so far`}>
+            ~{telling.tokens.toLocaleString("en")} tok
+          </span>
         </span>
       </div>
-      <div className="bg-card relative min-w-0 overflow-hidden rounded-md border">
-        <div className={long && !open ? FOLDED : ""}>{body}</div>
+      <div className="bg-muted/30 min-w-0 overflow-hidden rounded-md">
+        <div className={`px-3 py-2 ${long && !open ? FOLDED : ""}`}>
+          {mode === "source" ? <Source text={telling.text} pinned={pinned} compare={compare} wrap={wrap} /> : <Preview text={telling.text} pinned={pinned} wrap={wrap} onPath={onPath} />}
+        </div>
         {long && (
-          <div className={`flex justify-center ${open ? "border-t" : "from-card via-card/90 absolute inset-x-0 bottom-0 bg-gradient-to-t to-transparent pt-8"}`}>
+          <div className="flex justify-center">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 toggle()
               }}
-              className="text-muted-foreground hover:text-foreground flex h-6 items-center gap-1 px-2 text-meta outline-none"
+              className={`${quiet} flex h-6 items-center gap-1 px-2 text-meta`}
             >
               {open ? <ChevronDownIcon className="size-3" aria-hidden /> : <ChevronRightIcon className="size-3" aria-hidden />}
-              {open ? "Fold" : `Show all ${all.length} lines`}
+              {open ? "Fold" : `All ${telling.lines} lines`}
             </button>
           </div>
         )}
@@ -203,8 +198,7 @@ function Entry(props: { step: Step; telling: Telling; total: number; compare: Co
 }
 
 const Gap = ({ children }: { children: ReactNode }) => (
-  <div className="text-muted-foreground flex min-h-6 items-center gap-2 py-0.5 text-meta">
-    <span className="bg-border h-px w-3 shrink-0" aria-hidden />
+  <div className="text-muted-foreground flex min-h-6 items-center py-0.5 text-meta">
     <span className="min-w-0">{children}</span>
   </div>
 )
@@ -230,12 +224,28 @@ function changedIn(now: Json, before: Json | undefined): Set<string> {
   return out
 }
 
-/** The person's page after the selected step: a strip of the open tabs, and the one in front drawn by its surface's own page, inert. */
-function PagePreview({ step, before }: { step?: Step; before?: Step }) {
+/** A view no demo page draws, as its facts. */
+function Facts({ view }: { view: Json }) {
+  const facts = Object.entries(view && typeof view === "object" && !Array.isArray(view) ? view : {}).filter(([, v]) => !(v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle"))
+
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 p-3 font-mono text-meta">
+      {facts.map(([k, v]) => (
+        <div key={k} className="contents">
+          <dt className="text-muted-foreground">{k}</dt>
+          <dd className="truncate">{JSON.stringify(v)}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** The person's page after the selected step: its tabs, and the one in front, or the one a path picked, drawn by its surface's own page, inert. */
+function PagePreview({ step, before, peek }: { step?: Step; before?: Step; peek?: string }) {
   const frame = useRef<HTMLDivElement | null>(null)
   const page = step?.page
   const tabs = page?.tabs ?? []
-  const front = tabs.find((t) => t.at === page?.shown)
+  const front = tabs.find((t) => t.at === peek) ?? tabs.find((t) => t.at === page?.shown)
   const earlier = before?.page.tabs ?? []
   const changed = useMemo(() => (front ? changedIn(front.view, earlier.find((t) => t.at === front.at)?.view) : new Set<string>()), [front, earlier])
   const fresh = !earlier.some((t) => t.at === front?.at)
@@ -250,15 +260,14 @@ function PagePreview({ step, before }: { step?: Step; before?: Step }) {
   })
 
   return (
-    <section className="bg-sidebar sticky top-0 z-10 flex flex-col gap-2 border-b px-3 pt-2 pb-3" aria-label="The page at this step">
-      <h2 className="text-muted-foreground flex h-6 items-center gap-2 text-meta font-medium">
-        The page at step {step?.n ?? "–"}
-        <span className="rounded-sm border px-1 text-badge font-normal">snapshot</span>
-        {page?.asleep && <span className="text-badge font-normal">the root is asleep: as it last was</span>}
+    <section className="bg-sidebar sticky top-0 z-10 flex flex-col gap-1.5 px-3 pt-2 pb-3" aria-label="The page after this step">
+      <h2 className="text-muted-foreground flex h-5 items-center gap-2 text-meta">
+        The page after step {step?.n ?? "–"}
+        {page?.asleep && <span className="text-muted-foreground/70">· asleep, as it last was</span>}
       </h2>
-      <div className="bg-background flex h-48 flex-col overflow-hidden rounded-md border shadow-xs">
-        <div className="bg-muted/40 flex h-7 shrink-0 items-center gap-0.5 border-b px-1">
-          <span className="text-muted-foreground px-1.5 text-meta">Home</span>
+      <div className="bg-background flex h-48 flex-col overflow-hidden rounded-md border">
+        <div className="flex h-6 shrink-0 items-center gap-0.5 border-b px-1">
+          <span className="text-muted-foreground/70 px-1.5 text-meta">Home</span>
           {tabs.map((t) => {
             const view = (t.view ?? {}) as { title?: string; attention?: { who?: string } }
             const isNew = !earlier.some((e) => e.at === t.at)
@@ -266,7 +275,8 @@ function PagePreview({ step, before }: { step?: Step; before?: Step }) {
             return (
               <span
                 key={t.at}
-                className={`flex h-5 items-center gap-1 rounded-sm px-1.5 text-meta [&_svg]:size-3 ${t.at === front?.at ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"} ${isNew ? "ring-primary/50 ring-1" : ""}`}
+                title={t.at}
+                className={`flex h-5 items-center gap-1 rounded-sm px-1.5 text-meta [&_svg]:size-3 ${t.at === front?.at ? "bg-muted text-foreground" : "text-muted-foreground"} ${isNew ? "ring-primary/40 ring-1" : ""}`}
               >
                 {PAGES[t.surface]?.icon}
                 {view.title ?? t.surface}
@@ -275,13 +285,13 @@ function PagePreview({ step, before }: { step?: Step; before?: Step }) {
             )
           })}
         </div>
-        <div ref={frame} inert className="min-h-0 flex-1 overflow-auto select-none [&_[data-changed]]:bg-primary/10 [&_[data-changed]]:ring-primary/30 [&_[data-changed]]:ring-1">
+        <div ref={frame} inert className="min-h-0 flex-1 overflow-auto select-none [&_[data-changed]]:bg-primary/10">
           {!step ? (
             <p className="text-muted-foreground p-3 text-body">Not played yet.</p>
           ) : !front ? (
             <p className="text-muted-foreground p-3 text-body">No tab is open: the page shows Home.</p>
           ) : (
-            (PAGES[front.surface]?.draw(front.view) ?? <p className="text-muted-foreground p-3 text-body">No page for {front.surface}.</p>)
+            (PAGES[front.surface]?.draw(front.view) ?? <Facts view={front.view} />)
           )}
         </div>
       </div>
@@ -289,40 +299,34 @@ function PagePreview({ step, before }: { step?: Step; before?: Step }) {
   )
 }
 
-/** The demo project's shape, as /demo reads it from its surfaces: each surface's places, their facts and actions. */
+/** The demo project's shape, as /demo reads it from its surfaces, folded until asked for: each surface's places, their facts and actions. */
 function DemoShape({ demo }: { demo?: Demo }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const surfaces = Array.isArray(demo?.surfaces) ? demo.surfaces : []
 
   return (
-    <section className="flex flex-col pb-3" aria-label="Demo project">
-      <button type="button" onClick={() => setOpen(!open)} className="text-muted-foreground hover:text-foreground flex h-6 items-center gap-1 px-3 text-left text-meta font-medium outline-none">
+    <section className="flex flex-col" aria-label="Demo project">
+      <button type="button" onClick={() => setOpen(!open)} title={demo?.about} className={`${quiet} flex h-7 items-center gap-1 px-3 text-left text-meta`}>
         {open ? <ChevronDownIcon className="size-3" aria-hidden /> : <ChevronRightIcon className="size-3" aria-hidden />}
         Demo project
       </button>
       {open && (
-        <div className="flex flex-col gap-3 px-3">
-          <p className="text-muted-foreground text-body">{demo?.about.split(/(?<=\.) /)[0] ?? "Not played yet."}</p>
+        <div className="flex flex-col gap-3 px-3 pb-3">
           {surfaces.map((s) => (
             <div key={s.name} className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 text-body [&_svg]:size-3.5">
+              <div className="flex items-center gap-1.5 text-body [&_svg]:size-3.5" title={s.description}>
                 {PAGES[s.name]?.icon}
-                <span className="font-mono font-medium">{s.name}</span>
+                <span className="font-mono">{s.name}</span>
               </div>
-              <p className="text-muted-foreground text-meta">{s.description}</p>
-              <ul className="flex flex-col gap-1.5 border-l pl-2.5">
+              <ul className="flex flex-col gap-1.5 pl-5">
                 {s.views.map((v) => (
                   <li key={v.path} className="flex flex-col gap-0.5">
                     <span className="font-mono text-meta">{v.path}</span>
                     <span className="text-muted-foreground text-meta">{v.facts.join(" · ")}</span>
                     {v.actions.length > 0 && (
-                      <span className="flex flex-wrap gap-1">
+                      <span className="flex flex-wrap gap-x-2 font-mono text-meta [&_svg]:size-2.5">
                         {v.actions.map((a) => (
-                          <span
-                            key={a.name}
-                            title={`${a.description}${a.ask ? " — an ask: the person's alone" : ""}${a.notice ? " — a call gives a notice" : ""}`}
-                            className={`flex h-5 items-center gap-1 rounded-sm border px-1.5 font-mono text-meta [&_svg]:size-2.5 ${a.ask ? "border-warning/40 bg-warning/10" : ""}`}
-                          >
+                          <span key={a.name} title={`${a.description}${a.ask ? " — an ask: the person's alone" : ""}${a.notice ? " — a call gives a notice" : ""}`} className={`flex items-center gap-0.5 ${a.ask ? "text-warning" : ""}`}>
                             {a.name}
                             {a.inputs.length > 0 && <span className="text-muted-foreground">({a.inputs.join(", ")})</span>}
                             {a.ask && <UserIcon aria-label="ask" />}
@@ -333,15 +337,10 @@ function DemoShape({ demo }: { demo?: Demo }) {
                     )}
                   </li>
                 ))}
-                {s.itself && <li className="text-muted-foreground text-meta">changes by itself: its command {s.itself.map((c) => <code key={c} className="font-mono">{c}</code>)}</li>}
+                {s.itself && <li className="text-muted-foreground text-meta">changes by itself: {s.itself.join(", ")}</li>}
               </ul>
             </div>
           ))}
-          {surfaces.length > 0 && (
-            <p className="text-muted-foreground flex items-center gap-2 text-badge [&_svg]:size-2.5">
-              <UserIcon aria-hidden /> an ask, the person's alone <BellIcon aria-hidden /> a call gives a notice
-            </p>
-          )}
         </div>
       )}
     </section>
@@ -355,9 +354,12 @@ export default function Design() {
   const { view: demo } = useLive<Demo>("/demo")
   const { call: callTab, route, navigate, active } = useTab()
   const [compare, setCompare] = useState<Compare>("diff")
+  const [mode, setMode] = useState<Mode>("preview")
+  const [modes, setModes] = useState<Record<string, Mode>>({})
   const [wrap, setWrap] = useState(true)
   const [unfolded, setUnfolded] = useState(false)
   const [folds, setFolds] = useState<Record<string, boolean>>({})
+  const [peek, setPeek] = useState<{ step: number; at: string }>()
   const [refused, setRefused] = useState("")
   const scenarios = view?.scenarios ?? []
   const [, name, picked] = /^\/scenarios\/([^/]+)(?:\/(\d+))?/.exec(route) ?? []
@@ -366,7 +368,7 @@ export default function Design() {
   const steps = timeline?.name === current?.name && Array.isArray(timeline?.steps) ? timeline.steps : []
   const selected = steps.find((s) => String(s.n) === picked) ?? steps[0]
   const focused = useRef<HTMLLIElement | null>(null)
-  const pinned = steps.some((s) => s.tellings.some((t) => t.pinned !== undefined))
+  const differs = steps.some((s) => s.tellings.some((t) => t.pinned !== undefined))
   const act = async (handle?: Handle) => {
     if (!handle) return
 
@@ -375,6 +377,16 @@ export default function Design() {
     setRefused(answer.outcome === "refused" ? answer.reason : "")
   }
   const go = (n: number) => current && navigate(`/scenarios/${current.name}/${n}`)
+  /** A path clicked in a text: the step's page shows the tab it is in, where the page has it. */
+  const pathIn = (step: Step) => (path: string) => {
+    const tab = /^\/tabs\/\d+/.exec(path)?.[0]
+
+    if (!tab || !step.page.tabs.some((t) => t.at === tab)) return false
+    go(step.n)
+    setPeek({ step: step.n, at: tab })
+
+    return true
+  }
 
   // Braced: in some browsers scrolling gives a promise, which an effect may not return.
   useEffect(() => {
@@ -404,46 +416,61 @@ export default function Design() {
   const totals = steps.map((s) => s.tellings.map((t) => (total += t.tokens)))
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+    <div className="flex min-h-0 flex-1 max-md:flex-col max-md:overflow-auto">
+      <main className="flex min-w-0 flex-1 flex-col md:overflow-auto">
         {current && (
-          <header className="bg-background/95 sticky top-0 z-20 flex flex-col gap-1.5 border-b px-4 pt-3 pb-2 backdrop-blur">
+          <header className="bg-background/95 sticky top-0 z-20 flex flex-col gap-0.5 px-4 pt-3 pb-2 backdrop-blur">
             <div className="flex items-baseline gap-3">
-              <h1 className="text-sm font-medium">{current.title}</h1>
-              <span className="text-muted-foreground font-mono text-meta">{current.name}</span>
-              <span className="text-muted-foreground ml-auto text-body tabular-nums whitespace-nowrap">
-                {current.steps} steps · {current.lines ?? "–"} lines · ~{current.tokens?.toLocaleString("en") ?? "–"} tok given
+              <h1 className="min-w-0 truncate text-sm font-medium" title={current.name}>
+                {current.title}
+              </h1>
+              <span className="text-muted-foreground ml-auto shrink-0 text-meta tabular-nums whitespace-nowrap" title={`${current.steps} steps · ${current.lines ?? "–"} lines · ${current.chars?.toLocaleString("en") ?? "–"} chars`}>
+                ~{current.tokens?.toLocaleString("en") ?? "–"} tok
               </span>
               <Delta delta={current.delta} />
-            </div>
-            {timeline?.about && <p className="text-muted-foreground max-w-[100ch] text-body">{timeline.about}</p>}
-            {(current.error || view?.failure) && <p className="text-destructive text-body">{current.error ?? view?.failure}</p>}
-            <div className="text-muted-foreground flex items-center gap-3 text-meta">
-              {pinned && (
-                <span className="flex items-center gap-0.5" role="group" aria-label="A changed text">
-                  <span className="mr-1">Changed text</span>
-                  {COMPARES.map(([id, label, hint]) => (
-                    <button key={id} type="button" title={hint} aria-pressed={compare === id} onClick={() => setCompare(id)} className="hover:bg-muted aria-pressed:bg-accent aria-pressed:text-accent-foreground h-5 rounded-sm px-1.5 outline-none">
-                      {label}
-                    </button>
-                  ))}
-                </span>
-              )}
-              <button type="button" aria-pressed={wrap} onClick={() => setWrap(!wrap)} title="Wrap long lines at the block's edge, or keep them whole and scroll sideways" className="hover:bg-muted aria-pressed:bg-accent aria-pressed:text-accent-foreground h-5 rounded-sm px-1.5 outline-none">
-                Wrap
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUnfolded(!unfolded)
-                  setFolds({})
+              <Choice
+                value={mode}
+                options={MODES}
+                set={(m) => {
+                  setMode(m)
+                  setModes({})
                 }}
-                className="hover:bg-muted h-5 rounded-sm px-1.5 outline-none"
-              >
-                {unfolded ? "Fold all" : "Unfold all"}
-              </button>
-              <span className="ml-auto">↑ ↓ or j k move the step</span>
+                label="Show every text"
+              />
+              <Popover>
+                <PopoverTrigger className={`${quiet} flex size-5 items-center justify-center self-center rounded-sm`} aria-label="View options">
+                  <EllipsisIcon className="size-3.5" aria-hidden />
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-56 gap-2 text-meta">
+                  <button type="button" aria-pressed={wrap} onClick={() => setWrap(!wrap)} className={`${quiet} aria-pressed:text-foreground text-left`}>
+                    {wrap ? "✓ " : ""}Wrap long lines
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUnfolded(!unfolded)
+                      setFolds({})
+                    }}
+                    className={`${quiet} text-left`}
+                  >
+                    {unfolded ? "Fold long texts" : "Unfold long texts"}
+                  </button>
+                  {differs && (
+                    <div className="flex flex-col gap-1 border-t pt-2">
+                      <span className="text-muted-foreground/70 text-badge uppercase">A changed text's source</span>
+                      <Choice value={compare} options={COMPARES} set={setCompare} label="Compare with the pin" />
+                    </div>
+                  )}
+                  <span className="text-muted-foreground/70 border-t pt-2">↑ ↓ or j k move the step</span>
+                </PopoverContent>
+              </Popover>
             </div>
+            {timeline?.about && (
+              <p className="text-muted-foreground truncate text-body" title={timeline.about}>
+                {timeline.about}
+              </p>
+            )}
+            {(current.error || view?.failure) && <p className="text-destructive text-body">{current.error ?? view?.failure}</p>}
           </header>
         )}
         <ol className="flex flex-col px-2 pb-8">
@@ -454,15 +481,18 @@ export default function Design() {
               <li
                 key={step.n}
                 ref={here ? focused : undefined}
-                onClick={() => go(step.n)}
+                onClick={() => {
+                  go(step.n)
+                  if (peek?.step !== step.n) setPeek(undefined)
+                }}
                 aria-current={here ? "step" : undefined}
-                className={`flex scroll-mt-32 scroll-mb-24 gap-2 rounded-md border-l-2 py-0.5 pr-2 ${here ? "border-primary bg-accent/40" : "hover:bg-muted/30 border-transparent"}`}
+                className={`flex scroll-mt-24 scroll-mb-24 gap-2 rounded-md py-0.5 pr-2 ${here ? "bg-accent/40" : "hover:bg-muted/20"}`}
               >
-                <span className={`w-6 shrink-0 pt-2 text-right text-meta tabular-nums ${here ? "text-primary font-medium" : "text-muted-foreground/70"}`}>{step.n}</span>
+                <span className={`w-6 shrink-0 pt-[0.4rem] text-right text-meta tabular-nums ${here ? "text-foreground font-medium" : "text-muted-foreground/50"}`}>{step.n}</span>
                 <div className="flex min-w-0 flex-1 flex-col">
                   {step.timing && (
                     <Gap>
-                      <span className="text-warning">timing-dependent:</span> {step.timing}
+                      <span className="text-warning mr-1">timing-dependent:</span> {step.timing}
                     </Gap>
                   )}
                   {step.tellings.length === 0 && <Gap>{gapOf(step)}</Gap>}
@@ -475,7 +505,7 @@ export default function Design() {
                         <Gap key={i}>
                           {when}
                           {code && <code className="ml-1 font-mono">{code}</code>} — {tag.replace(/ hook$/, "")}: nothing
-                          {telling.delta && telling.delta !== "same" && <span className="text-warning ml-2">{telling.delta}</span>}
+                          {telling.delta && telling.delta !== "same" && <span className={`ml-2 ${telling.delta === "new" ? "text-info" : "text-warning"}`}>{telling.delta}</span>}
                         </Gap>
                       )
                     }
@@ -488,10 +518,13 @@ export default function Design() {
                         step={step}
                         telling={telling}
                         total={totals[si]![i]!}
+                        mode={modes[key] ?? mode}
+                        setMode={(m) => setModes({ ...modes, [key]: m })}
                         compare={compare}
                         wrap={wrap}
                         open={folds[key] ?? unfolded}
                         toggle={() => setFolds({ ...folds, [key]: !(folds[key] ?? unfolded) })}
+                        onPath={pathIn(step)}
                       />
                     )
                   })}
@@ -502,59 +535,59 @@ export default function Design() {
         </ol>
         {!steps.length && <p className="text-muted-foreground p-6 text-body">{view?.playing ? "Playing the scenarios…" : "Not played yet."}</p>}
       </main>
-      <aside className="bg-sidebar flex w-[26rem] shrink-0 flex-col overflow-auto border-l" aria-label="Scenarios">
-        <PagePreview step={selected} before={selected && steps[steps.indexOf(selected) - 1]} />
-        <h2 className="text-muted-foreground flex h-6 items-center justify-between px-3 pt-2 text-meta font-medium">
-          Scenarios
-          <span>{view?.playing ? "playing…" : "~tokens"}</span>
-        </h2>
-        <ul className="pt-1 pb-3">
+      <aside className="bg-sidebar flex shrink-0 flex-col md:w-[24rem] md:overflow-auto md:border-l max-md:border-t" aria-label="Scenarios">
+        <PagePreview step={selected} before={selected && steps[steps.indexOf(selected) - 1]} peek={peek?.step === selected?.n ? peek?.at : undefined} />
+        <ul className="pb-2">
           {scenarios.map((s, i) => (
             <li key={s.name}>
-              {s.group !== scenarios[i - 1]?.group && <div className="text-muted-foreground/70 px-3 pt-2 pb-0.5 text-badge uppercase">{s.group}</div>}
+              {s.group !== scenarios[i - 1]?.group && (
+                <div className="text-muted-foreground/70 flex items-center justify-between px-3 pt-3 pb-1 text-badge uppercase">
+                  {s.group}
+                  {i === 0 && view?.playing && <span className="normal-case">playing…</span>}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => navigate(`/scenarios/${s.name}`)}
                 aria-current={s.name === current?.name}
-                title={s.title}
-                className="hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none"
+                title={`${s.name} · ${s.steps} steps`}
+                className="hover:bg-muted/60 aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none"
               >
                 <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                <Delta delta={s.delta === "same" ? undefined : s.delta === "new" ? "new" : s.delta && s.delta.split(";")[0]} />
-                <span className={`text-meta tabular-nums ${s.error ? "text-destructive" : "text-muted-foreground"}`}>{s.error ? "failed" : (s.tokens?.toLocaleString("en") ?? "–")}</span>
+                <Delta delta={s.delta} short />
+                <span className={`w-12 text-right text-meta tabular-nums ${s.error ? "text-destructive" : "text-muted-foreground"}`}>{s.error ? "failed" : (s.tokens?.toLocaleString("en") ?? "–")}</span>
               </button>
             </li>
           ))}
         </ul>
         <DemoShape demo={demo} />
-        <h2 className="text-muted-foreground flex h-6 items-center px-3 text-meta font-medium">Pin</h2>
-        <div className="flex flex-col gap-2 px-3 pb-4">
-          <p className="text-muted-foreground text-body">
-            {view?.pinned ? `Pinned ${view.pinned.replace("T", " ").replace("Z", " UTC")}; each text shows its difference from it.` : "Nothing pinned: pin to keep these tellings as the baseline."}
-          </p>
-          <div className="flex gap-2">
+        <div className="text-muted-foreground flex h-7 items-center gap-2.5 px-3 text-meta">
+          <span className="min-w-0 truncate" title={view?.pinned ? "Each text shows its difference from the pin" : "Pin to keep these tellings as the baseline"}>
+            {view?.pinned ? `Pinned ${view.pinned.replace("T", " ").replace(/:\d\dZ$/, "")}` : "Not pinned"}
+          </span>
+          <span className="ml-auto flex shrink-0 gap-2.5">
             {view?.pin && (
-              <Button size="sm" onClick={() => void act(view.pin)}>
-                <PinIcon aria-hidden /> {view.pinned ? "Pin again" : "Pin"}
-              </Button>
+              <button type="button" className={quiet} onClick={() => void act(view.pin)}>
+                {view.pinned ? "Pin again" : "Pin"}
+              </button>
             )}
             {view?.unpin && (
-              <Button size="sm" variant="ghost" onClick={() => void act(view.unpin)}>
+              <button type="button" className={quiet} onClick={() => void act(view.unpin)}>
                 Unpin
-              </Button>
+              </button>
             )}
             {view?.play && (
-              <Button size="sm" variant="ghost" onClick={() => void act(view.play)}>
+              <button type="button" className={quiet} onClick={() => void act(view.play)}>
                 Play again
-              </Button>
+              </button>
             )}
-          </div>
-          {(refused || error) && (
-            <p role="alert" className="text-destructive text-body">
-              {refused || error}
-            </p>
-          )}
+          </span>
         </div>
+        {(refused || error) && (
+          <p role="alert" className="text-destructive px-3 pb-3 text-body">
+            {refused || error}
+          </p>
+        )}
       </aside>
     </div>
   )

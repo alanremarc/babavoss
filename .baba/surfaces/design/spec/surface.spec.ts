@@ -11,6 +11,7 @@ import { SCENARIOS } from "../src/scenarios.ts"
 import { shape, type Shape } from "../src/shape.ts"
 import tasks from "../demo/surfaces/tasks/src/surface.ts"
 import { lineDiff } from "../src/measure.ts"
+import { parts } from "../ui/told.ts"
 
 type Row = { at: string; name: string; steps: number; lines: number; chars: number; tokens: number; delta?: string }
 type Telling = { carrier: string; lines: number; chars: number; tokens: number; delta?: string; text: string; pinned?: string }
@@ -245,6 +246,22 @@ test("the scenarios are grouped, canonical first, and each noise scenario plays 
     "the session starts again after a compaction",
     "the session resumes",
   ])
+})
+
+test("the page reads every told text without changing a character of it; a session's start is prose, then the shell's answer", () => {
+  const texts = plays.flatMap((p) => p.steps.flatMap((s) => s.tellings.map((t) => t.text)))
+
+  for (const text of texts) {
+    const read = parts(text)
+
+    expect(read.map((p) => p.text).join("\n")).toBe(text)
+    for (const p of read) if (p.kind === "shaped") expect(p.lines.map((l) => l.spans.map((s) => s.text).join("")).join("\n")).toBe(p.text)
+  }
+
+  const start = parts(plays.find((p) => p.name === "start")!.steps[0]!.tellings[0]!.text)
+
+  expect(start.map((p) => p.kind)).toEqual(["prose", "shaped"])
+  expect(start[1]!.text.split("\n")[0]).toMatch(/^The shell of .* answered:$/)
 })
 
 test("the code changing plays again, and what then tells the agent otherwise is noticed", async () => {
