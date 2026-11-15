@@ -1,12 +1,12 @@
-// The app's one entry opens it; bv calls and reads its surface in an isolated session.
+// The role's one entry opens it; bv calls and reads its surface in an isolated session.
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "bun:test"
 
-test("the door opens the app on its tab and bv proposes a greeting there", () => {
-  const root = mkdtempSync(join(tmpdir(), "app-door-"))
+test("the door opens the role on its tab and bv proposes a greeting there", () => {
+  const root = mkdtempSync(join(tmpdir(), "role-door-"))
   const env = { ...process.env, BABAVOSS_HOME: root, BABAVOSS_BIN: root, CLAUDE_CODE_SESSION_ID: "spec", CODEX_THREAD_ID: "" }
   const run = (file: string, args: string[] = []) => {
     const result = spawnSync(file.endsWith(".ts") ? process.execPath : file, file.endsWith(".ts") ? [file, ...args] : args, { env, encoding: "utf8" })

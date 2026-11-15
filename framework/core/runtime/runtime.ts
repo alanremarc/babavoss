@@ -1,7 +1,7 @@
 // The resident process of one session: owns the session's state directory, runs the surface with its start commands, serves the
 // door, publishes the endpoint, exits when idle. It is woken in the directory the session runs in, which is its cwd.
-// The app's runtime entry hands startRuntime its arguments and nothing else.
-// An app loaded in place is edited while its runtimes are up. The runtime is woken under bun's hot reload, which runs the
+// The role's runtime entry hands startRuntime its arguments and nothing else.
+// A role loaded in place is edited while its runtimes are up. The runtime is woken under bun's hot reload, which runs the
 // entry again in the same process when its code changes: startRuntime then finds the runtime already here and puts the new
 // surface in its place, from the state the old one saved, once nothing is running or after SWAP_WAIT_MS, which cuts what still
 // runs. A wait, a cut and code that does not start are logged and said first in the agent's next answer. The process, its
@@ -9,13 +9,13 @@
 // own code is told to the open pages, which load again. The runtime's own code, the framework's core, is not swapped: when
 // that changed, the runtime here closes and starts again in the same process, at the same address. Each line it logs begins
 // with its time. Where the environment refuses it a lock or loopback, it logs why as its last line and ends with DENIED_EXIT,
-// for the waker to say the app does not run here.
+// for the waker to say the role does not run here.
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, watch, type FSWatcher } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { modelPorts, stateDir } from "../state/state.ts"
 import { run, type Running } from "../surface/run.ts"
-import type { AppDefinition } from "../app.ts"
+import type { RoleDefinition } from "../role.ts"
 import { door } from "./door.ts"
 import { DENIED_EXIT, Denied, lastPort, ownService } from "./service.ts"
 
@@ -26,7 +26,7 @@ export type RuntimeOptions = {
   idleMs?: number
   env?: NodeJS.ProcessEnv
   log?: (line: string) => void
-  /** Directories whose change may change the page; default: the app's src and its ui. */
+  /** Directories whose change may change the page; default: the role's src and its ui. */
   watch?: string[]
   /** What the framework's own code is, as a number that differs when it changed; for specs. */
   stamp?: number
@@ -42,15 +42,15 @@ export const RELOAD_MS = 500
 /** How long changed code waits for what runs to end before it cuts it and is loaded. */
 export const SWAP_WAIT_MS = 30_000
 
-/** The app's own source and its page, under the app root, above its scripts/open.ts entry. */
+/** The role's own source and its page, under the role root, above its scripts/open.ts entry. */
 export const sourceDirs = (entry = process.argv[1]!): string[] => {
   const root = dirname(dirname(resolve(entry)))
 
   return [join(root, "src"), join(root, "ui")].filter((dir) => existsSync(dir)).map((dir) => realpathSync(dir))
 }
 
-/** A runtime of this process: what a reload of the code finds here, and hands its new app to. `stamp` is the framework code it runs. */
-type Live = { port: number; stamp?: number; close(): Promise<void>; swap(app: AppDefinition): Promise<void> }
+/** A runtime of this process: what a reload of the code finds here, and hands its new role to. `stamp` is the framework code it runs. */
+type Live = { port: number; stamp?: number; close(): Promise<void>; swap(role: RoleDefinition): Promise<void> }
 
 /** When the framework's core, the code a runtime is made of, last changed: the latest of its files' times. */
 const coreStamp = (dir = dirname(import.meta.dir)): number =>
@@ -99,8 +99,8 @@ function standing<M>(first: Running<M>) {
   }
 }
 
-/** An app's version is its package's: the nearest package.json at or above its root, the directory its scripts/ is in. */
-export const appVersion = (entry = process.argv[1]!) => {
+/** A role's version is its package's: the nearest package.json at or above its root, the directory its scripts/ is in. */
+export const roleVersion = (entry = process.argv[1]!) => {
   for (let dir = dirname(dirname(resolve(entry))); ; dir = dirname(dir)) {
     const file = join(dir, "package.json")
 
@@ -121,7 +121,7 @@ export const sessionArg = (argv: string[]): string | undefined => {
  * the environment refuses it what it requires, in which case it ends with DENIED_EXIT.
  */
 export async function startRuntime(
-  app: AppDefinition,
+  role: RoleDefinition,
   argv: string[],
   options: RuntimeOptions = {}
 ): Promise<{ port: number; close(): Promise<void> } | undefined> {
@@ -138,14 +138,14 @@ export async function startRuntime(
 
     return undefined
   }
-  const dir = stateDir(app, { id: session }, options.env)
-  // The code was loaded again in this process: the runtime is here already, and takes the new app. Where the framework's
+  const dir = stateDir(role, { id: session }, options.env)
+  // The code was loaded again in this process: the runtime is here already, and takes the new role. Where the framework's
   // own code changed, the runtime here is that code no longer: it closes, and this one starts in its place.
   const stamp = options.stamp ?? coreStamp()
   const here = lives().get(dir)
 
   if (here && here.stamp === stamp) {
-    await here.swap(app)
+    await here.swap(role)
 
     return here
   }
@@ -164,8 +164,8 @@ export async function startRuntime(
   if (owner instanceof Denied) return refused(owner)
   if (!owner) return undefined
 
-  const started = (of: AppDefinition) => run(of.surface, { ...modelPorts(dir), log })
-  const stand = standing(started(app))
+  const started = (of: RoleDefinition) => run(of.surface, { ...modelPorts(dir), log })
+  const stand = standing(started(role))
   const running = stand.running
   let idle: ReturnType<typeof setTimeout> | undefined
   let closing: Promise<void> | undefined
@@ -197,10 +197,10 @@ export async function startRuntime(
     reload = setTimeout(() => void entrance.refresh(file), RELOAD_MS)
     reload.unref()
   }
-  // The code loaded again: the newest app takes the place of the running one once that has nothing under way, or once it has
+  // The code loaded again: the newest role takes the place of the running one once that has nothing under way, or once it has
   // waited SWAP_WAIT_MS, counted from the first change waiting, and cut what still runs. A wait is logged and told once.
-  let latest = app
-  let waiting: AppDefinition | undefined
+  let latest = role
+  let waiting: RoleDefinition | undefined
   let swapping: Promise<void> | undefined
   const bound = options.swapWaitMs ?? SWAP_WAIT_MS
   /** What keeps the code from loading: the running commands by name, and the rest of the work under way as a count. */
@@ -210,7 +210,7 @@ export async function startRuntime(
 
     return [...named, ...(rest > 0 ? [`${rest} more under way`] : [])].join(", ")
   }
-  const swap = (to: AppDefinition) => {
+  const swap = (to: RoleDefinition) => {
     waiting = to
 
     return (swapping ??= (async () => {
@@ -245,7 +245,7 @@ export async function startRuntime(
           if (failure === undefined) {
             stand.replace(fresh)
             latest = taking
-            about.version = appVersion(options.entry)
+            about.version = roleVersion(options.entry)
             await entrance.replace(taking.ui)
             log(`${taking.name}: its code changed and was loaded in place${cut && `, after ${bound / 1000}s, cutting ${cut}`}`)
             if (cut) entrance.note(`${taking.name}: its changed code was loaded after ${bound / 1000}s, cutting what still ran: ${cut}`)
@@ -273,8 +273,8 @@ export async function startRuntime(
     }, options.idleMs ?? IDLE_MS)
     idle.unref()
   }
-  const about = { app: app.name, version: appVersion(options.entry), session }
-  const entrance = door(running, { identity: owner.identity, ui: app.ui, touched: touch, end, about, command: options.command ?? `bv ${app.name}` })
+  const about = { role: role.name, version: roleVersion(options.entry), session }
+  const entrance = door(running, { identity: owner.identity, ui: role.ui, touched: touch, end, about, command: options.command ?? `bv ${role.name}` })
 
   // The address the session last had, so the person's open page finds this instance; any free one where that is taken.
   const preferred = options.port ?? lastPort(dir) ?? 0
@@ -300,7 +300,7 @@ export async function startRuntime(
 
   owner.publish(port)
   touch()
-  log(`${app.name} runtime for session ${session} on 127.0.0.1:${port}, in ${process.cwd()}, state in ${dir}`)
+  log(`${role.name} runtime for session ${session} on 127.0.0.1:${port}, in ${process.cwd()}, state in ${dir}`)
   for (const where of options.watch ?? sourceDirs(options.entry)) {
     try {
       const w = watch(where, { recursive: true }, (_event, file) => changed(join(where, String(file ?? ""))))

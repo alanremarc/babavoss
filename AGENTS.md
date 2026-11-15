@@ -43,7 +43,6 @@ A project that uses it:
 - A role imports the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`. Here the root package links itself.
 - Production never imports spec.
 - The version is semantic, in package.json, set by hand. Every version on main is a release: a change to the package raises it and adds its section to CHANGELOG.md, written for the agent that adapts a project's roles to it. On main, the Release workflow tags a new version vX.Y.Z; tags are never moved.
-- The code still says app where the design says role; the rename is to come.
 
 Style, which no tool enforces:
 

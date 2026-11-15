@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { action, defineApp, surface, view, type Update } from "../../framework/core/index.ts"
+import { action, defineRole, surface, view, type Update } from "../../framework/core/index.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
@@ -54,8 +54,8 @@ it("says a tab's change once in the answer to a call there, and still tells at /
   dirs.push(dir)
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1" }))
 
-  const app = defineApp({ name: "tabs", ui: dir, surface: shell({ title: "Tabs", utils: [counter] }) })
-  const runtime = await startRuntime(app, ["--session", "S"], {
+  const role = defineRole({ name: "tabs", ui: dir, surface: shell({ title: "Tabs", utils: [counter] }) })
+  const runtime = await startRuntime(role, ["--session", "S"], {
     entry: join(dir, "scripts/open.ts"),
     env: { BABAVOSS_HOME: dir },
     idleMs: 60_000,

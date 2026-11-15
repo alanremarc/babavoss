@@ -24,7 +24,7 @@ export const OPERATING = `## Operating it
 - Every answer says what changed since you last looked, including what the person did on the page.
 - A refusal gives its reason. Read again and act on what is offered; do not repeat the call.
 - The person watches and acts on the page. Give them its address whenever the role names a new one.
-- For more than a few calls of one kind, write one program with the command's \`-e\`: \`app.read(path)\`, \`app.call(path, handle, args)\` and \`app.wait(seconds)\`. Print each result and stop at the first refusal.`
+- For more than a few calls of one kind, write one program with the command's \`-e\`: \`role.read(path)\`, \`role.call(path, handle, args)\` and \`role.wait(seconds)\`. Print each result and stop at the first refusal.`
 
 /** .baba/ as a skill reaches it: every skill folder is two directories under the one .baba/ is in. */
 const FROM_SKILL = "<the directory this file is in>/../../../.baba"

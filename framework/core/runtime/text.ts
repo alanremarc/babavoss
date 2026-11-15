@@ -11,7 +11,7 @@ const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "obje
  * Relative facts, quoted cells in uniform tables, and each handle as the command that calls it: `path` is where the view was read,
  * which is where its handles are called.
  */
-export function textLines(value: Json | undefined, prefix = "", into = new Map<string, string>(), path = "/", command = "bv app"): Map<string, string> {
+export function textLines(value: Json | undefined, prefix = "", into = new Map<string, string>(), path = "/", command = "bv role"): Map<string, string> {
   if (isHandle(value)) {
     into.set(
       prefix,

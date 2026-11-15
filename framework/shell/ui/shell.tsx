@@ -1,6 +1,6 @@
 // The shell page: the surface's root view drives the tab strip and the launcher; each tab shows its util's component.
 // The URL is the surface path: / the launcher, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
-// the app's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
+// the role's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { CircleAlertIcon, SettingsIcon, XIcon } from "lucide-react"
 import type { Handle, View } from "../../core/index.ts"
@@ -51,7 +51,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
   }
 }
 
-export function App({ utils }: { utils: Registry }) {
+export function Shell({ utils }: { utils: Registry }) {
   const [root, setRoot] = useState<RootView>()
   const [error, setError] = useState("")
   const [connected, setConnected] = useState(false)
@@ -110,7 +110,7 @@ export function App({ utils }: { utils: Registry }) {
     return () => window.removeEventListener("popstate", navigate)
   }, [])
 
-  // A page opened at / lands in the first tab that is always open, where there is one: an app of one util is that util.
+  // A page opened at / lands in the first tab that is always open, where there is one: a role of one util is that util.
   const landed = useRef(false)
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-// Where an app's state lives: one directory per agentic session, and the ports that keep a surface's model there.
+// Where a role's state lives: one directory per agentic session, and the ports that keep a surface's model there.
 // The session's directory, where the session runs, is recorded there once by the session's own entry and kept.
 import { randomUUID } from "node:crypto"
 import { existsSync, linkSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
@@ -12,9 +12,9 @@ export type Env = Readonly<Record<string, string | undefined>>
 /** Everything kept on this machine lives under one home. */
 export const baseDir = (_app: { name: string }, env: Env = process.env): string => env.BABAVOSS_HOME ?? join(homedir(), ".babavoss")
 
-/** An app owns its state directory within the session. */
-export const stateDir = (app: { name: string }, session: { id: string }, env: Env = process.env): string =>
-  join(baseDir(app, env), "sessions", session.id.replaceAll(/[^A-Za-z0-9._-]/g, "-"), app.name)
+/** A role owns its state directory within the session. */
+export const stateDir = (role: { name: string }, session: { id: string }, env: Env = process.env): string =>
+  join(baseDir(role, env), "sessions", session.id.replaceAll(/[^A-Za-z0-9._-]/g, "-"), role.name)
 
 const sessionFile = (dir: string) => join(dir, "session.json")
 

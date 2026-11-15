@@ -1,4 +1,4 @@
-// A surface: an app's software. A model, an update, a view and its commands. `update` is pure and synchronous;
+// A surface: a role's software. A model, an update, a view and its commands. `update` is pure and synchronous;
 // every side effect is a command, run outside the loop, that reports back as an event. `view` answers the view at
 // a path: `/` the whole, an object's path the object. A path is part of the address, never state; reading it moves nobody.
 import type { Args, View } from "./view.ts"

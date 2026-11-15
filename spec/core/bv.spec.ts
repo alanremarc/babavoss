@@ -1,5 +1,5 @@
-// The standalone client and app door, exercised with isolated machine, bin and state directories.
-import { notesApp } from "../support/notes.ts"
+// The standalone client and role door, exercised with isolated machine, bin and state directories.
+import { notesRole } from "../support/notes.ts"
 import { poll } from "../support/poll.ts"
 import { spawnSync } from "node:child_process"
 import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
@@ -17,7 +17,7 @@ function setup() {
 
   roots.push(root)
 
-  const entry = join(notesApp(join(root, "app")), "scripts/open.ts")
+  const entry = join(notesRole(join(root, "role")), "scripts/open.ts")
   const bin = join(root, "bin")
 
   mkdirSync(bin)
@@ -84,7 +84,7 @@ it("accepts --session over both variables", () => {
   expect(s.run(["--session", "S"]).status).toBe(0)
 })
 it("says nothing is open", () => expect(setup().run().out).toContain("nothing is open in this session"))
-it("opens one app with client usage", () => {
+it("opens one role with client usage", () => {
   const s = setup()
 
   expect(s.open().status).toBe(0)
@@ -95,15 +95,15 @@ it("opens one app with client usage", () => {
   expect(answer.out).toContain("demo: demo")
   expect(s.run(["demo", "/"]).out).toContain("notes.count: 0")
 })
-it("lists two apps and requires a name", () => {
+it("lists two roles and requires a name", () => {
   const s = setup()
 
   s.open()
 
   const file = join(s.root, "sessions/S/open.json")
-  const apps = JSON.parse(readFileSync(file, "utf8"))
+  const roles = JSON.parse(readFileSync(file, "utf8"))
 
-  writeFileSync(file, JSON.stringify({ ...apps, other: apps.demo }))
+  writeFileSync(file, JSON.stringify({ ...roles, other: roles.demo }))
   expect(s.run().out).toBe("demo: demo\nother: demo\n")
   expect(s.run(["/"]).status).toBe(2)
   expect(s.run(["demo", "/"]).status).toBe(0)
@@ -186,14 +186,14 @@ it("keeps its address after an unannounced runtime death", async () => {
   expect(s.run(["/"]).out).not.toContain("a new address")
   expect(s.endpoint().port).toBe(port)
 })
-it("loads an edit of the app's code into the running runtime: the same process and address, the notes kept, the new code answering", async () => {
+it("loads an edit of the role's code into the running runtime: the same process and address, the notes kept, the new code answering", async () => {
   const s = setup()
 
   s.open()
   s.run(["/", "add", "text=Pharmacy"])
 
   const before = s.endpoint()
-  const source = join(s.root, "app/src/app.ts")
+  const source = join(s.root, "role/src/role.ts")
 
   writeFileSync(source, readFileSync(source, "utf8").replace('description: "Keep a note"', 'description: "Keep a note, as edited"'))
   await poll(() => s.run(["/"]).out, { timeout: 10_000 }).toContain("Keep a note, as edited")
@@ -234,7 +234,7 @@ it("runs a loop of calls", () => {
   const s = setup()
 
   s.open()
-  expect(s.run(["-e", 'for(let i=0;i<3;i++) console.log(await app.call("/","add",{text:String(i)}))']).status).toBe(0)
+  expect(s.run(["-e", 'for(let i=0;i<3;i++) console.log(await role.call("/","add",{text:String(i)}))']).status).toBe(0)
   expect(s.run(["/"]).out).toContain("notes.count: 3")
 })
 it("returns a program refusal as data", () => {
@@ -242,7 +242,7 @@ it("returns a program refusal as data", () => {
 
   s.open()
 
-  const answer = s.run(["-e", 'console.log(await app.call("/","add",{text:""}))'])
+  const answer = s.run(["-e", 'console.log(await role.call("/","add",{text:""}))'])
 
   expect(answer.status).toBe(0)
   expect(answer.out).toContain("A note needs text")
@@ -251,7 +251,7 @@ it("reads program code from stdin", () => {
   const s = setup()
 
   s.open()
-  expect(s.run(["-e", "-"], client, 'console.log(await app.read("/"))').out).toContain("count: 0")
+  expect(s.run(["-e", "-"], client, 'console.log(await role.read("/"))').out).toContain("count: 0")
 })
 it("prints the full help", () => expect(setup().run(["help"]).out).toContain("Stop at the first refusal"))
 it("opens with the commands and no pointer to a fuller guide: what an agent is pointed to, it reads", () => {
@@ -324,7 +324,7 @@ it("refused registry names what the harness must allow", () => {
   const answer = s.open()
 
   expect(answer.status).toBe(1)
-  expect(answer.err.trim()).toBe("cannot register the app under ~/.babavoss; allow writing the registry (under a sandbox, in the harness settings)")
+  expect(answer.err.trim()).toBe("cannot register the role under ~/.babavoss; allow writing the registry (under a sandbox, in the harness settings)")
 })
 it("refused runtime names what the harness must allow", () => {
   const s = setup()
@@ -343,7 +343,7 @@ it("refused runtime names what the harness must allow", () => {
   )
 })
 
-it("makes an app's word and uses it", () => {
+it("makes a role's word and uses it", () => {
   const s = setup()
 
   expect(s.open().out).toContain("demo is now a command")
@@ -364,18 +364,18 @@ it("keeps another command's word and uses bv NAME", () => {
 })
 
 
-function secondApp(s: ReturnType<typeof setup>) {
-  const directory = notesApp(join(s.root, "other"))
-  const definition = join(directory, "src/app.ts")
+function secondRole(s: ReturnType<typeof setup>) {
+  const directory = notesRole(join(s.root, "other"))
+  const definition = join(directory, "src/role.ts")
 
   writeFileSync(definition, readFileSync(definition, "utf8").replace('name: "demo"', 'name: "other"'))
   expect(s.run([], join(directory, "scripts/open.ts")).status).toBe(0)
 }
-it("two apps answer under their words and printed handles run as printed", () => {
+it("two roles answer under their words and printed handles run as printed", () => {
   const s = setup()
 
   s.open()
-  secondApp(s)
+  secondRole(s)
   try {
     for (const name of ["demo", "other"]) {
       const answer = spawnSync(join(s.bin, name), ["/"], { env: s.env, encoding: "utf8" })
@@ -391,15 +391,15 @@ it("two apps answer under their words and printed handles run as printed", () =>
     s.run(["other", "close"])
   }
 })
-it("bv alone lists both apps with their commands", () => {
+it("bv alone lists both roles with their commands", () => {
   const s = setup()
 
   s.open()
-  secondApp(s)
+  secondRole(s)
   expect(s.run().out).toBe("demo: demo\nother: other\n")
   s.run(["other", "close"])
 })
-it("keeps state only under the app within its session", () => {
+it("keeps state only under the role within its session", () => {
   const s = setup()
 
   s.open()
@@ -408,11 +408,11 @@ it("keeps state only under the app within its session", () => {
   expect(readdirSync(join(s.root, "sessions/S")).sort()).toEqual(["demo", "open.json"])
   expect(existsSync(join(s.root, "state"))).toBe(false)
 })
-it("two apps never share a runtime address", () => {
+it("two roles never share a runtime address", () => {
   const s = setup()
 
   s.open()
-  secondApp(s)
+  secondRole(s)
 
   const other = JSON.parse(readFileSync(join(s.root, "sessions/S/other/service.json"), "utf8"))
 
@@ -431,7 +431,7 @@ function installation(location = "project", configured = false) {
 
   roots.push(root)
   for (const path of [home, project, bin]) mkdirSync(path, { recursive: true })
-  notesApp(directory)
+  notesRole(directory)
 
   const env: Record<string, string | undefined> = { ...process.env, HOME: home, CLAUDE_CODE_SESSION_ID: "S", CODEX_THREAD_ID: "" }
 
@@ -491,7 +491,7 @@ it("a role's door says when a later babavoss is out, after its answer", () => {
     s.close()
   }
 })
-it("opening and calling a project app leaves git clean", () => {
+it("opening and calling a project role leaves git clean", () => {
   const s = installation()
   const git = (args: string[]) => spawnSync("git", args, { cwd: s.project, encoding: "utf8" })
 
@@ -506,7 +506,7 @@ it("opening and calling a project app leaves git clean", () => {
     s.close()
   }
 })
-it("a project app writes neither the person's home nor beside Bun", () => {
+it("a project role writes neither the person's home nor beside Bun", () => {
   const s = installation()
   const bun = join(s.bin, "bun")
 
@@ -539,7 +539,7 @@ it("a project handle runs exactly as printed from the project root", () => {
     s.close()
   }
 })
-it("an app run from source uses the door's working directory", () => {
+it("a role run from source uses the door's working directory", () => {
   const s = installation("source")
 
   try {

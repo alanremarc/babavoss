@@ -15,7 +15,7 @@ const TEMPLATE = fileURLToPath(new URL("../template", import.meta.url))
 /** The names the template stands in for the role's own. */
 const PLACEHOLDERS = ["NAME", "my-role"]
 /** The template's files that carry a placeholder. */
-const NAMED = ["ROLE.md", "src/app.ts", "ui/index.html"]
+const NAMED = ["ROLE.md", "src/role.ts", "ui/index.html"]
 const TSCONFIG = {
   compilerOptions: {
     lib: ["ESNext", "DOM", "DOM.Iterable"],

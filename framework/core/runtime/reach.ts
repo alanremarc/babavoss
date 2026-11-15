@@ -1,10 +1,10 @@
 // The doors' way to a session's surface: always through the session's runtime, woken when it is not up. A surface is never
-// run in a door's own process; where the environment refuses a runtime what it requires, the app does not run here.
+// run in a door's own process; where the environment refuses a runtime what it requires, the role does not run here.
 import { resolve } from "node:path"
 import { recordSessionCwd, stateDir, type Env } from "../state/state.ts"
 import type { Answer } from "../surface/run.ts"
 import type { Args, View } from "../surface/view.ts"
-import type { AppDefinition } from "../app.ts"
+import type { RoleDefinition } from "../role.ts"
 import type { Session } from "../session.ts"
 import { Denied, deniedState, serviceClient } from "./service.ts"
 
@@ -21,12 +21,12 @@ export type Reach = {
  * Throws Denied, saying "NAME does not run here" and why, when the environment refuses the runtime.
  */
 export async function reach(
-  app: AppDefinition,
+  role: RoleDefinition,
   session: Pick<Session, "id"> & { cwd?: string },
   options: { env?: Env; entry?: string | URL } = {}
 ): Promise<Reach> {
-  const dir = stateDir(app, session, options.env)
-  const denied = (why: string) => new Denied(`${app.name} does not run here: ${why}`)
+  const dir = stateDir(role, session, options.env)
+  const denied = (why: string) => new Denied(`${role.name} does not run here: ${why}`)
   const guarded = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
       return await work()

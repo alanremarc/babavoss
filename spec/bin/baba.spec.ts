@@ -43,7 +43,7 @@ test("new makes a role from the template under its name, with a passing spec, an
   const made = run(["new", "month-close"])
 
   expect(made.status, made.err).toBe(0)
-  expect(readFileSync(join(baba, "roles/month-close/src/app.ts"), "utf8")).toContain('name: "month-close"')
+  expect(readFileSync(join(baba, "roles/month-close/src/role.ts"), "utf8")).toContain('name: "month-close"')
   for (const folder of FOLDERS) {
     const text = readFileSync(skill(folder, "month-close"), "utf8")
 

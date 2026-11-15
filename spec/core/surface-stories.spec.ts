@@ -1,11 +1,11 @@
-// The notes app's rules, as stories at the surface's boundary: what each actor sees, is offered and is told.
-// The reminder's delay is the world's: the test holds the command and says when it comes due. The command is proven in app-runtime.spec.ts.
+// The notes role's rules, as stories at the surface's boundary: what each actor sees, is offered and is told.
+// The reminder's delay is the world's: the test holds the command and says when it comes due. The command is proven in role-runtime.spec.ts.
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
-import app from "../support/notes/src/app.ts"
+import role from "../support/notes/src/role.ts"
 
 test("a note the agent keeps is seen by the person, who is told of it once", async () => {
-  const { agent, person } = story(app.surface)
+  const { agent, person } = story(role.surface)
 
   person.told()
   expect(await agent.call("/", "add", { text: "Call the landlord" })).toMatchObject({ outcome: "written" })
@@ -16,14 +16,14 @@ test("a note the agent keeps is seen by the person, who is told of it once", asy
 })
 
 test("a note without text is refused", async () => {
-  const { agent } = story(app.surface)
+  const { agent } = story(role.surface)
 
   expect(await agent.call("/", "add", { text: "  " })).toEqual({ outcome: "refused", reason: "A note needs text" })
   expect(agent.sees()).toMatchObject({ notes: { count: 0 } })
 })
 
 test("clearing is offered only once there is a note", async () => {
-  const { agent } = story(app.surface)
+  const { agent } = story(role.surface)
 
   expect(agent.offered()).toEqual(["add"])
   await agent.call("/", "add", { text: "Pharmacy" })
@@ -31,7 +31,7 @@ test("clearing is offered only once there is a note", async () => {
 })
 
 test("the agent learns of a note the person removed", async () => {
-  const { agent, person } = story(app.surface)
+  const { agent, person } = story(role.surface)
 
   await agent.call("/", "add", { text: "Pharmacy" })
   agent.told()
@@ -42,7 +42,7 @@ test("the agent learns of a note the person removed", async () => {
 })
 
 test("a reminder is pending until the world says it is due, and cannot be set twice", async () => {
-  const { agent, person, world } = story(app.surface)
+  const { agent, person, world } = story(role.surface)
 
   await agent.call("/", "add", { text: "Pharmacy" })
   expect(await agent.call("/notes/1", "remind", { n: 1, seconds: 3600 })).toMatchObject({ outcome: "written" })
@@ -63,7 +63,7 @@ test("a reminder is pending until the world says it is due, and cannot be set tw
 })
 
 test("a reminder needs a positive delay", async () => {
-  const { agent } = story(app.surface)
+  const { agent } = story(role.surface)
 
   await agent.call("/", "add", { text: "Pharmacy" })
   expect(await agent.call("/notes/1", "remind", { n: 1, seconds: 0 })).toEqual({ outcome: "refused", reason: "seconds must be positive" })

@@ -22,7 +22,7 @@ Then open the role as its skill says, give the person its page, and build it one
 roles/NAME/
   ROLE.md           its description, in the frontmatter, and its own know-how: the order of the work, who decides what, when not to act
   scripts/open.ts   its door, the same in every role
-  src/app.ts        its definition: name, surface and page
+  src/role.ts        its definition: name, surface and page
   src/surface.ts    the surface: what is true and what can be done, made for the agent first
   ui/               the page, over the same surface
   spec/             its rules, as stories

@@ -1,4 +1,4 @@
-// The shell surface: one surface made of utils, each a mini-app with its own surface, opened as tabs. A tab stands at
+// The shell surface: one surface made of utils, each a mini-role with its own surface, opened as tabs. A tab stands at
 // /tabs/N and the util's own paths below it; the util never knows: the paths its views name under `at` are given whole
 // on the way out. Home at / lists each open tab with its util's facts at /, so what changes in a tab is in the agent's
 // present. The shell is a built-in of the framework: it imports the core beside it, and nothing else of the framework
@@ -11,7 +11,7 @@ export type Util<M, E extends { kind: string }, C> = { name: string; description
 // Deliberately any: this erases the type parameters, for code that holds one without knowing them.
 export type AnyUtil = Util<any, any, any>
 
-/** A util: a mini-app, one per workflow or job. */
+/** A util: a mini-role, one per workflow or job. */
 export const util = <M, E extends { kind: string }, C>(
   name: string,
   description: string,

@@ -74,7 +74,7 @@ const TONE = {
 /**
  * A line that opens onto its detail: an icon, a title, a quieter description cut to the line, an aside at its end.
  * Without children it is only the line. `status` marks it running or failed. `tone` tells whose it is where that
- * matters: `accent` one of particular concern, such as what an app did among an agent's steps, its icon in the accent
+ * matters: `accent` one of particular concern, such as what a role did among an agent's steps, its icon in the accent
  * and its title in full ink; `user` what the user side did beside its messages; `context` what was put into the
  * agent's context, such as a hook's output. Those two take their voice's colour.
  */

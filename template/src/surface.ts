@@ -1,5 +1,5 @@
-// The app's util: what is true and what can be done, made for the agent first. Here the agent proposes a greeting and the
-// person, on the page, accepts or declines it. Replace the greeting with the app's own work and keep the shape: the agent
+// The role's util: what is true and what can be done, made for the agent first. Here the agent proposes a greeting and the
+// person, on the page, accepts or declines it. Replace the greeting with the role's own work and keep the shape: the agent
 // does the work through handles, a fact at / says what is waited for, and what only the person may decide is an ask.
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
 

@@ -1,9 +1,9 @@
 // The http door of one surface. The surface's paths are the URLs; the method is the meaning; Accept says who asks.
-//   GET  /p   application/json   the view at /p for the actor in the header     GET /p  text/html  the app's page
+//   GET  /p   application/json   the view at /p for the actor in the header     GET /p  text/html  the role's page
 //   GET  /    text/event-stream  change { version } and work { jobs }           POST /p { handle, args }  a call
 //                                 call { path, handle, args, actor, refused? }, each call through this door as it is answered
-// /_/ is the page's own. The framework owns no page, it serves the app's; a page that cannot be served is an error, never
-// the view in its place. The page is served with meta tags saying whose it is (app, version, session): presentation, so
+// /_/ is the page's own. The framework owns no page, it serves the role's; a page that cannot be served is an error, never
+// the view in its place. The page is served with meta tags saying whose it is (role, version, session): presentation, so
 // never in a view.
 // Only this machine's clients: loopback host, own origin, the service token on everything but the page, as a header or
 // as the cookie the page response sets, named after the port.
@@ -24,7 +24,7 @@ export type UiHosting = (
   assets(req: IncomingMessage, res: ServerResponse, next: () => void): void
   close(): Promise<void>
 }>
-/** An app's ui: a directory with index.html and assets served under /_/, or a hosting. */
+/** A role's ui: a directory with index.html and assets served under /_/, or a hosting. */
 export type Ui = string | URL | UiHosting
 
 export type DoorOptions = {
@@ -34,7 +34,7 @@ export type DoorOptions = {
   /** Called on every request, so an idle timer can be reset. */
   touched?: () => void
   end?: () => void
-  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: app, version, session. */
+  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: role, version, session. */
   about?: Record<string, string>
 }
 
@@ -79,7 +79,7 @@ const body = (req: IncomingMessage) =>
     req.on("end", () => done(text))
     req.on("error", fail)
   })
-// Cookies ignore ports, and several runtimes share 127.0.0.1, so each names its cookie after its port; a page embedding another app's page keeps its own.
+// Cookies ignore ports, and several runtimes share 127.0.0.1, so each names its cookie after its port; a page embedding another role's page keeps its own.
 const cookieName = (port: number) => `babavoss-service-${port}`
 const tokenOf = (req: IncomingMessage, port: number): string | undefined => {
   const header = req.headers[SERVICE_HEADER]
@@ -92,11 +92,11 @@ const tokenOf = (req: IncomingMessage, port: number): string | undefined => {
 export type Door = {
   server: Server
   close(): Promise<void>
-  /** The app's code was loaded again: its ui, as it is defined now, takes the place of the one served. */
+  /** The role's code was loaded again: its ui, as it is defined now, takes the place of the one served. */
   replace(ui: Ui): Promise<void>
   /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
   refresh(file: string): Promise<void>
-  /** A line about the app's own code, said first in the agent's next answer; a later one takes its place. */
+  /** A line about the role's own code, said first in the agent's next answer; a later one takes its place. */
   note(line: string): void
 }
 
@@ -119,11 +119,11 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
       if (html !== undefined) served = html
 
-      return html === undefined ? { error: "the app's ui has no index.html" } : { html }
+      return html === undefined ? { error: "the role's ui has no index.html" } : { html }
     } catch (error) {
       hosted = undefined
 
-      return { error: `the app's page cannot be served: ${error instanceof Error ? error.message : String(error)}` }
+      return { error: `the role's page cannot be served: ${error instanceof Error ? error.message : String(error)}` }
     }
   }
   const escaped = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -133,9 +133,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       .map(([key, value]) => `<meta name="babavoss:${escaped(key)}" content="${escaped(value)}">`)
       .join("")
   const actorText = `agent:${options.about?.session ?? "session"}`
-  const text = textSession(running, options.identity.dir, actorText, options.command ?? "bv app")
+  const text = textSession(running, options.identity.dir, actorText, options.command ?? "bv role")
   const streams = new Set<ServerResponse>()
-  // What the runtime has to say of the app's code, until an answer to the agent carries it; a wait ends for it too.
+  // What the runtime has to say of the role's code, until an answer to the agent carries it; a wait ends for it too.
   let said: string | undefined
   const noted = new Set<() => void>()
   const told = (answer: string) => {
@@ -174,7 +174,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         if (req.method === "POST" && path === "/_/close") {
           res.once("finish", () => options.end?.())
 
-          return reply(200, `${options.about?.app} closed; any call wakes it`)
+          return reply(200, `${options.about?.role} closed; any call wakes it`)
         }
         if (req.method === "GET" && path === "/_/wait") {
           const seconds = Number(url.searchParams.get("seconds") ?? 600)
@@ -204,8 +204,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         if (req.method === "GET") {
           const view = running.read(path, actorText)
           const open = path === "/" && url.searchParams.has("open")
-          const lines = view === undefined ? [`nothing at ${path}`] : [...textLines(view, "", new Map(), path, options.command ?? "bv app").values()]
-          const use = open ? [`${options.about?.app} ${options.about?.version}`] : []
+          const lines = view === undefined ? [`nothing at ${path}`] : [...textLines(view, "", new Map(), path, options.command ?? "bv role").values()]
+          const use = open ? [`${options.about?.role} ${options.about?.version}`] : []
 
           return reply(view === undefined ? 404 : 200, told(text.answer([...use, ...lines], open, view, path)))
         }

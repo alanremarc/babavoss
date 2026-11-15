@@ -1,17 +1,17 @@
 #!/bin/sh
 // 2>/dev/null; exec bun --loader :ts "$0" --word "${0##*/}" "$@"
-// The standalone session client, copied into the home’s bin or beside Bun; no app code or framework imports.
+// The standalone session client, copied into the home’s bin or beside Bun; no role code or framework imports.
 import { readFileSync, mkdirSync, writeFileSync, renameSync, openSync, closeSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 6
+export const VERSION = 7
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const ENDPOINT_FILE = "service.json"
-export type OpenApp = { directory: string; entry: string; state: string; command?: string; page?: string }
+export type OpenRole = { directory: string; entry: string; state: string; command?: string; page?: string }
 export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".babavoss"), "sessions", session, "open.json")
 export const load = <T>(file: string): T | undefined => {
   try {
@@ -47,24 +47,24 @@ export function sessionArgs(args: string[]) {
   return session
 }
 
-const guide = `bv — the apps open in this session
-NAME PATH or bv NAME PATH — each app has its own command when its name is free
-bv                         list open apps and their commands
+const guide = `bv — the roles open in this session
+NAME PATH or bv NAME PATH — each role has its own command when its name is free
+bv                         list open roles and their commands
 NAME PATH                  read a view: demo /notes (or bv demo /notes)
 NAME PATH HANDLE name=value  call: demo / add text=Pharmacy; text=@- reads standard input
-bv NAME PATH               select an app: bv demo /notes
+bv NAME PATH               select a role: bv demo /notes
 bv wait [SECONDS]          wait for changes: bv wait 60
-bv close                   close: bv close; the next call wakes the app
-bv -e CODE                 async program: bv -e 'for (let i=0;i<3;i++) console.log(await app.call("/", "add", {text:String(i)}))'
-bv -e -                    code from standard input: echo 'console.log(await app.read("/"))' | bv -e -
+bv close                   close: bv close; the next call wakes the role
+bv -e CODE                 async program: bv -e 'for (let i=0;i<3;i++) console.log(await role.call("/", "add", {text:String(i)}))'
+bv -e -                    code from standard input: echo 'console.log(await role.read("/"))' | bv -e -
 bv --session ID PATH       explicit session: bv --session work /notes
 bv help                    this guide
-Programs have app.read(path), app.call(path, handle, args), app.wait(seconds), and app.page.
+Programs have role.read(path), role.call(path, handle, args), role.wait(seconds), and role.page.
 Write a program for more than a few calls of one kind, or a decision depending on a view.
 Print each call's result as it goes: failure halfway leaves earlier calls done.
 Stop at the first refusal unless calls are independent. Refusals include their reason as data.
 Stay under the harness's command run time limit.
-Use wait for the person; use a timer only for what the app does not report.`
+Use wait for the person; use a timer only for what the role does not report.`
 
 export async function bv(argv: string[], selected?: string, command = "bv"): Promise<number> {
   try {
@@ -82,17 +82,17 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
 
     const session = sessionArgs(args)
     const file = registryFile(session)
-    const apps = load<Record<string, OpenApp>>(file) ?? {}
-    const names = Object.keys(apps)
+    const roles = load<Record<string, OpenRole>>(file) ?? {}
+    const names = Object.keys(roles)
 
     if (!names.length) {
-      console.log("nothing is open in this session; open an app through its skill")
+      console.log("nothing is open in this session; open a role through its skill")
 
       return 0
     }
 
     if (!selected && !args.length) {
-      console.log(names.map((name) => `${name}: ${apps[name]!.command ?? `bv ${name}`}`).join("\n"))
+      console.log(names.map((name) => `${name}: ${roles[name]!.command ?? `bv ${name}`}`).join("\n"))
 
       return 0
     }
@@ -102,16 +102,16 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     if (!name && names.includes(args[0]!)) name = args.shift()
     if (!name && names.length === 1) name = names[0]
     if (!name) {
-      console.log(names.map((name) => `${name}: ${apps[name]!.command ?? `bv ${name}`}`).join("\n"))
-      if (args.length) throw new SyntaxError("name the app first: bv NAME PATH")
+      console.log(names.map((name) => `${name}: ${roles[name]!.command ?? `bv ${name}`}`).join("\n"))
+      if (args.length) throw new SyntaxError("name the role first: bv NAME PATH")
 
       return 0
     }
 
-    const app = apps[name]
+    const role = roles[name]
 
-    if (!app) throw new SyntaxError(`app ${name} is not open in this session`)
-    command = app.command ?? `bv ${name}`
+    if (!role) throw new SyntaxError(`role ${name} is not open in this session`)
+    command = role.command ?? `bv ${name}`
     const [path, handle, ...values] = args
     let route = path ?? "/?open"
     let method = "GET"
@@ -151,9 +151,9 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     type Endpoint = { port: number; token: string; dir: string; pid: number }
 
     const find = async () => {
-      const endpoint = load<Endpoint>(join(app.state, ENDPOINT_FILE))
+      const endpoint = load<Endpoint>(join(role.state, ENDPOINT_FILE))
 
-      if (!endpoint || endpoint.dir !== app.state) return
+      if (!endpoint || endpoint.dir !== role.state) return
       try {
         const response = await fetch(`http://127.0.0.1:${endpoint.port}/`, {
           headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token },
@@ -164,7 +164,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         if (response.headers.get(SERVICE_HEADER) === endpoint.token) return endpoint
       } catch {}
     }
-    /** The session's runtime for this app: the one up, or one woken. */
+    /** The session's runtime for this role: the one up, or one woken. */
     const reach = async (): Promise<Endpoint> => {
       let endpoint = await find()
 
@@ -172,10 +172,10 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
 
       let failed: Error | undefined
       const wake = () => {
-        const log = openSync(join(app.state, "service.log"), "a", 0o600)
-        // Under bun's hot reload: a change in the app's code is loaded into the runtime, which stays up at its address.
-        const child = spawn(process.execPath, ["--hot", app.entry, "--serve", session, command], {
-          cwd: app.directory,
+        const log = openSync(join(role.state, "service.log"), "a", 0o600)
+        // Under bun's hot reload: a change in the role's code is loaded into the runtime, which stays up at its address.
+        const child = spawn(process.execPath, ["--hot", role.entry, "--serve", session, command], {
+          cwd: role.directory,
           detached: true,
           stdio: ["ignore", "ignore", log],
           env: process.env,
@@ -207,7 +207,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       }
       if (!endpoint)
         throw new Error(
-          `cannot listen on or reach this machine’s runtime; allow resident processes and loopback listening and connections (under a sandbox, in the harness settings); see ${join(app.state, "service.log")}`
+          `cannot listen on or reach this machine’s runtime; allow resident processes and loopback listening and connections (under a sandbox, in the harness settings); see ${join(role.state, "service.log")}`
         )
 
       return endpoint
@@ -238,10 +238,10 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     // An open always names the page; any other answer names it only when the address is not the one last named.
     const announce = () => {
       if (path === "close") return
-      if (app.page !== page) {
+      if (role.page !== page) {
         console.log(`page: ${page}  a new address: give it to the person`)
-        app.page = page
-        save(file, apps)
+        role.page = page
+        save(file, roles)
       } else if (!path) console.log(`page: ${page}`)
     }
 
@@ -273,7 +273,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         },
       }
 
-      await new (Object.getPrototypeOf(async function () {}).constructor)("app", code)(connected)
+      await new (Object.getPrototypeOf(async function () {}).constructor)("role", code)(connected)
 
       return 0
     }
@@ -286,8 +286,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         [
           `${command} PATH — read; ${command} PATH HANDLE name=value — call (name=@- reads stdin)`,
           `${command} wait [SECONDS] — wait for changes`,
-          `${command} close — close the app`,
-          `${command} -e CODE — run an async program with app`,
+          `${command} close — close the role`,
+          `${command} -e CODE — run an async program with role`,
         ].join("\n")
       )
     if (response.body) for await (const chunk of response.body) process.stdout.write(chunk)

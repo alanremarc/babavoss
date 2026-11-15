@@ -1,4 +1,4 @@
-export { App, type Registry } from "./app.tsx"
+export { Shell, type Registry } from "./shell.tsx"
 export { TabProvider, useTab, useLive, type TabContext } from "./tab.tsx"
 export { read, call, changes, type Answer, type Change } from "./client.ts"
 export { Workbench, type WorkbenchTool, type WorkbenchFilter, type WorkbenchDocument, type WorkbenchDocuments } from "./layouts/workbench.tsx"
