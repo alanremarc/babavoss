@@ -50,6 +50,8 @@ A notice is one short line on what just happened, in answer to a call or to a co
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
+A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event.
+
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`; read its code in `framework/` there rather than guessing its interfaces.

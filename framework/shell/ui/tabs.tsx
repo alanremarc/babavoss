@@ -1,4 +1,5 @@
-// The bottom strip: the launcher's "+", then the open tabs as pills that scroll when they overflow; and a tab's panel.
+// The bottom strip: the launcher's "+", then the open tabs as pills that scroll when they overflow, and at its right what
+// the shell puts there; and a tab's panel.
 // A pill is marked by what stands in its tab: broken, needing the person, plainly; needing the agent, quietly; and why, as
 // its tooltip. A tab the agent opened is marked until looked at.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
@@ -178,7 +179,8 @@ export function TabContent({ address, hidden, children }: { address: string; hid
   )
 }
 
-export function SurfaceTabs({ items, active, onSelect, home }: { items: TabItem[]; active: string; onSelect: (id: string) => void; home: ReactNode }) {
+/** `end`: what stands at the strip's right, after the tabs, such as the activity button. */
+export function SurfaceTabs({ items, active, onSelect, home, end }: { items: TabItem[]; active: string; onSelect: (id: string) => void; home: ReactNode; end?: ReactNode }) {
   const strip = useRef<HTMLDivElement>(null)
   const [more, setMore] = useState(false)
 
@@ -244,6 +246,7 @@ export function SurfaceTabs({ items, active, onSelect, home }: { items: TabItem[
           <Tab key={item.id} {...item} active={active === item.id} focusable={active === item.id} onSelect={() => onSelect(item.id)} />
         ))}
       </div>
+      {end && <div className="ml-auto flex shrink-0 items-center gap-1 pl-1">{end}</div>}
     </nav>
   )
 }

@@ -3,7 +3,7 @@
 // the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are. A tab that
 // is broken or needs someone is marked in the strip and the launcher, from / where the shell gathers who is needed. Each
 // notice heard while the page is open is a toast, once: the surface, what happened, and who did it where not the person;
-// clicking it goes where it happened.
+// clicking it goes where it happened. At the strip's right, the activity panel keeps all of it, the person's own too.
 // The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
@@ -14,6 +14,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
+import { ActivityButton } from "./activity.tsx"
 import { call, changes, read, type Notice } from "./client.ts"
 import { Frame, TabCommands, useFrames } from "./frame.tsx"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
@@ -332,6 +333,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         active={active}
         onSelect={(key) => go(key)}
         home={<LauncherButton {...choices} />}
+        end={<ActivityButton changes={stream} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
         items={[
           ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go(strip[0]?.at ?? "new") }] : []),
           ...strip.map((row, i) => ({
