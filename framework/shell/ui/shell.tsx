@@ -15,8 +15,8 @@ import { SurfaceTabs, TabContent } from "./tabs.tsx"
 
 /** A util's presentation: its component, and the icon the strip and the launcher show. */
 export type Registry = Record<string, { component: ComponentType; icon?: ReactNode }>
-/** A tab as home lists it; one whose util is always open offers no `close`. */
-type Row = { at: string; n: number; util: string; title?: string; close?: Handle }
+/** A tab as home lists it; one whose util is always open offers no `close`; `broken` says why its util fails on what it keeps. */
+type Row = { at: string; n: number; util: string; title?: string; close?: Handle; broken?: string }
 type RootView = { title: string; utils: UtilEntry[]; tabs: Row[] }
 type At = { key: string; route: string }
 
@@ -206,7 +206,12 @@ export function Shell({ utils }: { utils: Registry }) {
             return (
               <TabContent key={row.at} address={row.at} hidden={active !== row.at}>
                 <Activity mode={active === row.at ? "visible" : "hidden"}>
-                  {Util ? (
+                  {row.broken !== undefined ? (
+                    <Alert variant="destructive" className="m-3 w-auto">
+                      <AlertTitle>This tab is broken</AlertTitle>
+                      <AlertDescription>{row.broken}</AlertDescription>
+                    </Alert>
+                  ) : Util ? (
                     <TabError>
                       <TabProvider
                         address={row.at}
