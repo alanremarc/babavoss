@@ -1,0 +1,11 @@
+{
+  "name": "roles",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "This repository's own roles. The framework is the checkout itself, linked, where a project names a release.",
+  "scripts": {
+    "baba": "bun ../bin/baba.ts",
+    "postinstall": "mkdir -p node_modules && ln -sfn ../.. node_modules/babavoss && bun ../bin/baba.ts provision"
+  }
+}

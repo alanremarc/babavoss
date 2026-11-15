@@ -23,6 +23,8 @@ CHANGELOG.md                what each release changed; an agent reads it after t
 spec/{core,shell,bin}/      the specs, mirroring the code
 spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network
 docs/DESIGN.md              the design
+.baba/                      this repository's own roles: its framework is the checkout, linked by its postinstall, not a release
+.claude/  .agents/          provisioned from .baba/: baba's skill and the framework's hook; a harness started here runs this checkout
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
 ```
