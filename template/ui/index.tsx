@@ -3,7 +3,7 @@
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Plain } from "babavoss/kit/index.ts"
-import { useLive, useTab } from "babavoss/shell/ui/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Root = { greeting: string; proposed?: string; accept?: Handle; decline?: Handle }
 

@@ -8,7 +8,7 @@ import { action, defineRoot, surface, view, type Update } from "../../framework/
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
-import { shell, util } from "../../framework/shell/shell.ts"
+import { shell, util } from "../../framework/shell/src/surface.ts"
 
 type Model = { n: number; note: string }
 

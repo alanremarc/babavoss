@@ -3,12 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>babavoss</title>
+    <title>baba</title>
     <script>
       ;(() => {
         let p = {}
         try {
-          p = JSON.parse(localStorage.getItem("babavoss.appearance") || "{}") || {}
+          const m = document.cookie.match(/(?:^|; )babavoss\.appearance=([^;]*)/)
+          p = JSON.parse(decodeURIComponent(m ? m[1] : "") || "{}") || {}
         } catch {}
         const mode = p.mode === "dark" || (p.mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"
         document.documentElement.classList.toggle("dark", mode === "dark")
@@ -19,6 +20,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/main.tsx"></script>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

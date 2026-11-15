@@ -5,10 +5,10 @@ import { tmpdir } from "node:os"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { UiHosting } from "../core/index.ts"
+import type { UiHosting } from "../../core/index.ts"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const frameworkRoot = resolve(here, "..")
+const frameworkRoot = resolve(here, "../..")
 
 /** Where a release puts the built page, under the root's ui directory. */
 export const BUILT = "dist"
@@ -70,7 +70,7 @@ export function shellUi(dir: string | URL): UiHosting {
       if (next === stamp) return
       // A fresh process: it sees packages installed after this runtime started.
       pending = (async () => {
-        const build = Bun.spawn([process.execPath, join(here, "build.ts"), root, out], { stdout: "pipe", stderr: "pipe" })
+        const build = Bun.spawn([process.execPath, join(here, "../scripts/build.ts"), root, out], { stdout: "pipe", stderr: "pipe" })
         const [stdout, stderr, code] = await Promise.all([new Response(build.stdout).text(), new Response(build.stderr).text(), build.exited])
 
         if (code !== 0) throw new Error([stdout, stderr].join("\n").trim())

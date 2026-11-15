@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises"
 import { describe, expect, it } from "bun:test"
 import { action, run, story, surface, view, type Ports, type Saved, type Update } from "../../framework/core/index.ts"
-import { shell, util, whole, within } from "../../framework/shell/shell.ts"
+import { shell, util, whole, within } from "../../framework/shell/src/surface.ts"
 import { own } from "../../framework/shell/ui/tab.tsx"
 
 type Model = { title: string; n: number; busy?: boolean }

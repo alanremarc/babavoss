@@ -6,11 +6,13 @@
 // made or removed the generated module changes, and the running root loads it.
 import { statSync, watch, type FSWatcher } from "node:fs"
 import { join } from "node:path"
+import { main } from "../../core/bv/door.ts"
 import { defineRoot } from "../../core/root.ts"
 import { findBaba, generateRoot, SURFACES_DIR } from "../../core/provision.ts"
 import type { AnySurface } from "../../core/surface/surface.ts"
-import { shell, shellUi, util } from "../../shell/index.ts"
-import { picker } from "./surface.ts"
+import { shellUi } from "../src/hosting.ts"
+import { picker } from "../src/picker.ts"
+import { shell, util } from "../src/surface.ts"
 
 const baba = findBaba(process.cwd())
 const generated = baba && generateRoot(baba)
@@ -56,11 +58,11 @@ const follow = (baba: string) => {
 if (baba) follow(baba)
 else held.babavossSurfaces?.close()
 
-export default defineRoot({
+await main(defineRoot({
   name: "baba",
   ui: shellUi(generated ?? new URL("../ui/", import.meta.url)),
   surface: shell({
     title: "baba",
     utils: [util("surfaces", "The surfaces in this .baba/", picker(baba, listed), { open: "always" }), ...surfaces.map(([name, surface]) => util(name, surface.description, surface))],
   }),
-})
+}))

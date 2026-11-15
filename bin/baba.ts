@@ -46,7 +46,7 @@ const refuse = (message: string): never => {
   throw new Refusal(message)
 }
 /** The root's door, which opens the root of a .baba/ in a session. */
-const ROOT = fileURLToPath(new URL("../framework/root/scripts/open.ts", import.meta.url))
+const ROOT = fileURLToPath(new URL("../framework/shell/scripts/open.ts", import.meta.url))
 /** Without a harness's session, as when the person starts it by hand, the session is this one. */
 const BY_HAND = "by-hand"
 

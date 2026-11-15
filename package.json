@@ -20,7 +20,6 @@
     "./core/*": "./framework/core/*",
     "./shell/*": "./framework/shell/*",
     "./kit/*": "./framework/kit/*",
-    "./root/*": "./framework/root/*",
     "./package.json": "./package.json"
   },
   "dependencies": {

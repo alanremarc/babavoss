@@ -5,7 +5,7 @@
 // with why and what to do, and close stays offered; a path it cannot show says so, and the rest of the tab works; a tab
 // it cannot open is not made. The shell is a built-in of the framework: it imports the core beside it, and nothing else
 // of the framework imports it.
-import { action, surface, view, type Call, type Json, type Surface, type Update, type View } from "../core/index.ts"
+import { action, surface, view, type Call, type Json, type Surface, type Update, type View } from "../../core/index.ts"
 
 /** `open: "always"`: the util has one tab, from the start; it is neither opened again nor closed. */
 export type UtilOptions = { open?: "always" }

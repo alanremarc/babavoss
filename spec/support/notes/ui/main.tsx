@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client"
 import { BellIcon, BellRingIcon, CheckIcon, PlusIcon, StickyNoteIcon, Trash2Icon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "babavoss/kit/index.ts"
-import { call, changes, read } from "babavoss/shell/ui/index.ts"
+import { call, changes, read } from "babavoss/shell/ui/index.tsx"
 import "./styles.css"
 
 type Note = { at: string; n: number; text: string; due?: "pending" | "due"; remove: Handle; remind?: Handle }

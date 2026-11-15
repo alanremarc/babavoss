@@ -13,7 +13,7 @@ import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type O
 export type HookInput = { session_id?: string; hook_event_name?: string; source?: string }
 type Endpoint = { port: number; token: string; dir: string }
 
-const ROOT = fileURLToPath(new URL("../root/scripts/open.ts", import.meta.url))
+const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
 const SKILL = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
 
 /** Where the roots of a .baba/ keep what their sessions write: beside it, or in the person's home's own place. */

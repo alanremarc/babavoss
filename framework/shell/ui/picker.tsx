@@ -1,7 +1,7 @@
 // The picker's page: the surfaces in this .baba/, as the person reads them. They open one from the launcher, or ask the
 // agent for a new one; nothing is typed here.
 import { Plain, WorkbenchEmpty, WorkbenchNotice, WorkbenchPage, WorkbenchSection } from "../../kit/index.ts"
-import { useLive } from "../../shell/ui/index.ts"
+import { useLive } from "./index.tsx"
 
 type Root = { baba?: string; missing?: string; surfaces: { name: string; description: string }[] }
 
