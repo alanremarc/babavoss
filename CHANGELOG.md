@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.40.0
+
+- `sessionDir()` from `babavoss/core/state/session-dir.ts` gives a surface's command the session's own directory under the project's `.babavoss/`, where a surface may keep what belongs to the session and not to a tab; it gives nothing outside a runtime. Nothing to adapt.
+- In this repository the queue and the map are one surface, the session's work seen as a list and as a map, kept in the session's directory and shared by its tabs.
+
 ## 0.39.5
 
 - A tab's menu hangs from the strip: its top is square and on the strip's lower border. It opens from a caret that takes the tab's icon's place and turns over as it opens, and from a right click anywhere on the tab. The surface's own actions stand in it without the surface's title, which the tab has. `MenuDropdown` in the kit takes `sideOffset`, `alignOffset` and `className`. Nothing to adapt.
