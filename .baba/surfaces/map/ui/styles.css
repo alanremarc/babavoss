@@ -1,0 +1,40 @@
+/* The map's own tokens: one hue per narrative, in the order the surface lists them, a step lighter in dark mode. */
+:scope {
+  --map-1: oklch(0.56 0.15 255);
+  --map-2: oklch(0.58 0.14 160);
+  --map-3: oklch(0.62 0.15 55);
+  --map-4: oklch(0.55 0.17 310);
+  --map-5: oklch(0.58 0.12 200);
+  --map-6: oklch(0.57 0.17 20);
+  --map-dot: color-mix(in oklch, var(--foreground) 9%, transparent);
+}
+
+.dark :scope {
+  --map-1: oklch(0.74 0.12 255);
+  --map-2: oklch(0.76 0.13 160);
+  --map-3: oklch(0.8 0.13 70);
+  --map-4: oklch(0.74 0.14 310);
+  --map-5: oklch(0.77 0.1 200);
+  --map-6: oklch(0.73 0.15 20);
+  --map-dot: color-mix(in oklch, var(--foreground) 7%, transparent);
+}
+
+@keyframes map-live {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--hue) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--hue) 0%, transparent);
+  }
+}
+
+.map-live {
+  animation: map-live 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-live {
+    animation: none;
+  }
+}
