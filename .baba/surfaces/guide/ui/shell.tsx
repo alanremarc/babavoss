@@ -16,7 +16,7 @@ import { Home, HomeTab, type TabEntry } from "babavoss/shell/ui/home.tsx"
 import type { SurfaceEntry } from "babavoss/shell/ui/home.ts"
 import { Inputs } from "babavoss/shell/ui/inputs.tsx"
 import { ActivityButton, ActivityLevels, inView, waitingRows, type Entered, type Shown } from "babavoss/shell/ui/notifications.tsx"
-import { SurfaceTabs, TabBroken, TabFailed, TabNoPage } from "babavoss/shell/ui/tabs.tsx"
+import { markOf, SurfaceTabs, TabBroken, TabFailed, TabNoPage } from "babavoss/shell/ui/tabs.tsx"
 import { standingOf } from "babavoss/shell/ui/turn.ts"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
@@ -143,11 +143,18 @@ const SURFACES: SurfaceEntry[] = [
   { name: "settings", description: "The person's settings. Use when they ask to change one.", open: handle("open", "Open the settings", { surface: "settings" }) },
   { name: "notes", broken: "src/surface.ts: Unexpected end of file" },
 ]
-const HOME_TABS: TabEntry[] = [
-  { at: "/queue", n: 3, surface: "queue", label: "Queue", icon: ICONS.queue, needs: [{ who: "person", why: "to approve or drop 1 draft" }] },
-  { at: "/tabs/2", n: 2, surface: "lab", label: "Lab", icon: ICONS.lab, needs: [{ who: "agent", why: "to read the run" }] },
-  { at: "/tabs/1", n: 1, surface: "lab", label: "Lab 1", icon: ICONS.lab, broken: "its saved state does not load" },
-]
+/** The open tabs as home lists them, each marked on its icon as the strip marks it. */
+const HOME_TABS: TabEntry[] = (
+  [
+    { at: "/queue", n: 3, surface: "queue", label: "Queue", icon: ICONS.queue, needs: [{ who: "person", why: "to approve or drop 1 draft" }] },
+    { at: "/tabs/2", n: 2, surface: "lab", label: "Lab", icon: ICONS.lab, needs: [{ who: "agent", why: "to read the run" }] },
+    { at: "/tabs/1", n: 1, surface: "lab", label: "Lab 1", icon: ICONS.lab, broken: "its saved state does not load" },
+  ] satisfies TabEntry[]
+).map((tab) => {
+  const mark = markOf(tab)
+
+  return mark ? { ...tab, mark } : tab
+})
 
 function HomeSpecimen() {
   const box = useRef<HTMLDivElement>(null)
@@ -159,14 +166,13 @@ function HomeSpecimen() {
 
   return (
     <States>
-      <State label="the open tabs, what each needs, the previous one; the surfaces to open; one that does not load" wide className="flex h-[26rem] flex-col items-stretch overflow-hidden p-0">
+      <State label="the open tabs, each marked by what it needs; the surfaces to open; one that does not load" wide className="flex h-[26rem] flex-col items-stretch overflow-hidden p-0">
         <div ref={box} className="contents">
           <Home
             title="babavoss"
             surfaces={SURFACES}
             icons={ICONS}
             tabs={HOME_TABS}
-            back={HOME_TABS[1]}
             keys="⌘P"
             disabled={false}
             loading={false}

@@ -62,7 +62,7 @@ export function rowsOf(surfaces: readonly SurfaceEntry[], tabs: readonly TabChoi
 /** What Enter does on a line, and what Enter with the command key does where it does something else; nothing on one that does not load. */
 export function doesOf(row: HomeRow): { enter?: string; other?: string } {
   if (row.kind === "tab") return { enter: "Go to tab", ...(row.another && { other: "Open another" }) }
-  if (row.kind === "surface") return { enter: "Open" }
+  if (row.kind === "surface") return { enter: "Open in new tab" }
 
   return {}
 }

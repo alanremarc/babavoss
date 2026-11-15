@@ -2,6 +2,18 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.51.4
+
+- An open tab's line in home's list carries its mark on its icon, as its pill in the strip does: broken, waiting on the person, or needing the agent. The words beside its name are gone, what it needs and "previous" alike; hovering the icon says them. Nothing to adapt.
+
+## 0.51.3
+
+- A line of home's list ends with its action alone, without the Enter sign, and a surface with no tab open says "Open in new tab". Nothing to adapt.
+
+## 0.51.2
+
+- Each line of home's list says at its end what Enter does on it, "Go to tab" or "Open", the same whether it is the chosen line or not; it no longer says what kind of thing the line is, and home's foot no longer repeats the chosen line's action. Enter with the command key still opens another tab of an open tab's surface. Nothing to adapt.
+
 ## 0.51.1
 
 - Home no longer offers a command that ends the person's move, "End my move" or "Copy the message that ends my move": the person writes to the agent themselves. What they did on the page still waits for its next turn and is counted on the activity's button. Nothing to adapt.

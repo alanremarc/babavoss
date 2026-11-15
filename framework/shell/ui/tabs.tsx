@@ -41,7 +41,7 @@ export const standing = ({ needs = [], broken }: Pick<TabItem, "needs" | "broken
   ...needs.map((n) => `${n.who === "person" ? "Needs you" : "Needs the agent"}: ${n.why}`),
 ]
 /** The mark in the pill's corner, the strongest first: broken; the one dot of what waits on the person; needing the agent. */
-const MARK = {
+export const MARK = {
   broken: "size-2 bg-destructive",
   person: "size-1.5 bg-primary",
   agent: "size-1.5 bg-muted-foreground/70",
