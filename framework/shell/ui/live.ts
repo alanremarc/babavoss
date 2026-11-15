@@ -41,7 +41,12 @@ export function liveCache(fetch: (path: string) => Promise<unknown>): LiveCache 
     const read = fetch(path)
       .then(
         (view) => void entries.set(path, { view }),
-        (error: unknown) => void entries.set(path, { ...entries.get(path), error: message(error) })
+        (error: unknown) => {
+          // No answer at all, the runtime being out of reach, is not an error of the path: a view that was read stays as
+          // it is, to be read again when the stream is back. Only a first read has nothing else to show.
+          if (error instanceof TypeError && entries.get(path)?.view !== undefined) return void stale.add(path)
+          entries.set(path, { ...entries.get(path), error: message(error) })
+        }
       )
       .then(() => {
         pending.delete(path)

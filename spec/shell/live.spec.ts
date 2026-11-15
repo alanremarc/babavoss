@@ -147,3 +147,26 @@ describe("the page's stream", () => {
     expect([said("lost", 700), said("connecting", 4000)]).toEqual(["Reconnecting", "Connecting"])
   })
 })
+
+describe("a runtime out of reach", () => {
+  it("leaves a view that was read as it is, with no error, and reads it again when asked", async () => {
+    let reach = true
+    let n = 0
+    const cache = liveCache(async (path) => {
+      if (!reach) throw new TypeError("Failed to fetch")
+
+      return { path, n: ++n }
+    })
+
+    await cache.load("/a")
+    reach = false
+    await cache.load("/a")
+    expect(cache.get("/a")).toEqual({ view: { path: "/a", n: 1 } })
+    // A path never read has nothing else to show.
+    await cache.load("/b")
+    expect(cache.get("/b")).toEqual({ error: "Failed to fetch" })
+    reach = true
+    await cache.load("/a")
+    expect(cache.get("/a")).toEqual({ view: { path: "/a", n: 2 } })
+  })
+})
