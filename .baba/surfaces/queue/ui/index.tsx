@@ -7,7 +7,8 @@ import type { Handle } from "babavoss/core/index.ts"
 import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain, useLive, useTab } from "babavoss/shell/ui/index.ts"
 
 type Status = "draft" | "backlog" | "lane" | "done"
-type Issue = { n: number; title: string; about: string; status: Status; lane?: number; note?: string; approve?: Handle; drop?: Handle }
+type Issue = { at: string; n: number; title: string; status: Status; lane?: number; note?: string }
+type Whole = Issue & { about: string; approve?: Handle; drop?: Handle }
 type Root = { lanes: number; free: number[]; issues: Issue[] }
 
 export const icon = <ListTodoIcon aria-hidden />
@@ -52,10 +53,11 @@ export default function Queue() {
   const [picked, setPicked] = useState<number>()
   const [refused, setRefused] = useState("")
   const issues = view?.issues ?? []
-  const selected = issues.find((issue) => issue.n === picked) ?? issues[0]
+  const current = issues.find((issue) => issue.n === picked) ?? issues[0]
+  const { view: selected } = useLive<Whole>(current ? `/issues/${current.n}` : "/")
   const busy = (view?.lanes ?? 0) - (view?.free.length ?? 0)
   const decide = async (handle: Handle) => {
-    const answer = await call("/", handle.name, handle.args)
+    const answer = await call(`/issues/${current?.n}`, handle.name, handle.args)
 
     setRefused(answer.outcome === "refused" ? answer.reason : "")
   }
@@ -64,7 +66,7 @@ export default function Queue() {
     <Plain label="Queue">
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col overflow-auto">
-          {selected ? (
+          {current && selected?.about !== undefined ? (
             <article className="flex max-w-3xl flex-col gap-4 p-6">
               <div className="text-muted-foreground flex items-center gap-2 text-xs">
                 <Mark status={selected.status} />
@@ -134,7 +136,7 @@ export default function Queue() {
                       <button
                         type="button"
                         onClick={() => setPicked(issue.n)}
-                        aria-current={issue.n === selected?.n}
+                        aria-current={issue.n === current?.n}
                         title={issue.title}
                         className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-xs outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
                       >

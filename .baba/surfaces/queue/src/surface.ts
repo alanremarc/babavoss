@@ -98,14 +98,20 @@ const drop = action({
 })
 
 const by = (a: Issue, b: Issue) => a.at - b.at
+/** An issue as the stack lists it: one line, with the path that has the rest. */
 const row = (issue: Issue) => ({
+  at: `/issues/${issue.n}`,
   n: issue.n,
   title: issue.title,
   status: issue.status,
   ...(issue.lane && { lane: issue.lane }),
-  about: issue.about,
   ...(issue.note && { note: issue.note }),
-  ...(issue.status === "draft" && { approve: approve.bind({ n: issue.n }) }),
+})
+/** An issue whole, at its own path: what it is about, and what can be done with it now. */
+const whole = (issue: Issue) => ({
+  ...row(issue),
+  about: issue.about,
+  ...(issue.status === "draft" && { waiting: "the person, to approve or drop this draft on the page", approve: approve.bind({ n: issue.n }) }),
   describe: describe.bind({ n: issue.n }),
   note_: note.bind({ n: issue.n }),
   ...(issue.status === "backlog" && { start: start.bind({ n: issue.n }) }),
@@ -122,7 +128,7 @@ const pages = view([add, draft, approve, describe, note, start, done, back, drop
 
     return {
       title: "Queue",
-      how: `Keep this true as the work moves: add an issue the person asks for, draft one you would suggest and leave it until they approve it on the page, start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
+      how: `Keep this true as the work moves: add an issue the person asks for, draft one you would suggest and leave it until they approve it on the page, start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. An issue's path has what it is about and what can be done with it. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       issues: [...lanes, ...backlog, ...drafts, ...finished].map(row),
@@ -130,6 +136,11 @@ const pages = view([add, draft, approve, describe, note, start, done, back, drop
       add: add.bind({}),
       draft: draft.bind({}),
     }
+  },
+  "/issues/:n": (m, { n }) => {
+    const issue = m.issues.find((issue) => issue.n === Number(n))
+
+    return issue && whole(issue)
   },
 })
 
