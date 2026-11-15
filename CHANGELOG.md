@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.54.3
+
+- An eye of the mark has no `dx`: a lens stays at the mark's middle, and a face that rests turned rests its eyes to one side of it. Only this repository's Design Guide used it. Nothing to adapt.
+
 ## 0.54.2
 
 - The mark's eye model, for variants being tried in this repository's Design Guide: an eye's `lens` now draws it as a patch of the sphere as seen, whole at the middle and smaller and narrower towards the edge, with `yaw`, a turn the face rests at, and `dx`; a gaze may say `lid`, how open the eyes are; and `Logo` and `Eyes` take `lostAs`, how a lost runtime is said: "orbit", as now and by default, or "doze", "search" or "pulse". The shell's mark is unchanged. Nothing to adapt.

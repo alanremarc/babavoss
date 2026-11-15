@@ -12,10 +12,10 @@ export type Gaze = { yaw: number; pitch: number; size: number; lid?: number }
  *
  * A variant of the mark may put a lens over the sphere's middle, `lens`: the eye is then a patch of the sphere as it is
  * seen, narrower towards the edge, and of its radius `r` only at the very middle, smaller by `lens` times how far from
- * the front it is. `yaw` is how far the face is turned at rest, so that eyes of one size rest unequal, and `dx` moves the
- * drawing sideways, to centre a face that rests turned.
+ * the front it is. `yaw` is how far the face is turned at rest: its eyes then rest to one side of the lens, which stays
+ * at the mark's middle, so eyes of one size rest unequal.
  */
-export type Eye = { x: number; r: number; lens?: number; yaw?: number; dx?: number }
+export type Eye = { x: number; r: number; lens?: number; yaw?: number }
 /** An eye as drawn: an ellipse whose `rx` lies along the line from the sphere's centre, turned by `turn` degrees. */
 export type Drawn = { cx: number; cy: number; rx: number; ry: number; turn: number }
 
@@ -47,7 +47,7 @@ export function drawn(eye: Eye, gaze: Gaze): Drawn {
   const r = eye.r * gaze.size * (lens ?? 1)
 
   return {
-    cx: SPHERE.x + x * SPHERE.radius + (eye.dx ?? 0),
+    cx: SPHERE.x + x * SPHERE.radius,
     cy: SPHERE.y + y * SPHERE.radius,
     rx: lens === undefined ? (r * z) / front : r * z,
     ry: r * (gaze.lid ?? 1),

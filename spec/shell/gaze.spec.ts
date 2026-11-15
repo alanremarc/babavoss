@@ -80,8 +80,8 @@ test("under a lens an eye is a patch of the sphere as seen: whole and round at t
   expect(turned.ry).toBeCloseTo(18 * (1 + 2 * (Math.cos(0.5) - 1)), 6)
   expect(turned.rx).toBeCloseTo(turned.ry * Math.cos(0.5), 6)
   expect(drawn(eye, { yaw: 1.4, pitch: 0, size: 1 }).ry).toBeCloseTo(18 * 0.3, 6)
-  // A face that rests turned draws its eyes unequal at rest, and `dx` moves the drawing.
-  expect(drawn({ ...eye, yaw: 0.5, dx: -10 }, REST)).toMatchObject({ cx: turned.cx - 10, ry: turned.ry })
+  // A face that rests turned draws its eyes at rest where a turn would put them: to one side of the lens, and unequal.
+  expect(drawn({ ...eye, yaw: 0.5 }, REST)).toMatchObject({ cx: turned.cx, ry: turned.ry })
   // The brand's eyes have no lens: they keep their size wherever they are.
   expect(drawn({ x: 69, r: 15 }, { yaw: 0.4, pitch: 0, size: 1 }).ry).toBeCloseTo(15, 6)
 })

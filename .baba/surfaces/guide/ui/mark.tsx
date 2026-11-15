@@ -4,7 +4,7 @@
 import { useState, type ComponentType, type ReactNode } from "react"
 import { HomeTab } from "babavoss/shell/ui/home.tsx"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
-import { EYES, LOSTS, MOVES, type Eye, type Lost } from "babavoss/shell/ui/gaze.ts"
+import { EYES, MOVES, type Eye, type Lost } from "babavoss/shell/ui/gaze.ts"
 import { standingOf, type Standing } from "babavoss/shell/ui/turn.ts"
 import { WorkbenchSegments } from "babavoss/kit/index.ts"
 import type { EntryOf } from "../src/catalogue.ts"
@@ -82,18 +82,17 @@ function Moves() {
 }
 
 /**
- * The lens pair: two eyes of one size, 18, the same angle either side of the sphere's front, under a lens over its
- * middle; the face rests turned a quarter of a radian to the right, so the left eye, at the middle, is whole and round,
- * and the right, towards the edge, is smaller and narrower: nearly the brand's two circles, but made by a look. `dx`
- * centres the turned face in the mark's box.
+ * The lens pair: two eyes of one size, 18, the same angle either side of the sphere's front, under a lens that stays at
+ * the mark's middle. The face rests turned a quarter of a radian to the right, so its eyes rest to the right of the
+ * middle: the left one near it, whole and round, the right one towards the edge, smaller and narrower.
  */
 const HALF = 0.28
-const LENS: Eye[] = [-1, 1].map((side) => ({ x: 50 + 70 * Math.sin(side * HALF), r: 18, lens: 2.2, yaw: 0.25, dx: -13.1 }))
+const LENS: Eye[] = [-1, 1].map((side) => ({ x: 50 + 70 * Math.sin(side * HALF), r: 18, lens: 2.2, yaw: 0.25 }))
 
 /** Pairs of eyes being tried, the brand's first to compare with. Each is a constant: the mark takes a new array for a new pair. */
 const VARIANTS: { label: string; about: string; pair: Eye[]; losts: readonly Lost[] }[] = [
   { label: "brand", about: "two circles, 18 and 12.7, 7 apart", pair: EYES, losts: ["orbit"] },
-  { label: "lens", about: "two eyes of 18 on the sphere, at rest looking right; the lens makes the nearer one larger", pair: LENS, losts: LOSTS.filter((l) => l !== "orbit") },
+  { label: "lens", about: "two eyes of 18 on the sphere, resting to the right of a lens at the middle", pair: LENS, losts: ["search"] },
 ]
 const STILL = standingOf({ agent: "idle", waiting: 0 })
 const WORKING = standingOf({ agent: "working", waiting: 0 })
