@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.43.3
+
+- A page that lost its runtime shows it in the mark alone: the larger eye comes to the centre and turns red, the smaller goes round it, and hovering the mark says Reconnecting. The bubble under the mark is gone. Nothing to adapt.
+
 ## 0.43.2
 
 - Home lists a surface by its name alone. Its description, written for the agent to choose it by, still finds it in the search and is told on hover. Nothing to adapt.

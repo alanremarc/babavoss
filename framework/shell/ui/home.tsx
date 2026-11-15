@@ -8,7 +8,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "cn"
 import type { Handle } from "../../core/index.ts"
-import { BoxIcon, LoaderCircleIcon, SendIcon } from "lucide-react"
+import { BoxIcon, SendIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Logo } from "./mark.tsx"
 import type { Standing as TurnStanding } from "./turn.ts"
@@ -42,7 +42,7 @@ export function HomeTab({
   standing: TurnStanding
   animate: boolean
   keys: string
-  /** What the page says of a runtime it lost and is finding again: the mark sleeps, and says it in a bubble under it. */
+  /** What the page says of a runtime it lost and is finding again: the mark shows it, and says it on hover. */
   lost?: string
   onSelect: () => void
 }) {
@@ -54,24 +54,15 @@ export function HomeTab({
       id={`tab-${HOME}`}
       aria-selected={active}
       aria-controls={`content-${HOME}`}
-      aria-label={`Home. ${standing.said}`}
-      title={`Home: open, switch to or run (${keys})\n${standing.said}`}
+      aria-label={`Home. ${lost ?? standing.said}`}
+      title={lost ?? `Home: open, switch to or run (${keys})\n${standing.said}`}
       tabIndex={active ? 0 : -1}
       data-active={active || undefined}
       className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:bg-foreground/6 focus-visible:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground not-hover:not-data-[active]:has-[[data-turn=working]]:bg-foreground/3"
       onClick={onSelect}
     >
-      <Logo standing={standing} animate={animate} asleep={!!lost} />
+      <Logo standing={standing} animate={animate} lost={!!lost} />
     </button>
-      {lost && (
-        <span
-          role="status"
-          className="pointer-events-none absolute top-full left-0 z-50 mt-2.5 flex h-6 animate-in items-center gap-1.5 rounded-full rounded-tl-[3px] bg-popover pr-2.5 pl-2 text-meta whitespace-nowrap text-muted-foreground shadow-md ring-1 ring-foreground/10 duration-200 fade-in-0 zoom-in-95 before:absolute before:-top-[4px] before:left-2.5 before:size-2 before:rotate-45 before:border-t before:border-l before:border-foreground/10 before:bg-popover motion-reduce:animate-none"
-        >
-          <LoaderCircleIcon aria-hidden className="size-3 animate-spin [animation-duration:1.4s]" />
-          {lost}
-        </span>
-      )}
     </span>
   )
 }

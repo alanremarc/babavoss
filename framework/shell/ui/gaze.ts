@@ -2,8 +2,8 @@
 // turns the sphere, and each eye is drawn where its patch lands, squashed towards the sphere's edge as a patch on a ball is.
 // Pure: the poses a thinking face goes through, the easing between them, and the ellipse an eye is at a gaze.
 
-/** Where the face looks, in radians, right and down positive; how wide the eyes are, 1 at rest; and how open, 1 unless said, 0 shut. */
-export type Gaze = { yaw: number; pitch: number; size: number; open?: number }
+/** Where the face looks, in radians, right and down positive; and how wide the eyes are, 1 at rest. */
+export type Gaze = { yaw: number; pitch: number; size: number }
 /** An eye at rest, in the mark's 100 by 100 box: its centre's x, the centre's y being the sphere's, and its radius. */
 export type Eye = { x: number; r: number }
 /** An eye as drawn: an ellipse whose `rx` lies along the line from the sphere's centre, turned by `turn` degrees. */
@@ -16,8 +16,6 @@ export const EYES: Eye[] = [
   { x: 71.5, r: 12.728 },
 ]
 export const REST: Gaze = { yaw: 0, pitch: 0, size: 1 }
-/** Asleep: the eyes nearly shut, two level lines where they rest. */
-export const SLEEP: Gaze = { yaw: 0, pitch: 0, size: 1, open: 0.14 }
 
 /** The eye at `gaze`: at rest exactly the brand's circle, and narrower along the radius the further it turns from the front. */
 export function drawn(eye: Eye, gaze: Gaze): Drawn {
@@ -34,8 +32,7 @@ export function drawn(eye: Eye, gaze: Gaze): Drawn {
     cx: SPHERE.x + x * SPHERE.radius,
     cy: SPHERE.y + y * SPHERE.radius,
     rx: (r * z) / front,
-    // A lid closes an eye from above and below: across the radius, which at the front is up and down.
-    ry: r * (gaze.open ?? 1),
+    ry: r,
     turn: Math.hypot(x, y) < 1e-6 ? 0 : (Math.atan2(y, x) * 180) / Math.PI,
   }
 }
@@ -46,7 +43,6 @@ export const between = (a: Gaze, b: Gaze, t: number): Gaze => ({
   yaw: a.yaw + (b.yaw - a.yaw) * t,
   pitch: a.pitch + (b.pitch - a.pitch) * t,
   size: a.size + (b.size - a.size) * t,
-  open: (a.open ?? 1) + ((b.open ?? 1) - (a.open ?? 1)) * t,
 })
 
 /** One move of a thinking face: the gazes it passes through, how long each turn takes and how long it rests at its end, in ms. */
@@ -78,3 +74,24 @@ export function next(last: string | undefined, random: () => number = Math.rando
 }
 
 export const within = ([from, to]: [number, number], random: () => number = Math.random) => from + (to - from) * random()
+
+/** How long the smaller eye takes round the larger one, in ms, while the page has lost its runtime. */
+export const ORBIT_MS = 1800
+/** How far from the larger eye's centre the smaller one goes round it. */
+const ORBIT_RADIUS = 34
+
+/**
+ * The eyes of a page that lost its runtime: the larger one comes to the mark's centre and the smaller goes round it.
+ * `into` is how far into that they are, 0 the eyes at rest and 1 the orbit, and `angle` where on its round the smaller
+ * one is, in radians from the right, clockwise. At 0 and no angle both are exactly at rest.
+ */
+export function orbiting(into: number, angle: number): [Drawn, Drawn] {
+  const [large, small] = EYES as [Eye, Eye]
+  const cx = large.x + (SPHERE.x - large.x) * into
+  const away = small.x - large.x + (ORBIT_RADIUS - (small.x - large.x)) * into
+
+  return [
+    { cx, cy: SPHERE.y, rx: large.r, ry: large.r, turn: 0 },
+    { cx: cx + away * Math.cos(angle), cy: SPHERE.y + away * Math.sin(angle), rx: small.r, ry: small.r, turn: 0 },
+  ]
+}
