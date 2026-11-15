@@ -2,7 +2,7 @@
 // its surface's icon; what the agent sees next, one item that opens in place into the person's waiting calls; a line of a
 // channel's history; and the keys that move through them. Hierarchy is type and colour alone, as everywhere in the drawer.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react"
-import { cn } from "cn"
+import { cn } from "../../kit/cn.ts"
 import { AppWindowIcon, BotIcon, ChevronRightIcon, CircleDotIcon, HouseIcon, UserRoundIcon } from "lucide-react"
 import { agoOf, needLine, previewOf, SHELL, type Channel, type Row, type TabInfo, type Who } from "./channels.ts"
 

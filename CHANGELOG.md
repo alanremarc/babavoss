@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.47.0
+
+- Kit: `DropdownMenu` and its parts, `Badge`, `Marker`, an inline line or labelled separator in a conversation, and `ResizablePanelGroup`, `ResizablePanel` and `ResizableHandle`, from shadcn, in the type scale. `ThreadStep` takes `onOpenChange` and `ThreadSteps` takes `initial`, so a page can keep the open step in its route. The kit's class merger keeps a type-scale size, `text-meta` and the others, beside a text colour; it used to drop it, so some small labels in messages, the composer and the shell were the wrong size. Nothing to adapt.
+- In this repository the lab shows a run as a conversation: bubbles for what is said, folded steps for what entered the context between, a divider per turn, a header for the run's lifecycle and the runs kept, and a composer that picks the model and starts a run from its first message.
+
 ## 0.46.0
 
 - Breaking: a tab stands at its surface's name. The tab opened while no other tab of its surface holds the name is `/NAME` until it closes, so `/queue/issues/42` survives the tab being closed and opened again; a second tab of a surface is `/tabs/N`, and `/tabs/N` still reaches any tab. Reads, calls, `show at=` and the page's URLs take either; every path the shell gives, tab rows, `at` facts, notices, needs, `pointed` and activity, is said by the address. At `/` a tab's heading is `/queue "Queue" (tab 10)`, and a second one `/tabs/11 queue "Queue"`. A spec matching `/tabs/1 NAME "Title"`, `at: "/tabs/1…"` or `NAME /tabs/1` in what the agent is told now matches `/NAME "Title" (tab 1)`, `at: "/NAME…"` and `/NAME`.
