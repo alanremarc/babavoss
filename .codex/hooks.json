@@ -1,0 +1,65 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
