@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.39.5
+
+- A tab's menu hangs from the strip: its top is square and on the strip's lower border. It opens from a caret that takes the tab's icon's place and turns over as it opens, and from a right click anywhere on the tab. The surface's own actions stand in it without the surface's title, which the tab has. `MenuDropdown` in the kit takes `sideOffset`, `alignOffset` and `className`. Nothing to adapt.
+
 ## 0.39.4
 
 - A tab under the keyboard's focus has no ring: it reads as one hovered, with its ground and its dots. Nothing to adapt.

@@ -264,16 +264,19 @@ export type TabMenuParts = {
 export const MANY = 8
 
 /**
- * The tab's menu, top to bottom: the surface's actions at `/` under its title; where the tab is below `/`, the place's
+ * The tab's menu, top to bottom: the surface's actions at `/`, with no title, the tab having it; where the tab is below `/`, the place's
  * actions under its name; Go, the places and the way back up, a submenu with a field where there are more than MANY;
  * then the shell's own controls. Asks stand first in their group, marked, and so does the label over them; Go and the
  * places in it carry a dot on the way to what waits elsewhere.
  */
 export function tabMenu({ surface, place, go, dots, start, navigate, controls }: TabMenuParts): MenuItem[] {
-  const section = (id: string, s: { label: string; actions: Offered[]; menu?: Json }): MenuItem[] => {
+  // The surface's own actions stand without a heading: the tab the menu hangs from names it already.
+  const section = (id: string, s: { label: string; actions: Offered[]; menu?: Json }, titled = true): MenuItem[] => {
     const items = grouped(s.actions, s.menu, start)
 
-    return items.length ? [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items] : []
+    if (!items.length || !titled) return items
+
+    return [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items]
   }
   const ups = go.filter((g) => g.up)
   const places = go.filter((g) => !g.up)
@@ -287,7 +290,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
   })
   const goItems: MenuItem[] = [...ups.map(entry), ...(ups.length && places.length ? [{ kind: "separator" as const, id: "places-edge" }] : []), ...places.map(entry)]
   const parts: MenuItem[][] = [
-    section("surface", surface),
+    section("surface", surface, false),
     place ? section("place", place) : [],
     goItems.length
       ? [{ kind: "submenu" as const, id: "go", label: "Go", items: goItems, ...(places.length > MANY && { search: "Filter places" }), ...(go.some((g) => dots.has(g.at)) && { mark: true }) }]

@@ -6,7 +6,7 @@
 // have not looked at; needing the agent, quietly; and why, as its tooltip. At its right stands what is the session's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
-import { EllipsisIcon } from "lucide-react"
+import { ChevronDownIcon } from "lucide-react"
 import { MenuDropdown } from "../../kit/layouts/menu.tsx"
 import { tabScrollOffset } from "./tab-scroll"
 
@@ -129,10 +129,12 @@ function Tab({
       )}
       data-active={active || undefined}
       data-menu={open || undefined}
+      // A right click anywhere on the tab opens its menu, once the click itself is over, so nothing of it closes the menu again.
       onContextMenu={(e) => {
         if (!menu) return
         e.preventDefault()
-        setOpen(true)
+        e.stopPropagation()
+        requestAnimationFrame(() => setOpen(true))
       }}
       onMouseEnter={() => setEngaged(true)}
       onMouseLeave={(event) => {
@@ -204,6 +206,10 @@ function Tab({
           open={open}
           setOpen={setOpen}
           label={`Menu for ${label}`}
+          // The menu hangs from the strip: its top square, on the strip's lower border, its left on the tab's.
+          sideOffset={11}
+          alignOffset={-3}
+          className="rounded-t-none"
           // Focus goes back to the tab, unless what was chosen opened a modal, which keeps it.
           closed={() => {
             if (!document.querySelector('[role="dialog"]:not([data-slot="sheet-content"])')) tab.current?.focus()
@@ -218,7 +224,7 @@ function Tab({
               tabIndex={-1}
               aria-label={`Menu for ${label}`}
             >
-              <EllipsisIcon aria-hidden />
+              <ChevronDownIcon aria-hidden className={cn("transition-[rotate] duration-200 ease-[cubic-bezier(.3,1.6,.4,1)] motion-reduce:transition-none", open && "rotate-180")} />
               {mark && <span aria-hidden className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
             </button>
           }

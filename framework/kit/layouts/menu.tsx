@@ -236,6 +236,9 @@ export function MenuDropdown({
   label,
   trigger,
   closed,
+  sideOffset = 4,
+  alignOffset = 0,
+  className = "",
   children,
 }: {
   open: boolean
@@ -243,6 +246,9 @@ export function MenuDropdown({
   label: string
   trigger: ReactNode
   closed?: () => void
+  sideOffset?: number
+  alignOffset?: number
+  className?: string
   children: ReactNode
 }) {
   return (
@@ -252,10 +258,11 @@ export function MenuDropdown({
         <Dropdown.Content
           side="bottom"
           align="start"
-          sideOffset={4}
+          sideOffset={sideOffset}
+          alignOffset={alignOffset}
           collisionPadding={8}
           aria-label={label}
-          className={`${menuContent} w-72`}
+          className={`${menuContent} w-72 ${className}`}
           onCloseAutoFocus={(event) => {
             if (!closed) return
             event.preventDefault()
