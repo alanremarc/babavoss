@@ -11,8 +11,8 @@ import { fileURLToPath } from "node:url"
 /** Where the harnesses read skills, relative to a project or to the person's home: Claude Code, and Codex with the rest. */
 export const SKILL_FOLDERS = [".claude/skills", ".agents/skills"]
 export const SURFACES_DIR = "surfaces"
-/** The harness events the framework's hook is provisioned for: it adds context there and blocks nothing. */
-export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse"]
+/** The harness events the framework's hook is provisioned for: it adds context at the first three, tells the turn at all, and blocks nothing. */
+export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "StopFailure", "SessionEnd"]
 /** Claude Code's settings beside .baba/: the person's too, so only the framework's own hooks in it are written. */
 const SETTINGS = ".claude/settings.json"
 /** How the framework's hooks are told from the person's: by the command they run. */
