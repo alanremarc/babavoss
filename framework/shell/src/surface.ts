@@ -18,7 +18,7 @@
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
 import { action, handles, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
-import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenOf, type Entry, type Seen } from "./activity.ts"
+import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen } from "./activity.ts"
 
 /** `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved. */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string }
@@ -235,7 +235,7 @@ export function shell(
   })
   const looked = action({
     name: "looked",
-    description: "the person looked at notice n alone, as by clicking its toast",
+    description: "the person looked at notice n alone, as by clicking its toast or opening its tab's channel",
     subject: {},
     inputs: { n: "number" },
     ask: true,
@@ -386,9 +386,12 @@ export function shell(
       if (!at) {
         const home = desktop.view(model, path, actor)
 
-        // How many notices the person has not seen is theirs alone, beside the asks that mark them.
-        if (home && path === NOTICES && actor !== undefined && isPerson(actor))
-          return { ...home, unseen: unseenOf(model.activity ?? [], model.seen ?? { upto: 0, looked: [] }) }
+        // Which notices the person has not seen, and how many, is theirs alone, beside the asks that mark them.
+        if (home && path === NOTICES && actor !== undefined && isPerson(actor)) {
+          const fresh = unseenIn(model.activity ?? [], model.seen ?? { upto: 0, looked: [] })
+
+          return { ...home, unseen: fresh.length, fresh }
+        }
         if (!home || path !== "/") return home
 
         const rows = model.tabs.map((tab) => said(tab, actor))

@@ -12,7 +12,7 @@ import { BoxIcon, SendIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Logo } from "./mark.tsx"
 import type { Standing as TurnStanding } from "./turn.ts"
-import { choices, type SurfaceEntry } from "./home.ts"
+import { doesOf, rowsOf, type HomeRow, type SurfaceEntry } from "./home.ts"
 import { named } from "./commands.ts"
 import { HOME } from "./pointing.ts"
 import { SEARCH_MARK } from "./shortcuts.ts"
@@ -87,11 +87,42 @@ type Props = {
   leave?: () => void
 }
 
-/** Home's page: the root's title, what the shell offers, and whose page it is at the bottom. */
+/** The command key as the person reads it: ⌘ on a Mac, Ctrl elsewhere. */
+const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl "
+
+/** What a line is, said at its end where it is not the chosen one; the chosen one says what Enter does there instead. */
+const KIND = { tab: "tab", surface: "surface", broken: "surface", command: "command" } as const
+
+/** A line's end: what kind of thing it is, giving way on the chosen line to what Enter does. */
+function Does({ row }: { row: HomeRow }) {
+  const { enter } = doesOf(row)
+
+  return (
+    <span className="shrink-0 pl-3 text-meta whitespace-nowrap">
+      <span className={enter ? "group-data-[selected=true]/command-item:hidden" : undefined}>{KIND[row.kind]}</span>
+      {enter && (
+        <span className="hidden text-foreground group-data-[selected=true]/command-item:inline">
+          {enter} <span className="text-muted-foreground">↵</span>
+        </span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * Home's page: the root's title, then one list of what the shell has, each thing once: the open tabs, the surfaces with
+ * none open, the shell's commands. A line names the thing; the chosen line and the foot say what Enter does on it, and
+ * what Enter with the command key does where that is something else.
+ */
 export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
   const [ended, setEnded] = useState<string>()
-  const offered = choices(surfaces)
+  const [picked, setPicked] = useState("")
+  const ending = end ? [{ value: "end move", label: end.drivable ? "End my move" : "Copy the message that ends my move" }] : []
+  const rows = rowsOf(surfaces, tabs, ending)
+  const chosen = rows.find((row) => row.value === picked)
+  const does = chosen ? doesOf(chosen) : {}
+  const tabOf = (at: string) => tabs.find((tab) => tab.at === at)
 
   // What ending the move last did is said until the turn moves on.
   useEffect(() => setEnded(undefined), [end?.drivable, !end])
@@ -105,7 +136,16 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, di
         <Command
           key={loading ? "loading" : "ready"}
           loop
+          value={picked}
+          onValueChange={setPicked}
           onKeyDown={(event) => {
+            // Enter with the command key does the chosen line's other thing: another tab of an open tab's surface.
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault()
+              if (chosen?.kind === "tab" && chosen.another && !disabled) launch(chosen.another)
+
+              return
+            }
             if (event.key !== "Escape") return
             event.preventDefault()
             if (search) setSearch("")
@@ -115,61 +155,80 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, di
           <CommandInput autoFocus {...{ [SEARCH_MARK]: "" }} aria-label="Run, open or switch to" placeholder="Run, open or switch to…" value={search} onValueChange={setSearch} />
           <CommandList className="max-h-none">
             <CommandEmpty>{loading ? "Loading…" : "Nothing found."}</CommandEmpty>
-            {offered.length > 0 && (
-              <CommandGroup heading="Open">
-                {offered.map((u) => {
-                  const count = tabs.filter((tab) => tab.surface === u.name).length
+            {rows.length > 0 && (
+              <CommandGroup>
+                {rows.map((row) => {
+                  if (row.kind === "tab") {
+                    const tab = tabOf(row.at)!
+                    const description = surfaces.find((u) => u.name === row.surface)?.description
 
-                  return "broken" in u ? (
-                    <CommandItem key={u.name} value={`surface ${u.name}`} keywords={[u.name, "broken", u.broken]} disabled data-broken="">
-                      <Glyph>{icons[u.name] ?? <BoxIcon aria-hidden />}</Glyph>
-                      <span className="max-w-[45%] shrink-0 truncate text-foreground">{u.name}</span>
-                      <span className="pl-1.5 text-meta whitespace-nowrap text-destructive">does not load</span>
-                      <span className="min-w-0 flex-1 truncate pl-1.5" title={u.broken}>
-                        {u.broken}
-                      </span>
-                    </CommandItem>
-                  ) : (
-                    <CommandItem key={u.name} value={`surface ${u.name}`} keywords={[u.name, u.description]} disabled={disabled} onSelect={() => launch(u.open)}>
-                      <Glyph>{icons[u.name] ?? <BoxIcon aria-hidden />}</Glyph>
+                    return (
+                      <CommandItem key={row.value} value={row.value} keywords={[row.label, row.surface, description ?? "", String(tab.n), "tab", "go"]} onSelect={() => select(row.at)}>
+                        <Glyph>{tab.icon}</Glyph>
+                        <span className="min-w-0 shrink truncate text-foreground" title={description}>
+                          {row.label}
+                        </span>
+                        <Standing tab={tab} previous={tab.at === back?.at} />
+                        <span className="flex-1" />
+                        <Does row={row} />
+                      </CommandItem>
+                    )
+                  }
+                  if (row.kind === "command")
+                    return (
+                      <CommandItem key={row.value} value={row.value} keywords={["end my move", "agent", "turn", "changes", "command", "run"]} onSelect={() => void end?.run().then(setEnded)}>
+                        <Glyph>
+                          <SendIcon aria-hidden />
+                        </Glyph>
+                        <span className="shrink-0 text-foreground">{row.label}</span>
+                        <span className="min-w-0 flex-1 truncate pl-1.5 text-meta">{ended ?? (end?.drivable ? "start the agent's turn with your changes" : "nothing here can start the agent's turn")}</span>
+                        <Does row={row} />
+                      </CommandItem>
+                    )
+                  if (row.kind === "broken")
+                    return (
+                      <CommandItem key={row.value} value={row.value} keywords={[row.name, "broken", row.broken]} disabled data-broken="">
+                        <Glyph>{icons[row.name] ?? <BoxIcon aria-hidden />}</Glyph>
+                        <span className="max-w-[45%] shrink-0 truncate text-foreground">{named(row.name)}</span>
+                        <span className="pl-1.5 text-meta whitespace-nowrap text-destructive">does not load</span>
+                        <span className="min-w-0 flex-1 truncate pl-1.5 text-meta" title={row.broken}>
+                          {row.broken}
+                        </span>
+                        <Does row={row} />
+                      </CommandItem>
+                    )
+
+                  return (
+                    <CommandItem key={row.value} value={row.value} keywords={[row.name, row.description, "surface", "open"]} disabled={disabled} onSelect={() => launch(row.open)}>
+                      <Glyph>{icons[row.name] ?? <BoxIcon aria-hidden />}</Glyph>
                       {/* A surface's description is written for the agent, to choose it by: here it is found by, and told on hover, not shown. */}
-                      <span className="min-w-0 flex-1 truncate text-foreground" title={u.description}>
-                        {named(u.name)}
+                      <span className="min-w-0 flex-1 truncate text-foreground" title={row.description}>
+                        {named(row.name)}
                       </span>
-                      {count > 0 && <span className="pl-2 text-meta whitespace-nowrap">{count} open</span>}
+                      <Does row={row} />
                     </CommandItem>
                   )
                 })}
               </CommandGroup>
             )}
-            {!loading && !offered.length && !search && <p className="my-2 ml-7 text-meta text-muted-foreground">Nothing to open yet.</p>}
-            {tabs.length > 0 && (
-              <CommandGroup heading="Switch to">
-                {tabs.map((tab) => (
-                  <CommandItem key={tab.at} value={`tab ${tab.at}`} keywords={[tab.label, tab.surface, String(tab.n)]} onSelect={() => select(tab.at)}>
-                    <Glyph>{tab.icon}</Glyph>
-                    <span className="min-w-0 flex-1 truncate text-foreground">{tab.label}</span>
-                    <Standing tab={tab} previous={tab.at === back?.at} />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-            {end && (
-              <CommandGroup heading="Shell">
-                <CommandItem value="end move" keywords={["end my move", "agent", "turn", "changes"]} onSelect={() => void end.run().then(setEnded)}>
-                  <Glyph>
-                    <SendIcon aria-hidden />
-                  </Glyph>
-                  {end.drivable ? "End my move" : "Copy the message that ends my move"}
-                  <span className="min-w-0 flex-1 truncate pl-1.5">{ended ?? (end.drivable ? "start the agent's turn with your changes" : "nothing here can start the agent's turn")}</span>
-                </CommandItem>
-              </CommandGroup>
-            )}
+            {!loading && !rows.length && !search && <p className="my-2 ml-7 text-meta text-muted-foreground">Nothing to open yet.</p>}
           </CommandList>
         </Command>
       </div>
       <About className="mt-auto max-w-[560px] pt-6">
-        <CommandShortcut className="ml-0 tracking-normal">{keys}</CommandShortcut>
+        {does.enter && (
+          <span className="whitespace-nowrap">
+            <CommandShortcut className="ml-0 tracking-normal">↵</CommandShortcut> {does.enter}
+          </span>
+        )}
+        {does.other && (
+          <span className="whitespace-nowrap">
+            <CommandShortcut className="ml-0 tracking-normal">{MOD}↵</CommandShortcut> {does.other}
+          </span>
+        )}
+        <span className="whitespace-nowrap">
+          <CommandShortcut className="ml-0 tracking-normal">{keys}</CommandShortcut> Home
+        </span>
       </About>
     </section>
   )
@@ -180,6 +239,9 @@ function Standing({ tab, previous }: { tab: TabEntry; previous: boolean }) {
   const said = standing(tab)
   const person = tab.needs?.find((n) => n.who === "person")
   const first = tab.broken !== undefined ? "broken" : (person ?? tab.needs?.[0])?.why
+
+  // A tab that needs nobody and was not the one shown before says nothing more than its name.
+  if (first === undefined && !previous) return null
 
   return (
     <span
@@ -192,7 +254,7 @@ function Standing({ tab, previous }: { tab: TabEntry; previous: boolean }) {
       {first !== undefined && (
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", tab.broken !== undefined ? "bg-destructive" : person ? "bg-primary" : "bg-muted-foreground/70")} />
       )}
-      <span className="truncate">{first ?? (previous ? "previous" : `${tab.surface} ${tab.n}`)}</span>
+      <span className="truncate">{first ?? "previous"}</span>
     </span>
   )
 }
