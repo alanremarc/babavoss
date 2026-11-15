@@ -1,7 +1,7 @@
 // The bottom strip: the launcher's "+", then the open tabs as pills that scroll when they overflow, and at its right what
 // the shell puts there; and a tab's panel.
 // A pill is marked by what stands in its tab: broken, needing the person, plainly; needing the agent, quietly; and why, as
-// its tooltip. A tab the agent opened is marked until looked at.
+// its tooltip. A tab the agent opened is marked until looked at. At its right stands what is the session's, not a tab's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
 import { XIcon } from "lucide-react"
@@ -179,7 +179,7 @@ export function TabContent({ address, hidden, children }: { address: string; hid
   )
 }
 
-/** `end`: what stands at the strip's right, after the tabs, such as the notifications button. */
+/** `end`: what stands at the strip's right, after the tabs, of the session rather than a tab: whose move it is, and the notifications. */
 export function SurfaceTabs({ items, active, onSelect, home, end }: { items: TabItem[]; active: string; onSelect: (id: string) => void; home: ReactNode; end?: ReactNode }) {
   const strip = useRef<HTMLDivElement>(null)
   const [more, setMore] = useState(false)

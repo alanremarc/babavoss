@@ -98,6 +98,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   let version = running.version()
   const by = new Map<string, Set<string>>()
   let heard: string[] = []
+  /** The person's calls that changed / since the agent was last answered. */
+  let acts = 0
 
   running.notices((notice) => {
     const who = whoOf(notice.cause, actor)!
@@ -117,6 +119,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
       // A commit of no known cause, as when code is loaded again: what it changed is told without a name.
       else if (!who) by.delete(key)
       else by.set(key, (by.get(key) ?? new Set()).add(who))
+    // A call of the person's that changed / waits for the agent's next answer.
+    if (who === "person" && [...now.keys(), ...marks.keys()].some((key) => now.get(key) !== marks.get(key))) acts += 1
     marks = now
   })
 
@@ -154,6 +158,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     before = now
     by.clear()
     heard = []
+    acts = 0
   }
 
   return {
@@ -161,6 +166,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     diff,
     /** How many notices wait to be told. */
     noticed: () => heard.length,
+    /** How many of the person's calls changed / since the agent was last answered: what waits for its next answer. */
+    waiting: () => acts,
     changed: () => (before === undefined ? [...textLines(root(), "", new Map(), "/", command).values()] : diff(before, root()).filter(others)),
     /** `path` is where the answer's lines were read or called: what / says of that same path, in the same words, is not said again. */
     answer(lines: string[], whole = false, shown?: Json, path?: string) {
