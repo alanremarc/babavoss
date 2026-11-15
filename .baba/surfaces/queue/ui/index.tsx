@@ -10,7 +10,7 @@ import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Status = "draft" | "backlog" | "lane" | "done"
 type Issue = { at: string; n: number; title: string; status: Status; lane?: number; note?: string }
-type Whole = Issue & { about: string; approve?: Handle; drop?: Handle }
+type Whole = Issue & { about: string; updates?: { t?: number; text: string }[]; approve?: Handle; drop?: Handle }
 type Root = { lanes: number; free: number[]; issues: Issue[] }
 
 export const icon = <ListTodoIcon aria-hidden />
@@ -37,6 +37,9 @@ const PROSE = [
   "[&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-5",
 ].join(" ")
 const NAMES: Record<Status, string> = { lane: "In progress", backlog: "Backlog", draft: "Draft", done: "Done" }
+
+/** When an update was posted, as the hour and minute of the day. */
+const clock = (t?: number) => (t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "")
 
 function Mark({ status }: { status: Status }) {
   const size = "size-3.5 shrink-0"
@@ -89,6 +92,19 @@ export default function Queue() {
                   <span className="text-muted-foreground">Now: </span>
                   {selected.note}
                 </p>
+              )}
+              {!!selected.updates?.length && (
+                <section aria-label="Updates" className="flex flex-col gap-2 border-t pt-4">
+                  <h2 className="text-muted-foreground text-meta font-medium">Updates from the lane</h2>
+                  <ol className="flex flex-col gap-2">
+                    {[...selected.updates].reverse().map((update, i) => (
+                      <li key={selected.updates!.length - i} className="flex gap-3 text-body">
+                        <time className="text-muted-foreground/70 w-10 shrink-0 tabular-nums">{clock(update.t)}</time>
+                        <span className="min-w-0 flex-1 whitespace-pre-wrap">{update.text}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
               )}
               {selected.status === "draft" && (
                 <div className="flex gap-2 pt-1">

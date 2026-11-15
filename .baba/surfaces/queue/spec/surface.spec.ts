@@ -76,3 +76,18 @@ test("what happens to an issue is noticed: started, done, dropped; the agent is 
   expect(person.noticed()).toEqual(["Issue 1, One, started in lane 2", "Issue 1, One, is done", "Issue 1, One, dropped"])
   expect(agent.noticed()).toEqual(["Issue 1, One, dropped"])
 })
+
+test("a lane's worker posts updates to its issue's channel, read at the issue's path and not in the stack", async () => {
+  const { agent } = story(queue)
+
+  await agent.call("/", "add", { title: "One", about: "Why" })
+  expect(await agent.call("/issues/1", "post", { n: 1, text: "early" })).toMatchObject({ outcome: "refused" })
+  await agent.call("/issues/1", "start", { n: 1, lane: 1 })
+  await agent.call("/issues/1", "post", { n: 1, text: "reproduced the fault" })
+  await agent.call("/issues/1", "post", { n: 1, text: " specs pass " })
+  expect((agent.sees("/issues/1") as { updates: { text: string }[] }).updates.map((u) => u.text)).toEqual(["reproduced the fault", "specs pass"])
+  expect(agent.sees()).not.toHaveProperty("issues.0.updates")
+  expect(await agent.call("/issues/1", "post", { n: 1, text: " " })).toEqual({ outcome: "refused", reason: "Say what happened" })
+  await agent.call("/issues/1", "done", { n: 1 })
+  expect(agent.sees("/issues/1")).toMatchObject({ updates: [{ text: "reproduced the fault" }, { text: "specs pass" }] })
+})

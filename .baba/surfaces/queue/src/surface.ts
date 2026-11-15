@@ -4,8 +4,12 @@
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
 
 export const LANES = 5
+/** How many updates an issue's channel keeps: the latest. */
+const KEPT = 200
 
-export type Issue = { n: number; title: string; about: string; note?: string; status: "draft" | "backlog" | "lane" | "done"; lane?: number; at: number }
+/** A line a lane's worker posted about where its issue stands, with when the call was admitted. */
+export type Posted = { t?: number; text: string }
+export type Issue = { n: number; title: string; about: string; note?: string; updates?: Posted[]; status: "draft" | "backlog" | "lane" | "done"; lane?: number; at: number }
 export type Model = { issues: Issue[]; next: number; clock: number }
 type Event = { kind: "none" }
 type Result = Update<Model, never>
@@ -67,6 +71,16 @@ const note = action({
     model: { ...m, issues: m.issues.map((issue) => (issue.n === n ? { ...issue, note: text.trim() } : issue)) },
   }),
 })
+const post = action({
+  name: "post",
+  description: ({ n }) => `Post an update on issue ${n} to its channel, as its lane's worker: a line or two on what was just found, done or decided; the person reads them to follow the work`,
+  subject: { n: "number" },
+  inputs: { text: "string" },
+  update: (m: Model, { n, text }, call): Result =>
+    text.trim()
+      ? { model: { ...m, issues: m.issues.map((issue) => (issue.n === n ? { ...issue, updates: [...(issue.updates ?? []), { t: call.t, text: text.trim() }].slice(-KEPT) } : issue)) } }
+      : { refused: "Say what happened" },
+})
 const start = action({
   name: "start",
   description: ({ n }) => `Give issue ${n} to a lane, 1 to ${LANES}, when a subagent begins on it`,
@@ -118,15 +132,16 @@ const row = (issue: Issue) => ({
 const whole = (issue: Issue) => ({
   ...row(issue),
   about: issue.about,
+  ...(issue.updates?.length && { updates: issue.updates }),
   ...(issue.status === "draft" && { attention: { who: "person", why: "to approve or drop this draft" }, approve: approve.bind({ n: issue.n }) }),
   describe: describe.bind({ n: issue.n }),
   note_: note.bind({ n: issue.n }),
   ...(issue.status === "backlog" && { start: start.bind({ n: issue.n }) }),
-  ...(issue.status === "lane" && { done: done.bind({ n: issue.n }) }),
+  ...(issue.status === "lane" && { post: post.bind({ n: issue.n }), done: done.bind({ n: issue.n }) }),
   ...((issue.status === "lane" || issue.status === "done") && { back: back.bind({ n: issue.n }) }),
   drop: drop.bind({ n: issue.n }),
 })
-const pages = view([add, draft, approve, describe, note, start, done, back, drop], {
+const pages = view([add, draft, approve, describe, note, post, start, done, back, drop], {
   "/": (m) => {
     const lanes = m.issues.filter((issue) => issue.status === "lane").sort((a, b) => a.lane! - b.lane!)
     const backlog = m.issues.filter((issue) => issue.status === "backlog").sort(by)
@@ -135,7 +150,7 @@ const pages = view([add, draft, approve, describe, note, start, done, back, drop
 
     return {
       title: "Queue",
-      how: `Keep this true as the work moves: add an issue the person asks for, draft one you would suggest and leave it until they approve it on the page, start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. An issue's path has what it is about and what can be done with it. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
+      how: `Keep this true as the work moves: add an issue the person asks for, draft one you would suggest and leave it until they approve it on the page, start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. An issue's path has what it is about, its channel of updates and what can be done with it; tell a lane's worker to post there as it goes. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       issues: [...lanes, ...backlog, ...drafts, ...finished].map(row),
