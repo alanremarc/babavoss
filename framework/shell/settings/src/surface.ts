@@ -7,7 +7,8 @@
 // own, of no event in the agent's work, so it is told to the agent in no way; the agent reads the tab when asked to change one.
 import { action, surface, view, type Update } from "../../../core/index.ts"
 import { bindings, clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
-import { isMode, isTheme, MODES, settingsOf, THEMES, type Mode, type Settings } from "./settings.ts"
+import { bounded, isPreset } from "../../../kit/theme.ts"
+import { choiceIn, isMode, MODES, nameOf, numbersOf, settingsOf, THEMES, type Choice, type Mode, type Settings } from "./settings.ts"
 import { readSettings, settingsFile, watchSettings, writeSettings } from "./store.ts"
 
 /** `writing`: this tab's writes not yet done; `unsaved`: why the last one failed. */
@@ -19,7 +20,23 @@ const changed = (m: Model, settings: Settings): Update<Model, Command> => ({
   model: { settings, writing: m.writing + 1 },
   commands: [{ kind: "write", settings }],
 })
-const themes = (mode: Mode) => THEMES[mode].map((t) => t.id)
+const THEME_NAMES = THEMES.join(", ")
+
+/** Where a theme is set: both modes while they are the same, else the one named; or why it cannot be. */
+function target(m: Model, mode: string): { modes: Mode[] } | { refused: string } {
+  const { same } = m.settings.appearance
+
+  if (mode === "both") return same ? { modes: ["light"] } : { refused: "the modes have themes of their own: name light or dark, or call same with on true first" }
+  if (mode !== "light" && mode !== "dark") return { refused: `a theme is of the light or the dark mode, or both, not ${mode}` }
+  if (same) return { refused: `both modes use one theme: name both, or call same with on false first to give ${mode} its own` }
+
+  return { modes: [mode] }
+}
+const chosen = (m: Model, modes: Mode[], choice: Choice): Update<Model, Command> => {
+  const { appearance } = m.settings
+
+  return changed(m, { ...m.settings, appearance: { ...appearance, themes: { ...appearance.themes, ...Object.fromEntries(modes.map((at) => [at, choice])) } } })
+}
 
 const mode = action({
   name: "mode",
@@ -33,14 +50,49 @@ const mode = action({
 const theme = action({
   name: "theme",
   quiet: true,
-  description: `set the theme of a mode: mode light or dark, theme ${themes("light").join(" or ")}`,
+  description: `choose a theme: mode both while the modes are the same, else light or dark; theme ${THEME_NAMES}, dynamic keeping its numbers or starting from the theme it replaces`,
   subject: {},
   inputs: { mode: "string", theme: "string" },
   update(m: Model, { mode, theme }): Update<Model, Command> {
-    if (mode !== "light" && mode !== "dark") return { refused: `a theme is of the light or the dark mode, not ${mode}` }
-    if (!isTheme(mode, theme)) return { refused: `no ${mode} theme ${theme}: it is ${themes(mode).join(" or ")}` }
+    const at = target(m, mode)
 
-    return changed(m, { ...m.settings, appearance: { ...m.settings.appearance, themes: { ...m.settings.appearance.themes, [mode]: theme } } })
+    if ("refused" in at) return at
+    if (theme !== "dynamic" && !isPreset(theme)) return { refused: `no theme ${theme}: it is ${THEME_NAMES}` }
+
+    const now = m.settings.appearance.themes[at.modes[0]!]
+
+    return chosen(m, at.modes, theme === "dynamic" ? numbersOf(now) : theme)
+  },
+})
+const dynamic = action({
+  name: "dynamic",
+  quiet: true,
+  description: "give a mode a dynamic theme of these numbers: mode as for theme; hue 0–360, tint (how strongly the greys lean to the hue) and vivid (how coloured the accent is) 0–100",
+  subject: {},
+  inputs: { mode: "string", hue: "number", tint: "number", vivid: "number" },
+  update(m: Model, { mode, hue, tint, vivid }): Update<Model, Command> {
+    const at = target(m, mode)
+
+    if ("refused" in at) return at
+    if (!Number.isFinite(hue) || hue < 0 || hue > 360) return { refused: `hue is 0 to 360, not ${hue}` }
+    if (!Number.isFinite(tint) || tint < 0 || tint > 100) return { refused: `tint is 0 to 100, not ${tint}` }
+    if (!Number.isFinite(vivid) || vivid < 0 || vivid > 100) return { refused: `vivid is 0 to 100, not ${vivid}` }
+
+    return chosen(m, at.modes, bounded({ hue, tint, vivid }))
+  },
+})
+const same = action({
+  name: "same",
+  quiet: true,
+  description: "whether both modes use one theme; off, each mode starts from the one they shared and is chosen on its own",
+  subject: {},
+  inputs: { on: "boolean" },
+  update(m: Model, { on }): Update<Model, Command> {
+    const { appearance } = m.settings
+
+    if (on === appearance.same) return { model: m, quiet: true }
+
+    return changed(m, { ...m.settings, appearance: { ...appearance, same: on, themes: on ? appearance.themes : { ...appearance.themes, dark: appearance.themes.light } } })
   },
 })
 const animate = action({
@@ -92,16 +144,18 @@ const reset = action({
   },
 })
 
-const pages = view([mode, theme, animate, bind, reset], {
+const pages = view([mode, theme, dynamic, same, animate, bind, reset], {
   "/": (m) => ({
     title: "Settings",
     how: "The person's own settings of the shell's page, the same in every session and project. Change one when they ask.",
-    appearance: { mode: m.settings.appearance.mode, light: m.settings.appearance.themes.light, dark: m.settings.appearance.themes.dark },
+    appearance: appearanceView(m.settings),
     shortcuts: { at: "/shortcuts", ...bindings(m.settings.keys) },
     logo: { animate: m.settings.logo.animate },
     ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
     mode: mode.bind({}),
     theme: theme.bind({}),
+    dynamic: dynamic.bind({}),
+    same: same.bind({}),
     animate: animate.bind({}),
   }),
   "/shortcuts": (m) => ({
@@ -116,6 +170,15 @@ const pages = view([mode, theme, animate, bind, reset], {
     reset: reset.bind({}),
   }),
 })
+
+/** The appearance as it is told: the mode, and one theme for both or one each, a preset's id or dynamic with its numbers. */
+function appearanceView({ appearance }: Settings) {
+  const told = (choice: Choice) => (typeof choice === "string" ? choice : { theme: nameOf(choice), ...choice })
+
+  return appearance.same
+    ? { mode: appearance.mode, same: true, theme: told(choiceIn(appearance, "light")) }
+    : { mode: appearance.mode, same: false, light: told(appearance.themes.light), dark: told(appearance.themes.dark) }
+}
 
 /** The settings surface over the person's file, which `file` names when it runs: theirs by default. */
 export function settings(file: () => string = () => settingsFile()) {

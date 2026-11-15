@@ -29,6 +29,7 @@ import { NOTICES, Notifications, unseenRows, useFeed, type Heard, type Page as N
 import * as settingsPage from "../settings/ui/index.tsx"
 import { bindings, shown as keysShown } from "../settings/src/keys.ts"
 import { useSettings } from "./appearance.ts"
+import { choiceIn, nameOf, numbersOf } from "../settings/src/settings.ts"
 import { mac, useShortcuts } from "./shortcuts.ts"
 import { ChangesContext, Ready, ServicesContext, TabProvider, tabCache, type ShellServices } from "./tab.tsx"
 import { boot, booted, servedAs } from "./boot.ts"
@@ -282,7 +283,9 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
 
   now.current = { go, open, rows, root, setError }
 
-  const theme = settings.appearance.themes[mode]
+  const choice = choiceIn(settings.appearance, mode)
+  const theme = nameOf(choice)
+  const { hue, tint, vivid } = numbersOf(choice)
   const services = useMemo<ShellServices>(
     () => ({
       open: async (surface) => {
@@ -300,9 +303,9 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
 
         for (const fn of hearers) fn({ text, at: address + (at && at !== "/" ? at : ""), from: row?.title ?? row?.surface, by: "the surface", kept: false })
       },
-      appearance: { mode, theme },
+      appearance: { mode, theme, numbers: { hue, tint, vivid } },
     }),
-    [hearers, mode, theme]
+    [hearers, mode, theme, hue, tint, vivid]
   )
 
   // Pointing: the agent's show moves `pointed` at /; the page goes there, or offers it while the person is busy.

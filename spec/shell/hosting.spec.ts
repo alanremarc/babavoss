@@ -211,12 +211,14 @@ describe("the person's settings in the page", () => {
   it("are given in its head as it is served, before what reads them, and no markup in them can close the script", () => {
     const file = scratch()
 
-    writeSettings(file, { ...DEFAULTS, appearance: { mode: "dark", themes: { light: "neutral", dark: "claude" } } })
+    writeSettings(file, { ...DEFAULTS, appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: { hue: 200, tint: 40, vivid: 60 } } } })
 
     const html = withSettings("<html><head><script>paint()</script></head></html>", file)
 
     expect(html.indexOf("babavoss-settings")).toBeLessThan(html.indexOf("paint()"))
-    expect(given(html)).toMatchObject({ appearance: { mode: "dark", themes: { dark: "claude" } }, logo: { animate: true } })
+    expect(given(html)).toMatchObject({ appearance: { mode: "dark", themes: { dark: { hue: 200 } } }, logo: { animate: true } })
+    // What each mode is painted in, by name and numbers, so the page paints it before its first frame.
+    expect(given(html).paint).toEqual({ light: { theme: "neutral", hue: 0, tint: 0, vivid: 0 }, dark: { theme: "dynamic", hue: 200, tint: 40, vivid: 60 } })
     writeFileSync(file, JSON.stringify({ appearance: { mode: "</script><b>" } }))
     expect(withSettings("<head></head>", file)).not.toContain("</script><b>")
   })
@@ -234,8 +236,8 @@ describe("the person's settings in the page", () => {
 
     expect(given(withSettings("<head></head>", file))).not.toHaveProperty("appearance")
     expect(migrated(cookie, file)).toBe(true)
-    expect(readSettings(file).appearance).toEqual({ mode: "light", themes: { light: "claude", dark: "neutral" } })
-    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", themes: { light: "claude", dark: "neutral" } } })
+    expect(readSettings(file).appearance).toEqual({ mode: "light", same: false, themes: { light: "claude", dark: "neutral" } })
+    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", same: false, themes: { light: "claude", dark: "neutral" } } })
     expect(migrated(cookie, file)).toBe(false)
     expect(readSettings(file).appearance.mode).toBe("dark")
   })

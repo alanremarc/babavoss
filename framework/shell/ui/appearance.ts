@@ -4,7 +4,8 @@
 // index.html, by the same rules as here. With the settings comes the machine's mode, where the runtime could tell it:
 // that is what "system" follows, a browser's own answer only where there is none.
 import { useEffect, useState, useSyncExternalStore } from "react"
-import { resolveMode, settingsOf, type Appearance, type Mode, type Settings } from "../settings/src/settings.ts"
+import { varsOf, type Theme } from "../../kit/theme.ts"
+import { choiceIn, nameOf, numbersOf, resolveMode, settingsOf, type Appearance, type Mode, type Settings } from "../settings/src/settings.ts"
 
 const SETTINGS_ID = "babavoss-settings"
 /** The window event a settings tab tells its settings by, as its view changes. */
@@ -22,10 +23,20 @@ export const given = (): Settings => {
 /** Tells the page the settings, as a settings tab reads them. */
 export const announce = (settings: Settings) => window.dispatchEvent(new CustomEvent<Settings>(CHANGED, { detail: settings }))
 
+/** Paints a theme's numbers on the page's root, the tokens following at once: what a picker does as it is dragged. */
+export function paintTheme(theme: Theme, root: HTMLElement = document.documentElement): void {
+  for (const [name, value] of Object.entries(varsOf(theme))) root.style.setProperty(name, value)
+}
+
+/** Applies the mode, and its theme: data-theme names it, a preset's id or dynamic, and its numbers paint it. */
 export function applyAppearance(appearance: Appearance, mode: Mode): void {
-  document.documentElement.classList.toggle("dark", mode === "dark")
-  document.documentElement.dataset.theme = appearance.themes[mode]
-  document.documentElement.style.colorScheme = mode
+  const choice = choiceIn(appearance, mode)
+  const root = document.documentElement
+
+  root.classList.toggle("dark", mode === "dark")
+  root.dataset.theme = nameOf(choice)
+  root.style.colorScheme = mode
+  paintTheme(numbersOf(choice), root)
 }
 
 const modeOf = (value: unknown): Mode | undefined => {
