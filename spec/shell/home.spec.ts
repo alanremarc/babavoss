@@ -1,4 +1,5 @@
-// Home: which surfaces it offers to open and which it lists broken, the tab it returns to, and where the shortcut goes.
+// Home, the shell's own page: which surfaces it offers to open and which it lists broken, the tab it returns to, and where
+// its shortcut goes.
 import { describe, expect, it } from "bun:test"
 import { handle } from "../../framework/core/surface/view.ts"
 import { backTo, choices, shortcut } from "../../framework/shell/ui/home.ts"
@@ -30,16 +31,15 @@ describe("home", () => {
     expect(choices([{ name: "odd", description: "…" }])).toEqual([{ name: "odd", broken: "the odd surface offers no open" }])
   })
 
-  it("returns to the tab shown before it while that tab is open, or to the settings", () => {
+  it("returns to the tab shown before it while that tab is open", () => {
     expect(backTo("/tabs/2", ["/tabs/1", "/tabs/2"])).toBe("/tabs/2")
     expect(backTo("/tabs/3", ["/tabs/1", "/tabs/2"])).toBeUndefined()
-    expect(backTo("settings", [])).toBe("settings")
     expect(backTo(undefined, ["/tabs/1"])).toBeUndefined()
   })
 
   it("is where the shortcut goes from any tab, and from home it goes back, or stays where nothing was shown before", () => {
     expect(shortcut("/tabs/2", "/tabs/2")).toBe(HOME)
-    expect(shortcut("settings", undefined)).toBe(HOME)
+    expect(shortcut("/tabs/3", undefined)).toBe(HOME)
     expect(shortcut(HOME, "/tabs/2")).toBe("/tabs/2")
     expect(shortcut(HOME, undefined)).toBe(HOME)
   })

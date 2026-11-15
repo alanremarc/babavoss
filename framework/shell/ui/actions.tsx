@@ -4,16 +4,14 @@
 // the tab is below /, the place's, under its name; Go, the places and the way back up; then the shell's own controls.
 // What waits on the person is dotted, and so is every step of the way to it. Around the tab's content: the line that says
 // why an action was refused, and the modal an action with inputs opens, the page's drawer for it or a form of its inputs.
-// While the tab is shown, its entries are commands of the palette, and its asks dot it in the strip.
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+// While the tab is shown, its asks dot it in the strip.
+import { useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
 import { XIcon } from "lucide-react"
-import { DropdownKit, SearchMenu, type Menu, type MenuItem } from "../../kit/layouts/menu.tsx"
+import { DropdownKit, SearchMenu, type MenuItem } from "../../kit/layouts/menu.tsx"
 import type { Args, View } from "../../core/surface/view.ts"
 import {
-  commandsOf,
   dotted,
   foundItems,
-  grouped,
   indexOf,
   labelOf,
   named,
@@ -22,57 +20,32 @@ import {
   placesOf,
   search,
   tabMenu,
-  type Command,
   type Found,
   type Offered,
 } from "./commands.ts"
 import { Inputs, type Drawers } from "./inputs.tsx"
 import { ChangesContext, doorOf, useTab, type Door } from "./tab.tsx"
 
-/**
- * Each tab's commands, by its address, for the palette, while the tab is shown; and how many asks it offers where it was
- * last seen, which dot it in the strip until it closes.
- */
-export type TabCommands = {
-  get: (at: string) => Command[] | undefined
-  set: (at: string, commands: Command[] | undefined) => void
-  asks: (at: string) => number
-  ask: (at: string, count: number) => void
-  subscribe: (fn: () => void) => () => void
-  /** Told as a tab's count of asks changes, alone: the strip follows it. */
-  subscribeAsks: (fn: () => void) => () => void
-}
+/** How many asks each tab offers where it was last seen, by its address, which dot it in the strip until it closes. */
+export type TabAsks = { count: (at: string) => number; set: (at: string, count: number) => void; subscribe: (fn: () => void) => () => void }
 
-export function useTabCommands(): TabCommands {
-  const [store] = useState<TabCommands>(() => {
-    const all = new Map<string, Command[]>()
+export function useTabAsks(): TabAsks {
+  const [store] = useState<TabAsks>(() => {
     const asked = new Map<string, number>()
     const listeners = new Set<() => void>()
-    const askers = new Set<() => void>()
-    const tell = (to: Set<() => void>) => {
-      for (const fn of to) fn()
-    }
-    const on = (to: Set<() => void>) => (fn: () => void) => {
-      to.add(fn)
-
-      return () => void to.delete(fn)
-    }
 
     return {
-      get: (at) => all.get(at),
-      set: (at, commands) => {
-        if (commands) all.set(at, commands)
-        else all.delete(at)
-        tell(listeners)
-      },
-      asks: (at) => asked.get(at) ?? 0,
-      ask: (at, count) => {
+      count: (at) => asked.get(at) ?? 0,
+      set: (at, count) => {
         if ((asked.get(at) ?? 0) === count) return
         asked.set(at, count)
-        tell(askers)
+        for (const fn of listeners) fn()
       },
-      subscribe: on(listeners),
-      subscribeAsks: on(askers),
+      subscribe: (fn) => {
+        listeners.add(fn)
+
+        return () => void listeners.delete(fn)
+      },
     }
   })
 
@@ -112,8 +85,8 @@ function useIndex(read: Door["read"], on: boolean): Found[] | undefined {
   return found
 }
 
-/** What a tab offers, read from its views: the menus its commands are made of, and the tab's menu where `menu` is asked for. */
-type Model = { commands: Command[]; asks: number; items: MenuItem[]; found?: Found[]; ready: boolean }
+/** What a tab offers, read from its views: how many asks, and the tab's menu where `menu` is asked for. */
+type Model = { asks: number; items: MenuItem[]; found?: Found[]; ready: boolean }
 
 function useModel({
   door,
@@ -150,13 +123,6 @@ function useModel({
     ...(route !== "/" ? [{ at: "/", label: shown, up: true }] : []),
   ]
   const go: { at: string; label: string; up?: boolean }[] = [...ups, ...places]
-  // The palette's menus, as the tab's commands: the surface's, the place's, and Go.
-  const go_: MenuItem[] = go.map((g) => ({ kind: "action", id: `${g.up ? "up" : "go"} ${g.at}`, label: g.label, hint: g.at, run: () => navigate(g.at) }))
-  const menus: Menu[] = [
-    { id: "surface", label: shown, items: grouped(atRoot, root?.menu, start) },
-    ...(route !== "/" && here ? [{ id: "place", label: placeLabel, items: grouped(atHere, here.menu, start) }] : []),
-    { id: "go", label: "Go", items: go_ },
-  ]
   const targets = menu ? [...(found ?? []).flatMap((f) => (f.kind === "action" && f.action.ask ? [f.action.path] : [])), ...menu.notices] : []
   const items = menu
     ? tabMenu({
@@ -170,7 +136,7 @@ function useModel({
       })
     : []
 
-  return { commands: commandsOf(menus.filter((m) => m.items.length)), asks: [...atRoot, ...atHere].filter((a) => a.ask).length, items, found, ready: !!root }
+  return { asks: [...atRoot, ...atHere].filter((a) => a.ask).length, items, found, ready: !!root }
 }
 
 /** The tab's menu, as the dropdown in the strip shows it while it is open: its views are read as it opens. */
@@ -213,11 +179,11 @@ export function TabMenu({
 }
 
 /**
- * Around a tab's content: the refusal of the last action started from its menu or the palette, and the modal of the one
+ * Around a tab's content: the refusal of the last action started from its menu, and the modal of the one
  * `asking` for its inputs. `start` is the shell's, which starts an action of this tab wherever it was chosen.
  */
 export function Actions({
-  commands,
+  asks,
   title,
   name,
   drawers = {},
@@ -228,7 +194,7 @@ export function Actions({
   dismiss,
   children,
 }: {
-  commands: TabCommands
+  asks: TabAsks
   title?: string
   name: string
   drawers?: Drawers
@@ -246,13 +212,8 @@ export function Actions({
 
     return answer.outcome === "refused" ? answer.reason : undefined
   }
-  const latest = useRef(model)
 
-  latest.current = model
-  // The palette's commands are this tab's while it is shown; a hidden tab's effects are gone, and so are its commands.
-  useLayoutEffect(() => commands.set(tab.address, latest.current.commands))
-  useLayoutEffect(() => () => commands.set(tab.address, undefined), [commands, tab.address])
-  useLayoutEffect(() => commands.ask(tab.address, model.asks), [commands, tab.address, model.asks])
+  useLayoutEffect(() => asks.set(tab.address, model.asks), [asks, tab.address, model.asks])
 
   return (
     <>

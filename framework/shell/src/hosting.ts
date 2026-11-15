@@ -1,12 +1,16 @@
 // The shell page: bundle source on demand; built releases serve files directly. What the page is built from is installed
 // by the root's door before it opens. A page that does not build leaves the last one that did: it is served until a change
-// builds, through a reload of the root's code too, so a surface's broken page never takes the root's page down.
+// builds, through a reload of the root's code too, so a surface's broken page never takes the root's page down. Every
+// page is served with the person's settings in it, so it paints in their appearance at once, and /_/settings.json gives
+// them again, read from their file each time (settings/src/store.ts).
 import { existsSync, readFileSync, mkdtempSync, readdirSync, statSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { UiHosting } from "../../core/index.ts"
+import { appearanceOf } from "../settings/src/settings.ts"
+import { kept, readSettings, settingsFile, writeSettings } from "../settings/src/store.ts"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const frameworkRoot = resolve(here, "../..")
@@ -66,8 +70,69 @@ const lastBuilt = (): Map<string, Build> => {
   return held[PAGES]
 }
 
-/** Serve a built release, or rebuild source on the next request after an edit. */
+/** Where the page finds the person's settings as it is served, before anything else in its head: index.html reads it. */
+export const SETTINGS_ID = "babavoss-settings"
+
+/**
+ * The page with the person's settings in its head, as JSON no markup in it can close. Where the file has no appearance
+ * yet, none is given, and the page paints by the cookie an older page kept until it is taken in.
+ */
+export function withSettings(html: string, file = settingsFile()): string {
+  const { appearance, ...rest } = readSettings(file)
+  const given = kept(file)?.appearance === undefined ? rest : { appearance, ...rest }
+
+  return html.replace(/<head>/i, `<head><script type="application/json" id="${SETTINGS_ID}">${JSON.stringify(given).replaceAll("<", "\\u003c")}</script>`)
+}
+
+const APPEARANCE_COOKIE = "babavoss.appearance"
+
+/**
+ * The appearance a browser kept in its cookie before the settings had a file, taken into the file once: where the file
+ * says no appearance of its own. Answers whether it was taken.
+ */
+export function migrated(cookie: string | undefined, file = settingsFile()): boolean {
+  const found = new RegExp(`(?:^|;\\s*)${APPEARANCE_COOKIE.replace(".", "\\.")}=([^;]*)`).exec(cookie ?? "")?.[1]
+
+  if (found === undefined || kept(file)?.appearance !== undefined) return false
+  try {
+    writeSettings(file, { ...readSettings(file), appearance: appearanceOf(JSON.parse(decodeURIComponent(found))) })
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The person's settings, at /_/settings.json, read each time; the cookie of an older page is taken in first. */
+const settingsAsset = (req: IncomingMessage, res: ServerResponse): boolean => {
+  if (new URL(req.url ?? "/", "http://127.0.0.1").pathname !== "/_/settings.json") return false
+  migrated(req.headers.cookie)
+  res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+  res.end(JSON.stringify(readSettings(settingsFile())))
+
+  return true
+}
+
+/** Serve a built release, or rebuild source on the next request after an edit; each page with the person's settings. */
 export function shellUi(dir: string | URL): UiHosting {
+  const hosting = pageUi(dir)
+
+  return async (server) => {
+    const hosted = await hosting(server)
+
+    return {
+      page: async (path) => {
+        const html = await hosted.page(path)
+
+        return html === undefined ? html : withSettings(html)
+      },
+      assets: (req, res, next) => void (settingsAsset(req, res) || hosted.assets(req, res, next)),
+      close: () => hosted.close(),
+    }
+  }
+}
+
+function pageUi(dir: string | URL): UiHosting {
   const root = typeof dir === "string" ? resolve(dir) : fileURLToPath(dir)
 
   return async () => {

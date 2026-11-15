@@ -3,10 +3,10 @@ import { describe, expect, it } from "bun:test"
 import { arrival, placeOf, pointedSince, QUIET_MS } from "../../framework/shell/ui/pointing.ts"
 
 describe("pointing", () => {
-  it("reads a place from a path: a tab and the route within it, the settings, else home", () => {
+  it("reads a place from a path: a tab and the route within it, else home", () => {
     expect(placeOf("/tabs/3/issues/14")).toEqual({ key: "/tabs/3", route: "/issues/14" })
     expect(placeOf("/tabs/3/")).toEqual({ key: "/tabs/3", route: "/" })
-    expect(placeOf("/settings")).toEqual({ key: "settings", route: "/" })
+    expect(placeOf("/settings")).toEqual({ key: "home", route: "/" })
     expect(placeOf("/")).toEqual({ key: "home", route: "/" })
     expect(placeOf("/elsewhere")).toEqual({ key: "home", route: "/" })
   })

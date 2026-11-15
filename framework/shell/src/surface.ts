@@ -9,12 +9,15 @@
 // a surface throws breaks only what it was asked for: a tab it cannot restore or show at / is listed as broken, with why
 // and what to do, and close stays offered; a path it cannot show says so, and the rest of the tab works; a tab it cannot
 // open is not made. A surface whose code does not load is listed as broken with why, and cannot be opened; its open tabs
-// keep what they hold, broken, until its code loads again.
+// keep what they hold, broken, until its code loads again. Beside the project's surfaces, after them, it holds its own,
+// which no project's surface can be named for: the settings (../settings/), of which one tab is enough, so opening them
+// again points to the tab open.
 //
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
 import { action, handles, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
+import settings from "../settings/src/surface.ts"
 import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenOf, type Entry, type Seen } from "./activity.ts"
 
 /** `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved. */
@@ -36,6 +39,11 @@ export const EMPTY = "no surfaces yet: ask the agent for one, which it makes wit
 export const MISSING = "there is no .baba/ in this directory or above: make one with `baba init`"
 /** The name a tab of state kept from before gives the picker, which the shell no longer has: its desktop lists the surfaces. */
 const PICKER = "surfaces"
+
+/** The surfaces that come with the shell, listed after the project's: a project's surface cannot take their names. */
+export const OWN: Record<string, AnySurface> = { settings }
+/** The shell's own surfaces of which one tab is enough: opening another shows the one open. */
+const SINGLE = new Set(["settings"])
 
 /** Who a surface says is needed at its /: the person, or the agent; and why, in a few words. */
 export type Attention = { who: "person" | "agent"; why: string }
@@ -83,8 +91,13 @@ export const attentionOf = (value: Json | undefined): Attention[] =>
  * `broken` names the surfaces of that .baba/ whose code did not load, with why (loading.ts).
  * A session's state kept from before is read as it was: its picker tab is dropped, and a tab's `util` is its surface.
  */
-export function shell(surfaces: Record<string, AnySurface>, baba?: string, broken: Record<string, string> = {}): Surface<ShellModel, ShellEvent, ShellCommand> {
-  const held = new Map(Object.entries(surfaces))
+export function shell(
+  surfaces: Record<string, AnySurface>,
+  baba?: string,
+  broken: Record<string, string> = {},
+  own: Record<string, AnySurface> = OWN
+): Surface<ShellModel, ShellEvent, ShellCommand> {
+  const held = new Map([...Object.entries(surfaces).filter(([name]) => !(name in own)), ...Object.entries(own)])
   const unloaded = new Map(Object.entries(broken).filter(([name]) => !held.has(name)))
   /** Why a surface that does not load is broken, and what mends it. */
   const unloadable = (name: string) => `the ${name} surface does not load (${unloaded.get(name)}); fix its code, and it is loaded again`
@@ -93,7 +106,7 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string, broke
 
   const open = action({
     name: "open",
-    description: ({ surface }) => `open a ${surface} tab`,
+    description: ({ surface }) => (SINGLE.has(surface) ? `open the ${surface} tab, or show the one open` : `open a ${surface} tab`),
     subject: { surface: "string" },
     inputs: {},
     update(model: ShellModel, { surface: name }): Update<ShellModel, ShellCommand> {
@@ -101,6 +114,10 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string, broke
 
       if (unloaded.has(name)) return { refused: `no ${name} tab is opened: ${unloadable(name)}` }
       if (!s) return { refused: `no surface ${name}` }
+
+      const one = SINGLE.has(name) ? model.tabs.find((t) => t.surface === name) : undefined
+
+      if (one) return { model: { ...model, pointed: { at: `/tabs/${one.n}`, n: (model.pointed?.n ?? 0) + 1 } } }
 
       // A tab that would be broken from the start is not made: its surface's code is at fault, and the refusal says how.
       try {
@@ -228,7 +245,7 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string, broke
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
       title: "baba",
-      ...(baba === undefined ? { missing: MISSING } : !held.size && !unloaded.size && { empty: EMPTY }),
+      ...(baba === undefined ? { missing: MISSING } : ![...held.keys()].some((name) => !(name in own)) && !unloaded.size && { empty: EMPTY }),
       surfaces: [
         ...[...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
         ...[...unloaded.keys()].map((name) => ({ name, broken: unloadable(name) })),

@@ -6,7 +6,6 @@ import { handle, type View } from "../../framework/core/surface/view.ts"
 import {
   actionItems,
   argsOf,
-  commandsOf,
   dotted,
   foundItems,
   grouped,
@@ -21,7 +20,7 @@ import {
   search,
   tabMenu,
 } from "../../framework/shell/ui/commands.ts"
-import type { Menu, MenuItem } from "../../framework/kit/layouts/menu.tsx"
+import type { MenuItem } from "../../framework/kit/layouts/menu.tsx"
 
 const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 }, {}, true)
 const note = handle("note", "Say where issue 3 stands", { n: 3 }, { text: "string" })
@@ -71,37 +70,6 @@ describe("a tab's actions", () => {
   })
 })
 
-describe("the palette's commands", () => {
-  const set: string[] = []
-  const menus: Menu[] = [
-    {
-      id: "view",
-      label: "View",
-      items: [
-        { kind: "action", id: "fold", label: "Fold all", keys: "⌘.", run: () => set.push("fold") },
-        { kind: "check", id: "wrap", label: "Wrap", checked: false, set: (on) => set.push(`wrap ${on}`) },
-        { kind: "separator", id: "edge" },
-        { kind: "choice", id: "lens", label: "Lens", value: "a", options: [{ id: "a", label: "All" }, { id: "b", label: "Mine" }], set: (v) => set.push(v) },
-        { kind: "submenu", id: "more", label: "More", disabled: true, items: [{ kind: "action", id: "reset", label: "Reset", run: () => {} }] },
-      ],
-    },
-  ]
-
-  it("offers every entry as a command named by the way to it, a check as its toggle and a choice by each other option", () => {
-    const commands = commandsOf(menus)
-
-    expect(commands.map((c) => [c.group, c.label, c.disabled])).toEqual([
-      ["View", "Fold all", false],
-      ["View", "Check Wrap", false],
-      ["View", "Lens: Mine", false],
-      ["View", "More › Reset", true],
-    ])
-    expect(commands[0]!.keys).toBe("⌘.")
-    for (const c of commands.slice(0, 3)) c.run()
-    expect(set).toEqual(["fold", "wrap true", "b"])
-  })
-})
-
 describe("a tab's menus from the surface", () => {
   const start = handle("start", "Give issue 3 to a lane", { n: 3 }, { lane: "number" })
   const done = handle("done", "Mark issue 3 done", { n: 3 })
@@ -122,7 +90,6 @@ describe("a tab's menus from the surface", () => {
       ["action", "Describe…", false],
       ["action", "Drop", false],
     ])
-    expect(commandsOf([{ id: "place", label: "Fix it", items }]).filter((c) => c.ask).map((c) => c.label)).toEqual(["Approve"])
   })
 
   it("ignores a menu fact that is not groups of names, and orders by the view alone", () => {

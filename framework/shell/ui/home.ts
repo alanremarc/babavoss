@@ -1,5 +1,6 @@
-// What home offers, worked out without a page: which surfaces can be opened and which do not load, the tab home returns
-// to, and where the palette's shortcut goes.
+// What home offers, worked out without a page: home is to the shell what a page is to its surface, so what it offers is
+// what the shell has at /: which surfaces can be opened and which do not load, the open tabs to switch to, and the tab
+// home returns to; and where home's shortcut goes. A surface's own actions and places are its tab's menu, never home's.
 import type { Handle } from "../../core/index.ts"
 import { HOME } from "./pointing.ts"
 
@@ -15,12 +16,12 @@ export function choices(surfaces: readonly SurfaceEntry[]): SurfaceChoice[] {
   )
 }
 
-/** The tab home returns to: the one shown before it, while it is still open, or the settings; else none. */
+/** The tab home returns to: the one shown before it, while it is still open; else none. */
 export function backTo(previous: string | undefined, open: readonly string[]): string | undefined {
-  return previous === "settings" || (previous !== undefined && open.includes(previous)) ? previous : undefined
+  return previous !== undefined && open.includes(previous) ? previous : undefined
 }
 
-/** Where the palette's shortcut goes: to home from anywhere else, and from home back to the tab shown before, if any. */
+/** Where home's shortcut goes: to home from anywhere else, and from home back to the tab shown before, if any. */
 export function shortcut(active: string, back: string | undefined): string {
   return active !== HOME ? HOME : (back ?? HOME)
 }
