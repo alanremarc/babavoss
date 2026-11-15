@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.46.0
+
+- Breaking: a tab stands at its surface's name. The tab opened while no other tab of its surface holds the name is `/NAME` until it closes, so `/queue/issues/42` survives the tab being closed and opened again; a second tab of a surface is `/tabs/N`, and `/tabs/N` still reaches any tab. Reads, calls, `show at=` and the page's URLs take either; every path the shell gives, tab rows, `at` facts, notices, needs, `pointed` and activity, is said by the address. At `/` a tab's heading is `/queue "Queue" (tab 10)`, and a second one `/tabs/11 queue "Queue"`. A spec matching `/tabs/1 NAME "Title"`, `at: "/tabs/1…"` or `NAME /tabs/1` in what the agent is told now matches `/NAME "Title" (tab 1)`, `at: "/NAME…"` and `/NAME`.
+- A path into a tab that is closed, or into a surface with no tab open, is answered with what happened and where to go, `/tabs/3, the queue tab 3, was closed by the person; queue is now at /queue (tab 10)`, instead of `nothing at`. A surface may say the same for its own paths with the optional `absent(model, path)`.
+- Breaking: `tabs` and `activity` are reserved names, like `baba` and `settings`. Rename a project surface called either.
+
 ## 0.45.0
 
 - A session resumed, forked or compacted is given a short reminder of baba's words (`skill/reminder.md`, also in the plugin) and then the whole present, instead of the whole words again. A new or cleared session still gets them whole.
