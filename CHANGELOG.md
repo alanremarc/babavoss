@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.40.2
+
+- A tab's menu's search also finds an entry by its way in the menu: "go" finds every place, Go being where they are listed, and a word of where an action is offered finds it. What meets the query by its label comes first, then by its way, then by its path or description; among equals what waits on the person. A place found says Go beside it. Nothing to adapt.
+
 ## 0.40.1
 
 - In a menu the mark of what waits on the person stands at an entry's right, so a menu keeps no room at its left for it. Nothing to adapt.

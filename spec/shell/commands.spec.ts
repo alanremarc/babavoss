@@ -159,6 +159,10 @@ describe("a tab's menus from the surface", () => {
     expect(search(found, "deep").map((f) => (f.kind === "place" ? f.at : ""))).toEqual(["/issues/1/deep"])
     expect(search(found, "drop")).toEqual([])
     expect(search(found, "  ")).toEqual([])
+    // A word is met by a label first, then by the way to an entry in the menu, Go for a place, then by what else says it.
+    expect(search(found, "go").map((f) => f.label)).toEqual(["Issue 1", "Issue 2", "Issue 3", "Deep"])
+    expect(search(found, "issue").map((f) => f.label).slice(0, 4)).toEqual(["Issue 1", "Issue 2", "Issue 3", "Approve"])
+    expect(search(found, "add").map((f) => f.label)[0]).toBe("Add…")
 
     reads.length = 0
     await indexOf(read, { views: 10, depth: 0 })
@@ -233,7 +237,7 @@ describe("the tab's menu", () => {
     )
 
     expect(items.map((i) => (i.kind === "action" ? [i.label, i.note, i.mark === true] : []))).toEqual([
-      ["Draft", undefined, false],
+      ["Draft", "Go", false],
       ["Approve", "Draft", true],
     ])
     for (const i of items) if (i.kind === "action") i.run()

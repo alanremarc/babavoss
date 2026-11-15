@@ -211,19 +211,48 @@ export async function indexOf(read: (path: string) => Promise<View | undefined>,
   return found
 }
 
-/** What the search finds for a query: places and actions whose words hold every word of it, the places first, at most `cap`. */
+/** The menu a place is found under: Go, where the tab's menu lists the places. */
+export const GO = "Go"
+
+/**
+ * How well one word of a query is met by a found entry, lower the better, or nothing where it is not: by its label
+ * whole, at a word's start or within; then by its way in the menu, Go for a place and where an action is offered; then
+ * by what else says it, a place's path or an action's description.
+ */
+function met(f: Found, word: string): number | undefined {
+  const starts = (text: string) => text.split(/[^a-z0-9]+/).some((w) => w.startsWith(word))
+  const label = f.label.toLowerCase()
+  const way = (f.kind === "place" ? GO : f.where).toLowerCase()
+  const rest = (f.kind === "place" ? f.at : f.action.handle.description).toLowerCase()
+
+  if (label === word) return 0
+  if (starts(label)) return 1
+  if (label.includes(word)) return 2
+  if (starts(way)) return 3
+  if (way.includes(word)) return 4
+
+  return rest.includes(word) ? 5 : undefined
+}
+
+/**
+ * What the search finds for a query: the places and actions that meet every word of it, by their label, their way in
+ * the menu or what else says them, the best met first; among equals what waits on the person, then the order they were
+ * read in, nearest `/` first. At most `cap`.
+ */
 export function search(found: Found[], query: string, cap = 30): Found[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
 
   if (!words.length) return []
 
-  const hit = (f: Found) => {
-    const text = (f.kind === "place" ? `${f.label} ${f.at}` : `${f.label} ${f.action.handle.description} ${f.where}`).toLowerCase()
+  return found
+    .flatMap((f, order) => {
+      const scores = words.map((w) => met(f, w))
 
-    return words.every((w) => text.includes(w))
-  }
-
-  return [...found.filter((f) => f.kind === "place" && hit(f)), ...found.filter((f) => f.kind === "action" && hit(f))].slice(0, cap)
+      return scores.some((score) => score === undefined) ? [] : [{ f, order, score: scores.reduce<number>((sum, score) => sum + score!, 0), ask: f.kind === "action" && f.action.ask }]
+    })
+    .sort((a, b) => a.score - b.score || Number(b.ask) - Number(a.ask) || a.order - b.order)
+    .slice(0, cap)
+    .map(({ f }) => f)
 }
 
 /** Whether `path` is `place` or below it, within one tab. */
@@ -305,7 +334,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
 export function foundItems(found: Found[], navigate: (at: string) => void, start: (action: Offered) => void): MenuItem[] {
   return found.map((f) =>
     f.kind === "place"
-      ? { kind: "action", id: `place ${f.at}`, label: f.label, hint: f.at, run: () => navigate(f.at) }
+      ? { kind: "action", id: `place ${f.at}`, label: f.label, note: GO, hint: f.at, run: () => navigate(f.at) }
       : {
           kind: "action",
           id: `action ${f.action.path} ${key(f.action.handle)}`,
