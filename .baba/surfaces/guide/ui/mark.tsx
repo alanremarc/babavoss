@@ -115,17 +115,17 @@ function Variants() {
             <span className="text-foreground">{v.label}</span>
             <span className="text-meta text-muted-foreground tabular-nums">{v.about}</span>
           </div>
-          <States min={150}>
+          <States min={190}>
             <State label="strip" className="justify-center gap-3">
               {SHOWN.map((s) => (
-                <span key={s.label} title={s.label} className="grid size-7 place-items-center rounded-full bg-sidebar">
+                <span key={s.label} title={s.label} className="grid size-7 shrink-0 place-items-center rounded-full bg-sidebar">
                   <Logo standing={s.standing} pair={v.pair} {...(s.lost && { lost: true })} />
                 </span>
               ))}
             </State>
             {SHOWN.map((s) => (
               <State key={s.label} label={`${s.label}, ×${LARGE}`} className="justify-center p-4">
-                <span className="grid size-7 place-items-center rounded-full bg-sidebar" style={{ zoom: LARGE }}>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sidebar" style={{ zoom: LARGE }}>
                   <Logo standing={s.standing} pair={v.pair} {...(s.lost && { lost: true })} />
                 </span>
               </State>
