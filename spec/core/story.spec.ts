@@ -96,6 +96,25 @@ test("a held command can report an event that changes the view", async () => {
   expect(agent.sees()).toMatchObject({ items: ["Fetched"] })
 })
 
+test("a command held open sends its events one at a time, each seen and told before the next, until it is ended", async () => {
+  const { agent, person, world } = story(list)
+
+  await agent.call("/", "fetch", { text: "feed" })
+  agent.told()
+  person.told()
+  await world.send({ kind: "added", text: "First" })
+  expect(world.commands()).toEqual([{ text: "feed" }])
+  expect(agent.sees()).toMatchObject({ items: ["First"] })
+  expect(person.told()).toEqual(['items: [] → ["First"]'])
+  await world.send((c) => c.text === "feed", { kind: "added", text: "Second" })
+  expect(agent.told()).toEqual(['items: [] → ["First", "Second"]'])
+  expect(person.told()).toEqual(['items: ["First"] → ["First", "Second"]'])
+  await world.end()
+  expect(world.commands()).toEqual([])
+  expect(agent.told()).toEqual([])
+  await expect(world.send({ kind: "added", text: "Late" })).rejects.toThrow("Expected one pending command, found 0")
+})
+
 test("a failed command reports what failed made of the error", async () => {
   const { agent, world } = story(list)
 

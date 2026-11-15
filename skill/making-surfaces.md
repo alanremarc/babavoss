@@ -5,7 +5,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 ## The loop
 
 1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and what they decide there.
-2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types.
+2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the root, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
 The running root takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harness: it writes the skill baba and the framework's hook beside `.baba/` again, as installing does.
