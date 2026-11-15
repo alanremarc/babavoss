@@ -1,7 +1,8 @@
 // The design document: where the content babavoss gives an agent is inspected. Canonical scenarios are played on a small
 // demo project through the framework's real hook, word and runtime, with no agent and no harness, and every text the agent
-// would be given is shown verbatim and measured. They are played again whenever the framework's code, baba's words or the
-// demo change, so what is shown follows the code. A pin keeps the tellings as a baseline, and each is then shown with its
+// would be given is shown verbatim and measured, with what the person's page showed after each step. They are played again
+// whenever the framework's code, baba's words or the demo change, so what is shown follows the code. The demo's shape is
+// read from its surfaces as they are played. A pin keeps the tellings as a baseline, and each is then shown with its
 // difference from it.
 import { watch, type FSWatcher } from "node:fs"
 import { dirname, join } from "node:path"
@@ -10,12 +11,16 @@ import { action, surface, view, type Notice, type Update } from "babavoss/core/i
 import { delta, masked, said, size, sum, together, type Delta, type Size } from "./measure.ts"
 import { play, type Play, type Played } from "./play.ts"
 import { SCENARIOS, type Scenario } from "./scenarios.ts"
+import { factsOf, listed, said as factsSaid, shape, type Shape } from "./shape.ts"
 
 /** The tellings as pinned: each scenario's texts, step by step, and when. */
 export type Pin = { t: number; texts: Record<string, string[][]> }
-/** `playing`: a play is under way; `again`: the code changed while it was, so it plays once more; `failure`: why the last play did not end. */
-export type Model = { plays: Play[]; playing: boolean; again?: boolean; pin?: Pin; failure?: string }
-export type Event = { kind: "changed" } | { kind: "played"; plays: Play[] } | { kind: "unplayed"; error: string } | { kind: "none" }
+/**
+ * `playing`: a play is under way; `again`: the code changed while it was, so it plays once more; `failure`: why the last
+ * play did not end; `shape`: the demo's surfaces as the last play read them.
+ */
+export type Model = { plays: Play[]; playing: boolean; again?: boolean; pin?: Pin; failure?: string; shape?: Shape[] }
+export type Event = { kind: "changed" } | { kind: "played"; plays: Play[]; shape?: Shape[] } | { kind: "unplayed"; error: string } | { kind: "none" }
 export type Command = { kind: "watch" } | { kind: "play" }
 type Result = Update<Model, Command>
 
@@ -24,7 +29,8 @@ const FRAMEWORK = dirname(fileURLToPath(import.meta.resolve("babavoss/package.js
 const WATCHED = [join(FRAMEWORK, "framework/core"), join(FRAMEWORK, "framework/shell/src"), join(FRAMEWORK, "framework/shell/scripts"), join(FRAMEWORK, "skill"), join(FRAMEWORK, "bin"), fileURLToPath(new URL("../demo", import.meta.url))]
 const HOW =
   "Each scenario is played on the demo project through the framework's own hook, word and runtime, again whenever their code changes, so this is what an agent is given now. " +
-  "A step's path has its texts whole. Pin to keep them as the baseline to compare with. Tokens are estimated: characters / 4."
+  "A step's path has its texts whole, and its page what the person's page showed after it; /demo is the demo project's shape. " +
+  "Pin to keep the texts as the baseline to compare with. Tokens are estimated: characters / 4."
 
 const playing = (m: Model): Result => (m.playing ? { model: { ...m, again: true } } : { model: { ...m, playing: true, again: false }, commands: [{ kind: "play" }] })
 
@@ -108,19 +114,21 @@ const stepRow = (m: Model, play: Play, n: number) => {
   }
 }
 
-/** A step whole: what changed in the project, and each text the agent was given with its size, its delta and, where it differs, the pinned text. */
+/** A step whole: what changed in the project, which tabs the person's page had, and each text the agent was given with its size, its delta and, where it differs, the pinned text. */
 const stepWhole = (m: Model, play: Play, n: number) => {
   const step = play.steps[n]!
   const all = deltas(m, play, n)
   const pinned = m.pin?.texts[play.name]?.[n]
+  const at = `/scenarios/${play.name}/${n + 1}`
 
   return {
-    at: `/scenarios/${play.name}/${n + 1}`,
+    at,
     scenario: play.name,
     n: n + 1,
     who: step.who,
     did: step.did,
     changed: step.changed.length ? step.changed : "nothing",
+    page: pageRow(step, at),
     tellings: step.tellings.map((t, i) => ({
       carrier: t.carrier,
       ...size(t.text),
@@ -130,6 +138,36 @@ const stepWhole = (m: Model, play: Play, n: number) => {
     })),
   }
 }
+
+/** What the person's page showed after a step, in a line: the tab in front and the others, and an at to their views. */
+const pageRow = (step: Played, at: string) => {
+  const { tabs, shown, asleep } = step.page ?? { tabs: [] }
+
+  return {
+    at: `${at}/page`,
+    tabs: tabs.length ? tabs.map((t) => `${t.surface} ${t.at}${t.at === shown ? " (in front)" : ""}`) : "none open",
+    ...(asleep && { asleep: true }),
+  }
+}
+
+/** The demo's surfaces as / of /demo lists them: as explored, with the facts the plays saw at / besides, which the surface's own commands bring. */
+const demoView = (m: Model) =>
+  m.shape?.map((s) => {
+    const seen = m.plays.flatMap((p) => p.steps.flatMap((step) => (step.page?.tabs ?? []).filter((t) => t.surface === s.name).map((t) => t.view)))
+
+    return {
+      ...s,
+      views: s.views.map((v) => {
+        if (v.path !== "/") return v
+
+        const facts = listed(v.facts)
+
+        for (const view of seen) factsOf(view, facts)
+
+        return { ...v, facts: factsSaid(facts) }
+      }),
+    }
+  })
 
 /** A scenario with its steps as rows. */
 function scenarioView(m: Model, name: string) {
@@ -164,12 +202,11 @@ const pages = view<Model, Command>([replay, pin, unpin], {
     ...(m.plays.length && !m.playing && { pin: pin.bind({}) }),
     ...(m.pin && { unpin: unpin.bind({}) }),
   }),
-  "/demo": () => ({
-    about: "The demo project the scenarios are played on: a .baba/ with these surfaces, in a directory of its own for each play, removed after it.",
-    surfaces: [
-      { name: "tasks", about: "rows by identity; add and done for both sides; approve and reopen, the person's ask; attention while a task waits for review; a notice as a task moves" },
-      { name: "build", about: "changes by itself: its command reads build.txt, which a scenario writes; a failure is a notice and the agent's attention" },
-    ],
+  "/demo": (m) => ({
+    about:
+      "The demo project the scenarios are played on: a .baba/ with these surfaces, made afresh for each play and removed after it. " +
+      "Each place gives these facts and offers these actions; an ask is the person's alone; itself: the commands a surface starts, which change it with no call.",
+    surfaces: demoView(m) ?? "not played yet",
   }),
   "/scenarios/:name": (m, { name }) => scenarioView(m, name!),
   "/scenarios/:name/:n": (m, { name, n }) => {
@@ -178,12 +215,17 @@ const pages = view<Model, Command>([replay, pin, unpin], {
 
     return play && Number.isInteger(i) && i >= 0 && i < play.steps.length ? stepWhole(m, play, i) : undefined
   },
-  // The page's: a scenario laid out whole, every step with its texts, as the lanes show it.
-  "/lanes/:name": (m, { name }) => {
+  "/scenarios/:name/:n/page": (m, { name, n }) => {
+    const step = m.plays.find((p) => p.name === name)?.steps[Number(n) - 1]
+
+    return step && { ...(step.page ?? { tabs: [] }) }
+  },
+  // The page's: a scenario laid out whole, every step with its texts and the page it left, as the timeline shows it.
+  "/timeline/:name": (m, { name }) => {
     const scenario = scenarioOf(name!)
     const play = m.plays.find((p) => p.name === name)
 
-    return scenario && play ? { ...scenarioView(m, name!), steps: play.steps.map((_, n) => stepWhole(m, play, n)) } : undefined
+    return scenario && play ? { ...scenarioView(m, name!), steps: play.steps.map((step, n) => ({ ...stepWhole(m, play, n), page: step.page ?? { tabs: [] } })) } : undefined
   },
 })
 
@@ -203,7 +245,7 @@ function update(m: Model, event: Event): Result {
   if (event.kind !== "played") return { model: m }
 
   const { failure: _failure, ...kept } = m
-  const next = { ...kept, plays: event.plays, playing: false, again: false }
+  const next = { ...kept, plays: event.plays, playing: false, again: false, ...(event.shape && { shape: event.shape }) }
   const notices = noticed(m.plays, event.plays)
 
   return m.again ? { ...playing(next), notices } : { model: next, notices }
@@ -234,7 +276,7 @@ export default surface<Model, Event, Command>({
   restore: (saved) => {
     const kept = saved as Partial<Model> | undefined
 
-    return { plays: Array.isArray(kept?.plays) ? kept.plays : [], playing: false, ...(kept?.pin && { pin: kept.pin }) }
+    return { plays: Array.isArray(kept?.plays) ? kept.plays : [], playing: false, ...(kept?.pin && { pin: kept.pin }), ...(Array.isArray(kept?.shape) && { shape: kept.shape }) }
   },
   start: () => [{ kind: "watch" }],
   session: (c) => c.kind === "watch",
@@ -242,7 +284,9 @@ export default surface<Model, Event, Command>({
   view: pages.view,
   async run(command, send, signal) {
     if (command.kind === "watch") return watching(() => send({ kind: "changed" }), signal)
-    send({ kind: "played", plays: await Promise.all(SCENARIOS.map((s) => play(s, signal))) })
+    const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.map((s) => play(s, signal))), shape()])
+
+    send({ kind: "played", plays, shape: demo })
   },
   failed: (command, error) => (command.kind === "play" ? { kind: "unplayed", error } : { kind: "none" }),
 })
