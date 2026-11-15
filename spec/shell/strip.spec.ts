@@ -1,4 +1,4 @@
-// The strip's order: the newest tab beside the launcher, and where the person lands when the tab they look at closes.
+// The strip's order: the newest tab beside home, and where the person lands when the tab they look at closes.
 import { describe, expect, it } from "bun:test"
 import { newestFirst, successor } from "../../framework/shell/ui/strip.ts"
 
@@ -12,7 +12,7 @@ describe("the strip", () => {
     expect(tabs.map((t) => t.n)).toEqual([1, 4, 2, 7])
   })
 
-  it("puts a tab opened later beside the launcher", () => {
+  it("puts a tab opened later beside home", () => {
     expect(newestFirst([tab(1), tab(2), tab(3)])[0]!.n).toBe(3)
   })
 

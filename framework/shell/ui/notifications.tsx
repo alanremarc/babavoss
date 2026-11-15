@@ -202,7 +202,7 @@ export function Notifications({ changes, notices, go, title }: { changes: Stream
 
   return (
     <>
-      <Toasts toasts={toasts} into={button} dismiss={(id) => setToasts((all) => all.filter((t) => t.id !== id))} className="right-2 bottom-13" />
+      <Toasts toasts={toasts} into={button} dismiss={(id) => setToasts((all) => all.filter((t) => t.id !== id))} className="top-13 right-2" from="top" />
       <Popover
         open={open}
         onOpenChange={(next) => {
@@ -223,7 +223,7 @@ export function Notifications({ changes, notices, go, title }: { changes: Stream
             </span>
           )}
         </PopoverTrigger>
-        <PopoverContent side="top" align="end" sideOffset={8} collisionPadding={8} aria-label="Notifications" className="w-[min(24rem,calc(100vw-16px))] gap-0 p-0">
+        <PopoverContent side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label="Notifications" className="w-[min(24rem,calc(100vw-16px))] gap-0 p-0">
           <div className="flex flex-col gap-1.5 border-b px-2.5 pt-2 pb-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-large font-medium">{shown === "all" ? "All activity" : "Notifications"}</span>

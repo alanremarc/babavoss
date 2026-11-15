@@ -1,9 +1,12 @@
 // Where the page stands, and what it does when the agent points the person to a place. The URL is the surface path:
-// / the launcher, /settings the appearance, /tabs/N/route a tab and the place within it. Pointing goes there at once,
+// / home, /settings the appearance, /tabs/N/route a tab and the place within it. Pointing goes there at once,
 // unless the person is in the middle of something: they are writing in a field, or acted on the page within QUIET_MS.
 // Then the page offers the place instead, to click to go, until they go, dismiss it, or the agent points again.
 
-/** A place on the page: the tab's key, /tabs/N, or "new" or "settings", and the route within it. */
+/** Home's key: the page at /, where no tab is shown. */
+export const HOME = "home"
+
+/** A place on the page: the tab's key, /tabs/N, or HOME or "settings", and the route within it. */
 export type Place = { key: string; route: string }
 /** The shell's `pointed` at /: the place and how many times the agent has pointed. */
 export type Pointed = { at: string; n: number }
@@ -19,7 +22,7 @@ export function placeOf(path: string): Place {
   if (tab) return { key: tab[1]!, route: tab[2] || "/" }
   if (clean === "/settings") return { key: "settings", route: "/" }
 
-  return { key: "new", route: "/" }
+  return { key: HOME, route: "/" }
 }
 
 /**
@@ -41,7 +44,7 @@ export function arrival(person: { typing: boolean; acted: number }, now: number)
 
 /**
  * Whether the person is writing in an element: a field or an editable region that holds text, or an embedded page, whose
- * keys the page cannot see. An empty field that only has focus, such as the launcher's search, holds nothing to lose.
+ * keys the page cannot see. An empty field that only has focus, such as home's search, holds nothing to lose.
  */
 export function typingIn(element: Element | null): boolean {
   if (!element) return false
