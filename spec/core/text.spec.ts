@@ -3,11 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { defineApp } from "../../skills/baba/framework/core/app.ts"
-import { startRuntime } from "../../skills/baba/framework/core/runtime/runtime.ts"
-import { endpointFile, SERVICE_HEADER, type Endpoint } from "../../skills/baba/framework/core/runtime/service.ts"
-import { readJsonFile } from "../../skills/baba/framework/core/state/json-file.ts"
-import { handle } from "../../skills/baba/framework/core/surface/view.ts"
+import { defineApp } from "../../framework/core/app.ts"
+import { startRuntime } from "../../framework/core/runtime/runtime.ts"
+import { endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { readJsonFile } from "../../framework/core/state/json-file.ts"
+import { handle } from "../../framework/core/surface/view.ts"
 
 const dirs: string[] = []
 const closes: (() => Promise<void>)[] = []

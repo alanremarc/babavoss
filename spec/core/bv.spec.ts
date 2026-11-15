@@ -2,15 +2,14 @@
 import { notesApp } from "../support/notes.ts"
 import { poll } from "../support/poll.ts"
 import { spawnSync } from "node:child_process"
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
+import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION, reloads } from "../../skills/baba/framework/core/bv/bv.ts"
-import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../skills/baba/framework/core/runtime/service.ts"
-import { installedIn, SKILL_FOLDERS } from "../../skills/baba/framework/core/skill-folders.ts"
+import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
+import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../framework/core/runtime/service.ts"
 
-const client = resolve("skills/baba/framework/core/bv/bv.ts")
+const client = resolve("framework/core/bv/bv.ts")
 const roots: string[] = []
 
 function setup() {
@@ -423,13 +422,12 @@ it("two apps never share a runtime address", () => {
 })
 
 // Installation fixtures isolate the person's home, project and Bun's own bin.
-function installation(location = "project", harness = ".agents", configured = false) {
+function installation(location = "project", configured = false) {
   const root = mkdtempSync(join(tmpdir(), "bv-install-"))
   const home = join(root, "home")
   const project = join(root, "project")
   const bin = join(root, "bin")
-  const directory = location === "personal" ? join(home, harness, "skills/demo") :
-    location === "source" ? join(project, "demo") : join(project, harness, "skills/demo")
+  const directory = join(location === "personal" ? home : project, location === "source" ? "demo" : ".baba/roles/demo")
 
   roots.push(root)
   for (const path of [home, project, bin]) mkdirSync(path, { recursive: true })
@@ -453,7 +451,7 @@ function installation(location = "project", harness = ".agents", configured = fa
 }
 
 it("a person's agents install uses their home and configured bin", () => {
-  const s = installation("personal", ".agents", true)
+  const s = installation("personal", true)
 
   try {
     expect(s.open().status).toBe(0)
@@ -464,9 +462,8 @@ it("a person's agents install uses their home and configured bin", () => {
     s.close()
   }
 })
-for (const harness of [".agents", ".claude", ".codex"])
-  it(`a project's ${harness} install keeps its home and words in the project`, () => {
-    const s = installation("project", harness)
+it("a project's roles keep their home and words in the project", () => {
+    const s = installation("project")
 
     try {
       expect(s.open().status).toBe(0)
@@ -477,6 +474,23 @@ for (const harness of [".agents", ".claude", ".codex"])
       s.close()
     }
   })
+it("a role's door says when a later babavoss is out, after its answer", () => {
+  const s = installation()
+
+  s.env.BABAVOSS_LATEST = "99.0.0"
+  try {
+    const answer = s.open()
+
+    expect(answer.status).toBe(0)
+    expect(answer.stdout).toContain(`babavoss 99.0.0 is out`)
+    expect(answer.stdout).toContain(`in ${realpathSync(join(s.project, ".baba"))}`)
+    expect(answer.stdout.indexOf("notes.count")).toBeLessThan(answer.stdout.indexOf("babavoss 99.0.0"))
+    s.env.BABAVOSS_LATEST = ""
+    expect(s.open().stdout).not.toContain("is out")
+  } finally {
+    s.close()
+  }
+})
 it("opening and calling a project app leaves git clean", () => {
   const s = installation()
   const git = (args: string[]) => spawnSync("git", args, { cwd: s.project, encoding: "utf8" })
@@ -538,7 +552,7 @@ it("an app run from source uses the door's working directory", () => {
 })
 for (const location of ["personal", "project"])
   it(`BABAVOSS_HOME wins for a ${location} install`, () => {
-    const s = installation(location, ".agents", true)
+    const s = installation(location, true)
 
     s.env.BABAVOSS_HOME = join(s.root, "override")
     try {
@@ -552,35 +566,3 @@ for (const location of ["personal", "project"])
     }
   })
 
-it("tells the project an app is installed in by the harness skill folder that holds it", () => {
-  expect(installedIn("/work/shop/.agents/skills/payments")).toBe("/work/shop")
-  expect(installedIn("/work/shop/.claude/skills/payments/scripts")).toBe("/work/shop")
-  expect(installedIn("/work/shop/.codex/skills/payments")).toBe("/work/shop")
-  // The innermost project, where one sits inside a folder that is itself among skills.
-  expect(installedIn("/home/.agents/skills/outer/.claude/skills/inner")).toBe("/home/.agents/skills/outer")
-  expect(installedIn("/work/shop/skills/payments")).toBeUndefined()
-  expect(SKILL_FOLDERS.filter((folder) => folder.linked).map((folder) => folder.project)).toEqual([".agents/skills", ".claude/skills"])
-})
-
-it("wakes an app under hot reload where its framework loads changed code in place: one that depends on it, or holds a copy from 0.2.0", () => {
-  const root = mkdtempSync(join(tmpdir(), "bv-spec-"))
-
-  roots.push(root)
-
-  const held = (version?: string) => {
-    const app = join(root, version ?? "none")
-
-    mkdirSync(join(app, "scripts"), { recursive: true })
-    if (version) {
-      mkdirSync(join(app, "framework"))
-      writeFileSync(join(app, "framework/VERSION"), `${version}\n`)
-    }
-
-    return join(app, "scripts/open.ts")
-  }
-
-  expect(reloads(held("0.2.0"))).toBe(true)
-  expect(reloads(held("1.0.0"))).toBe(true)
-  expect(reloads(held("0.1.0"))).toBe(false)
-  expect(reloads(held())).toBe(true)
-})

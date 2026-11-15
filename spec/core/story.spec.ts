@@ -1,9 +1,9 @@
 // Specify an app's behavior entirely through its actors and outside world.
 import { expect, test } from "bun:test"
-import { action, view } from "../../skills/baba/framework/core/surface/authoring.ts"
-import { story } from "../../skills/baba/framework/core/surface/story.ts"
-import { surface } from "../../skills/baba/framework/core/surface/surface.ts"
-import { handle } from "../../skills/baba/framework/core/surface/view.ts"
+import { action, view } from "../../framework/core/surface/authoring.ts"
+import { story } from "../../framework/core/surface/story.ts"
+import { surface } from "../../framework/core/surface/surface.ts"
+import { handle } from "../../framework/core/surface/view.ts"
 
 type Model = { items: string[]; error?: string }
 type Event = { kind: "added"; text: string } | { kind: "failed"; error: string }

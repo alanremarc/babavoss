@@ -1,9 +1,5 @@
 [test]
 timeout = 30000
-preload = ["./spec/support/baba.ts"]
-# The template's own spec runs in a new app; here spec/app/template.spec.ts runs it.
-pathIgnorePatterns = ["skills/baba/assets/template/**"]
-
-[install]
-# One node_modules at the root, which holds the skill as babavoss: what the specs and the example resolve from, walking up.
-linker = "hoisted"
+preload = ["./spec/support/offline.ts"]
+# The template's own spec runs in a role made from it; here spec/bin/baba.spec.ts runs it.
+pathIgnorePatterns = ["template/**"]

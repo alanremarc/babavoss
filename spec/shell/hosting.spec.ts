@@ -6,7 +6,7 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
-import { BUILT, shellUi, buildUi } from "../../skills/baba/framework/shell/index.ts"
+import { BUILT, shellUi, buildUi } from "../../framework/shell/index.ts"
 
 const dirs: string[] = []
 
@@ -48,14 +48,12 @@ describe("a built page", () => {
   })
 })
 
-for (const app of ["skills/baba", "spec/support/notes"]) {
+for (const app of ["template", "spec/support/notes"]) {
   it(`${app}: bundles source, reloads edits and serves the release`, async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-app-")))
 
     dirs.push(dir)
     for (const name of ["ui", "src"]) cpSync(resolve(app, name), join(dir, name), { recursive: true })
-    cpSync(resolve("skills/baba/package.json"), join(dir, "package.json"))
-    symlinkSync(resolve("skills/baba/framework"), join(dir, "framework"))
     symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
     const serve = async () => {
@@ -130,7 +128,6 @@ for (const app of ["skills/baba", "spec/support/notes"]) {
     }
     await buildUi(join(dir, "ui"), join(dir, "ui", BUILT))
     rmSync(join(dir, "node_modules"))
-    rmSync(join(dir, "framework"))
     rmSync(join(dir, "src"), { recursive: true })
 
     const release = await serve()
@@ -147,9 +144,7 @@ it("refuses to build a shell page that imports no stylesheet, and says what to i
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("skills/baba", name), join(dir, name), { recursive: true })
-  cpSync(resolve("skills/baba/package.json"), join(dir, "package.json"))
-  symlinkSync(resolve("skills/baba/framework"), join(dir, "framework"))
+  for (const name of ["ui", "src"]) cpSync(resolve("template", name), join(dir, name), { recursive: true })
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
   writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
 
