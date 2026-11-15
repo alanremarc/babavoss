@@ -21,6 +21,9 @@ function place(kept: Json[] = []) {
     made: [] as { id: string; from: string; session: string }[],
     acts: [] as Json[],
     closed: [] as string[],
+    cleared: [] as string[],
+    forgotten: [] as string[],
+    swept: [] as { id: string; spared: boolean }[],
     records: new Map<string, Json>(kept.map((r) => [(r as { id: string }).id, r])),
     fail: "",
   }
@@ -45,6 +48,16 @@ function place(kept: Json[] = []) {
       world.closed.push(project)
 
       return " M notes.md"
+    },
+    clear: (dir) => void world.cleared.push(dir),
+    forget(id) {
+      world.forgotten.push(id)
+      world.records.delete(id)
+    },
+    async sweep(spared) {
+      world.swept = [...world.records.keys()].map((id) => ({ id, spared: spared(id, world.records.get(id)) }))
+
+      return world.swept.filter((r) => !r.spared).map((r) => r.id)
     },
     record: (_dir, run) => void world.records.set((run as { id: string }).id, run),
     list: () => [...world.records.values()],
@@ -242,7 +255,7 @@ test("a message is refused while no run is up", async () => {
   expect(await agent.call("/", "start", { model: "gpt" })).toEqual({ outcome: "refused", reason: "model is one of haiku, sonnet, opus" })
 })
 
-test("close ends the process, deletes the project, takes back the login and keeps the record, with what was left changed", async () => {
+test("close ends the process, takes back the login, deletes the project and home and keeps the record, with what was left changed", async () => {
   const { agent, harness, where } = await started()
   const id = where.made[0]!.id
 
@@ -251,6 +264,7 @@ test("close ends the process, deletes the project, takes back the login and keep
   expect(harness.told).toEqual(["end"])
   expect(where.closed).toEqual([MADE.project])
   expect(harness.released).toEqual([MADE.home])
+  expect(where.cleared).toEqual([DIR])
   expect(agent.offered()).toEqual(["start", "start_from"])
   expect(agent.sees()).not.toHaveProperty("project")
   expect((root(agent).recent ?? []).map((r) => r.title)).toEqual(expect.arrayContaining(["closed", "the project at close"]))
@@ -304,10 +318,46 @@ test("past runs are listed from their records, and one is shown here when no run
   const listed = agent.sees("/runs") as { runs: { id: string; status: string; open?: Json }[] }
 
   expect(listed.runs).toMatchObject([{ id: KEPT.id, status: "ended", checkout: "/repo", commit: "fedcba9876", uncommitted: 0, turns: 0 }])
-  expect(agent.offered("/runs")).toEqual(["open"])
+  expect(agent.offered("/runs")).toEqual(["open", "forget"])
   expect(await agent.call("/runs", "open", { id: KEPT.id })).toMatchObject({ outcome: "written" })
   await until(() => root(agent).run === KEPT.id)
   expect(agent.sees()).toMatchObject({ status: "ended", ended: expect.stringContaining("the lab that ran it is gone") })
   expect(agent.sees("/entries/1")).toMatchObject({ text: "hi" })
   expect(agent.offered()).toEqual(["start", "start_from", "close"])
+})
+
+test("a record is forgotten whole from the list of runs, the shown one once it is closed, and only the last 20 are kept", async () => {
+  const { agent, where } = await started()
+  const id = where.made[0]!.id
+
+  expect(agent.offered("/runs")).toEqual([])
+  await agent.call("/", "close", {})
+  await until(() => root(agent).status === "closed")
+  expect(agent.offered("/runs")).toEqual(["forget"])
+  expect(await agent.call("/runs", "forget", { id })).toMatchObject({ outcome: "written" })
+  await until(() => where.forgotten.length === 1)
+  expect(where.forgotten).toEqual([id])
+  expect(agent.sees()).toMatchObject({ status: "no run", runs: { count: 0 } })
+
+  const many = Array.from({ length: 22 }, (_, i) => ({ ...KEPT, id: `2026-11-${String(i + 1).padStart(2, "0")}T10-00-00-ab12`, began: 1000 + i }))
+  const crowded = place(many)
+  const s = story(lab(fakeHarness().harness, crowded.runs), { effects: "real" })
+
+  await until(() => crowded.forgotten.length === 2)
+  expect(crowded.forgotten).toEqual([many[0]!.id, many[1]!.id])
+  expect(s.agent.sees()).toMatchObject({ runs: { count: 20 } })
+})
+
+test("on start, what a lab that is gone left is swept: every run but the one shown here and those of a lab still running", async () => {
+  const running = { ...KEPT, id: "2026-11-15T09-00-00-cd34", lab: process.ppid }
+  const gone = { ...KEPT, id: "2026-11-15T08-00-00-ef56", lab: 2 ** 22 + 1 }
+  const where = place([KEPT, running, gone])
+
+  story(lab(fakeHarness().harness, where.runs), { model: { next: 4, runs: [], run: KEPT } as unknown as Model, effects: "real" })
+  await until(() => where.swept.length === 3)
+  expect(where.swept).toEqual([
+    { id: KEPT.id, spared: true },
+    { id: running.id, spared: true },
+    { id: gone.id, spared: false },
+  ])
 })

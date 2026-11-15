@@ -1,9 +1,10 @@
 // Where a run lives, and what is done there besides the harness: one directory under this repository's .babavoss/lab/runs,
 // holding the project under test, a copy of a checkout as it is now, uncommitted changes included, with its own git and
 // dependencies, provisioned and its root started; the agent under test's home; and the run's record, written as it goes.
+// A closed run keeps only its record: its project and home are deleted, and nothing outside its directory ever is.
 // The root under test is reached here too, as the person. The surface reaches all of it through `Runs`, faked in its specs.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
-import { dirname, join, resolve, sep } from "node:path"
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
+import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { findService, serviceClient, type Json } from "babavoss/core/index.ts"
 import { sessionEnv } from "babavoss/core/harness/index.ts"
@@ -23,6 +24,15 @@ export interface Runs {
   look(project: string, home: string, session: string, at: string): Promise<Said>
   /** Closes the project's roots, says what the agent under test left changed in it, and deletes it. */
   close(project: string): Promise<string>
+  /** Deletes what a run's directory holds besides its record: its project and its home, a link there removed, never followed. */
+  clear(dir: string): void
+  /** Deletes run `id`'s directory whole, its record with it. */
+  forget(id: string): void
+  /**
+   * Closes and clears every run not `spared`, as a lab that crashed or came before left them: their roots closed, each
+   * home's login taken back by `release`, their project and home deleted. Answers with the runs cleared.
+   */
+  sweep(spared: (id: string, record: Json | undefined) => boolean, release: (home: string) => void): Promise<string[]>
   /** Writes the run's record. */
   record(dir: string, run: Json): void
   /** The records of every run, oldest first. */
@@ -33,6 +43,8 @@ export interface Runs {
 export const REPO = realpathSync(fileURLToPath(new URL("../../../../", import.meta.url)))
 export const RUNS = join(REPO, ".babavoss/lab/runs")
 const RECORD = "run.json"
+/** What a run's directory holds besides its record, deleted when it closes. */
+const HELD = ["project", "home"]
 /** What a run's project leaves out of the copy: the lab itself, so a run does not start runs of its own. */
 export const LEFT_OUT = [".baba/surfaces/lab"]
 
@@ -126,91 +138,150 @@ const pageOf = async (project: string, session: string) => {
 const client = (project: string, home: string, session: string) =>
   serviceClient(stateOf(project, session), session, join(project, "framework/shell/scripts/open.ts"), envOf(project, home))
 
-export const runs: Runs = {
-  async make(id, from, session) {
-    const began = Date.now()
-    const checkout = checkoutOf(from)
-    const dir = join(RUNS, id)
-    const project = join(dir, "project")
-    const home = join(dir, "home")
+/** The directory of run `id` under `root`, only where `id` is one name right under it: never a path that leads out. */
+export function runDir(id: string, root: string = RUNS): string | undefined {
+  if (!/^[\w.-]+$/.test(id) || id === "." || id === "..") return undefined
 
-    // What sessions write is git's to ignore, here as the root's door has it.
-    if (!existsSync(join(REPO, ".babavoss/.gitignore"))) {
-      mkdirSync(join(REPO, ".babavoss"), { recursive: true })
-      writeFileSync(join(REPO, ".babavoss/.gitignore"), "*\n")
-    }
-    mkdirSync(home, { recursive: true })
-    try {
-      const copied = copyCheckout(checkout, project)
+  const dir = resolve(root, id)
 
-      install(project)
-      // Its root is up before the agent's first message, so the page is there from the start; the hook finds it.
-      sh(["bun", "run", "baba", "start", "--session", session], join(project, ".baba"), envOf(project, home))
-
-      return { dir, project, home, checkout: copied, ms: Date.now() - began, page: await pageOf(project, session) }
-    } catch (error) {
-      rmSync(project, { recursive: true, force: true })
-      throw error
-    }
-  },
-  async act(project, home, session, at, handle, args) {
-    const answer = await client(project, home, session).request(at, { method: "POST", body: JSON.stringify({ handle, args }) })
-    const body = (await answer.json()) as { outcome?: string; reason?: string; error?: string }
-
-    return body.outcome === "written"
-      ? { ok: true, text: `written: ${handle} at ${at}` }
-      : { ok: false, text: `refused: ${body.reason ?? body.error ?? answer.status}` }
-  },
-  async look(project, home, session, at) {
-    const answer = await client(project, home, session).request(at)
-
-    return { ok: answer.ok, text: JSON.stringify(await answer.json(), null, 2) }
-  },
-  async close(project) {
-    if (!project.startsWith(RUNS + sep) || !existsSync(project)) return ""
-
-    const sessions = join(project, ".babavoss/sessions")
-
-    for (const session of existsSync(sessions) ? readdirSync(sessions) : []) {
-      const found = await findService(join(sessions, session, "baba")).catch(() => undefined)
-
-      if (found)
-        await fetch(`http://127.0.0.1:${found.port}/_/close`, {
-          method: "POST",
-          headers: { accept: "text/plain", "babavoss-service": found.token },
-          signal: AbortSignal.timeout(5000),
-        })
-          .then((answer) => answer.body?.cancel())
-          .catch(() => {})
-    }
-
-    let changed = ""
-
-    try {
-      changed = sh(["git", "status", "--short"], project).trimEnd()
-    } catch {}
-    // A closed runtime ends as its answer is sent; a moment more, and nothing writes in the project any longer.
-    await Bun.sleep(300)
-    rmSync(project, { recursive: true, force: true })
-
-    return changed
-  },
-  record(dir, run) {
-    if (!dir.startsWith(RUNS + sep)) return
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, RECORD), `${JSON.stringify(run)}\n`)
-  },
-  list() {
-    if (!existsSync(RUNS)) return []
-
-    return readdirSync(RUNS)
-      .sort()
-      .flatMap((id) => {
-        try {
-          return [JSON.parse(readFileSync(join(RUNS, id, RECORD), "utf8")) as Json]
-        } catch {
-          return []
-        }
-      })
-  },
+  return dirname(dir) === resolve(root) && basename(dir) === id ? dir : undefined
 }
+
+/** Deletes `path`: a link is removed itself, never what it points at; a directory with what it holds, a link in it removed unfollowed. */
+function remove(path: string) {
+  const stat = lstatSync(path, { throwIfNoEntry: false })
+
+  if (!stat) return
+  if (stat.isSymbolicLink() || !stat.isDirectory()) return unlinkSync(path)
+  rmSync(path, { recursive: true, force: true })
+}
+
+/** Where runs live under `root`: this repository's .babavoss/lab/runs, or a directory of a spec's. */
+export function runsAt(root: string = RUNS): Runs {
+  const within = (dir: string) => runDir(basename(dir), root) === resolve(dir)
+  const read = (dir: string): Json | undefined => {
+    try {
+      return JSON.parse(readFileSync(join(dir, RECORD), "utf8")) as Json
+    } catch {
+      return undefined
+    }
+  }
+
+  const place: Runs = {
+    async make(id, from, session) {
+      const began = Date.now()
+      const checkout = checkoutOf(from)
+      const dir = runDir(id, root)
+
+      if (!dir) throw new Error(`${id} is not a run's name`)
+
+      const project = join(dir, "project")
+      const home = join(dir, "home")
+
+      // What sessions write is git's to ignore, here as the root's door has it.
+      if (!existsSync(join(REPO, ".babavoss/.gitignore"))) {
+        mkdirSync(join(REPO, ".babavoss"), { recursive: true })
+        writeFileSync(join(REPO, ".babavoss/.gitignore"), "*\n")
+      }
+      mkdirSync(home, { recursive: true })
+      try {
+        const copied = copyCheckout(checkout, project)
+
+        install(project)
+        // Its root is up before the agent's first message, so the page is there from the start; the hook finds it.
+        sh(["bun", "run", "baba", "start", "--session", session], join(project, ".baba"), envOf(project, home))
+
+        return { dir, project, home, checkout: copied, ms: Date.now() - began, page: await pageOf(project, session) }
+      } catch (error) {
+        place.clear(dir)
+        throw error
+      }
+    },
+    async act(project, home, session, at, handle, args) {
+      const answer = await client(project, home, session).request(at, { method: "POST", body: JSON.stringify({ handle, args }) })
+      const body = (await answer.json()) as { outcome?: string; reason?: string; error?: string }
+
+      return body.outcome === "written"
+        ? { ok: true, text: `written: ${handle} at ${at}` }
+        : { ok: false, text: `refused: ${body.reason ?? body.error ?? answer.status}` }
+    },
+    async look(project, home, session, at) {
+      const answer = await client(project, home, session).request(at)
+
+      return { ok: answer.ok, text: JSON.stringify(await answer.json(), null, 2) }
+    },
+    async close(project) {
+      if (!within(dirname(project)) || basename(project) !== "project" || !existsSync(project)) return ""
+
+      const sessions = join(project, ".babavoss/sessions")
+
+      for (const session of existsSync(sessions) ? readdirSync(sessions) : []) {
+        const found = await findService(join(sessions, session, "baba")).catch(() => undefined)
+
+        if (found)
+          await fetch(`http://127.0.0.1:${found.port}/_/close`, {
+            method: "POST",
+            headers: { accept: "text/plain", "babavoss-service": found.token },
+            signal: AbortSignal.timeout(5000),
+          })
+            .then((answer) => answer.body?.cancel())
+            .catch(() => {})
+      }
+
+      let changed = ""
+
+      try {
+        changed = sh(["git", "status", "--short"], project).trimEnd()
+      } catch {}
+      // A closed runtime ends as its answer is sent; a moment more, and nothing writes in the project any longer.
+      await Bun.sleep(300)
+      rmSync(project, { recursive: true, force: true })
+
+      return changed
+    },
+    clear(dir) {
+      if (!within(dir)) return
+      for (const held of HELD) remove(join(resolve(dir), held))
+    },
+    forget(id) {
+      const dir = runDir(id, root)
+
+      if (dir) remove(dir)
+    },
+    async sweep(spared, release) {
+      const swept: string[] = []
+
+      for (const id of existsSync(root) ? readdirSync(root).sort() : []) {
+        const dir = runDir(id, root)
+
+        if (!dir || !HELD.some((held) => existsSync(join(dir, held))) || spared(id, read(dir))) continue
+        await place.close(join(dir, "project"))
+        if (existsSync(join(dir, "home"))) release(join(dir, "home"))
+        place.clear(dir)
+        swept.push(id)
+      }
+
+      return swept
+    },
+    record(dir, run) {
+      if (!within(dir)) return
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, RECORD), `${JSON.stringify(run)}\n`)
+    },
+    list() {
+      if (!existsSync(root)) return []
+
+      return readdirSync(root)
+        .sort()
+        .flatMap((id) => {
+          const record = read(join(root, id))
+
+          return record === undefined ? [] : [record]
+        })
+    },
+  }
+
+  return place
+}
+
+export const runs: Runs = runsAt()

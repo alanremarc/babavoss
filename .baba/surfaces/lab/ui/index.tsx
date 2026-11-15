@@ -43,6 +43,7 @@ type Past = {
   cost: number
   shown?: boolean
   open?: Handle
+  forget?: Handle
 }
 
 export const icon = <FlaskConicalIcon aria-hidden />
@@ -290,7 +291,10 @@ export default function Lab() {
             }}
           >
             {listing ? (
-              <Runs open={(handle) => void act(handle, {}, "/runs").then((refusal) => !refusal && navigate("/"))} />
+              <Runs
+                open={(handle) => void act(handle, {}, "/runs").then((refusal) => !refusal && navigate("/"))}
+                forget={(handle) => void act(handle, {}, "/runs")}
+              />
             ) : entries.length ? (
               <ol className="flex flex-col gap-px py-2">
                 {entries.map((row) => (
@@ -381,8 +385,8 @@ function Checkout({ of }: { of: Root }) {
   )
 }
 
-/** The runs kept, newest first, each to open here while no run is up. */
-function Runs({ open }: { open: (handle: Handle) => void }) {
+/** The runs kept, newest first, each to open here while no run is up, and to forget. */
+function Runs({ open, forget }: { open: (handle: Handle) => void; forget: (handle: Handle) => void }) {
   const { view } = useLive<{ runs: Past[] }>("/runs")
   const runs = view?.runs ?? []
 
@@ -391,7 +395,7 @@ function Runs({ open }: { open: (handle: Handle) => void }) {
       <Empty>
         <EmptyHeader>
           <EmptyTitle>No runs yet</EmptyTitle>
-          <EmptyDescription>Each run's record is kept under .babavoss/lab/runs, and listed here.</EmptyDescription>
+          <EmptyDescription>Each run's record is kept under .babavoss/lab/runs, the last 20, and listed here.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     )
@@ -416,6 +420,13 @@ function Runs({ open }: { open: (handle: Handle) => void }) {
             </Button>
           ) : (
             <span className="w-11 shrink-0 text-right text-[11px] text-muted-foreground">{run.shown ? "shown" : ""}</span>
+          )}
+          {run.forget ? (
+            <Button size="xs" variant="ghost" onClick={() => forget(run.forget!)} title="Delete this run's record">
+              Forget
+            </Button>
+          ) : (
+            <span className="w-14 shrink-0" />
           )}
         </li>
       ))}

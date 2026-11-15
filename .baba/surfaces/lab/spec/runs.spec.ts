@@ -1,11 +1,12 @@
 // A run's project: a copy of a checkout as it is now, against a git repository made for the spec. What is uncommitted comes
 // along, staged or not, added or deleted; what git ignores, what sessions write and the lab itself stay out; and the copy
-// is a repository of its own, so what the agent under test commits there never reaches the checkout.
+// is a repository of its own, so what the agent under test commits there never reaches the checkout. A run's directory,
+// once closed, keeps its record alone, and what deletes there never reaches outside it.
 import { afterAll, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { checkoutOf, copyCheckout, REPO } from "../src/runs.ts"
+import { checkoutOf, copyCheckout, REPO, runDir, runsAt } from "../src/runs.ts"
 
 const made: string[] = []
 const temp = () => {
@@ -107,4 +108,63 @@ test("a run starts from the top of a git checkout with a .baba/, this repository
   git(bare, "init", "-q")
   expect(() => checkoutOf(bare)).toThrow("has no .baba/")
   expect(() => checkoutOf(join(bare, "missing"))).toThrow("does not exist")
+})
+
+/** A directory of runs, each with a record, a project and a home whose login is a link to a keychain outside. */
+function runsDir(...ids: string[]) {
+  const root = temp()
+  const keychain = join(temp(), "Keychains")
+
+  put(keychain, "login.keychain-db", "the person's")
+  for (const id of ids) {
+    put(root, `${id}/run.json`, `${JSON.stringify({ id, status: "idle" })}\n`)
+    put(root, `${id}/project/notes.md`, "the agent's work\n")
+    put(root, `${id}/home/.claude/projects/p/t.jsonl`, "a transcript\n")
+    mkdirSync(join(root, id, "home/Library"), { recursive: true })
+    symlinkSync(keychain, join(root, id, "home/Library/Keychains"))
+  }
+
+  return { root, keychain, place: runsAt(root) }
+}
+
+test("a run's name is one name right under the runs, never a path out of them", () => {
+  const root = temp()
+
+  expect(runDir("2026-11-15T10-00-00-ab12", root)).toBe(join(root, "2026-11-15T10-00-00-ab12"))
+  expect(["..", ".", "../x", "a/b", "", "/etc"].map((id) => runDir(id, root))).toEqual(Array(6).fill(undefined))
+})
+
+test("a closed run's project and home are deleted, the keychain's link removed and never followed; its record stays", () => {
+  const { root, keychain, place } = runsDir("r1")
+
+  place.clear(join(root, "r1"))
+  expect(["project", "home"].filter((held) => existsSync(join(root, "r1", held)))).toEqual([])
+  expect(place.list()).toEqual([{ id: "r1", status: "idle" }])
+  expect(readFileSync(join(keychain, "login.keychain-db"), "utf8")).toBe("the person's")
+  place.clear(join(root, ".."))
+  place.clear(keychain)
+  expect(existsSync(keychain)).toBe(true)
+})
+
+test("a forgotten run is deleted whole, and nothing outside the runs is", () => {
+  const { root, keychain, place } = runsDir("r1", "r2")
+
+  place.forget("r1")
+  place.forget("..")
+  expect(place.list()).toEqual([{ id: "r2", status: "idle" }])
+  expect(existsSync(root)).toBe(true)
+  expect(existsSync(join(keychain, "login.keychain-db"))).toBe(true)
+})
+
+test("a sweep clears every run that is not spared, its home's login taken back first, and keeps their records", async () => {
+  const { root, keychain, place } = runsDir("r1", "r2", "r3")
+  const released: string[] = []
+
+  place.clear(join(root, "r3"))
+  expect(await place.sweep((id) => id === "r2", (home) => void released.push(home))).toEqual(["r1"])
+  expect(released).toEqual([join(root, "r1/home")])
+  expect(existsSync(join(root, "r1/home"))).toBe(false)
+  expect(existsSync(join(root, "r2/project/notes.md"))).toBe(true)
+  expect(place.list()).toHaveLength(3)
+  expect(existsSync(join(keychain, "login.keychain-db"))).toBe(true)
 })

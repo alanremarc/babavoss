@@ -2,7 +2,9 @@
 // watches. A run is a copy of a checkout as it is now, uncommitted changes included, with its own root and page, and an
 // agent under test in it with a home of its own, under a harness the lab reaches through the framework's adapter. Every
 // event of its stream joins the timeline: what entered the agent's context, chunk by chunk, with sizes, tokens and cost,
-// and what was done on its page as the person. A turn that ends, and a run that cannot go on, are noticed. A run's record is kept under .babavoss/lab/runs, so it outlives its tab.
+// and what was done on its page as the person. A turn that ends, and a run that cannot go on, are noticed. A run's record
+// is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
+// left behind by a lab that is gone is cleared when the lab starts.
 import { randomBytes, randomUUID } from "node:crypto"
 import { action, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
@@ -13,6 +15,8 @@ export const MODELS = ["haiku", "sonnet", "opus"]
 export const END_MOVE = "[The person ended their move on the page.]"
 const RECENT = 5
 const BUDGET_USD = 0.5
+/** How many runs' records are kept: past it, the oldest is forgotten. */
+export const KEEP = 20
 
 /** starting: the project is being made; idle: the agent waits for a message; working: a turn runs; ended: its process is gone. */
 export type Status = "starting" | "idle" | "working" | "ended" | "closing" | "closed"
@@ -36,12 +40,14 @@ export type Run = Timeline & {
   login?: string
   page?: string
   ended?: string
+  /** The process of the lab that runs it, so another lab's start tells a live run from one left behind. */
+  lab?: number
 }
 /** A run as the list of runs has it. */
 export type Summary = { id: string; began: number; model: string; status: Status; checkout?: Checkout; turns: number; cost: number; entries: number }
 export type Model = { next: number; run?: Run; runs: Summary[] }
 export type Event =
-  | ({ kind: "made"; n: number; t: number; id: string; session: string; login: string } & Made)
+  | ({ kind: "made"; n: number; t: number; id: string; session: string; login: string; lab: number } & Made)
   | { kind: "stream"; n: number; t: number; event: HarnessEvent }
   | { kind: "acted"; n: number; t: number; id: string; said: Said }
   | { kind: "closed"; n: number; t: number; changed: string }
@@ -53,10 +59,12 @@ export type Command =
   | { kind: "say"; n: number; session: string; text: string }
   | { kind: "interrupt"; n: number; session: string }
   | { kind: "act"; n: number; id: string; project: string; home: string; session: string; at: string; handle?: string; args?: Json }
-  | { kind: "close"; n: number; session?: string; project?: string; home?: string }
+  | { kind: "close"; n: number; session?: string; dir?: string; project?: string; home?: string }
   | { kind: "record"; dir: string; run: Run }
   | { kind: "list" }
   | { kind: "read"; id: string }
+  | { kind: "forget"; ids: string[] }
+  | { kind: "sweep"; keep?: string }
 type Result = Update<Model, Command>
 
 const up = (run: Run | undefined): boolean => !!run && (run.status === "idle" || run.status === "working")
@@ -70,8 +78,9 @@ const note = (run: Run, t: number, title: string, text = "", error = false): Run
 const at = (run: Run) => run.began + (run.entries.at(-1)?.t ?? 0)
 /** Who did it, as the timeline says: the person on the lab's page, or the agent that drives the run. */
 const who = (call: Call) => (isPerson(call.actor) ? "the person" : "the developing agent")
-/** The commands that close a run: its process killed, its root closed, its project deleted and its home's login taken back. */
-const closing = (run: Run): Command[] => (run.project ? [{ kind: "close", n: run.n, session: run.session, project: run.project, home: run.home }] : [])
+/** The commands that close a run: its process killed, its root closed, its home's login taken back, its project and home deleted. */
+const closing = (run: Run): Command[] =>
+  run.project ? [{ kind: "close", n: run.n, session: run.session, dir: run.dir, project: run.project, home: run.home }] : []
 const said = (m: Model, run: Run, text: string, call: Call): Result =>
   up(run)
     ? {
@@ -192,7 +201,7 @@ const look = action({
 })
 const close = action({
   name: "close",
-  description: "Close the run: its agent's process is killed, its root closed and its project deleted; its timeline and record stay",
+  description: "Close the run: its agent's process is killed, its root closed, its project and home deleted; its timeline and record stay",
   subject: {},
   inputs: {},
   update(m: Model): Result {
@@ -204,6 +213,30 @@ const close = action({
     return { model: { ...m, run: { ...run, status: "closing" } }, commands: closing(run) }
   },
 })
+const forget = action({
+  name: "forget",
+  description: ({ id }) => `Delete run ${id}'s record whole`,
+  subject: { id: "string" },
+  inputs: {},
+  update(m: Model, { id }): Result {
+    if (!m.runs.some((r) => r.id === id)) return { refused: `no run ${id}` }
+    if (m.run?.id === id && m.run.status !== "closed") return { refused: "the run is shown here and not closed: close it first" }
+
+    const { run, ...rest } = m
+
+    return { model: { ...rest, ...(run?.id !== id && run && { run }), runs: m.runs.filter((r) => r.id !== id) }, commands: [{ kind: "forget", ids: [id] }] }
+  },
+})
+/** The model past an event, with the oldest records past KEEP forgotten, never the run shown here. */
+const kept = (result: { model: Model; commands?: Command[]; notices?: Notice[] }): Result => {
+  const m = result.model
+  const over = m.runs.length - KEEP
+  const old = over > 0 ? m.runs.filter((r) => r.id !== m.run?.id).slice(0, over).map((r) => r.id) : []
+
+  return old.length
+    ? { ...result, model: { ...m, runs: m.runs.filter((r) => !old.includes(r.id)) }, commands: [...(result.commands ?? []), { kind: "forget", ids: old }] }
+    : result
+}
 const open = action({
   name: "open",
   description: ({ id }) => `Show run ${id} here, its timeline as it was recorded`,
@@ -234,7 +267,7 @@ const HOW =
   "/entries a line each, /entries/since/N the entries after N, /entries/N one whole, /injected what hooks injected. Act on its page as " +
   "the person with look and act, then end_move. All of it is on the timeline the person watches. Close the run when done: its record stays, in /runs."
 
-const pages = view([start, startFrom, say, endMove, stop, act, look, close, open], {
+const pages = view([start, startFrom, say, endMove, stop, act, look, close, open, forget], {
   "/": (m) => {
     const run = m.run
     const working = run?.status === "working"
@@ -296,6 +329,7 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
         cost: Math.round(r.cost * 10_000) / 10_000,
         entries: r.entries,
         ...(r.id === m.run?.id ? { shown: true } : !live(m.run) && { open: open.bind({ id: r.id }) }),
+        ...((r.id !== m.run?.id || m.run.status === "closed") && { forget: forget.bind({ id: r.id }) }),
       })),
   }),
 })
@@ -303,8 +337,8 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
 /** The run after an event of its own command. */
 function happened(run: Run, e: Exclude<Event, { kind: "listed" | "read" }>): Run {
   if (e.kind === "made") {
-    const { id, session, dir, project, home, checkout, login, page } = e
-    const made = { ...run, began: e.t, status: "idle" as const, id, session, dir, project, home, checkout, login, ...(page && { page }) }
+    const { id, session, dir, project, home, checkout, login, page, lab } = e
+    const made = { ...run, began: e.t, status: "idle" as const, id, session, dir, project, home, checkout, login, lab, ...(page && { page }) }
     const dirty = checkout.dirty.length ? `, and ${checkout.dirty.length} paths uncommitted:\n${checkout.dirty.join("\n")}` : ", nothing uncommitted"
 
     return note(
@@ -335,7 +369,7 @@ function happened(run: Run, e: Exclude<Event, { kind: "listed" | "read" }>): Run
     const left = e.changed ? `what git said of it, against the commit it was copied at:\n${e.changed}` : "nothing changed against the commit it was copied at"
     const closed = note({ ...run, status: "closed" }, e.t, "the project at close", left)
 
-    return note(closed, e.t, "closed", "the root under test is closed, its project deleted, the home's login link taken back")
+    return note(closed, e.t, "closed", "the root under test is closed, the home's login link taken back, its project and home deleted; this record stays")
   }
   if (e.command === "act" && e.id) return { ...run, ...resolve(run, e.id, `failed: ${e.error}`, true) }
 
@@ -371,6 +405,19 @@ const recorded = (saved: Json | undefined, n: number, ended: string): Run | unde
 }
 const RESTARTED = "the lab was started again, by a change to its code or a new runtime, and the agent under test's process did not survive it"
 const ORPHANED = "the lab that ran it is gone, and the agent under test's process with it"
+/** Whether a record is of a run another lab, still running, runs: its process is up and is not this one. */
+const ranElsewhere = (record: Json | undefined): boolean => {
+  const pid = (record as { lab?: unknown } | undefined)?.lab
+
+  if (typeof pid !== "number" || pid === process.pid) return false
+  try {
+    process.kill(pid, 0)
+
+    return live(record as unknown as Run)
+  } catch {
+    return false
+  }
+}
 const summaries = (records: Json[]): Summary[] =>
   records.flatMap((r) => {
     const run = recorded(r, 0, ORPHANED)
@@ -400,12 +447,13 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
 
       return { next: kept.next, runs: Array.isArray(kept.runs) ? kept.runs : [], ...(run && { run }) }
     },
-    start: () => [{ kind: "list" }],
+    // What a lab that is gone left of its runs is cleared: every run but the one shown here and those of a lab still running.
+    start: (m) => [{ kind: "sweep", ...(m.run?.id && m.run.status !== "closed" && { keep: m.run.id }) }, { kind: "list" }],
     working: (m) => live(m.run),
     session: (c) => c.kind === "harness",
     update(m, message) {
       if (message.kind === "call") return pages.update(m, message)
-      if (message.kind === "listed") return { model: { ...m, runs: summaries(message.runs) } }
+      if (message.kind === "listed") return kept({ model: { ...m, runs: summaries(message.runs) } })
       if (message.kind === "read") {
         const run = recorded(message.run, m.next, ORPHANED)
 
@@ -419,12 +467,18 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
       const runs = s ? [...m.runs.filter((r) => r.id !== s.id), s].sort((a, b) => a.began - b.began) : m.runs
       const notices = noticed(m.run, run)
 
-      return { model: { ...m, run, runs }, commands: run.dir ? [{ kind: "record", dir: run.dir, run }] : [], ...(notices.length && { notices }) }
+      return kept({ model: { ...m, run, runs }, commands: run.dir ? [{ kind: "record", dir: run.dir, run }] : [], ...(notices.length && { notices }) })
     },
     view: pages.view,
     async run(c, send, signal) {
       if (c.kind === "record") return place.record(c.dir, c.run)
       if (c.kind === "list") return send({ kind: "listed", runs: place.list() })
+      if (c.kind === "forget") return c.ids.forEach((id) => place.forget(id))
+      if (c.kind === "sweep") {
+        const spared = (id: string, record: Json | undefined) => id === c.keep || ranElsewhere(record)
+
+        return void (await place.sweep(spared, (home) => harness.release(home)))
+      }
       if (c.kind === "read") {
         const found = place.list().find((r) => (r as { id?: unknown } | null)?.id === c.id)
 
@@ -441,10 +495,11 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
 
         if (signal.aborted) {
           await place.close(made.project)
+          harness.release(made.home)
 
-          return harness.release(made.home)
+          return place.clear(made.dir)
         }
-        send({ kind: "made", n: c.n, t: Date.now(), id, session, login, ...made })
+        send({ kind: "made", n: c.n, t: Date.now(), id, session, login, lab: process.pid, ...made })
 
         const agent = harness.start({ project: made.project, home: made.home, session, model: c.model, budget: BUDGET_USD })
 
@@ -465,6 +520,7 @@ export function lab(harness: Harness, place: Runs): Surface<Model, Event, Comman
         const changed = c.project ? await place.close(c.project) : ""
 
         if (c.home) harness.release(c.home)
+        if (c.dir) place.clear(c.dir)
 
         return send({ kind: "closed", n: c.n, t: Date.now(), changed })
       }
