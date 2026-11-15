@@ -5,16 +5,18 @@
 // a surface does on its own is told where it chose to tell it. /activity/notices is the notices alone. Time is the
 // message's own, stamped as it enters, a call by the run loop and a tab's event by the shell's run, so the update that
 // keeps it stays pure. The last KEPT entries are kept; the agent is never fed them. What the person has seen of the
-// notices is kept beside them, a mark the page sets, so a page opened later counts what is new from the log itself.
+// notices is kept beside them, a mark the page sets, so a page opened later counts what is new from the log itself, and
+// sees a tab's notices alone, one by one.
 import { isPerson, type Args, type Call, type Json, type Notice, type View } from "../../core/index.ts"
 
 /** Who did it: the person, an agent of the session, or a surface by a command's event. */
 export type Who = "person" | "agent" | "surface"
 /**
  * One line of activity: its number in the session, when in ms since the epoch, who, the surface and the place it is about,
- * and what; `notice` where a surface said it, absent where it is the mechanical line for a call or the shell's own.
+ * and what; `notice` where a surface said it, absent where it is the mechanical line for a call or the shell's own; `own`
+ * where it is the shell's own opening, closing or showing of a tab, which is about the tab but not in it.
  */
-export type Entry = { n: number; when: number; who: Who; surface: string; at: string; what: string; notice?: true }
+export type Entry = { n: number; when: number; who: Who; surface: string; at: string; what: string; notice?: true; own?: true }
 /** An entry before it is numbered. */
 export type Line = Omit<Entry, "n">
 /** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by their toast. */
@@ -91,16 +93,16 @@ export function linesOf(before: Held, message: Call | { kind: "tab"; n: number }
 
   const { handle, args } = message
 
-  if (handle === "open" && typeof args.surface === "string") return [{ when, who, surface: args.surface, at: `/tabs/${before.next}`, what: "opened" }]
+  if (handle === "open" && typeof args.surface === "string") return [{ when, who, surface: args.surface, at: `/tabs/${before.next}`, what: "opened", own: true }]
 
   const closed = handle === "close" ? before.tabs.find((t) => t.n === args.n) : undefined
 
-  if (closed) return [{ when, who, surface: closed.surface, at: `/tabs/${closed.n}`, what: "closed" }]
+  if (closed) return [{ when, who, surface: closed.surface, at: `/tabs/${closed.n}`, what: "closed", own: true }]
 
   const shown = handle === "show" && typeof args.at === "string" ? tabOf(args.at) : undefined
   const pointed = shown && before.tabs.find((t) => t.n === Number(shown[1]))
 
-  if (pointed) return [{ when, who, surface: pointed.surface, at: (args.at as string).replace(/\/$/, ""), what: "shown to the person" }]
+  if (pointed) return [{ when, who, surface: pointed.surface, at: (args.at as string).replace(/\/$/, ""), what: "shown to the person", own: true }]
 
   return [{ when, who, surface: SHELL, at: "/", what: said(handle, args) }]
 }
@@ -129,7 +131,11 @@ export const restored = (kept: unknown): Entry[] =>
     ? kept
         .filter(isEntry)
         .slice(-KEPT)
-        .map(({ notice, ...e }): Entry => (notice === true || (notice === undefined && e.who === "surface") ? { ...e, notice: true } : e))
+        .map(({ notice, own, ...e }): Entry => ({
+          ...e,
+          ...((notice === true || (notice === undefined && e.who === "surface")) && { notice: true as const }),
+          ...(own === true && { own: true as const }),
+        }))
     : []
 
 /** The seen mark kept from before; where there is none, as in state kept before it, everything kept so far counts as seen. */
@@ -153,9 +159,12 @@ export function seeUpto(seen: Seen, n: number): Seen {
 /** The mark after the person looked at notice `n` alone, as by clicking its toast. */
 export const lookAt = (seen: Seen, n: number): Seen => (n <= seen.upto || seen.looked.includes(n) ? seen : { ...seen, looked: [...seen.looked, n] })
 
-/** How many notices `who` has not seen: newer than the mark, not looked at one by one, and caused by someone else. */
-export const unseenOf = (entries: Entry[], seen: Seen, who: Who = "person"): number =>
-  entries.filter((e) => e.notice && e.who !== who && e.n > seen.upto && !seen.looked.includes(e.n)).length
+/** The notices `who` has not seen, by number, oldest first: newer than the mark, not looked at one by one, and caused by someone else. */
+export const unseenIn = (entries: Entry[], seen: Seen, who: Who = "person"): number[] =>
+  entries.filter((e) => e.notice && e.who !== who && e.n > seen.upto && !seen.looked.includes(e.n)).map((e) => e.n)
+
+/** How many notices `who` has not seen. */
+export const unseenOf = (entries: Entry[], seen: Seen, who: Who = "person"): number => unseenIn(entries, seen, who).length
 
 /** A time as /activity gives it: UTC to the second. */
 export const stamp = (when: number): string => new Date(when).toISOString().replace(/\.\d{3}Z$/, "Z")
@@ -163,8 +172,8 @@ export const stamp = (when: number): string => new Date(when).toISOString().repl
 /**
  * /activity, newest first, PAGE at a time, or with `notices` the notices alone, at /activity/notices: `upto` the number
  * of the newest entry shown, the newest by default; `earlier` names the page before where there is one. `kind` is notice
- * where a surface said it, call for the mechanical line; `at` is null where the entry's tab is closed. `open` is the tab
- * numbers open now.
+ * where a surface said it, call for the mechanical line; `at` is null where the entry's tab is closed; `tab` is the tab an
+ * entry is in, closed or not, absent for the shell's own. `open` is the tab numbers open now.
  */
 export function activityView(all: Entry[], open: Set<number>, upto?: number, notices = false): View | undefined {
   if (upto !== undefined && (!Number.isInteger(upto) || upto < 1)) return undefined
@@ -179,14 +188,19 @@ export function activityView(all: Entry[], open: Set<number>, upto?: number, not
 
     return !m || open.has(Number(m[1])) ? at : null
   }
-  const row = (e: Entry) => ({ n: e.n, when: stamp(e.when), who: e.who, ...(!notices && { kind: e.notice ? "notice" : "call" }), surface: e.surface, at: live(e.at), what: e.what })
+  const tab = (e: Entry) => (e.own ? undefined : /^\/tabs\/\d+/.exec(e.at)?.[0])
+  const row = (e: Entry) => {
+    const t = tab(e)
+
+    return { n: e.n, when: stamp(e.when), who: e.who, ...(!notices && { kind: e.notice ? "notice" : "call" }), surface: e.surface, at: live(e.at), ...(t && { tab: t }), what: e.what }
+  }
 
   return {
     at: upto === undefined ? base : `${base}/${upto}`,
     about: notices
-      ? "what the surfaces chose to say in this session, newest first, by who caused it; at is null where the tab is closed"
+      ? "what the surfaces chose to say in this session, newest first, by who caused it; tab is the tab it is in, at null where that is closed"
       : "who did what in this session, newest first: the person, an agent, or a surface by itself; kind is notice where a surface said it, " +
-        "call where a call said nothing; at is null where the tab is closed",
+        "call where a call said nothing; tab is the tab it is in, absent for the shell's own, at null where the tab is closed",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),
