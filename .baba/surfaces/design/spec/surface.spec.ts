@@ -1,12 +1,14 @@
 // The design document's rules, as stories. The scenarios are played once for real, on the demo project through the
-// framework's hook, word and runtime, and settled as the play command's event: what is shown is what that code gave.
+// framework's hook, word and runtime, and the demo's shape read from its surfaces, both settled as the play command's
+// event: what is shown is what that code gave, and nothing told is written here.
 import { readFileSync } from "node:fs"
 import { beforeAll, expect, test } from "bun:test"
 import { story, whole, type Json } from "babavoss/core/index.ts"
 import { TELLS } from "babavoss/core/hook.ts"
 import design, { type Model } from "../src/surface.ts"
-import { play, WORD, type Play } from "../src/play.ts"
+import { play, WORD, type Page, type Play } from "../src/play.ts"
 import { SCENARIOS } from "../src/scenarios.ts"
+import { shape, type Shape } from "../src/shape.ts"
 import tasks from "../demo/surfaces/tasks/src/surface.ts"
 import { lineDiff } from "../src/measure.ts"
 
@@ -15,9 +17,10 @@ type Telling = { carrier: string; lines: number; chars: number; tokens: number; 
 type Step = { at: string; n: number; who: string; did: string; changed: string[] | string; tellings: Telling[] }
 
 let plays: Play[] = []
+let demo: Shape[] = []
 
 beforeAll(async () => {
-  plays = await Promise.all(SCENARIOS.map((s) => play(s)))
+  ;[plays, demo] = await Promise.all([Promise.all(SCENARIOS.map((s) => play(s))), shape()])
 }, 60_000)
 
 /** The design document with the plays settled, as when its watch starts it and the play ends. */
@@ -25,7 +28,7 @@ async function played(model?: Model) {
   const told = story(design, model ? { model } : {})
 
   await told.world.settle((c) => c.kind === "watch", { kind: "changed" })
-  await told.world.settle((c) => c.kind === "play", { kind: "played", plays })
+  await told.world.settle((c) => c.kind === "play", { kind: "played", plays, shape: demo })
 
   return told
 }
@@ -110,6 +113,59 @@ test("a scenario's path lists its steps with sizes and an at each; a step's path
   expect(step.changed).toContain("activity: agent · tasks /tabs/1 · opened")
   expect(agent.sees("/scenarios/work/99")).toBeUndefined()
   expect(agent.sees("/scenarios/none")).toBeUndefined()
+})
+
+test("a step carries what the person's page showed after it: each open tab at /, as the person reads it, and the tab in front", async () => {
+  const { agent } = await played()
+  const at = (did: string) => agent.sees(`/scenarios/ask/${stepOf("ask", did).n}/page`) as Page
+  const task = (page: Page) => (page.tabs.find((t) => t.at === page.shown)!.view as { tasks: Json[] }).tasks[0]
+  const done = at(`${WORD} /tabs/1/tasks/1 done`)
+
+  expect(at("says: Write the notes and have me check them.")).toEqual({ tabs: [] })
+  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toMatchObject({ shown: "/tabs/1", tabs: [{ at: "/tabs/1", surface: "tasks" }] })
+  expect(task(at(`${WORD} /tabs/1 add 'title=Write the notes'`))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "todo" })
+  // In review, the task carries the person's asks, as their page has them, and the tab says they are waited for.
+  expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve", ask: true }, reopen: { ask: true } })
+  expect(done.tabs[0]!.view).toMatchObject({ attention: { who: "person", why: "to review task 1" } })
+  expect(task(at("on the page: approve n=1 at /tabs/1/tasks/1"))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "done" })
+
+  // The agent is never offered the asks, in no text of any play; the step lists the page in a line.
+  const told = plays.flatMap((p) => p.steps.flatMap((s) => s.tellings.map((t) => t.text)))
+
+  expect(told.filter((t) => /baba \S+ (approve|reopen)/.test(t))).toEqual([])
+  expect((agent.sees(`/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
+    at: `/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
+    tabs: ["tasks /tabs/1 (in front)"],
+  })
+
+  // Where the person acts is in front, and a page that sleeps is as it last was.
+  const beside = plays.find((p) => p.name === "beside")!.steps
+
+  expect(beside.map((s) => s.page.shown).filter(Boolean).at(-1)).toBe("/tabs/1")
+  expect(beside[stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1]!.page.shown).toBe("/tabs/1")
+  expect(plays.find((p) => p.name === "break")!.steps.find((s) => s.who === "root")!.page).toMatchObject({ asleep: true, tabs: [{}, {}] })
+})
+
+test("the demo's shape is read from its surfaces: places by pattern, their facts, the ask and the notice, what changes by itself", async () => {
+  const { agent } = await played()
+  const surfaces = (agent.sees("/demo") as { surfaces: Shape[] }).surfaces
+  const tasks = surfaces.find((s) => s.name === "tasks")!
+  const build = surfaces.find((s) => s.name === "build")!
+  const own = (await import("../demo/surfaces/build/src/surface.ts")).default
+
+  expect(surfaces.map((s) => s.name)).toEqual(["build", "tasks"])
+  expect(tasks.description).toBe((await import("../demo/surfaces/tasks/src/surface.ts")).default.description)
+  expect(tasks.views.map((v) => v.path)).toEqual(["/", "/tasks/:n"])
+  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status", "attention"]), actions: [{ name: "add", inputs: ["title"] }] })
+  expect(tasks.views[0]!.actions[0]).not.toHaveProperty("notice")
+  expect(tasks.views[1]!.actions.map((a) => [a.name, a.ask ?? false, a.notice ?? false])).toEqual([
+    ["done", false, true],
+    ["approve", true, true],
+    ["reopen", true, true],
+  ])
+  // What the build's own command brings is in its facts too, as the plays saw it.
+  expect(build).toMatchObject({ description: own.description, itself: ["watch"], views: [{ path: "/", actions: [] }] })
+  expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why", "attention"]))
 })
 
 test("pinned, every telling is the same as the pin; one that changed shows its delta, and its pinned text", async () => {

@@ -1,5 +1,6 @@
 // The demo project's tasks, for the design document's scenarios: rows by identity, actions for both sides, an ask that is
-// the person's alone, attention while they are waited for, a notice when a task moves, and a path per task.
+// the person's alone, attention while they are waited for, a notice when a task moves, and a path per task. A task in
+// review carries its asks in the list too, so the person decides from the list; the agent is never offered them.
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
 
 export type Task = { n: number; title: string; status: "todo" | "review" | "done" }
@@ -50,7 +51,13 @@ const pages = view([add, done, approve, reopen], {
     return {
       title: "Tasks",
       how: "Add what the person asks for and mark a task done when it is; they approve it on the page.",
-      tasks: m.tasks.map(({ n, title, status }) => ({ at: `/tasks/${n}`, n, title, status })),
+      tasks: m.tasks.map(({ n, title, status }) => ({
+        at: `/tasks/${n}`,
+        n,
+        title,
+        status,
+        ...(status === "review" && { approve: approve.bind({ n }), reopen: reopen.bind({ n }) }),
+      })),
       ...(review.length && { attention: { who: "person", why: `to review ${review.length === 1 ? `task ${review[0]!.n}` : `${review.length} tasks`}` } }),
       add: add.bind({}),
     }
