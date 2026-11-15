@@ -6,7 +6,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { cn } from "cn"
 import type { Handle } from "../../core/index.ts"
-import { BoxIcon, PlusIcon, SettingsIcon } from "lucide-react"
+import { BoxIcon, PanelTopIcon, PlusIcon, SettingsIcon } from "lucide-react"
+import { menubar, menubarCommand } from "./appearance.ts"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { named, type Command as TabCommand } from "./commands.ts"
 import type { Frames } from "./frame.tsx"
@@ -88,6 +89,8 @@ type Props = {
 /** Home's page: the root's title, the palette, and whose page it is at the bottom. */
 export function Home({ title, notice, surfaces, icons, tabs, back, frames, disabled, loading, launch, select, settings, leave }: Props) {
   const [search, setSearch] = useState("")
+  const bar = useSyncExternalStore(menubar.subscribe, menubar.get)
+  const barCommand = menubarCommand(bar, mac)
   const offered = choices(surfaces)
 
   return (
@@ -155,6 +158,13 @@ export function Home({ title, notice, surfaces, icons, tabs, back, frames, disab
                   <SettingsIcon aria-hidden />
                 </Glyph>
                 Settings
+              </CommandItem>
+              <CommandItem value="menubar" keywords={[barCommand.label, "menu bar", "header"]} onSelect={() => menubar.set(!bar)}>
+                <Glyph>
+                  <PanelTopIcon aria-hidden />
+                </Glyph>
+                {barCommand.label}
+                <CommandShortcut>{barCommand.keys}</CommandShortcut>
               </CommandItem>
             </CommandGroup>
           </CommandList>

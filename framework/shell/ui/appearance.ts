@@ -54,3 +54,33 @@ export function applyAppearance(appearance: Appearance, mode: Mode): void {
   document.documentElement.dataset.theme = appearance.themes[mode]
   document.documentElement.style.colorScheme = mode
 }
+
+// Whether the frame draws the surface's menu bar above every tab: the person's, shown unless they hid it, kept in a cookie
+// of its own beside the appearance's, and the same for every tab. Hidden, everything it held is in the palette.
+export const menubarKey = "babavoss.menubar"
+
+/** Whether a page's cookies say the menu bar is shown: unless they say it is hidden. */
+export const menubarOf = (cookie: string): boolean => !cookie.split("; ").includes(`${menubarKey}=hidden`)
+
+/** The palette's command for the menu bar, by whether it is shown now, and the keys that do the same. */
+export const menubarCommand = (shown: boolean, mac: boolean) => ({ label: shown ? "Hide menu bar" : "Show menu bar", keys: mac ? "⌘\\" : "Ctrl \\" })
+
+/** Whether a key press toggles the menu bar: ⌘\ on a Mac, Ctrl+\ elsewhere. */
+export const togglesMenubar = (e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }, mac: boolean) =>
+  e.key === "\\" && (mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey && !e.shiftKey
+
+const shownNow = new Set<() => void>()
+
+/** The menu bar's setting as a store, for useSyncExternalStore: every frame, the palette and settings follow one choice. */
+export const menubar = {
+  get: (): boolean => menubarOf(document.cookie),
+  set: (shown: boolean): void => {
+    document.cookie = `${menubarKey}=${shown ? "shown" : "hidden"}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`
+    for (const fn of shownNow) fn()
+  },
+  subscribe: (fn: () => void): (() => void) => {
+    shownNow.add(fn)
+
+    return () => void shownNow.delete(fn)
+  },
+}

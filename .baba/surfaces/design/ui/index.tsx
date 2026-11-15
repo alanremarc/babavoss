@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react"
 import { BookOpenTextIcon, PinIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, useMenus } from "babavoss/kit/index.ts"
+import { Button } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 import { lineDiff } from "../src/measure.ts"
 
@@ -30,6 +30,13 @@ const Pre = ({ children, className = "" }: { children: ReactNode; className?: st
 )
 
 /** One text the agent is given: its header line, then the text as it is, or against the pinned one. */
+/** How a changed text is shown against the pin: the page's own choice, in the lane's header. */
+const COMPARES: [Compare, string, string][] = [
+  ["text", "Now", "Now only"],
+  ["diff", "Diff", "Line diff against the pin"],
+  ["side", "Side by side", "Pinned and now side by side"],
+]
+
 function Given({ telling, compare }: { telling: Telling; compare: Compare }) {
   const empty = !telling.text
   const header = (
@@ -109,13 +116,6 @@ export default function Design() {
     setRefused(answer.outcome === "refused" ? answer.reason : "")
   }
 
-  useMenus([
-    {
-      id: "view",
-      label: "View",
-      items: [{ kind: "choice", id: "compare", label: "Changed text", value: compare, options: [{ id: "text", label: "Now only" }, { id: "diff", label: "Line diff against the pin" }, { id: "side", label: "Pinned and now side by side" }], set: (v) => setCompare(v as Compare) }],
-    },
-  ])
   useEffect(() => focused.current?.scrollIntoView({ block: "nearest" }), [picked, lanes?.name])
 
   const steps = lanes?.name === current?.name && Array.isArray(lanes?.steps) ? lanes.steps : []
@@ -141,7 +141,16 @@ export default function Design() {
           <div className="text-muted-foreground bg-muted/30 contents text-badge font-medium tracking-wide uppercase">
             <div className="bg-muted/30 border-b px-3 py-1.5">Person</div>
             <div className="bg-muted/30 border-b border-l px-3 py-1.5">Demo project</div>
-            <div className="bg-muted/30 border-b border-l px-3 py-1.5">The agent is given</div>
+            <div className="bg-muted/30 flex items-center justify-between gap-2 border-b border-l px-3 py-1.5">
+              The agent is given
+              <span className="flex gap-0.5" role="group" aria-label="Changed text">
+                {COMPARES.map(([id, label, hint]) => (
+                  <button key={id} type="button" title={hint} aria-pressed={compare === id} onClick={() => setCompare(id)} className="hover:bg-muted aria-pressed:bg-accent aria-pressed:text-accent-foreground rounded-sm px-1.5 text-meta outline-none">
+                    {label}
+                  </button>
+                ))}
+              </span>
+            </div>
           </div>
           {steps.map((step) => {
             const here = String(step.n) === picked

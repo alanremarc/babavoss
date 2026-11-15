@@ -1,7 +1,8 @@
 // The welcome page of a util with several scopes (projects, repositories, blueprints): with none open, the content lists
-// them to pick from, filtered, and the util's tools are still at hand. Any layout shows it in place of its content.
+// them to pick from, filtered, and the util's tools are still at hand. Any layout shows it in place of its content, and
+// heads its content with the scope's row, a menu named by the open one to switch it.
 import { useState, type ReactNode } from "react"
-import type { Menu } from "./menu.tsx"
+import { MenuTriggers, type Menu } from "./menu.tsx"
 import { muted, SearchField } from "./parts.tsx"
 
 /** One scope a util can open: its name, what it is, and a short aside such as its state or counts. */
@@ -18,6 +19,7 @@ export type Scopes = { title: string; hint?: string; list: Scope[]; current?: st
 export const scopeMenu = (scopes: Scopes): Menu => ({
   id: "scope",
   label: scopes.list.find((s) => s.id === scopes.current)?.label ?? scopes.current ?? scopes.title,
+  strong: true,
   items: [
     { kind: "choice", id: "scopes", label: scopes.title, value: scopes.current ?? "", options: scopes.list, set: (id) => scopes.open(id) },
     ...(scopes.all === false
@@ -34,6 +36,15 @@ export const scopeMenu = (scopes: Scopes): Menu => ({
         ]),
   ],
 })
+
+/** The row that heads a layout's content where it has scopes: the scope's menu. */
+export function ScopeBar({ scopes }: { scopes: Scopes }) {
+  return (
+    <div className="flex h-bar shrink-0 items-center border-b px-1">
+      <MenuTriggers menus={[scopeMenu(scopes)]} />
+    </div>
+  )
+}
 
 /** The content before a scope is open: every scope to pick from, filtered. */
 export function Welcome({ scopes }: { scopes: Scopes }) {

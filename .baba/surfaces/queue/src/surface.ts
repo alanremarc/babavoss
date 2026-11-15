@@ -128,11 +128,17 @@ const row = (issue: Issue) => ({
   ...(issue.lane && { lane: issue.lane }),
   ...(issue.note && { note: issue.note }),
 })
+/** How the page's menu for an issue groups its actions: moving it along, then its words. */
+const menu = [
+  { label: "Move", actions: ["start", "done", "back"] },
+  { label: "Edit", actions: ["describe", "note"] },
+]
 /** An issue whole, at its own path: what it is about, and what can be done with it now. */
 const whole = (issue: Issue) => ({
   ...row(issue),
   about: issue.about,
   ...(issue.updates?.length && { updates: issue.updates }),
+  menu,
   ...(issue.status === "draft" && { attention: { who: "person", why: "to approve or drop this draft" }, approve: approve.bind({ n: issue.n }) }),
   describe: describe.bind({ n: issue.n }),
   note_: note.bind({ n: issue.n }),
