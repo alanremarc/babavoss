@@ -238,6 +238,8 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
   "/": (m) => {
     const run = m.run
     const working = run?.status === "working"
+    // While a turn runs or the run closes, the timeline's facts stand still, so a wait ends when it is done.
+    const still = working || run?.status === "closing"
 
     return {
       title: "Lab",
@@ -255,15 +257,13 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             turns: run.turns,
             tokens: run.tokens,
             cost: Math.round(run.cost * 10_000) / 10_000,
-            // While a turn runs these stand still, so a wait ends when the turn does.
-            ...(working
-              ? { turn: { since: run.since, at: `/entries/since/${run.since}` } }
-              : {
-                  entries: run.entries.length,
-                  ...(run.turns > 0 && { last_turn: { at: `/entries/since/${run.since}` } }),
-                  timeline: { at: "/entries" },
-                  recent: run.entries.slice(-RECENT).map(row),
-                }),
+            ...(working && { turn: { since: run.since, at: `/entries/since/${run.since}` } }),
+            ...(!still && {
+              entries: run.entries.length,
+              ...(run.turns > 0 && { last_turn: { at: `/entries/since/${run.since}` } }),
+              timeline: { at: "/entries" },
+              recent: run.entries.slice(-RECENT).map(row),
+            }),
           }
         : { status: "no run" }),
       runs: { count: m.runs.length, at: "/runs" },
@@ -333,9 +333,10 @@ function happened(run: Run, e: Exclude<Event, { kind: "listed" | "read" }>): Run
   }
   if (e.kind === "acted") return { ...run, ...resolve(run, e.id, e.said.text, !e.said.ok) }
   if (e.kind === "closed") {
-    const closed = note({ ...run, status: "closed" }, e.t, "closed", "the root under test is closed, its project deleted, the home's login link taken back")
+    const left = e.changed ? `what git said of it, against the commit it was copied at:\n${e.changed}` : "nothing changed against the commit it was copied at"
+    const closed = note({ ...run, status: "closed" }, e.t, "the project at close", left)
 
-    return e.changed ? note(closed, e.t, "the project at close", `what git said of it, against the commit it was copied at:\n${e.changed}`) : closed
+    return note(closed, e.t, "closed", "the root under test is closed, its project deleted, the home's login link taken back")
   }
   if (e.command === "act" && e.id) return { ...run, ...resolve(run, e.id, `failed: ${e.error}`, true) }
 
