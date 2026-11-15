@@ -7,7 +7,7 @@ import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 8
+export const VERSION = 9
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const ENDPOINT_FILE = "service.json"
