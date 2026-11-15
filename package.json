@@ -19,6 +19,7 @@
   "exports": {
     "./core/*": "./framework/core/*",
     "./shell/*": "./framework/shell/*",
+    "./root/*": "./framework/root/*",
     "./package.json": "./package.json"
   },
   "dependencies": {

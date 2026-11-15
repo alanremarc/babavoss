@@ -2,8 +2,7 @@
 // Nothing here reads the model. Write one test per rule of the role, in the words the person would use for it.
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
-import role from "../src/role.ts"
-import { greeting } from "../src/surface.ts"
+import greeting from "../src/role.ts"
 
 test("the agent proposes a greeting, and only the person is offered the decision", async () => {
   const { agent, person } = story(greeting)
@@ -42,14 +41,4 @@ test("a greeting without text is refused, and nothing changes", async () => {
 
   expect(await agent.call("/", "propose", { text: " " })).toEqual({ outcome: "refused", reason: "A greeting needs text" })
   expect(agent.sees()).not.toHaveProperty("proposed")
-})
-
-test("the role opens on its one tab, and the agent is told at / what changes in it", async () => {
-  const { agent, person } = story(role.surface)
-
-  expect(agent.sees()).toMatchObject({ tabs: [{ at: "/tabs/1", util: "greeting", facts: { greeting: "hello" } }] })
-  await agent.call("/tabs/1", "propose", { text: "good morning" })
-  agent.told()
-  await person.call("/tabs/1", "accept", {})
-  expect(agent.told()).toContain('tabs.0.facts.greeting: "hello" → "good morning"')
 })

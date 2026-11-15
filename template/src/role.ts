@@ -1,11 +1,54 @@
-// The role: a shell of one util, always open, run in the session's runtime, with the page the person sees it through.
-// The agent reaches it through scripts/open.ts and nowhere else. Another job of the role is another util beside this one.
-import { defineRole } from "babavoss/core/index.ts"
-import { shell, shellUi, util } from "babavoss/shell/index.ts"
-import { greeting } from "./surface.ts"
+// The role: its surface, what is true and what can be done, made for the agent first. The root of .baba/ runs it as a
+// tab. Here the agent proposes a greeting and the person, on the page, accepts or declines it. Replace the greeting with
+// the role's own work and keep the shape: the agent does the work through handles, a fact at / says what is waited for,
+// and what only the person may decide is an ask.
+import { action, surface, view, type Update } from "babavoss/core/index.ts"
 
-export default defineRole({
-  name: "my-role",
-  ui: shellUi(new URL("../ui/", import.meta.url)),
-  surface: shell({ title: "my-role", utils: [util("greeting", "A greeting the agent proposes and the person decides on", greeting, { open: "always" })] }),
+export type Model = { greeting: string; proposed?: string }
+type Event = { kind: "none" }
+
+const propose = action({
+  name: "propose",
+  description: "Propose a greeting; the person accepts or declines it on the page",
+  subject: {},
+  inputs: { text: "string" },
+  update: (m: Model, { text }): Update<Model, never> => (text.trim() ? { model: { ...m, proposed: text.trim() } } : { refused: "A greeting needs text" }),
+})
+const accept = action({
+  name: "accept",
+  description: "Use the proposed greeting",
+  subject: {},
+  inputs: {},
+  ask: true,
+  update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed ?? m.greeting } }),
+})
+const decline = action({
+  name: "decline",
+  description: "Keep the greeting as it is",
+  subject: {},
+  inputs: {},
+  ask: true,
+  update: (m: Model): Update<Model, never> => ({ model: { greeting: m.greeting } }),
+})
+const pages = view([propose, accept, decline], {
+  "/": (m) => ({
+    title: "Greeting",
+    greeting: m.greeting,
+    ...(m.proposed !== undefined && {
+      proposed: m.proposed,
+      waiting: "the person, to accept or decline the proposed greeting on the page",
+      accept: accept.bind({}),
+      decline: decline.bind({}),
+    }),
+    propose: propose.bind({}),
+  }),
+})
+
+export default surface<Model, Event, never>({
+  description: "A greeting the agent proposes and the person decides on",
+  init: () => ({ greeting: "hello" }),
+  update: (m, message) => (message.kind === "call" ? pages.update(m, message) : { model: m }),
+  view: pages.view,
+  run: async () => {},
+  failed: () => ({ kind: "none" }),
 })

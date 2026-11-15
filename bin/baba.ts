@@ -1,24 +1,21 @@
 #!/usr/bin/env bun
 // baba, the package's command: makes a project's .baba/ directory, makes a role in it from the template, and provisions
 // the roles as skills. It works on the .baba/ it is run in, or the nearest one above.
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { hookContext, hookOutput, type HookInput } from "../framework/core/hook.ts"
-import { findBaba, provision, ROLES_DIR, taken } from "../framework/core/provision.ts"
+import { findBaba, provision, RESERVED, roles, ROLES_DIR, ROOT_DIR, taken } from "../framework/core/provision.ts"
 import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
 const USAGE = `baba init [--from SPEC]   make .baba/ in this directory, install the framework and provision; SPEC names the framework, a release by default
 baba new NAME             make the role NAME from the template in .baba/roles/NAME, and provision
+baba role NAME            open the role NAME as a tab of the root, where it is not open yet, and answer with what is true there and what can be done
 baba start [--session ID] start the root of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the roles
 baba provision            write the skills of baba and of every role, and the framework's hook, into the harnesses' configuration beside .baba/
 baba hook                 what a harness's hook runs: reads the hook's input, prints the context to add`
 const NAME = /^[a-z][a-z0-9-]*$/
 const TEMPLATE = fileURLToPath(new URL("../template", import.meta.url))
-/** The names the template stands in for the role's own. */
-const PLACEHOLDERS = ["NAME", "my-role"]
-/** The template's files that carry a placeholder. */
-const NAMED = ["ROLE.md", "src/role.ts", "ui/index.html"]
 const TSCONFIG = {
   compilerOptions: {
     lib: ["ESNext", "DOM", "DOM.Iterable"],
@@ -80,7 +77,7 @@ function init(args: string[]) {
     })
   )
   writeFileSync(join(baba, "tsconfig.json"), json(TSCONFIG))
-  writeFileSync(join(baba, ".gitignore"), "node_modules\n")
+  writeFileSync(join(baba, ".gitignore"), `node_modules\n${ROOT_DIR}\n`)
 
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })
 
@@ -92,7 +89,7 @@ function create(args: string[]) {
   const [name] = args
   const baba = found()
 
-  if (!name || !NAME.test(name) || name === "baba") throw new Refusal("a role's name is lowercase kebab-case, such as month-close, and not baba")
+  if (!name || !NAME.test(name) || RESERVED.includes(name)) throw new Refusal(`a role's name is lowercase kebab-case, such as month-close, and not ${RESERVED.join(" or ")}`)
 
   const dir = join(baba, ROLES_DIR, name)
 
@@ -102,10 +99,39 @@ function create(args: string[]) {
 
   if (other) throw new Refusal(`${other} exists already and was not provisioned from here: name the role otherwise, or remove what is there`)
   cpSync(TEMPLATE, dir, { recursive: true })
-  for (const file of NAMED.map((named) => join(dir, named)))
-    writeFileSync(file, PLACEHOLDERS.reduce((text, word) => text.replaceAll(word, name), readFileSync(file, "utf8")))
   console.log(`made ${dir}`)
   report(provision(baba))
+}
+
+/** The session a root's door is to work in: the harness's where there is one, else the one started by hand. */
+const session = () => (process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID ? [] : ["--session", BY_HAND])
+
+/** Opens a role as a tab of the root where it has none, then reads the tab: two requests through the root's door. */
+function open(args: string[]): number {
+  const [name] = args
+  const baba = found()
+
+  if (!name || args.length !== 1) throw new Refusal(USAGE)
+  if (!roles(baba).includes(name)) throw new Refusal(`there is no role ${name} in ${baba}: its roles are ${roles(baba).join(", ") || "none yet"}`)
+
+  const util = JSON.stringify(name)
+  const program = `const at = (view) => view.tabs.find((tab) => tab.util === ${util})?.at
+let tab = at(await role.read("/"))
+if (!tab) {
+  const answer = await role.call("/", "open", { util: ${util} })
+  if (answer.outcome === "refused") throw new Error(answer.reason)
+  tab = at(await role.read("/"))
+}
+console.log(tab)`
+  const opened = Bun.spawnSync([process.execPath, ROOT, ...session(), "-e", program], { stdout: "pipe", stderr: "inherit" })
+  const lines = opened.stdout.toString().trimEnd().split("\n")
+  const tab = lines.pop()
+
+  // What the root said on the way, a new page address among it, comes before the role's answer.
+  if (lines.length) console.log(lines.join("\n"))
+  if (opened.exitCode !== 0 || !tab?.startsWith("/tabs/")) return opened.exitCode || 1
+
+  return Bun.spawnSync([process.execPath, ROOT, ...session(), tab], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
 }
 
 try {
@@ -113,12 +139,10 @@ try {
 
   if (command === "init") init(args)
   else if (command === "new") create(args)
-  else if (command === "start") {
-    const harness = process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID
-    const session = args.includes("--session") || harness ? [] : ["--session", BY_HAND]
-
-    process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...session, ...args], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
-  } else if (command === "provision" && !args.length) report(provision(found()))
+  else if (command === "role") process.exitCode = open(args)
+  else if (command === "start")
+    process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...(args.includes("--session") ? [] : session()), ...args], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
+  else if (command === "provision" && !args.length) report(provision(found()))
   else if (command === "hook") {
     // Never in the agent's way: whatever fails here, the hook says nothing.
     try {

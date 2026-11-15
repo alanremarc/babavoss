@@ -92,11 +92,16 @@ The agent is the role's first user and the surface is built for it: a reader tha
 ```text
 .baba/:     a Bun package beside the harnesses' skill folders, in a project or in the person's home; package.json names the
             framework, a release of this repository, and nothing else does; roles/NAME/ is a role: ROLE.md, its description
-            and own know-how; scripts/open.ts, its door; src/, its definition and surface; ui/, its page; spec/, its rules
-root:       what .baba/ is to a session before any role is opened: a role the framework provides, named baba, whose surface
-            is the roles in .baba/ and whose page shows them; it runs with no roles at all. Started by `baba start`, by
-            hand or by the agent, and by the hook when a session starts; either way its answer is the framework's
-            version, the page's address with the word to open it in the harness's browser where it has one, and the roles
+            and own know-how; src/role.ts, its surface; ui/index.tsx, its page, a component; spec/, its rules
+root:       what .baba/ is to a session: one runtime and one page, which the framework provides and generates from the roles.
+            Its first tab lists them; each role is a util of it, opened as a tab the first time its skill is used, by the
+            one command the skill names, which answers with what is true in the tab and what can be done there. It runs
+            with no roles at all. At / the agent is told what changes in any open tab
+start:      by `baba start`, by hand or by the agent, and by the hook when a session starts; either way the answer is the
+            framework's version, the page's address with the word to open it in the harness's browser where it has one,
+            the roles and the open tabs. It sleeps when idle and any command wakes it where it was
+aware:      a session that starts under the hook is given what invoking the skill baba gives, its text and the root
+            started; without the hook, the skill says how to start it
 bootstrap:  one command, the package's init: makes .baba/, installs the framework and provisions
 loop:       change a role in .baba/ → test it → provision it
 provision:  one generated SKILL.md per role in .claude/skills/NAME and .agents/skills/NAME, and baba's, which the package
@@ -114,6 +119,6 @@ update:     a role's door says when a later release is out, asked of the reposit
 release:    a tag vX.Y.Z of this repository; every version on main is one, with its section in CHANGELOG.md, written for
             the agent that adapts a project to it
 keeps:      what the roles' sessions write is beside .baba/: ~/.babavoss/ for the person's home, the project's .babavoss/ otherwise
-later:      tests that run a role under a harness; the roles' own surfaces under the root's, on one page; root context and know-how
+later:      tests that run a role under a harness; root context and know-how
             declared in .baba/; hooks for harnesses besides Claude Code
 ```

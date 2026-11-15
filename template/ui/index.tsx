@@ -1,12 +1,12 @@
-// The util's page: it shows what the surface says and offers the person their decision. Anything else the person wants
-// changed, they tell the agent; there is no form here.
+// The role's page, shown in its tab: what the surface says, and the person's decision. Anything else the person wants
+// changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's.
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Plain, useLive, useTab } from "babavoss/shell/ui/index.ts"
 
 type Root = { greeting: string; proposed?: string; accept?: Handle; decline?: Handle }
 
-export function Greeting() {
+export default function Greeting() {
   const { view, error } = useLive<Root>("/")
   const { call } = useTab()
   const [refused, setRefused] = useState("")

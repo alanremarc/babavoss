@@ -44,23 +44,25 @@ test("new makes a role from the template under its name, with a passing spec, an
   const made = run(["new", "month-close"])
 
   expect(made.status, made.err).toBe(0)
-  expect(readFileSync(join(baba, "roles/month-close/src/role.ts"), "utf8")).toContain('name: "month-close"')
+  // The root is generated from the roles: their surfaces by name, and the page with each one's component.
+  expect(readFileSync(join(baba, ".root/roles.ts"), "utf8")).toContain('import r0 from "../roles/month-close/src/role.ts"')
+  expect(readFileSync(join(baba, ".root/main.tsx"), "utf8")).toContain('import * as p0 from "../roles/month-close/ui/index.tsx"')
   for (const folder of FOLDERS) {
     const text = readFileSync(skill(folder, "month-close"), "utf8")
 
     expect(text).toStartWith("---\nname: month-close\ndescription: Do WHAT for WHO. Use when TASK is needed.\ncompatibility: Requires Bun 1.4 or later\n---\n")
-    expect(text).toContain("Run `bun <the directory this file is in>/../../../.baba/roles/month-close/scripts/open.ts` from the project's directory.")
+    expect(text).toContain("Run `bun <the directory this file is in>/../../../.baba/node_modules/babavoss/bin/baba.ts role month-close` from the project's directory.")
     expect(text).toContain(OPERATING)
     expect(text).toEndWith("## The work\n\nWHAT the agent does here, in order; what the person decides on the page; when not to act.\n")
-    // The door the skill names is the role's.
-    expect(existsSync(join(project, folder, "month-close", "../../../.baba/roles/month-close/scripts/open.ts"))).toBe(true)
+    // The command the skill names is the package's, as installed.
+    expect(existsSync(join(project, folder, "month-close", "../../../.baba/node_modules/babavoss/bin/baba.ts"))).toBe(true)
   }
   expect(run(["new", "month-close"])).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 
   const spec = spawnSync(process.execPath, ["test", "roles/month-close"], { cwd: baba, encoding: "utf8" })
 
   expect(spec.status, spec.stderr).toBe(0)
-  expect(spec.stderr).toContain("5 pass")
+  expect(spec.stderr).toContain("3 pass")
 })
 
 test("provision follows the roles: a changed description is written again, a role that is gone loses its skill, and baba stays", () => {
@@ -120,11 +122,11 @@ test("provision writes the framework's hook into Claude Code's settings for each
   expect(run(["provision"]).status).toBe(0)
 })
 
-test("the hook tells the agent what changed in an open role since the session last read it, and says nothing when nothing did", () => {
+test("a session's start gives what the skill baba gives and starts the root; a role opens as a tab of it; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)
 
-  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "", BABAVOSS_BIN: join(project, "bin") }
-  const door = (...args: string[]) => spawnSync(process.execPath, [join(baba, "roles/desk/scripts/open.ts"), ...args], { cwd: project, encoding: "utf8", env })
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "" }
+  const command = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: project, encoding: "utf8", env })
   const hook = (event: string) =>
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], {
       cwd: project,
@@ -132,46 +134,61 @@ test("the hook tells the agent what changed in an open role since the session la
       env,
       input: JSON.stringify({ session_id: "hooked", hook_event_name: event }),
     })
-
-  const root = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", ...args], { cwd: baba, encoding: "utf8", env })
-  // A session's start starts the root, roles open or none: its version, its page's address and how to show it, the roles.
+  const body = readFileSync(join(checkout, "skill/SKILL.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
   const started = hook("SessionStart")
 
-  expect(started.status).toBe(0)
-  expect(started.stdout).toContain(`baba ${VERSION}\n`)
-  expect(started.stdout).toMatch(/page: http:\/\/127\.0\.0\.1:\d+  a new address: open it in the harness's browser if it has one, and otherwise give it to the person\n/)
-  expect(started.stdout).toContain('"desk"')
-  expect(started.stdout).not.toContain("is open in this session")
-  // By hand it is the same runtime, at the same address, wherever in the project it is started from.
-  expect(root().stdout).toContain(/page: http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0])
-  expect(existsSync(join(baba, ".babavoss"))).toBe(false)
-  expect(door().status).toBe(0)
   try {
-    expect(hook("SessionStart").stdout).toContain("The role desk is open in this session. Its current state is read with `")
+    // The skill's own words, then the root's answer: its version, its page's address and how to show it, the roles.
+    expect(started.status).toBe(0)
+    expect(started.stdout).toStartWith(`${body}\n\nThe root of .baba/ was started for this session, and answered:\n`)
+    expect(started.stdout).toContain(`baba ${VERSION}\n`)
+    expect(started.stdout).toMatch(/page: http:\/\/127\.0\.0\.1:\d+  a new address: open it in the harness's browser if it has one, and otherwise give it to the person\n/)
+    expect(started.stdout).toContain('"desk"')
+
+    // By hand it is the same runtime, at the same address, wherever in the project it is started from.
+    const address = /http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0]
+
+    expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
+    expect(existsSync(join(baba, ".babavoss"))).toBe(false)
+
+    // The role's one command opens it as a tab the first time, and answers with the same tab after.
+    const opened = command("role", "desk")
+
+    expect(opened.status, opened.stderr).toBe(0)
+    expect(opened.stdout).toContain('greeting: "hello"')
+
+    const tab = /baba (\/tabs\/\d+) propose text=string/.exec(opened.stdout)![1]!
+
+    expect(command("role", "desk").stdout).toContain(`${tab} propose text=string`)
+    expect(command("role", "nobody")).toMatchObject({ status: 2, stderr: expect.stringContaining("there is no role nobody") })
+
+    // The page holds the role's component beside the root's.
+    const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
+    const script = /\/_\/[^"]*\.js/.exec(html)![0]
+
+    expect(await (await fetch(address + script)).text()).toContain("The agent proposes")
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
 
     // The person proposes on the page: a call the agent did not make.
-    const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/desk/service.json"), "utf8")) as { port: number; token: string }
-    const person = spawnSync("curl", [
-      "-s", "-X", "POST", `http://127.0.0.1:${endpoint.port}/tabs/1`,
-      "-H", "accept: application/json", "-H", "content-type: application/json", "-H", `babavoss-service: ${endpoint.token}`, "-H", "babavoss-actor: person",
-      "-d", JSON.stringify({ handle: "propose", args: { text: "good morning" } }),
-    ])
+    const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
+    const person = await fetch(`http://127.0.0.1:${endpoint.port}${tab}`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json", "babavoss-service": endpoint.token, "babavoss-actor": "person" },
+      body: JSON.stringify({ handle: "propose", args: { text: "good morning" } }),
+    })
 
-    expect(person.status).toBe(0)
+    expect(person.status).toBe(200)
 
     const told = hook("UserPromptSubmit").stdout
 
-    expect(told).toStartWith("The role desk changed since this session last read it; the person may have acted on its page:\n")
+    expect(told).toStartWith("The roles' tabs changed since this session last read them; the person may have acted on the page:\n")
     expect(told).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")
-    // After a tool call the context is named as such, which is how the harness takes it there.
     expect(hook("PostToolUse").stdout).toBe("")
     expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
   } finally {
-    door("close")
-    root("close")
+    command("start", "close")
   }
   expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], { cwd: project, encoding: "utf8", env, input: "not json" })).toMatchObject({ status: 0, stdout: "" })
-})
+}, 60_000)

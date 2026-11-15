@@ -48,7 +48,7 @@ describe("a built page", () => {
   })
 })
 
-for (const role of ["template", "spec/support/notes"]) {
+for (const role of ["spec/support/notes"]) {
   it(`${role}: bundles source, reloads edits and serves the release`, async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-role-")))
 
@@ -144,7 +144,7 @@ it("refuses to build a shell page that imports no stylesheet, and says what to i
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("template", name), join(dir, name), { recursive: true })
+  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
   writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
 
