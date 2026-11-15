@@ -2,6 +2,19 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.53.1
+
+- This repository's Design Document surface opens on a scenario picker, and a scenario is two screens of one frame over a strip of its steps: the person's page after the chosen step, and what the agent was given at it. The scenario and the step are the tab's route, `/design/scenarios/NAME/N`. Each scenario's row at `/design` carries `about` as detail. The package is unchanged. Nothing to adapt.
+
+## 0.53.0
+
+- The shell's page exports the parts of it that only show: `ActivityButton` and `ActivityLevels` (notifications.tsx), `RefusedAlert` and `PointedAlert` (connection.tsx), `TabBroken`, `TabFailed` and `TabNoPage` (tabs.tsx), `RefusedLine` (actions.tsx). `TabMenu` takes an optional door, and a tab's own controls are one function, `controlsOf` in commands.ts. The mark takes an optional named move, `MOVES` in gaze.ts, and repeats it. The shell looks and behaves as before. Nothing to adapt.
+- This repository's `.baba/` has a surface `guide`, the Design Guide: the mark in each state, the kit's tokens, components and layouts, and the shell's elements, each drawn by the real component. Its spec fails when a file of `framework/kit/components` or `framework/kit/layouts` has no specimen.
+
+## 0.52.0
+
+- A session's runtime knows which harness its agent runs in: a hook names its adapter with what it tells of the turn, in the header `babavoss-harness`, and the runtime keeps the one last heard beside the session's state. The page is given it in the turn, as `harness`, and home's foot says it after the session: Claude Code, Codex, or an adapter's own name. A session whose hooks were never heard has none. `hookContext(event, baba, harness)` takes the adapter's name as its third argument. Nothing to adapt in a project.
+
 ## 0.51.4
 
 - An open tab's line in home's list carries its mark on its icon, as its pill in the strip does: broken, waiting on the person, or needing the agent. The words beside its name are gone, what it needs and "previous" alike; hovering the icon says them. Nothing to adapt.

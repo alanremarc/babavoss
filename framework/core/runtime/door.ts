@@ -28,7 +28,7 @@ import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, CALL_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
-import { answered, driverOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
+import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
 export type UiHosting = (
@@ -207,22 +207,22 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   try {
     const kept = JSON.parse(readFileSync(hooksFile, "utf8")) as Partial<Hooks>
 
-    hooks = { ever: kept.ever === true, told: kept.told === true }
+    hooks = { ever: kept.ever === true, told: kept.told === true, ...(harnessOf(kept.harness) && { harness: harnessOf(kept.harness) }) }
   } catch {}
 
   const keepHooks = (next: Hooks) => {
-    const changed = next.ever !== hooks.ever || next.told !== hooks.told
+    const changed = next.ever !== hooks.ever || next.told !== hooks.told || next.harness !== hooks.harness
 
     hooks = next
     if (changed)
       try {
-        writeFileSync(hooksFile, JSON.stringify({ ever: next.ever, told: next.told }))
+        writeFileSync(hooksFile, JSON.stringify({ ever: next.ever, told: next.told, ...(next.harness && { harness: next.harness }) }))
       } catch {}
   }
   const turnNow = () => {
     const { agent, since } = reading(turn, Date.now(), busy > 0 && !hooks.told)
 
-    return { agent, since, waiting: text.waiting(), drivable: !!driverOf(options.about?.session ?? "session") }
+    return { agent, since, waiting: text.waiting(), drivable: !!driverOf(options.about?.session ?? "session"), ...(hooks.harness && { harness: hooks.harness }) }
   }
   const turnEvent = () => `event: turn\ndata: ${(turnSent = JSON.stringify(turnNow()))}\n\n`
   const pushTurn = () => {
@@ -277,7 +277,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         const event = (await body(req)).trim() as TurnEvent
 
         if (!TURN_EVENTS.includes(event)) return reply(400, `the turn is told as one of ${TURN_EVENTS.join(", ")}`)
-        keepHooks(hooksHeard())
+        // The hook says whose it is: the session's harness is the one last heard, and kept where a hook does not say.
+        keepHooks(hooksHeard(harnessOf(req.headers[HARNESS_HEADER]) ?? hooks.harness))
         turn = turned(turn, event, Date.now())
         if (event === "started") text.turned()
         pushTurn()

@@ -97,8 +97,9 @@ const row = (m: Model, scenario: Scenario) => {
     name: scenario.name,
     group: GROUPS[scenario.group],
     title: scenario.title,
+    // What it is about, and its totals, are detail: read at the tab's path, and only counted in the shell's present; how they moved is not.
+    about: detail(scenario.about),
     steps: scenario.steps.length,
-    // A scenario's totals are detail: read at the tab's path, and only counted in the shell's present; how they moved is not.
     ...(total && { lines: detail(total.lines), chars: detail(total.chars), tokens: detail(total.tokens) }),
     ...(moved && { delta: against(m, play, moved.delta, moved.texts) }),
     ...(play?.error && { error: play.error }),

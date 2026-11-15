@@ -14,7 +14,7 @@
 // second: its history, newest first, grouped by when, one line an entry that opens to its whole. Opening a channel sees
 // its notices, and they stay dotted until it is left; Mark all seen sees them all. Escape, Backspace or the left arrow go
 // back; Escape on the first level closes.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react"
 import { cn } from "../../kit/cn.ts"
 import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LogsIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
@@ -29,7 +29,7 @@ export type Shown = "notices" | "all"
 export type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number; fresh?: number[] }
 type Stream<T = void> = { subscribe: (fn: (value: T) => void) => () => void }
 /** The channel the second level shows: its key, the notices unseen as it was entered, and the newest entry then. */
-type Entered = { key: string; stay: ReadonlySet<number>; since: number }
+export type Entered = { key: string; stay: ReadonlySet<number>; since: number }
 
 export const NOTICES = "/activity/notices"
 const ALL = "/activity"
@@ -285,7 +285,6 @@ export function Notifications({
     go(at)
   }
   const badge = badgeOf(told.unseen, toasts.filter((t) => t.counts).length, open)
-  const said = ["Activity", badge ? `${badge} new` : "", waiting ? `${waiting} of your changes wait for the agent's next turn` : ""].filter(Boolean).join(", ")
   const elsewhere = !!entered && channels.some((c) => c.key !== entered.key && c.rows.some((r) => arrived(r, entered.since)))
   const seeAll = () => {
     const last = told.rows[0]?.n
@@ -303,21 +302,7 @@ export function Notifications({
         className="top-13 right-2"
         from="top"
       />
-      <button
-        ref={button}
-        type="button"
-        aria-label={said}
-        aria-expanded={open}
-        title={said}
-        data-state={open ? "open" : "closed"}
-        data-notifications
-        className="relative flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full px-1.5 text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
-        onClick={() => toggle(!open)}
-      >
-        <LogsIcon className="size-4" aria-hidden />
-        {waiting > 0 && <span className="text-meta tabular-nums">{waiting > 9 ? "9+" : waiting}</span>}
-        {badge > 0 && <span aria-hidden data-unseen={badge} className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
-      </button>
+      <ActivityButton ref={button} badge={badge} waiting={waiting} open={open} onClick={() => toggle(!open)} />
       <Sheet open={open} onOpenChange={(to) => toggle(to)}>
         <SheetContent
           ref={content}
@@ -357,59 +342,175 @@ export function Notifications({
             }
           }}
         >
-          {channel ? (
-            <ChannelHeader channel={channel} icon={channel.surface && icons[channel.surface]} elsewhere={elsewhere} back={leave} go={() => goTo(channel.key)} />
-          ) : (
-            <div className="flex h-9 shrink-0 items-center gap-3 px-3">
-              <SheetTitle className="text-body font-medium">Activity</SheetTitle>
-              <div role="tablist" aria-label="Show" className="flex items-center gap-2.5">
-                {SHOWN.map((s) => (
-                  <button key={s.value} type="button" role="tab" aria-selected={shown === s.value} className={cn(QUIET, shown === s.value && "text-foreground")} onClick={() => setShown(s.value)}>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              {told.unseen > 0 && (
-                <button type="button" className={cn(QUIET, "ml-auto")} onClick={seeAll}>
-                  Mark all seen
-                </button>
-              )}
-            </div>
-          )}
-          <div
-            ref={lines}
-            key={channel ? `in-${channel.key}` : "list"}
-            data-lines
-            role="list"
-            aria-label={channel ? `${channel.name}, newest first` : "Channels"}
-            tabIndex={0}
-            className={cn(
-              "min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-2 outline-none duration-150 animate-in fade-in-0 motion-reduce:animate-none",
-              channel ? "slide-in-from-right-2" : backed && "slide-in-from-left-2"
-            )}
-            onKeyDown={moveIn}
-          >
-            {channel ? (
-              <History channel={channel} entered={entered!} expanded={expanded} expand={setExpanded} goTo={goTo} />
-            ) : (
-              <>
-                {next.length > 0 && <NextTurn rows={next} tabs={tabs} open={nextOpen} toggle={() => setNextOpen((o) => !o)} />}
-                {channels.map((c) => (
-                  <div role="listitem" key={c.key}>
-                    <ChannelItem channel={c} icon={c.surface && icons[c.surface]} lit={!!c.rows[0] && arrived(c.rows[0], since)} enter={() => enter(c.key)} />
-                  </div>
-                ))}
-                {!channels.length && <p className="px-3 py-6 text-center text-muted-foreground/70">{shown === "all" ? "Nothing has happened yet" : "Nothing new to say yet"}</p>}
-              </>
-            )}
-            {feed.earlier && (
-              <button type="button" className={cn(QUIET, "mx-2 mt-2")} onClick={() => void feed.more()}>
-                Show earlier
-              </button>
-            )}
-          </div>
+          <ActivityLevels
+            lines={lines}
+            {...(channel && { channel, entered: entered! })}
+            icons={icons}
+            elsewhere={elsewhere}
+            leave={leave}
+            goTo={goTo}
+            expanded={expanded}
+            expand={setExpanded}
+            shown={shown}
+            show={setShown}
+            unseen={told.unseen}
+            seeAll={seeAll}
+            next={next}
+            tabs={tabs}
+            nextOpen={nextOpen}
+            toggleNext={() => setNextOpen((o) => !o)}
+            channels={channels}
+            since={since}
+            enter={enter}
+            backed={backed}
+            {...(feed.earlier && { more: () => void feed.more() })}
+          />
         </SheetContent>
       </Sheet>
+    </>
+  )
+}
+
+/** The button at the strip's right: the count of the person's calls that wait for the agent, and one dot while `badge` counts something unseen. */
+export function ActivityButton({
+  ref,
+  badge,
+  waiting,
+  open,
+  onClick,
+}: {
+  ref?: RefObject<HTMLButtonElement | null>
+  badge: number
+  waiting: number
+  open: boolean
+  onClick: () => void
+}) {
+  const said = ["Activity", badge ? `${badge} new` : "", waiting ? `${waiting} of your changes wait for the agent's next turn` : ""].filter(Boolean).join(", ")
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={said}
+      aria-expanded={open}
+      title={said}
+      data-state={open ? "open" : "closed"}
+      data-notifications
+      className="relative flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full px-1.5 text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
+      onClick={onClick}
+    >
+      <LogsIcon className="size-4" aria-hidden />
+      {waiting > 0 && <span className="text-meta tabular-nums">{waiting > 9 ? "9+" : waiting}</span>}
+      {badge > 0 && <span aria-hidden data-unseen={badge} className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
+    </button>
+  )
+}
+
+/**
+ * What the drawer holds, at either level: the list, its header with Notices and All and Mark all seen, what the agent sees
+ * next and the channels; or a `channel`, its header and its history. The drawer keeps where it stands; this draws it.
+ */
+export function ActivityLevels({
+  lines,
+  channel,
+  entered,
+  icons,
+  elsewhere,
+  leave,
+  goTo,
+  expanded,
+  expand,
+  shown,
+  show,
+  unseen,
+  seeAll,
+  next,
+  tabs,
+  nextOpen,
+  toggleNext,
+  channels,
+  since,
+  enter,
+  backed,
+  more,
+}: {
+  lines?: RefObject<HTMLDivElement | null>
+  channel?: Channel
+  entered?: Entered
+  icons: Record<string, ReactNode | undefined>
+  elsewhere: boolean
+  leave: () => void
+  goTo: (at: string) => void
+  expanded: number | undefined
+  expand: (n: number | undefined) => void
+  shown: Shown
+  show: (shown: Shown) => void
+  unseen: number
+  seeAll: () => void
+  next: Row[]
+  tabs: TabInfo[]
+  nextOpen: boolean
+  toggleNext: () => void
+  channels: Channel[]
+  since: number
+  enter: (key: string) => void
+  backed: boolean
+  /** Reads further back, where there is more. */
+  more?: () => void
+}) {
+  return (
+    <>
+      {channel ? (
+        <ChannelHeader channel={channel} icon={channel.surface && icons[channel.surface]} elsewhere={elsewhere} back={leave} go={() => goTo(channel.key)} />
+      ) : (
+        <div className="flex h-9 shrink-0 items-center gap-3 px-3">
+          <SheetTitle className="text-body font-medium">Activity</SheetTitle>
+          <div role="tablist" aria-label="Show" className="flex items-center gap-2.5">
+            {SHOWN.map((s) => (
+              <button key={s.value} type="button" role="tab" aria-selected={shown === s.value} className={cn(QUIET, shown === s.value && "text-foreground")} onClick={() => show(s.value)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+          {unseen > 0 && (
+            <button type="button" className={cn(QUIET, "ml-auto")} onClick={seeAll}>
+              Mark all seen
+            </button>
+          )}
+        </div>
+      )}
+      <div
+        ref={lines}
+        key={channel ? `in-${channel.key}` : "list"}
+        data-lines
+        role="list"
+        aria-label={channel ? `${channel.name}, newest first` : "Channels"}
+        tabIndex={0}
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-2 outline-none duration-150 animate-in fade-in-0 motion-reduce:animate-none",
+          channel ? "slide-in-from-right-2" : backed && "slide-in-from-left-2"
+        )}
+        onKeyDown={moveIn}
+      >
+        {channel ? (
+          <History channel={channel} entered={entered!} expanded={expanded} expand={expand} goTo={goTo} />
+        ) : (
+          <>
+            {next.length > 0 && <NextTurn rows={next} tabs={tabs} open={nextOpen} toggle={toggleNext} />}
+            {channels.map((c) => (
+              <div role="listitem" key={c.key}>
+                <ChannelItem channel={c} icon={c.surface && icons[c.surface]} lit={!!c.rows[0] && arrived(c.rows[0], since)} enter={() => enter(c.key)} />
+              </div>
+            ))}
+            {!channels.length && <p className="px-3 py-6 text-center text-muted-foreground/70">{shown === "all" ? "Nothing has happened yet" : "Nothing new to say yet"}</p>}
+          </>
+        )}
+        {more && (
+          <button type="button" className={cn(QUIET, "mx-2 mt-2")} onClick={more}>
+            Show earlier
+          </button>
+        )}
+      </div>
     </>
   )
 }

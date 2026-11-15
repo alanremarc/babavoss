@@ -15,7 +15,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
-import type { TurnEvent } from "./runtime/turn.ts"
+import { HARNESS_HEADER, type TurnEvent } from "./runtime/turn.ts"
 
 type Endpoint = { port: number; token: string; dir: string }
 
@@ -46,13 +46,13 @@ const endpointOf = (root: OpenRoot) => {
 }
 
 /** Tells an open root's runtime of the turn; one asleep is not woken for it, since its page is closed too. */
-async function tellTurn(root: OpenRoot, session: string, event: TurnEvent) {
+async function tellTurn(root: OpenRoot, session: string, event: TurnEvent, harness?: string) {
   const endpoint = endpointOf(root)
 
   if (!endpoint) return
   await fetch(`http://127.0.0.1:${endpoint.port}/_/turn`, {
     method: "POST",
-    headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
+    headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}`, ...(harness && { [HARNESS_HEADER]: harness }) },
     body: event,
     signal: AbortSignal.timeout(1000),
   })
@@ -79,8 +79,11 @@ async function changed(root: OpenRoot, session: string, ask: string): Promise<st
   return answer.ok && text && text !== "nothing changed" ? text : undefined
 }
 
-/** The context a hook adds for the agent, for the roots of `baba`, a .baba/ directory; undefined when there is none to add. */
-export async function hookContext(input: HookEvent, baba: string): Promise<string | undefined> {
+/**
+ * The context a hook adds for the agent, for the roots of `baba`, a .baba/ directory; undefined when there is none to add.
+ * `harness` is the name of the adapter the hook runs for, told to each root's runtime with the turn.
+ */
+export async function hookContext(input: HookEvent, baba: string, harness?: string): Promise<string | undefined> {
   const session = input.session
 
   if (!session || !/^[A-Za-z0-9._-]+$/.test(session)) return undefined
@@ -91,7 +94,7 @@ export async function hookContext(input: HookEvent, baba: string): Promise<strin
   const turn = turnOf(input)
   // Whose move it is, told before what changed is read, so the page counts nothing as waiting once the turn has it.
   const tell = async () => {
-    if (turn) await Promise.all(roots().map(([, root]) => tellTurn(root, session, turn).catch(() => {})))
+    if (turn) await Promise.all(roots().map(([, root]) => tellTurn(root, session, turn, harness).catch(() => {})))
   }
 
   if (input.moment === "SessionStart") {

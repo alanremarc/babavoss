@@ -133,8 +133,9 @@ function useModel({
   return { asks: [...atRoot, ...atHere].filter((a) => a.ask).length, items, found, ready: !!root }
 }
 
-/** The tab's menu, as the dropdown in the strip shows it while it is open: its views are read as it opens. */
+/** The tab's menu, as the dropdown in the strip shows it while it is open: its views are read as it opens, through `door` where given. */
 export function TabMenu({
+  door: given,
   address,
   route,
   title,
@@ -145,6 +146,8 @@ export function TabMenu({
   controls,
   close,
 }: {
+  /** Where its views are read from: the tab's, at its address, unless another is given, as a sample's. */
+  door?: Door
   address: string
   route: string
   title?: string
@@ -156,7 +159,7 @@ export function TabMenu({
   close: () => void
 }) {
   const changes = useContext(ChangesContext)
-  const door = useMemo(() => doorOf(address, changes), [address, changes])
+  const door = useMemo(() => given ?? doorOf(address, changes), [given, address, changes])
   const model = useModel({ door, route, title, name, start, navigate, menu: { notices, controls } })
   const find = (query: string) => foundItems(search(model.found ?? [], query), navigate, start)
 
@@ -169,6 +172,20 @@ export function TabMenu({
       close={close}
       {...(!model.ready && { empty: "Reading…" })}
     />
+  )
+}
+
+/** The line over a tab's content that says why the action last started from its menu was refused. */
+export function RefusedLine({ reason, dismiss }: { reason: string; dismiss: () => void }) {
+  return (
+    <p role="alert" className="flex shrink-0 items-center gap-2 border-b bg-destructive/5 py-0.5 pr-1 pl-2.5 text-meta text-destructive">
+      <span className="min-w-0 flex-1 truncate" title={reason}>
+        {reason}
+      </span>
+      <button type="button" aria-label="Dismiss" className="grid size-icon cursor-pointer place-items-center rounded-sm hover:bg-foreground/8" onClick={dismiss}>
+        <XIcon className="size-glyph" aria-hidden />
+      </button>
+    </p>
   )
 }
 
@@ -213,16 +230,7 @@ export function Actions({
   return (
     <>
       <div className="relative flex min-h-0 flex-1 flex-col text-body">
-        {refused && (
-          <p role="alert" className="flex shrink-0 items-center gap-2 border-b bg-destructive/5 py-0.5 pr-1 pl-2.5 text-meta text-destructive">
-            <span className="min-w-0 flex-1 truncate" title={refused}>
-              {refused}
-            </span>
-            <button type="button" aria-label="Dismiss" className="grid size-icon cursor-pointer place-items-center rounded-sm hover:bg-foreground/8" onClick={dismiss}>
-              <XIcon className="size-glyph" aria-hidden />
-            </button>
-          </p>
-        )}
+        {refused && <RefusedLine reason={refused} dismiss={dismiss} />}
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
       {asking && (
