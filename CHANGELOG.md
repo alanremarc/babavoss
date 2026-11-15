@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.38.1
+
+- The mark's eyes sit on an invisible sphere, the circle of home's tab: while the agent works the face looks about as one that thinks, down, aside, across, narrowing to focus, each turn eased and in no fixed order, an eye narrowing as it nears the sphere's edge. Frames run only while the eyes turn, and not on a page that is not shown. Nothing to adapt.
+
 ## 0.38.0
 
 - The bar above every tab is gone; a page fills its tab under the strip. Each tab in the strip carries its surface's menu behind dots that replace its icon on hover or focus, and on a right click or Shift+F10. The menu holds a search of the tree's actions and places, the actions at `/` under the surface's `title`, the current place's actions under its name, `Go`, and the shell's Close tab, Close other tabs, Copy link and Reload. `menu` facts, `title` or `name` on rows, and drawers work as before. Nothing to adapt, but check that a page does not assume a bar above it.
