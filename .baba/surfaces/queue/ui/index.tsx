@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCircleIcon } from "lucide-react"
 import Markdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
@@ -30,6 +31,9 @@ const PROSE = [
   "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_li]:pl-1 [&_li::marker]:text-muted-foreground",
   "[&_code]:rounded-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-[0.9em]",
   "[&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
+  "[&_table]:my-3 [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:border-collapse [&_table]:text-body",
+  "[&_th]:border-b [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-medium [&_th]:text-muted-foreground [&_th:first-child]:pl-0",
+  "[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top [&_td:first-child]:pl-0 [&_tr:last-child_td]:border-b-0",
   "[&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-5",
 ].join(" ")
 const NAMES: Record<Status, string> = { lane: "In progress", backlog: "Backlog", draft: "Draft", done: "Done" }
@@ -78,7 +82,7 @@ export default function Queue() {
               </div>
               <h1 className="text-lg leading-snug font-medium text-balance">{selected.title}</h1>
               <div className={PROSE}>
-                <Markdown>{selected.about}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]}>{selected.about}</Markdown>
               </div>
               {selected.note && (
                 <p className="border-primary/50 border-l-2 pl-3 text-sm">
