@@ -1,5 +1,6 @@
 // A sheet: a panel that slides in from the right edge over the page, below what stands above it, and keeps the page around
-// it live: closed by Escape, by a press outside it, or by its owner. `top` is where it starts, as a Tailwind class.
+// it live: closed by Escape, by a press outside it, or by its owner. `top` is where it starts, as a Tailwind class. Its
+// text is the frame's body size, since it stands outside the page that set it.
 import * as React from "react"
 import { cn } from "cn"
 import { Dialog as SheetPrimitive } from "radix-ui"
@@ -18,12 +19,13 @@ function SheetContent({ className, top = "top-0", ...props }: React.ComponentPro
       <SheetPrimitive.Content
         data-slot="sheet-content"
         aria-describedby={undefined}
-        className={cn(
+        // The size stays out of cn, which would take it and the colour for one and keep the colour.
+        className={`text-body ${cn(
           "fixed right-0 bottom-0 z-40 flex w-[min(24rem,100vw)] flex-col border-l bg-popover text-popover-foreground shadow-lg outline-none",
           "duration-200 data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right motion-reduce:animate-none",
           top,
           className
-        )}
+        )}`}
         {...props}
       />
     </SheetPrimitive.Portal>
