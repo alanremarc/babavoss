@@ -2,6 +2,14 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.37.0
+
+- Breaking: the bar above every tab is the shell's alone, made from the surface's views. A menu named by the surface's `title` holds the actions at `/`. Where the route is below `/`, a menu for that place holds its actions, asks first. `Go` lists the places the view names under `at`, by their row's `title` or `name`, and the way back up. `Help` searches the actions and places of the tree below the tab. `useMenus`, `MenuBar`, `MenuHostContext` and `MenuHost` are gone from `babavoss/kit`, and `Plain` and `Workbench` no longer take `label`, `menus` or `viewMenu`. Move every entry a page put in the header into the page's content, a toggle or a button in its own toolbar, as page state; none of it becomes an action of the surface.
+- An action with inputs opens a modal: the shell's form, or the page's own drawer, `export const drawers = { NAME: Component }` with `{ handle, path, view, submit, close }` (`DrawerProps` from `babavoss/shell/ui/index.tsx`). `submit` resolves with the refusal reason, which the modal shows while staying open.
+- A view may order its actions in the bar with a `menu` fact, `[{ label, actions: [names] }]`. Give it below `/` so it stays out of the present.
+- Name each place by a `title` or `name` in its row, so `Go` and `Help` can name it.
+- The person can hide the menu bar from home, Settings or ⌘\. Nothing to adapt.
+
 ## 0.36.0
 
 - The strip is the page's header, at the top: home's `+`, the tabs newest first, and at its right whose move it is and the notifications. Below it stand a tab's frame and its content. The notifications panel opens downward and toasts come in under the bell. A surface whose page assumed a strip at the bottom should check its layout.
