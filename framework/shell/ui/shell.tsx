@@ -13,11 +13,7 @@
 // (appearance.ts). It loads no stylesheet: the root's page does, one, which imports the shell's styles.css, so the
 // shell's styles are compiled once.
 import { Activity, Component, startTransition, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
-import { CircleAlertIcon, LocateFixedIcon, XIcon } from "lucide-react"
 import type { Handle, View } from "../../core/index.ts"
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
-import { Button } from "../../kit/components/button"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { DropdownKit, MenuItems, type MenuItem } from "../../kit/layouts/menu.tsx"
 import { call, changes, read, type Turn } from "./client.ts"
 import { Actions, TabMenu, useTabAsks } from "./actions.tsx"
@@ -32,11 +28,11 @@ import { useSettings } from "./appearance.ts"
 import { mac, useShortcuts } from "./shortcuts.ts"
 import { ChangesContext, Ready, ServicesContext, TabProvider, tabCache, type ShellServices } from "./tab.tsx"
 import { boot, booted, servedAs } from "./boot.ts"
-import { Overlay, useSaid, type Connected } from "./connection.tsx"
+import { Overlay, PointedAlert, RefusedAlert, useSaid, type Connected } from "./connection.tsx"
 import { cachesBy } from "./live.ts"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { cycled, newestFirst, successor } from "./strip.ts"
-import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
+import { SurfaceTabs, TabBroken, TabContent, TabFailed, TabNoPage, type TabNeed } from "./tabs.tsx"
 import { standingOf } from "./turn.ts"
 
 /**
@@ -64,13 +60,7 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
     if (this.state.error === undefined) return this.props.children
 
     return (
-      <Alert variant="destructive" className="m-3 w-auto">
-        <AlertTitle>The surface's page failed</AlertTitle>
-        <AlertDescription>{this.state.error}</AlertDescription>
-        <Button variant="outline" onClick={() => this.setState({ error: undefined })}>
-          Try again
-        </Button>
-      </Alert>
+      <TabFailed error={this.state.error} retry={() => this.setState({ error: undefined })} />
     )
   }
 }
@@ -473,34 +463,14 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
         <main className="relative flex min-h-0 flex-1 flex-col">
           {/* Over the content, never above it: nothing that comes or goes here moves the page. */}
           <Overlay>
-            {error && (
-              <Alert variant="destructive" className="w-auto shadow-md">
-                <CircleAlertIcon />
-                <AlertTitle>Refused</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-                <AlertAction>
-                  <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setError("")}>
-                    <XIcon />
-                  </Button>
-                </AlertAction>
-              </Alert>
-            )}
+            {error && <RefusedAlert reason={error} dismiss={() => setError("")} />}
             {offer && offered && (
-              <Alert className="w-auto shadow-md">
-                <LocateFixedIcon />
-                <AlertTitle>
-                  The agent points to {entries.find((e) => e.at === offered.key)?.label ?? offered.key}
-                  {offered.route !== "/" && <span className="font-mono text-muted-foreground"> {offered.route}</span>}
-                </AlertTitle>
-                <AlertAction className="flex gap-1">
-                  <Button size="sm" onClick={() => go(offered.key, offered.route)}>
-                    Go there
-                  </Button>
-                  <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setOffer(undefined)}>
-                    <XIcon />
-                  </Button>
-                </AlertAction>
-              </Alert>
+              <PointedAlert
+                label={entries.find((e) => e.at === offered.key)?.label ?? offered.key}
+                route={offered.route}
+                go={() => go(offered.key, offered.route)}
+                dismiss={() => setOffer(undefined)}
+              />
             )}
           </Overlay>
           {active === HOME && (
@@ -530,10 +500,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
               <TabContent key={`${row.at} ${row.n}`} address={row.at} hidden={active !== row.at}>
                 <Activity mode={visible ? "visible" : "hidden"}>
                   {!visible && !drawn.has(row.at) ? null : row.broken !== undefined ? (
-                    <Alert variant="destructive" className="m-3 w-auto">
-                      <AlertTitle>This tab is broken</AlertTitle>
-                      <AlertDescription>{row.broken}</AlertDescription>
-                    </Alert>
+                    <TabBroken why={row.broken} />
                   ) : Page ? (
                     <TabError>
                       <TabProvider
@@ -562,15 +529,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
                       </TabProvider>
                     </TabError>
                   ) : (
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <CircleAlertIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>{row.surface} has no page</EmptyTitle>
-                        <EmptyDescription>Give it one: the default export of its ui/index.tsx.</EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
+                    <TabNoPage surface={row.surface} />
                   )}
                 </Activity>
               </TabContent>

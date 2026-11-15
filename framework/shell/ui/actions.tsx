@@ -172,6 +172,20 @@ export function TabMenu({
   )
 }
 
+/** The line over a tab's content that says why the action last started from its menu was refused. */
+export function RefusedLine({ reason, dismiss }: { reason: string; dismiss: () => void }) {
+  return (
+    <p role="alert" className="flex shrink-0 items-center gap-2 border-b bg-destructive/5 py-0.5 pr-1 pl-2.5 text-meta text-destructive">
+      <span className="min-w-0 flex-1 truncate" title={reason}>
+        {reason}
+      </span>
+      <button type="button" aria-label="Dismiss" className="grid size-icon cursor-pointer place-items-center rounded-sm hover:bg-foreground/8" onClick={dismiss}>
+        <XIcon className="size-glyph" aria-hidden />
+      </button>
+    </p>
+  )
+}
+
 /**
  * Around a tab's content: the refusal of the last action started from its menu, and the modal of the one
  * `asking` for its inputs. `start` is the shell's, which starts an action of this tab wherever it was chosen.
@@ -213,16 +227,7 @@ export function Actions({
   return (
     <>
       <div className="relative flex min-h-0 flex-1 flex-col text-body">
-        {refused && (
-          <p role="alert" className="flex shrink-0 items-center gap-2 border-b bg-destructive/5 py-0.5 pr-1 pl-2.5 text-meta text-destructive">
-            <span className="min-w-0 flex-1 truncate" title={refused}>
-              {refused}
-            </span>
-            <button type="button" aria-label="Dismiss" className="grid size-icon cursor-pointer place-items-center rounded-sm hover:bg-foreground/8" onClick={dismiss}>
-              <XIcon className="size-glyph" aria-hidden />
-            </button>
-          </p>
-        )}
+        {refused && <RefusedLine reason={refused} dismiss={dismiss} />}
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
       {asking && (

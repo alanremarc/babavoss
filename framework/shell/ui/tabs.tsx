@@ -6,7 +6,10 @@
 // have not looked at; needing the agent, quietly; and why, as its tooltip. At its right stands what is the session's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "../../kit/cn.ts"
-import { EllipsisIcon } from "lucide-react"
+import { CircleAlertIcon, EllipsisIcon } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "../../kit/components/alert"
+import { Button } from "../../kit/components/button"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { MenuDropdown } from "../../kit/layouts/menu.tsx"
 import { tabScrollOffset } from "./tab-scroll"
 
@@ -254,6 +257,38 @@ export function TabContent({ address, hidden, children }: { address: string; hid
     </section>
   )
 }
+
+/** A tab whose surface fails on what it keeps, in place of its page: why. */
+export const TabBroken = ({ why }: { why: string }) => (
+  <Alert variant="destructive" className="m-3 w-auto">
+    <AlertTitle>This tab is broken</AlertTitle>
+    <AlertDescription>{why}</AlertDescription>
+  </Alert>
+)
+
+/** A tab whose page threw while it was drawn: what it threw, and drawing it again. */
+export const TabFailed = ({ error, retry }: { error: string; retry: () => void }) => (
+  <Alert variant="destructive" className="m-3 w-auto">
+    <AlertTitle>The surface's page failed</AlertTitle>
+    <AlertDescription>{error}</AlertDescription>
+    <Button variant="outline" onClick={retry}>
+      Try again
+    </Button>
+  </Alert>
+)
+
+/** A tab of a surface that has no page, and where to give it one. */
+export const TabNoPage = ({ surface }: { surface: string }) => (
+  <Empty>
+    <EmptyHeader>
+      <EmptyMedia variant="icon">
+        <CircleAlertIcon />
+      </EmptyMedia>
+      <EmptyTitle>{surface} has no page</EmptyTitle>
+      <EmptyDescription>Give it one: the default export of its ui/index.tsx.</EmptyDescription>
+    </EmptyHeader>
+  </Empty>
+)
 
 /** `end`: what stands at the strip's right, after the tabs, of the session rather than a tab: whose move it is, and the notifications. */
 export function SurfaceTabs({ items, active, onSelect, home, end }: { items: TabItem[]; active: string; onSelect: (id: string) => void; home: ReactNode; end?: ReactNode }) {
