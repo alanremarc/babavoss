@@ -22,11 +22,11 @@ const GROUPS: { status: Status; label: string }[] = [
 ]
 /** Reading type for an issue's markdown: a measure of about 68 characters, loose leading, quiet headings and lists. */
 const PROSE = [
-  "max-w-[68ch] text-[13.5px] leading-[1.65] text-foreground/85",
+  "max-w-[68ch] text-large leading-relaxed text-foreground/85",
   "[&>*:first-child]:mt-0 [&_p]:my-3 [&_strong]:font-medium [&_strong]:text-foreground",
   "[&_h1]:mt-6 [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-medium [&_h1]:text-foreground",
   "[&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:text-sm [&_h2]:font-medium [&_h2]:text-foreground",
-  "[&_h3]:mt-5 [&_h3]:mb-1 [&_h3]:text-xs [&_h3]:font-medium [&_h3]:text-muted-foreground",
+  "[&_h3]:mt-5 [&_h3]:mb-1 [&_h3]:text-body [&_h3]:font-medium [&_h3]:text-muted-foreground",
   "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_li]:pl-1 [&_li::marker]:text-muted-foreground",
   "[&_code]:rounded-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-[0.9em]",
   "[&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
@@ -45,7 +45,7 @@ function Mark({ status }: { status: Status }) {
 }
 
 const Lane = ({ lane }: { lane: number }) => (
-  <span className="bg-primary text-primary-foreground inline-flex h-4 shrink-0 items-center rounded-sm px-1 text-[10px] font-medium tabular-nums">L{lane}</span>
+  <span className="bg-primary text-primary-foreground inline-flex h-4 shrink-0 items-center rounded-sm px-1 text-badge font-medium tabular-nums">L{lane}</span>
 )
 
 export default function Queue() {
@@ -70,7 +70,7 @@ export default function Queue() {
         <main className="flex min-w-0 flex-1 flex-col overflow-auto">
           {current && selected?.about !== undefined ? (
             <article className="flex max-w-3xl flex-col gap-4 p-6">
-              <div className="text-muted-foreground flex items-center gap-2 text-xs">
+              <div className="text-muted-foreground flex items-center gap-2 text-body">
                 <Mark status={selected.status} />
                 <span>{NAMES[selected.status]}</span>
                 {selected.lane && <Lane lane={selected.lane} />}
@@ -119,7 +119,7 @@ export default function Queue() {
 
             return (
               <section key={status} aria-label={label} className="pb-2">
-                <h2 className="text-muted-foreground flex h-6 items-center justify-between px-3 text-[11px] font-medium">
+                <h2 className="text-muted-foreground flex h-6 items-center justify-between px-3 text-meta font-medium">
                   {label}
                   {status === "lane" ? (
                     <span className="flex items-center gap-0.5" aria-label={`${busy} of ${view?.lanes ?? 0} lanes busy`}>
@@ -131,7 +131,7 @@ export default function Queue() {
                     <span className="tabular-nums">{rows.length}</span>
                   )}
                 </h2>
-                {!rows.length && <p className="text-muted-foreground/70 px-3 text-xs">All lanes idle</p>}
+                {!rows.length && <p className="text-muted-foreground/70 px-3 text-body">All lanes idle</p>}
                 <ul>
                   {rows.map((issue) => (
                     <li key={issue.n}>
@@ -140,12 +140,12 @@ export default function Queue() {
                         onClick={() => navigate(`/issues/${issue.n}`)}
                         aria-current={issue.n === current?.n}
                         title={issue.title}
-                        className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-xs outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
+                        className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
                       >
                         <Mark status={issue.status} />
                         <span className="min-w-0 flex-1 truncate">{issue.title}</span>
                         {issue.lane && <Lane lane={issue.lane} />}
-                        <span className="text-muted-foreground/70 text-[10px] tabular-nums">#{issue.n}</span>
+                        <span className="text-muted-foreground/70 text-meta tabular-nums">#{issue.n}</span>
                       </button>
                     </li>
                   ))}

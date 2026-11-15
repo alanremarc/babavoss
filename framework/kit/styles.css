@@ -1,7 +1,9 @@
+/* The kit's design language: Tailwind, the theming tokens in defaults.css, and the palettes beyond the neutral one there.
+   A palette is chosen by data-theme on the page's root, and its mode by the class dark; the shell's settings set both. */
 @import "tailwindcss" source(".");
 @import "./defaults.css";
 
-/* Anthropic palette anchors, adapted to warm shell surfaces:
+/* The Claude palette: Anthropic palette anchors, adapted to warm shell surfaces:
    https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md */
 :root[data-theme="claude"] {
   --card-foreground: var(--foreground);
@@ -10,13 +12,6 @@
   --accent: var(--muted);
   --accent-foreground: var(--foreground);
   --ring: var(--primary);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--muted);
-  --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ring);
   --chart-1: #d97757;
   --chart-2: #6a9bcc;
   --chart-3: #788c5d;
@@ -35,6 +30,9 @@
   --muted: #efe3d7;
   --muted-foreground: #6b6259;
   --destructive: #b7333d;
+  --success: #5f7a45;
+  --warning: #a8691c;
+  --info: #3d74a8;
   --border: #ded7cc;
   --input: #c8bfb2;
   --sidebar: #f0eee6;
@@ -51,6 +49,9 @@
   --muted: #453027;
   --muted-foreground: #b7aaa0;
   --destructive: #ed8b87;
+  --success: #a3b886;
+  --warning: #e0a957;
+  --info: #8fb5dc;
   --border: #494039;
   --input: #5a4e43;
   --sidebar: #2b2521;
