@@ -10,19 +10,15 @@ export type Command = { id: string; group: string; label: string; hint?: string;
 
 const key = (h: Handle) => `${h.name} ${JSON.stringify(h.args)}`
 
-/**
- * The actions offered at `path`, once each, in the view's order. An ask is a handle the person is offered and the agent
- * is not: `agent` is the same view as the agent reads it; without it, nothing is known to be an ask.
- */
-export function offered(path: string, person: View | undefined, agent?: View): Offered[] {
-  const theirs = agent && new Set(handles(agent).map(key))
+/** The actions offered at `path` in the view the person reads, once each, in the view's order; an ask is the handle marked one. */
+export function offered(path: string, view: View | undefined): Offered[] {
   const seen = new Set<string>()
 
-  return handles(person).flatMap((handle) => {
+  return handles(view).flatMap((handle) => {
     if (seen.has(key(handle))) return []
     seen.add(key(handle))
 
-    return [{ path, handle, ask: !!theirs && !theirs.has(key(handle)) }]
+    return [{ path, handle, ask: handle.ask === true }]
   })
 }
 

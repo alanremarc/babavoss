@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "../../kit/components/input"
 import { Textarea } from "../../kit/components/textarea"
 import { MenuHostContext, MenuTriggers, type Menu, type MenuHost, type MenuItem } from "../../kit/layouts/menu.tsx"
-import type { Args, View } from "../../core/surface/view.ts"
+import type { Args } from "../../core/surface/view.ts"
 import { actionItems, argsOf, commandsOf, joined, named, offered, type Command, type Offered } from "./commands.ts"
 import { useTab } from "./tab.tsx"
 
@@ -44,37 +44,16 @@ export function useFrames(): Frames {
   return frames
 }
 
-/** The view at a path under the tab as the agent reads it, the person's without the asks; by the header the door takes
- * the actor from, the core's ACTOR_HEADER, which lives with the service and so not in the page. */
-async function asAgent(address: string, path: string): Promise<View | undefined> {
-  const response = await fetch(address + (path === "/" ? "" : path), { headers: { accept: "application/json", "babavoss-actor": "agent" } })
-
-  return response.ok ? ((await response.json()) as View) : undefined
-}
-
 /** The actions offered at a path under the tab, kept current; none where nothing is there, or with no path. */
 function useOffered(path: string | undefined): Offered[] {
-  const { live, address } = useTab()
+  const { live } = useTab()
   const [actions, setActions] = useState<Offered[]>([])
 
   useEffect(() => {
-    let latest = 0
-
     if (path === undefined) return setActions([])
 
-    return live(
-      path,
-      (view) => {
-        const n = ++latest
-
-        void asAgent(address, path).then(
-          (agent) => n === latest && setActions(offered(path, view, agent)),
-          () => n === latest && setActions(offered(path, view))
-        )
-      },
-      () => setActions([])
-    )
-  }, [live, address, path])
+    return live(path, (view) => setActions(offered(path, view)), () => setActions([]))
+  }, [live, path])
 
   return actions
 }

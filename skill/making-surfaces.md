@@ -5,10 +5,10 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 ## The loop
 
 1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and what they decide there.
-2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types.
-3. Open it from the root, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
+2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
+3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
-The running root takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harness: it writes the skill baba and the framework's hook beside `.baba/` again, as installing does.
+The running shell takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harness: it writes the skill baba and the framework's hook beside `.baba/` again, as installing does.
 
 ## A surface
 
@@ -81,7 +81,7 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
   - frame: `h-menubar`, `h-bar` and `h-row`, the heights of the menu bar, a bar below it, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
 - Never hard-code a colour, a font or a size where a token fits.
 
-Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The root takes it after the shell's, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
+Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
 
 ## Updating
 

@@ -1,5 +1,5 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
-// baba would, its text and the root's answer, the root started; after each tool call, what was heard in an open root since
+// baba would, its text and the shell's answer, the shell started; after each tool call, what was heard in an open root since
 // the agent was last told, one line each: notices, and where the person acted; with each message of the person, that and
 // then what changed at / since the agent was last told it, by who changed it: the person on its page, the surface by itself,
 // or the agent with them. What the agent's own calls alone changed or gave, their answers told it. It steers and informs,
@@ -88,13 +88,13 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
   }
 
   if (input.hook_event_name === "SessionStart") {
-    // What invoking the skill baba gives, given unasked: its text, and the root started, which the skill would have the
-    // agent do. The root's answer is its version, its page's address, the roots and the tabs open in this session.
+    // What invoking the skill baba gives, given unasked: its text, and the shell started, which the skill would have the
+    // agent do. The shell's answer is its version, its page's address, the surfaces and the tabs open in this session.
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
     lines.push(readFileSync(SKILL, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
-    if (root.exitCode === 0 && answer) lines.push(`The root of .baba/ was started for this session, and answered:\n${answer}`)
+    if (root.exitCode === 0 && answer) lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
     await tell()
   } else if (turn === "ended" || turn === "gone") await tell()
   else {
@@ -104,7 +104,7 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
     for (const [name, root] of roots()) {
       const text = await changed(root, session, tells.ask).catch(() => undefined)
 
-      if (text) lines.push(`${tells.lead(name === "baba" ? "the root of .baba/" : `the root ${name}`)}\n${text}`)
+      if (text) lines.push(`${tells.lead(name === "baba" ? "the shell of .baba/" : `the root ${name}`)}\n${text}`)
     }
   }
 
