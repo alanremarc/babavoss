@@ -1,10 +1,11 @@
-// The shell page: the shell's view at / drives the tab strip and the launcher; each tab shows its surface's component.
-// The strip is the launcher's "+", then the open tabs newest first. A tab the person opens becomes theirs to look at; one
-// the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are. A tab that
-// is broken or needs someone is marked in the strip and the launcher, from / where the shell gathers who is needed. At the
-// strip's right are the notifications: each notice heard while the page is open is a toast that then goes into their
-// button, and their panel keeps the notices and all activity (notifications.tsx).
-// The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. When the
+// The shell page: the shell's view at / drives the tab strip and home; each tab shows its surface's component.
+// The strip is the page's header: home's "+", then the open tabs newest first. Below it a tab's frame and its content,
+// or home, the palette, filling the rest (home.tsx). A tab the person opens becomes theirs to look at; one the agent
+// opens takes its place beside the "+", marked until looked at, and the person stays where they are. A tab that is broken
+// or needs someone is marked in the strip and on home, from / where the shell gathers who is needed. At the strip's right
+// are the notifications: each notice heard while the page is open is a toast that then goes into their button, and their
+// panel keeps the notices and all activity (notifications.tsx).
+// The URL is the surface path: / home, also where no tab is, /tabs/N/route a tab, /settings the appearance. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
@@ -14,17 +15,18 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { call, changes, read, type Notice, type Turn } from "./client.ts"
-import { Frame, TabCommands, useFrames } from "./frame.tsx"
-import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
+import { Frame, useFrames } from "./frame.tsx"
+import { Home, HomeTab, useHomeKey, type TabEntry } from "./home.tsx"
+import { backTo, shortcut, type SurfaceEntry } from "./home.ts"
 import { Notifications } from "./notifications.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
-import { arrival, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
+import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
 import { TurnIndicator } from "./turn.tsx"
 
-/** Each surface's page module: its component, the default export, and the icon the strip and the launcher show. */
+/** Each surface's page module: its component, the default export, and the icon the strip and home show. */
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
 /** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
 type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
@@ -33,7 +35,7 @@ type Need = { at: string; surface: string } & TabNeed
 type RootView = { title: string; needs?: Need[]; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
 
 const parse = () => placeOf(location.pathname)
-const urlOf = (key: string, route = "/") => (key === "new" ? "/" : key === "settings" ? "/settings" : key + (route === "/" ? "" : route))
+const urlOf = (key: string, route = "/") => (key === HOME ? "/" : key === "settings" ? "/settings" : key + (route === "/" ? "" : route))
 
 class TabError extends Component<{ children: ReactNode }, { error?: string }> {
   state: { error?: string } = {}
@@ -63,7 +65,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   const [at, setAt] = useState(parse)
   const [routes, setRoutes] = useState<Record<string, string>>(() => (at.key.startsWith("/") ? { [at.key]: at.route } : {}))
   const [listeners] = useState(() => new Set<() => void>())
-  // Every tab's frame, and the commands of the one looked at, which the palette offers first.
+  // Every tab's frame, and the commands of the one looked at, which home offers first.
   const frames = useFrames()
   const up = useRef(false)
   const stream = useMemo(
@@ -78,7 +80,10 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     [listeners]
   )
   const rows = root?.tabs ?? []
-  const active = at.key === "new" || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : "new"
+  const active = at.key === HOME || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : HOME
+  // The tab shown before home, which home returns to; its frame stays live while home is shown, for its commands.
+  const [shown, setShown] = useState<string>()
+  const back = backTo(shown, rows.map((r) => r.at))
   const icons = useMemo(() => Object.fromEntries(Object.entries(surfaces).map(([name, s]) => [name, s.icon])), [surfaces])
   const strip = useMemo(() => newestFirst(rows), [rows])
   const entries: TabEntry[] = strip.map((row) => ({
@@ -150,7 +155,11 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     if (root) setSeen((s) => (!s ? new Set([...root.tabs.map((r) => r.at), active]) : s.has(active) ? s : new Set([...s, active])))
   }, [root, active])
 
-  // A closed tab in the URL falls back to the launcher.
+  useEffect(() => {
+    if (active !== HOME) setShown(active)
+  }, [active])
+
+  // A closed tab in the URL falls back to home.
   useEffect(() => {
     if (root && at.key !== active) history.replaceState(null, "", urlOf(active, routes[active]))
   }, [root, at.key, active, routes])
@@ -226,29 +235,42 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     if (offered && offered.key === at.key && offered.route === at.route) setOffer(undefined)
   }, [offered?.key, offered?.route, at.key, at.route])
 
-  const choices = {
-    surfaces: root?.surfaces ?? [],
-    icons,
-    tabs: entries,
-    active,
-    disabled: pending || !root,
-    loading: !root,
-    launch: (s: SurfaceEntry) => void open(s.open),
-    select: (at: string) => go(at),
-    settings: () => go("settings"),
-    lead: (done: () => void) => <TabCommands frames={frames} at={active} done={done} />,
-  }
-  const away = (at: string) => go(successor(strip, at) ?? "new")
+  const away = (at: string) => go(successor(strip, at) ?? HOME)
+
+  useHomeKey(() => go(shortcut(active, back)))
 
   return (
     <div className="flex h-dvh min-h-64 flex-col overflow-hidden text-xs">
+      <SurfaceTabs
+        active={active}
+        onSelect={(key) => go(key)}
+        home={<HomeTab active={active === HOME} onSelect={() => go(HOME)} />}
+        end={
+          <>
+            <TurnIndicator turn={turn} />
+            <Notifications changes={stream} notices={notices} title={root?.title ?? "baba"} go={(at) => go(placeOf(at).key, placeOf(at).route)} />
+          </>
+        }
+        items={[
+          ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go(strip[0]?.at ?? HOME) }] : []),
+          ...strip.map((row, i) => ({
+            id: row.at,
+            label: entries[i]!.label,
+            icon: entries[i]!.icon,
+            unseen: !!seen && !seen.has(row.at) && row.at !== active,
+            needs: entries[i]!.needs,
+            broken: entries[i]!.broken,
+            ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && away(row.at)) }),
+          })),
+        ]}
+      />
       {!connected && (
-        <p className="px-4 py-2 text-muted-foreground" role="status">
+        <p className="border-b px-4 py-1 text-muted-foreground" role="status">
           {root ? "Reconnecting…" : "Connecting…"}
         </p>
       )}
       {error && (
-        <Alert variant="destructive" className="mx-3 mb-2 w-auto">
+        <Alert variant="destructive" className="mx-3 my-2 w-auto">
           <CircleAlertIcon />
           <AlertTitle>Refused</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -260,7 +282,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         </Alert>
       )}
       {offer && offered && (
-        <Alert className="mx-3 mb-2 w-auto">
+        <Alert className="mx-3 my-2 w-auto">
           <LocateFixedIcon />
           <AlertTitle>
             The agent points to {entries.find((e) => e.at === offered.key)?.label ?? offered.key}
@@ -281,9 +303,23 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           <TabContent address="settings" hidden={active !== "settings"}>
             <Settings title={root?.title ?? "babavoss"} />
           </TabContent>
-          {active === "new" && (
-            <TabContent address="new" hidden={false}>
-              <Launcher title={root?.title} notice={root?.missing ?? root?.empty} {...choices} />
+          {active === HOME && (
+            <TabContent address={HOME} hidden={false}>
+              <Home
+                title={root?.title}
+                notice={root?.missing ?? root?.empty}
+                surfaces={root?.surfaces ?? []}
+                icons={icons}
+                tabs={entries}
+                back={entries.find((e) => e.at === back)}
+                frames={frames}
+                disabled={pending || !root}
+                loading={!root}
+                launch={(handle) => void open(handle)}
+                select={(at) => go(at)}
+                settings={() => go("settings")}
+                {...(back && { leave: () => go(back) })}
+              />
             </TabContent>
           )}
           {rows.map((row) => {
@@ -291,7 +327,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
 
             return (
               <TabContent key={row.at} address={row.at} hidden={active !== row.at}>
-                <Activity mode={active === row.at ? "visible" : "hidden"}>
+                <Activity mode={active === row.at || (active === HOME && back === row.at) ? "visible" : "hidden"}>
                   {row.broken !== undefined ? (
                     <Alert variant="destructive" className="m-3 w-auto">
                       <AlertTitle>This tab is broken</AlertTitle>
@@ -328,29 +364,6 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           })}
         </main>
       </ChangesContext.Provider>
-      <SurfaceTabs
-        active={active}
-        onSelect={(key) => go(key)}
-        home={<LauncherButton {...choices} />}
-        end={
-          <>
-            <TurnIndicator turn={turn} />
-            <Notifications changes={stream} notices={notices} title={root?.title ?? "baba"} go={(at) => go(placeOf(at).key, placeOf(at).route)} />
-          </>
-        }
-        items={[
-          ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go(strip[0]?.at ?? "new") }] : []),
-          ...strip.map((row, i) => ({
-            id: row.at,
-            label: entries[i]!.label,
-            icon: entries[i]!.icon,
-            unseen: !!seen && !seen.has(row.at) && row.at !== active,
-            needs: entries[i]!.needs,
-            broken: entries[i]!.broken,
-            ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && away(row.at)) }),
-          })),
-        ]}
-      />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-// Toasts: a small stack of passing lines, newest at the bottom, each gone after a while unless hovered. A toast with an
+// Toasts: a small stack of passing lines, newest nearest the edge they come from, each gone after a while unless hovered. A toast with an
 // action is a button that does it and goes; any toast can be dismissed. Given `into`, the place where passed toasts are
 // kept, one that times out or is dismissed shrinks into it, so the eye learns where they went; with reduced motion it
 // only fades. What a toast says is the caller's.
@@ -36,7 +36,7 @@ function leave(el: HTMLElement, to: Element | null | undefined): Promise<unknown
   ).finished
 }
 
-function Toast({ item, dismiss, into }: { item: ToastItem; dismiss: () => void; into?: RefObject<Element | null> }) {
+function Toast({ item, dismiss, into, from }: { item: ToastItem; dismiss: () => void; into?: RefObject<Element | null>; from: "top" | "bottom" }) {
   const [held, setHeld] = useState(false)
   const self = useRef<HTMLLIElement>(null)
   const going = useRef(false)
@@ -75,7 +75,7 @@ function Toast({ item, dismiss, into }: { item: ToastItem; dismiss: () => void; 
     <li
       ref={self}
       role="status"
-      className="pointer-events-auto relative w-full rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-200 animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none"
+      className={cn("pointer-events-auto relative w-full rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-200 animate-in fade-in-0 motion-reduce:animate-none", from === "top" ? "slide-in-from-top-2" : "slide-in-from-bottom-2")}
       onMouseEnter={() => setHeld(true)}
       onMouseLeave={() => setHeld(false)}
       onFocus={() => setHeld(true)}
@@ -109,15 +109,28 @@ function Toast({ item, dismiss, into }: { item: ToastItem; dismiss: () => void; 
 
 /**
  * The stack, placed by `className`; `dismiss` takes a toast away by its id, once it is gone. `into` is where a passed toast
- * goes, such as the button that keeps them; a toast acted on goes at once, since it was seen.
+ * goes, such as the button that keeps them; a toast acted on goes at once, since it was seen. `from` is the edge the
+ * stack stands at, where a new toast comes in: the bottom, or the top, newest first.
  */
-export function Toasts({ toasts, dismiss, className, into }: { toasts: ToastItem[]; dismiss: (id: number) => void; className?: string; into?: RefObject<Element | null> }) {
+export function Toasts({
+  toasts,
+  dismiss,
+  className,
+  into,
+  from = "bottom",
+}: {
+  toasts: ToastItem[]
+  dismiss: (id: number) => void
+  className?: string
+  into?: RefObject<Element | null>
+  from?: "top" | "bottom"
+}) {
   if (!toasts.length) return null
 
   return (
-    <ol aria-label="Notices" className={cn("pointer-events-none fixed z-50 flex w-[min(22rem,calc(100vw-16px))] flex-col gap-1.5 text-xs", className)}>
+    <ol aria-label="Notices" className={cn("pointer-events-none fixed z-50 flex w-[min(22rem,calc(100vw-16px))] gap-1.5 text-xs", from === "top" ? "flex-col-reverse" : "flex-col", className)}>
       {toasts.map((item) => (
-        <Toast key={item.id} item={item} dismiss={() => dismiss(item.id)} {...(into && { into })} />
+        <Toast key={item.id} item={item} from={from} dismiss={() => dismiss(item.id)} {...(into && { into })} />
       ))}
     </ol>
   )

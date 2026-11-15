@@ -1,4 +1,4 @@
-// The strip's order: newest tab first, beside the launcher; a tab's number is the order it was opened in.
+// The strip's order: newest tab first, beside home; a tab's number is the order it was opened in.
 /** The tabs newest first, by their number, which grows with each one opened. */
 export function newestFirst<T extends { n: number }>(tabs: readonly T[]): T[] {
   return [...tabs].sort((a, b) => b.n - a.n)

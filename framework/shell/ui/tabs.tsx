@@ -1,5 +1,5 @@
-// The bottom strip: the launcher's "+", then the open tabs as pills that scroll when they overflow, and at its right what
-// the shell puts there; and a tab's panel.
+// The strip, the page's header: home's "+", then the open tabs as pills that scroll when they overflow, and at its right
+// what the shell puts there; and a tab's panel.
 // A pill is marked by what stands in its tab: broken, needing the person, plainly; needing the agent, quietly; and why, as
 // its tooltip. A tab the agent opened is marked until looked at. At its right stands what is the session's, not a tab's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
@@ -234,7 +234,7 @@ export function SurfaceTabs({ items, active, onSelect, home, end }: { items: Tab
   }
 
   return (
-    <nav aria-label="Tabs" className="flex h-11 shrink-0 items-center gap-1 border-t bg-sidebar px-2" onKeyDown={moveTab}>
+    <nav aria-label="Tabs" className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-2" onKeyDown={moveTab}>
       <div className="shrink-0">{home}</div>
       <div
         ref={strip}
