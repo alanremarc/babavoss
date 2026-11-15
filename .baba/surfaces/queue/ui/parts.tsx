@@ -1,7 +1,7 @@
 // What the queue's two views share: the shapes of its views, the marks of where an issue stands, an issue as a one-liner,
-// the toolbar that switches between the list and the map, and each narrative's hue.
+// the toolbar that switches between the list, the map and the archive, and each narrative's hue.
 import type { ReactNode } from "react"
-import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListIcon, LoaderCircleIcon, WaypointsIcon } from "lucide-react"
+import { ArchiveIcon, CircleCheckIcon, CircleDashedIcon, CircleIcon, ListIcon, LoaderCircleIcon, WaypointsIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 
 export type Status = "draft" | "backlog" | "lane" | "done"
@@ -28,14 +28,16 @@ const HUES = 6
 /** A narrative's hue, by its place among the narratives: the surface's own tokens, a step lighter in dark mode. */
 export const hue = (i: number) => `var(--map-${(Math.max(0, i) % HUES) + 1})`
 
-export function Mark({ status, className = "size-3.5" }: { status: Status; className?: string }) {
+/** Where an issue stands, as an icon; in `color`, its narrative's hue, where one is given. */
+export function Mark({ status, className = "size-3.5", color }: { status: Status; className?: string; color?: string }) {
   const size = `${className} shrink-0`
+  const style = color ? { color } : undefined
 
-  if (status === "lane") return <LoaderCircleIcon className={`${size} text-primary animate-spin [animation-duration:2.5s]`} aria-hidden />
-  if (status === "done") return <CircleCheckIcon className={`${size} text-muted-foreground`} aria-hidden />
-  if (status === "draft") return <CircleDashedIcon className={`${size} text-muted-foreground`} aria-hidden />
+  if (status === "lane") return <LoaderCircleIcon className={`${size} ${color ? "" : "text-primary"} animate-spin [animation-duration:2.5s]`} style={style} aria-hidden />
+  if (status === "done") return <CircleCheckIcon className={`${size} ${color ? "" : "text-muted-foreground"}`} style={style} aria-hidden />
+  if (status === "draft") return <CircleDashedIcon className={`${size} ${color ? "" : "text-muted-foreground"}`} style={style} aria-hidden />
 
-  return <CircleIcon className={size} aria-hidden />
+  return <CircleIcon className={size} style={style} aria-hidden />
 }
 
 export const Lane = ({ lane }: { lane: number }) => (
@@ -59,11 +61,12 @@ export function Line({ to, color, onPick }: { to: { n: number; title: string; st
   )
 }
 
-export type Lens = "list" | "map"
+export type Lens = "list" | "map" | "archive"
 
 const LENSES: { lens: Lens; label: string; icon: ReactNode }[] = [
   { lens: "list", label: "List", icon: <ListIcon aria-hidden /> },
   { lens: "map", label: "Map", icon: <WaypointsIcon aria-hidden /> },
+  { lens: "archive", label: "Archive", icon: <ArchiveIcon aria-hidden /> },
 ]
 
 /** The modes of the page, as a toolbar that floats at its foot: an icon each, the one shown lit; the choice is the tab's route. */

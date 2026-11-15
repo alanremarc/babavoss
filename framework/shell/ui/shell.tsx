@@ -153,7 +153,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
   const [servedNotices] = useState(() => booted<NoticesPage>(NOTICES))
   const told = useFeed(NOTICES, stream, true, servedNotices)
   const served = useRef(root !== undefined)
-  const unseen = useMemo(() => unseenRows(told.rows, told.unseen), [told.rows, told.unseen])
+  const unseen = useMemo(() => unseenRows(told.rows, told.fresh), [told.rows, told.fresh])
 
   useEffect(() => asks.subscribe(asksMoved), [asks])
 
@@ -411,7 +411,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
         active={active}
         onSelect={(key) => go(key)}
         home={<HomeTab active={active === HOME} standing={standingOf(turn)} animate={settings.logo.animate} keys={homeKeys} lost={lost} onSelect={() => go(HOME)} />}
-        end={<Notifications changes={stream} notices={notices} told={told} title={root?.title ?? "baba"} waiting={standingOf(turn).waiting} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
+        end={<Notifications changes={stream} notices={notices} told={told} title={root?.title ?? "baba"} tabs={entries} icons={icons} waiting={standingOf(turn).waiting} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
         items={[
           ...strip.map((row, i) => ({
             id: row.at,

@@ -2,7 +2,7 @@
 // its shortcut goes.
 import { describe, expect, it } from "bun:test"
 import { handle } from "../../framework/core/surface/view.ts"
-import { backTo, choices, shortcut } from "../../framework/shell/ui/home.ts"
+import { backTo, choices, shortcut, doesOf, rowsOf } from "../../framework/shell/ui/home.ts"
 import { HOME, placeOf } from "../../framework/shell/ui/pointing.ts"
 
 const open = (surface: string) => handle("open", `open a ${surface} tab`, { surface })
@@ -43,4 +43,24 @@ describe("home", () => {
     expect(shortcut(HOME, "/tabs/2")).toBe("/tabs/2")
     expect(shortcut(HOME, undefined)).toBe(HOME)
   })
+})
+
+it("home lists each thing once: the open tabs, the surfaces with none open, the shell's commands; and says what Enter does on each", () => {
+  const open = { kind: "handle" as const, name: "open", args: { surface: "queue" }, open: {}, description: "open a queue tab" }
+  const surfaces = [
+    { name: "queue", description: "Track the work", open },
+    { name: "lab", description: "Watch an agent", open: { ...open, args: { surface: "lab" } } },
+    { name: "bad", broken: "SyntaxError" },
+  ]
+  const rows = rowsOf(surfaces, [{ at: "/tabs/2", surface: "queue", label: "Queue" }], [{ value: "end move", label: "End my move" }])
+
+  expect(rows.map((row) => [row.kind, row.value])).toEqual([
+    ["tab", "tab /tabs/2"],
+    ["surface", "surface lab"],
+    ["broken", "surface bad"],
+    ["command", "end move"],
+  ])
+  expect(rows.map(doesOf)).toEqual([{ enter: "Go to tab", other: "Open another" }, { enter: "Open" }, {}, { enter: "Run" }])
+  // A tab whose surface cannot be opened again offers no other thing.
+  expect(doesOf(rowsOf([], [{ at: "/tabs/1", surface: "gone", label: "Gone" }])[0]!)).toEqual({ enter: "Go to tab" })
 })
