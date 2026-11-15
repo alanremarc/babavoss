@@ -133,7 +133,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
   try {
     // The skill's own words, then the root's answer: its version, its page's address and how to show it, the surfaces.
     expect(started.status).toBe(0)
-    expect(started.stdout).toStartWith(`${body}\n\nThe root of .baba/ was started for this session, and answered:\n`)
+    expect(started.stdout).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
     expect(started.stdout).toMatch(/page: http:\/\/127\.0\.0\.1:\d+  a new address: open it in the harness's browser if it has one, and otherwise give it to the person\n/)
 
@@ -185,7 +185,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const opened = hook("UserPromptSubmit").stdout
 
     expect(opened).toStartWith(
-      "In the root of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nnotices:\nthe person acted on /\nchanged by the person:\n"
+      "In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nnotices:\nthe person acted on /\nchanged by the person:\n"
     )
     expect(opened).toMatch(/\n\+ \/tabs\/\d+ desk "Greeting"\nactions: propose /)
     expect(opened).toContain('\nhow: "Propose a greeting when the person asks for another.')
@@ -210,13 +210,13 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(JSON.parse(hook("PostToolUse").stdout)).toEqual({
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
-        additionalContext: `Heard in the root of .baba/ while you worked:\nnotices:\nthe person acted on desk ${tab}`,
+        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nthe person acted on desk ${tab}`,
       },
     })
 
     const told = hook("UserPromptSubmit").stdout
 
-    expect(told).toStartWith("In the root of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
+    expect(told).toStartWith("In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
     expect(told).toContain(`+ need: the person, at ${tab} desk, to accept or decline the proposed greeting`)
     expect(told).toContain("good morning")
     // Told once: the session has now been answered.

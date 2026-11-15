@@ -26,6 +26,7 @@ template/                   the surface a new one starts from: the surface, its 
 CHANGELOG.md                what each release changed; an agent reads it after taking one
 spec/{core,shell,kit,bin}/  the specs, mirroring the code
 spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network
+spec/surfaces.spec.ts       runs .baba/'s surfaces' specs with the framework's, as bun check checks their types with it
 docs/DESIGN.md              the design
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
 .claude/  .agents/          provisioned from .baba/: baba's skill and the framework's hook; a harness started here runs this checkout

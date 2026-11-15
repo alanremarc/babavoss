@@ -1,7 +1,9 @@
 // A harness as the framework drives one: a session of an agent started in a project, with a home of its own, spoken to,
 // and its stream read as the framework's own events. An adapter is the only code that knows a harness: its command and
 // flags, what its stream means, and where its login is kept. Claude Code's is the first; another harness is another
-// adapter with this interface. What makes an agent aware, the hooks and the skill, is provisioned elsewhere.
+// adapter with this interface. An adapter hands on nothing of the account's: no account, organisation or user id and no
+// address, so what records a session's events never holds them. What makes an agent aware, the hooks and the skill, is
+// provisioned elsewhere.
 
 export type Tokens = { input: number; cache_write: number; cache_read: number; output: number }
 /** The API request a chunk of the agent's came from, and the tokens it was given; left out where a harness does not say. */
