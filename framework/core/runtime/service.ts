@@ -18,6 +18,8 @@ export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
 /** The response header of a service that gave way to a new one without doing what it was asked: ask again. */
 export const STALE_HEADER = "babavoss-stale"
+/** The request header naming one run of the word, one tool call of the agent's: what tells calls apart for the hooks' silence. */
+export const CALL_HEADER = "babavoss-call"
 export const STARTUP_MS = 10_000
 export const REQUEST_MS = 30_000
 
