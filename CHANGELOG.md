@@ -2,6 +2,14 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.21.2
+
+- What the root tells the agent of `/`, in the hook and in the "changed" part of an answer, now names who made each change: `changed by the person:`, `changed by the surface:` for a command's event, or a combination such as `changed by the person and you:`. A change of no known cause, such as code loaded again, stays under `changed:`.
+- What only the agent's own calls changed is no longer told back to it, including calls made by a `-e` program. Such changes do not end a `wait`.
+- The hook's lead line no longer guesses that the person may have acted. It says: "What changed in the root of .baba/ at / since this session was last answered, by who changed it:".
+- The skill baba now says that a surface is shared and live, that the person's moves are to be taken up and never undone, and that where the person changed something first, their change stands. A surface's own `how` need not say so again.
+- `Running` has a new `cause()` that gives who made the last commit and whether it was a call. Anything that implements `Running` by hand must add it.
+
 ## 0.21.1
 
 - A tab whose surface throws on the state it keeps, for example after the surface's code changed, no longer breaks the root. `/` lists it with `broken` saying why, in place of `title` and `facts`, and keeps `close` offered. Reading the tab says the same, calls into it are refused, and its page shows the reason. A surface that changes the shape of its model should still give a `restore` that takes the earlier shape.
