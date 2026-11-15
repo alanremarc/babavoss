@@ -26,7 +26,8 @@ beforeAll(() => {
 
   expect(made.status, made.err).toBe(0)
 }, 120_000)
-afterAll(() => rmSync(project, { recursive: true, force: true }))
+// Removing the project, a whole install, can take longer than a hook's five seconds on a busy machine.
+afterAll(() => rmSync(project, { recursive: true, force: true }), 60_000)
 
 test("init makes .baba/ as a package that names the framework and provisions when installed, and baba is a skill beside it", () => {
   const pack = JSON.parse(readFileSync(join(baba, "package.json"), "utf8")) as { scripts: Record<string, string>; dependencies: Record<string, string> }

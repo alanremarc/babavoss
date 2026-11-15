@@ -2,6 +2,14 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.38.0
+
+- The bar above every tab is gone; a page fills its tab under the strip. Each tab in the strip carries its surface's menu behind dots that replace its icon on hover or focus, and on a right click or Shift+F10. The menu holds a search of the tree's actions and places, the actions at `/` under the surface's `title`, the current place's actions under its name, `Go`, and the shell's Close tab, Close other tabs, Copy link and Reload. `menu` facts, `title` or `name` on rows, and drawers work as before. Nothing to adapt, but check that a page does not assume a bar above it.
+- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask, or a notice not yet seen about a place. Give asks and notices an `at` where they belong, so the dot leads there.
+- Home is the babavoss mark, which also shows whose move it is: still, looking about while the agent works, and counting the person's changes that wait for its next turn. Home offers to end the person's move. The turn indicator at the strip's right is gone.
+- The notifications open as a drawer from the right edge.
+- The menu-bar setting and ⌘\ are gone. The kit gains `MenuDropdown`, `SearchMenu`, `DropdownKit` and `Sheet`.
+
 ## 0.37.0
 
 - Breaking: the bar above every tab is the shell's alone, made from the surface's views. A menu named by the surface's `title` holds the actions at `/`. Where the route is below `/`, a menu for that place holds its actions, asks first. `Go` lists the places the view names under `at`, by their row's `title` or `name`, and the way back up. `Help` searches the actions and places of the tree below the tab. `useMenus`, `MenuBar`, `MenuHostContext` and `MenuHost` are gone from `babavoss/kit`, and `Plain` and `Workbench` no longer take `label`, `menus` or `viewMenu`. Move every entry a page put in the header into the page's content, a toggle or a button in its own toolbar, as page state; none of it becomes an action of the surface.
