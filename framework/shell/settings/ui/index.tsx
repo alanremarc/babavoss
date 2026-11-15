@@ -1,5 +1,7 @@
 // The settings' page, shown in their tab: the appearance, the shortcuts and the mark, each as it is with the control that
-// changes it, every change a call of the surface. A shortcut is rebound by clicking its keys and pressing new ones; Escape
+// changes it, every change a call of the surface. A theme is chosen from swatches, each painted in its own theme; Dynamic
+// shows the picker, which paints the page as it is dragged and keeps the numbers once let go. With one theme for both
+// modes there is one choice, else one for each. A shortcut is rebound by clicking its keys and pressing new ones; Escape
 // gives up, and a clash or keys that cannot be a binding is said on its row. Beside the mark's switch, the mark as it is
 // while the agent works. As the surface says them, the settings are told to the page, which applies them at once.
 import { useEffect, useState, type ReactNode } from "react"
@@ -7,22 +9,28 @@ import { MonitorIcon, MoonIcon, SettingsIcon, SunIcon } from "lucide-react"
 import type { Handle } from "../../../core/index.ts"
 import { Button } from "../../../kit/components/button"
 import { ToggleGroup, ToggleGroupItem } from "../../../kit/components/toggle-group"
-import { announce, useSystemDark } from "../../ui/appearance.ts"
+import { ThemePicker } from "../../../kit/components/theme-picker"
+import { PRESETS, varsOf, type Theme } from "../../../kit/theme.ts"
+import { announce, paintTheme, useSystemDark } from "../../ui/appearance.ts"
 import { Logo } from "../../ui/mark.tsx"
 import { mac, RECORDING_MARK } from "../../ui/shortcuts.ts"
 import { useLive, useTab } from "../../ui/tab.tsx"
 import { chordOf, COMMANDS, isCommand, shown, type CommandId } from "../src/keys.ts"
-import { resolveMode, settingsOf, THEMES, type Mode } from "../src/settings.ts"
+import { appearanceOf, choiceIn, nameOf, numbersOf, resolveMode, settingsOf, type Choice, type Mode } from "../src/settings.ts"
 
 export const icon = <SettingsIcon aria-hidden />
 
+/** A theme as the surface tells it: a preset's id, or dynamic with its numbers. */
+type Told = string | ({ theme: "dynamic" } & Theme)
 type Root = {
-  appearance: { mode: Mode | "system"; light: string; dark: string }
+  appearance: { mode: Mode | "system"; same: true; theme: Told } | { mode: Mode | "system"; same: false; light: Told; dark: Told }
   shortcuts: Record<CommandId, string>
   logo: { animate: boolean }
   unsaved?: string
   mode?: Handle
   theme?: Handle
+  dynamic?: Handle
+  same?: Handle
   animate?: Handle
 }
 type Row = { command: CommandId; does: string; keys: string; default?: string }
@@ -36,7 +44,7 @@ export default function Settings() {
   const { call } = useTab()
   const systemDark = useSystemDark()
   const [refused, setRefused] = useState<{ at: string; reason: string }>()
-  const run = async (at: string, handle: Handle | undefined, args: Record<string, string | boolean>, path = "/") => {
+  const run = async (at: string, handle: Handle | undefined, args: Record<string, string | number | boolean>, path = "/") => {
     if (!handle) return false
 
     const answer = await call(path, handle.name, { ...handle.args, ...args })
@@ -52,14 +60,13 @@ export default function Settings() {
 
     const keys = Object.fromEntries(shortcuts.commands.filter((r) => r.default !== undefined).map((r) => [r.command, r.keys]))
 
-    announce(
-      settingsOf({ appearance: { mode: root.appearance.mode, themes: { light: root.appearance.light, dark: root.appearance.dark } }, keys, logo: root.logo })
-    )
+    announce(settingsOf({ appearance: keptOf(root.appearance), keys, logo: root.logo }))
   }, [root, shortcuts])
 
   if (!root) return <p className="p-6 text-muted-foreground">Reading the settings…</p>
 
-  const mode = resolveMode({ mode: root.appearance.mode, themes: { light: root.appearance.light, dark: root.appearance.dark } }, systemDark)
+  const appearance = appearanceOf(keptOf(root.appearance))
+  const mode = resolveMode(appearance, systemDark)
   const changed = shortcuts?.commands.some((r) => r.default !== undefined) ?? false
 
   return (
@@ -96,24 +103,31 @@ export default function Settings() {
               </ToggleGroupItem>
             </ToggleGroup>
           </Line>
-          {(["light", "dark"] as const).map((m) => (
-            <Line key={m} label={`${m === "light" ? "Light" : "Dark"} theme`} note={m === mode ? "shown now" : undefined}>
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                spacing={0}
-                value={root.appearance[m]}
-                aria-label={`${m} theme`}
-                onValueChange={(value) => value && void run(`theme ${m}`, root.theme, { mode: m, theme: value })}
-              >
-                {THEMES[m].map((t) => (
-                  <ToggleGroupItem key={t.id} value={t.id}>
-                    {t.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Line>
+          <Line label="Both modes in one theme" note={appearance.same ? "one theme, light and dark" : "a theme for each mode"}>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={appearance.same ? "on" : "off"}
+              aria-label="Both modes in one theme"
+              onValueChange={(value) => value && void run("same", root.same, { on: value === "on" })}
+            >
+              <ToggleGroupItem value="on">Same</ToggleGroupItem>
+              <ToggleGroupItem value="off">Distinct</ToggleGroupItem>
+            </ToggleGroup>
+          </Line>
+          {(appearance.same ? (["both"] as const) : (["light", "dark"] as const)).map((m) => (
+            <ThemeChoice
+              key={m}
+              label={m === "both" ? "Theme" : m === "light" ? "Light theme" : "Dark theme"}
+              note={m === mode ? "shown now" : undefined}
+              choice={choiceIn(appearance, m === "both" ? mode : m)}
+              dark={m === "both" ? mode === "dark" : m === "dark"}
+              shown={m === "both" || m === mode}
+              choose={(theme) => void run(`theme ${m}`, root.theme, { mode: m, theme })}
+              keep={(t) => void run(`theme ${m}`, root.dynamic, { mode: m, ...t })}
+            />
           ))}
           {refused && (refused.at === "mode" || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
         </Section>
@@ -163,6 +177,66 @@ export default function Settings() {
           </Line>
         </Section>
       </div>
+    </div>
+  )
+}
+
+/** The appearance the surface tells, as its file keeps it. */
+const keptOf = (a: Root["appearance"]) =>
+  a.same ? { mode: a.mode, same: true, themes: { light: a.theme, dark: a.theme } } : { mode: a.mode, same: false, themes: { light: a.light, dark: a.dark } }
+
+/**
+ * A mode's theme: a swatch for each preset and Dynamic, each painted in its own theme in that mode, and under Dynamic the
+ * picker. While it is dragged the page is painted in it, where this choice is what is shown; it is kept once let go.
+ */
+function ThemeChoice({
+  label,
+  note,
+  choice,
+  dark,
+  shown,
+  choose,
+  keep,
+}: {
+  label: string
+  note?: string
+  choice: Choice
+  dark: boolean
+  shown: boolean
+  choose: (theme: string) => void
+  keep: (theme: Theme) => void
+}) {
+  const name = nameOf(choice)
+  const numbers = numbersOf(choice)
+  const options = [...PRESETS.map((p) => ({ id: p.id as string, label: p.label, theme: p.theme as Theme })), { id: "dynamic", label: "Dynamic", theme: numbers }]
+
+  return (
+    <div className="flex flex-col gap-2 py-1">
+      <span className="flex min-w-0 flex-col">
+        <span className="text-foreground">{label}</span>
+        {note && <span className="text-meta text-muted-foreground">{note}</span>}
+      </span>
+      <div role="radiogroup" aria-label={label} className="grid grid-cols-4 gap-1.5">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={o.id === name}
+            onClick={() => o.id !== name && choose(o.id)}
+            data-theme={o.id}
+            style={varsOf(o.theme)}
+            className={`${dark ? "dark" : "light"} flex items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-left text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring aria-checked:border-primary aria-checked:ring-1 aria-checked:ring-primary`}
+          >
+            <span className="flex shrink-0 -space-x-1" aria-hidden>
+              <span className="size-3 rounded-full border border-background bg-muted" />
+              <span className="size-3 rounded-full border border-background bg-primary" />
+            </span>
+            <span className="truncate text-meta">{o.label}</span>
+          </button>
+        ))}
+      </div>
+      {name === "dynamic" && <ThemePicker value={numbers} onChange={(t) => shown && paintTheme(t)} onCommit={keep} className="pt-1" />}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 // The guide's catalogue: every specimen, once, in the group and section it belongs to, with the framework's files it shows
 // and the states it is shown in. Pure data, which the surface lists and the page draws; a specimen's path is
 // /GROUP/ENTRY. A file of the kit's components or layouts that no entry names fails the guide's spec.
+import { PRESETS } from "babavoss/kit/theme.ts"
 import { MOVES } from "babavoss/shell/ui/gaze.ts"
 
 export type Entry = { readonly id: string; readonly title: string; readonly files: readonly string[]; readonly states: readonly string[] }
@@ -11,6 +12,7 @@ const KIT = "framework/kit"
 const SHELL = "framework/shell/ui"
 const C = (name: string) => `${KIT}/components/${name}.tsx`
 const L = (name: string) => `${KIT}/layouts/${name}`
+const PRESET_IDS = PRESETS.map((p) => p.id)
 
 export const GROUPS = [
   {
@@ -36,7 +38,7 @@ export const GROUPS = [
       {
         title: "Tokens",
         entries: [
-          { id: "colour", title: "Colour", files: [`${KIT}/defaults.css`, `${KIT}/styles.css`], states: ["neutral light", "neutral dark", "claude light", "claude dark"] },
+          { id: "colour", title: "Colour", files: [`${KIT}/theme.ts`, `${KIT}/theme.css`, `${KIT}/defaults.css`], states: PRESET_IDS.flatMap((id) => [`${id} light`, `${id} dark`]) },
           { id: "type", title: "Type", files: [`${KIT}/defaults.css`], states: ["badge", "meta", "body", "large", "sm", "base", "lg", "xl", "sans", "mono"] },
           { id: "radius", title: "Radius", files: [`${KIT}/defaults.css`], states: ["sm", "md", "lg", "xl", "2xl", "3xl", "4xl"] },
           { id: "frame", title: "Frame", files: [`${KIT}/defaults.css`], states: ["menubar", "bar", "row", "icon", "rail-icon", "glyph"] },
@@ -62,6 +64,7 @@ export const GROUPS = [
           { id: "input", title: "Input", files: [C("input"), C("textarea")], states: ["empty", "filled", "invalid", "disabled", "textarea"] },
           { id: "input-group", title: "Input group", files: [C("input-group")], states: ["addon start", "addon end", "button", "textarea"] },
           { id: "command", title: "Command", files: [C("command")], states: ["search", "groups", "shortcut", "disabled", "empty"] },
+          { id: "theme-picker", title: "Theme picker", files: [C("theme-picker"), `${KIT}/theme.ts`], states: ["live", "light and dark", "disabled"] },
         ],
       },
       {

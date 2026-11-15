@@ -1,7 +1,8 @@
-// The foundations' specimens: the theming tokens as the kit defines them. Colour is read from the page's own stylesheet,
-// every palette in both modes side by side, each column given its palette's values so the kit's classes draw in it; type,
+// The foundations' specimens: the theming tokens as the kit defines them. Colour is every preset in both modes side by
+// side, each cell given its theme, so the stylesheet derives the tokens in it as it does for the page; type,
 // radius and the frame's sizes are drawn by their classes and measured as they render.
 import { useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react"
+import { derive, PRESETS, varsOf } from "babavoss/kit/index.ts"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 
@@ -14,106 +15,65 @@ const COLOURS: { family: string; tokens: [string, string?][] }[] = [
   { family: "Lines", tokens: [["border"], ["input"]] },
   { family: "Series", tokens: [["chart-1"], ["chart-2"], ["chart-3"], ["chart-4"], ["chart-5"], ["thread-user"], ["thread-context"]] },
 ]
-/** The palettes in both modes: the rules of the stylesheet each takes, in order, later over earlier. */
-const COLUMNS: { theme: string; dark: boolean; rules: string[] }[] = [
-  { theme: "neutral", dark: false, rules: [":root"] },
-  { theme: "neutral", dark: true, rules: [":root", ".dark"] },
-  { theme: "claude", dark: false, rules: [":root", ':root[data-theme="claude"]', ':root[data-theme="claude"]:not(.dark)'] },
-  { theme: "claude", dark: true, rules: [":root", ".dark", ':root[data-theme="claude"]', ':root.dark[data-theme="claude"]'] },
-]
+/** The presets, each in both modes: a column each, which takes its theme by data-theme and its numbers, so the kit's tokens derive in it. */
+const COLUMNS = PRESETS.map((p) => ({ id: p.id, label: p.label, theme: p.theme }))
 
-/** A selector as written, whatever quoting and spacing the stylesheet was compiled with. */
-const plain = (selector: string) => selector.replace(/["'\s]/g, "")
-
-/** Every custom property the page's stylesheets set under each selector, rules nested in layers and media included. */
-function declared(): Map<string, Record<string, string>> {
-  const out = new Map<string, Record<string, string>>()
-  const walk = (rules: CSSRuleList) => {
-    for (const rule of rules) {
-      if (rule instanceof CSSStyleRule) {
-        const set = out.get(plain(rule.selectorText)) ?? {}
-
-        for (const name of rule.style) if (name.startsWith("--")) set[name] = rule.style.getPropertyValue(name).trim()
-        out.set(plain(rule.selectorText), set)
-      }
-      if ("cssRules" in rule && rule.cssRules) walk(rule.cssRules as CSSRuleList)
-    }
-  }
-
-  for (const sheet of document.styleSheets) {
-    try {
-      walk(sheet.cssRules)
-    } catch {
-      // A sheet from elsewhere does not let itself be read; the kit's is the page's own.
-    }
-  }
-
-  return out
-}
-
-/** Each column's values, read once the page's stylesheet is there. */
-function usePalettes() {
-  const [values, setValues] = useState<Record<string, string>[]>()
-
-  useLayoutEffect(() => {
-    const rules = declared()
-
-    setValues(COLUMNS.map((c) => Object.assign({}, ...c.rules.map((r) => rules.get(plain(r)) ?? {}))))
-  }, [])
-
-  return values
-}
+const told = ({ l, c, h, alpha }: { l: number; c: number; h: number; alpha: number }) =>
+  `oklch(${+l.toFixed(3)} ${+c.toFixed(4)} ${+h.toFixed(1)}${alpha < 1 ? ` / ${alpha * 100}%` : ""})`
 
 function Colour() {
-  const values = usePalettes()
   const root = document.documentElement
   const current = `${root.dataset.theme ?? "neutral"} ${root.classList.contains("dark") ? "dark" : "light"}`
 
-  if (!values) return null
-
   return (
-    <div className="grid grid-cols-[7rem_repeat(4,minmax(0,1fr))] overflow-hidden rounded-lg border text-meta">
-      <div />
-      {COLUMNS.map((c) => {
-        const name = `${c.theme} ${c.dark ? "dark" : "light"}`
-
-        return (
-          <div key={name} className="flex items-center gap-1.5 border-l px-2 py-1.5 font-medium">
-            {name}
-            {name === current && <span className="size-1.5 rounded-full bg-primary" title="In use on this page" />}
+    <div className="overflow-x-auto rounded-lg border">
+      <div className="grid min-w-max grid-cols-[7rem_repeat(7,minmax(6.5rem,1fr))] text-meta">
+        <div />
+        {COLUMNS.map((c) => (
+          <div key={c.id} className="flex flex-col border-l px-2 py-1.5">
+            <span className="font-medium">{c.label}</span>
+            <span className="flex gap-1.5 font-mono text-badge text-muted-foreground">
+              {(["light", "dark"] as const).map((mode) => (
+                <span key={mode} className="flex flex-1 items-center gap-1">
+                  {mode}
+                  {`${c.id} ${mode}` === current && <span className="size-1.5 rounded-full bg-primary" title="In use on this page" />}
+                </span>
+              ))}
+            </span>
           </div>
-        )
-      })}
-      {COLOURS.map(({ family, tokens }) =>
-        tokens.map(([fill, ink], i) => (
-          <Row key={fill} first={i === 0} family={family} fill={fill} ink={ink} values={values} />
-        ))
-      )}
+        ))}
+        {COLOURS.map(({ family, tokens }) => tokens.map(([fill, ink], i) => <Row key={fill} first={i === 0} family={family} fill={fill} ink={ink} />))}
+      </div>
     </div>
   )
 }
 
-/** One token across the palettes: its name, then a swatch in each column, its text drawn on it where it has one. */
-function Row({ first, family, fill, ink, values }: { first: boolean; family: string; fill: string; ink?: string; values: Record<string, string>[] }) {
+/** One token across the presets: its name, then a swatch in each mode of each, its text drawn on it where it has one. */
+function Row({ first, family, fill, ink }: { first: boolean; family: string; fill: string; ink?: string }) {
   return (
     <>
       <div className={`flex flex-col justify-center px-2 ${first ? "border-t" : ""}`}>
         {first && <span className="text-badge tracking-wide text-muted-foreground/70 uppercase">{family}</span>}
         <span className="font-mono">{fill}</span>
       </div>
-      {values.map((v, n) => (
-        // The column's palette, set on it, so var() and the kit's classes inside resolve to it.
-        <div key={n} className={`border-l bg-background p-1 ${first ? "border-t" : ""}`} style={v as CSSProperties}>
-          <div
-            className="flex h-7 items-center justify-between rounded-md px-2 ring-1 ring-border ring-inset"
-            style={{ background: `var(--${fill})`, color: ink ? `var(--${ink})` : undefined }}
-            title={`--${fill}: ${v[`--${fill}`] ?? ""}${ink ? `\n--${ink}: ${v[`--${ink}`] ?? ""}` : ""}`}
-          >
-            {ink && <span className="font-medium">Aa</span>}
-            <span className="ml-auto truncate font-mono text-badge opacity-70" style={{ color: ink ? undefined : "var(--foreground)" }}>
-              {(v[`--${fill}`] ?? "").replace(/^var\(--(.*)\)$/, "→ $1")}
-            </span>
-          </div>
+      {COLUMNS.map((c) => (
+        <div key={c.id} className={`flex border-l ${first ? "border-t" : ""}`}>
+          {(["light", "dark"] as const).map((mode) => {
+            const made = derive(c.theme, mode) as Record<string, Parameters<typeof told>[0]>
+
+            return (
+              // The preset in this mode, set on the cell, so var() and the kit's classes inside resolve to it.
+              <div key={mode} data-theme={c.id} className={`${mode} flex-1 bg-background p-1`} style={varsOf(c.theme) as CSSProperties}>
+                <div
+                  className="flex h-7 items-center justify-center rounded-md ring-1 ring-border ring-inset"
+                  style={{ background: `var(--${fill})`, color: ink ? `var(--${ink})` : undefined }}
+                  title={`--${fill}: ${made[fill] ? told(made[fill]) : ""}${ink && made[ink] ? `\n--${ink}: ${told(made[ink])}` : ""}`}
+                >
+                  {ink && <span className="font-medium">Aa</span>}
+                </div>
+              </div>
+            )
+          })}
         </div>
       ))}
     </>

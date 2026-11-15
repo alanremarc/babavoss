@@ -3,6 +3,7 @@
 // cache (live.ts): a page is shown once its first reads are known, and keeps what it shows while a new path is read.
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { Args, View } from "../../core/index.ts"
+import type { Theme } from "../../kit/theme.ts"
 import { call as callDoor, read as readDoor, type Answer } from "./client.ts"
 import { cachesBy, liveCache, shownOf, type Entry, type LiveCache } from "./live.ts"
 
@@ -23,17 +24,18 @@ export type TabContext = {
  * What a page may ask of the shell beyond its tab, used by convention and never needed: `open` shows a tab of a surface,
  * the one open or else a new one; `go` goes to a place by its whole path, as `/queue/issues/3`; `toast` raises a toast from
  * the tab, which clicking returns to, kept nowhere and not told to the agent, since what happened to both sides is a notice
- * of the surface's `update`; `appearance` is the person's mode and theme, for a library that must be told them.
+ * of the surface's `update`; `appearance` is the person's mode and theme, for a library that must be told them: `theme`
+ * the preset's id or dynamic, `numbers` the three it is derived from, which change as a dynamic theme is changed.
  */
 export type ShellServices = {
   open: (surface: string) => Promise<void>
   go: (at: string) => void
   toast: (address: string, text: string, at?: string) => void
-  appearance: { mode: "light" | "dark"; theme: string }
+  appearance: { mode: "light" | "dark"; theme: string; numbers: Theme }
 }
 
 /** The shell's services as the shell gives them; a page drawn without the shell has them do nothing. */
-export const ServicesContext = createContext<ShellServices>({ open: async () => {}, go: () => {}, toast: () => {}, appearance: { mode: "light", theme: "neutral" } })
+export const ServicesContext = createContext<ShellServices>({ open: async () => {}, go: () => {}, toast: () => {}, appearance: { mode: "light", theme: "neutral", numbers: { hue: 0, tint: 0, vivid: 0 } } })
 
 /** The tab's context as the shell holds it: with its cache, which useLive reads. */
 const Context = createContext<(TabContext & { cache: LiveCache }) | null>(null)
