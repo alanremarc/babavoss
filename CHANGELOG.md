@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.41.0
+
+- The notifications are an activity log: one line an entry, who as a small mark, what, its place as a quiet token, how long ago, grouped Now, Earlier today, Yesterday, then by date, with what needs the person pinned above under Needs you. Hierarchy is carried by type and colour alone: what was new when the log opened stays in the foreground with a dot until it closes. It opens on Notices; All adds a line for every call; Mark all seen clears what is new. The bell carries one dot. While the log is open no toast is shown: a toast on screen leaves into it and a notice heard comes in as its newest line. Toasts are one line. Nothing to adapt.
+- Kit: `ToastItem.title` is optional, and a toast takes `mark`; `Toasts` takes `away` to send every toast away at once. The `Sheet` sets the frame's body size on its content. Nothing to adapt.
+
 ## 0.40.2
 
 - A tab's menu's search also finds an entry by its way in the menu: "go" finds every place, Go being where they are listed, and a word of where an action is offered finds it. What meets the query by its label comes first, then by its way, then by its path or description; among equals what waits on the person. A place found says Go beside it. Nothing to adapt.
