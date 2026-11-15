@@ -1,9 +1,22 @@
 // What the present costs an agent, measured: a fixed scenario on a queue of twelve issues, replayed through the formatter,
-// and the lines and characters each step injects. Run with `bun spec/support/measure.ts`; add `--print` for the texts.
+// and the lines and characters each step injects; and a turn through a real runtime's door, as the hooks and the word
+// see it, while the person and a surface's command act beside the agent. Run with `bun spec/support/measure.ts`; add
+// `--print` for the texts.
 // Index-keyed and flattened, as before identity-keyed rows and a heading per tab, the same scenario took 34 lines and
 // 2044 characters whole, 59 lines and 4201 characters over its steps, and 38 lines and 3124 characters told at once.
+// The turn, before notices were split from the present: 31 lines and 1057 characters during the work, 18 and 663 in the
+// word's answers, 13 and 394 after tool calls, and nothing with the person's next message.
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { action, defineRoot, surface, view as routes, type Update } from "../../framework/core/index.ts"
 import { handle, type Json } from "../../framework/core/surface/view.ts"
 import { diff, tell, whole } from "../../framework/core/present/present.ts"
+import { startRuntime } from "../../framework/core/runtime/runtime.ts"
+import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { readJsonFile } from "../../framework/core/state/json-file.ts"
+import { shell } from "../../framework/shell/src/surface.ts"
+import { TELLS } from "../../framework/core/hook.ts"
 
 const COMMAND = ".babavoss/bin/baba"
 const HOW =
@@ -160,6 +173,198 @@ export const now: Formatter = {
     tell(diff(before, now, { command: COMMAND, path }), () => (path === "/" ? (who ? `changed by ${BY[who]}:` : "changed:") : undefined)).join("\n"),
 }
 
+/** The turn's surfaces: a list of tasks whose `check` a command runs, reporting twice; and notes the person keeps. */
+type Task = { n: number; title: string; status: "todo" | "doing" | "done"; checks?: string }
+type Tasks = { tasks: Task[]; next: number }
+type Checked = { kind: "checked"; n: number; result: "running" | "passed" }
+
+const gates: (() => void)[] = []
+const tasked = (m: Tasks, n: number, change: (t: Task) => Task): Tasks => ({ ...m, tasks: m.tasks.map((t) => (t.n === n ? change(t) : t)) })
+const add = action({
+  name: "add",
+  description: "Add a task",
+  subject: {},
+  inputs: { title: "string" },
+  update: (m: Tasks, { title }): Update<Tasks, never> => ({ model: { tasks: [...m.tasks, { n: m.next, title, status: "todo" }], next: m.next + 1 } }),
+})
+const begin = action({
+  name: "begin",
+  description: "Begin a task",
+  subject: { n: "number" },
+  inputs: {},
+  update: (m: Tasks, { n }): Update<Tasks, { n: number }> => ({ model: tasked(m, n, (t) => ({ ...t, status: "doing" })), commands: [{ n }] }),
+})
+const finish = action({
+  name: "finish",
+  description: "Finish a task",
+  subject: { n: "number" },
+  inputs: {},
+  update: (m: Tasks, { n }): Update<Tasks, never> => ({ model: tasked(m, n, (t) => ({ ...t, status: "done" })), notices: [{ text: `Task ${n} is done`, at: `/tasks/${n}` }] }),
+})
+const rename = action({
+  name: "rename",
+  description: "Rename a task",
+  subject: { n: "number" },
+  inputs: { title: "string" },
+  update: (m: Tasks, { n, title }): Update<Tasks, never> => ({ model: tasked(m, n, (t) => ({ ...t, title })) }),
+})
+const taskViews = routes<Tasks, { n: number }>([add, begin, finish, rename], {
+  "/": (m) => ({
+    title: "Tasks",
+    how: "Add what the person asks for, begin one at a time; checks run by themselves; finish a task only once its checks passed.",
+    tasks: m.tasks.map(({ n, title, status, checks }) => ({ at: `/tasks/${n}`, n, title, status, ...(checks && { checks }) })),
+    ...(m.tasks.some((t) => t.checks === "passed" && t.status === "doing") && { attention: { who: "agent", why: "to finish what passed its checks" } }),
+    add: add.bind({}),
+  }),
+  "/tasks/:n": (m, { n }) => {
+    const t = m.tasks.find((t) => t.n === Number(n))
+
+    return (
+      t && {
+        ...t,
+        ...(t.status === "todo" && { begin: begin.bind({ n: t.n }) }),
+        ...(t.status === "doing" && { finish: finish.bind({ n: t.n }) }),
+        rename: rename.bind({ n: t.n }),
+      }
+    )
+  },
+})
+const tasks = surface<Tasks, Checked | { kind: "none" }, { n: number }>({
+  description: "Track tasks. Use when work is asked for.",
+  init: () => ({ tasks: [], next: 1 }),
+  update: (m, msg) =>
+    msg.kind === "call"
+      ? taskViews.update(m, msg)
+      : msg.kind === "checked"
+        ? {
+            model: tasked(m, msg.n, (t) => ({ ...t, checks: msg.result })),
+            ...(msg.result === "passed" && { notices: [{ text: `Task ${msg.n}'s checks passed`, at: `/tasks/${msg.n}` }] }),
+          }
+        : { model: m },
+  view: taskViews.view,
+  // Each report waits for the scenario to let it through.
+  run: async ({ n }, send) => {
+    for (const result of ["running", "passed"] as const) {
+      await new Promise<void>((go) => gates.push(go))
+      send({ kind: "checked", n, result })
+    }
+  },
+  failed: () => ({ kind: "none" }),
+})
+
+type Notes = { notes: { n: number; text: string }[] }
+
+const write = action({
+  name: "write",
+  description: "Write a note",
+  subject: {},
+  inputs: { text: "string" },
+  update: (m: Notes, { text }): Update<Notes, never> => ({ model: { notes: [...m.notes, { n: m.notes.length + 1, text }] } }),
+})
+const pin = action({
+  name: "pin",
+  description: "Pin a note for the agent",
+  subject: {},
+  inputs: { text: "string" },
+  update: (m: Notes, { text }): Update<Notes, never> => ({ model: { notes: [...m.notes, { n: m.notes.length + 1, text }] }, notices: [`Pinned: ${text}`] }),
+})
+const noteViews = routes<Notes, never>([write, pin], { "/": (m) => ({ title: "Notes", notes: m.notes, write: write.bind({}), pin: pin.bind({}) }) })
+const notes = surface<Notes, { kind: "none" }, never>({
+  description: "Keep notes. Use when something is to be remembered.",
+  init: () => ({ notes: [] }),
+  update: (m, msg) => (msg.kind === "call" ? noteViews.update(m, msg) : { model: m }),
+  view: noteViews.view,
+  run: async () => {},
+  failed: () => ({ kind: "none" }),
+})
+
+/** What each hook asks the runtime for. */
+export type Hooks = { PostToolUse: string; UserPromptSubmit: string }
+
+/**
+ * A turn: the root opened at the session's start with both tabs and two tasks, and the person's message; then the agent's
+ * eight tool calls, four of them the word's and four of other tools, each followed by its hook, while the person acts five
+ * times on the two tabs and a task's checks report twice; then the person's next message. Every text the agent is given,
+ * by the word or a hook.
+ */
+export async function midTurn(hooks: Hooks) {
+  const dir = mkdtempSync(join(tmpdir(), "measure-"))
+
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1" }))
+
+  const root = defineRoot({ name: "baba", ui: dir, surface: shell({ tasks, notes }, dir) })
+  const runtime = await startRuntime(root, ["--session", "S"], {
+    entry: join(dir, "scripts/open.ts"),
+    env: { BABAVOSS_HOME: dir },
+    idleMs: 60_000,
+    watch: [],
+    log: () => {},
+    exit: () => {},
+  })
+
+  if (!runtime) throw new Error("not started")
+
+  const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "baba")))!
+  const send = async (path: string, call?: unknown, person = false, program = false) =>
+    (
+      await fetch(`http://127.0.0.1:${runtime.port}${path}`, {
+        method: call ? "POST" : "GET",
+        headers: {
+          accept: person || program ? "application/json" : "text/plain",
+          [SERVICE_HEADER]: endpoint.token,
+          [ACTOR_HEADER]: person ? "person" : "agent:S",
+        },
+        ...(call ? { body: JSON.stringify(call) } : {}),
+      })
+    ).text()
+  const rows: { name: string; text: string }[] = []
+  const agent = async (name: string, path: string, handle: string, args: Record<string, string> = {}) => {
+    rows.push({ name: `call: ${name}`, text: await send(path, { handle, args }) })
+    rows.push({ name: "  PostToolUse", text: hookText(await send(hooks.PostToolUse)) })
+  }
+  // A tool call of another kind, an edit or a test run: the root speaks only through its hook.
+  const other = async (name: string) => rows.push({ name: `tool: ${name}`, text: "" }, { name: "  PostToolUse", text: hookText(await send(hooks.PostToolUse)) })
+  const person = async (path: string, handle: string, args: Json = {}) => void (await send(path, { handle, args }, true))
+  const report = async () => {
+    gates.shift()!()
+    await Bun.sleep(30)
+  }
+
+  // As a session resumed: the tabs were opened and the tasks added before, as by a program, which is told nothing.
+  await send("/", { handle: "open", args: { surface: "tasks" } }, false, true)
+  await send("/", { handle: "open", args: { surface: "notes" } }, false, true)
+  await send("/tabs/1", { handle: "add", args: { title: "Write the parser" } }, false, true)
+  await send("/tabs/1", { handle: "add", args: { title: "Wire the parser in" } }, false, true)
+  rows.push({ name: "session start", text: await send("/?open") })
+  rows.push({ name: "UserPromptSubmit", text: hookText(await send(hooks.UserPromptSubmit)) })
+
+  await agent("begin task 1", "/tabs/1/tasks/1", "begin")
+  await person("/tabs/1/tasks/2", "rename", { n: 2, title: "Wire the parser into the reader" })
+  await other("edit parser.ts")
+  await report()
+  await agent("add task 3", "/tabs/1", "add", { title: "Document the grammar" })
+  await person("/tabs/2", "write", { text: "the grammar is in docs/grammar.md" })
+  await person("/tabs/2", "write", { text: "keep it LL(1)" })
+  await other("edit parser.ts")
+  await report()
+  await agent("finish task 1", "/tabs/1/tasks/1", "finish")
+  await person("/tabs/2", "pin", { text: "stop after the parser" })
+  await other("run the tests")
+  await person("/tabs/1/tasks/3", "rename", { n: 3, title: "Document the grammar, briefly" })
+  await agent("add task 4", "/tabs/1", "add", { title: "Benchmark the parser" })
+  await other("edit reader.ts")
+  rows.push({ name: "UserPromptSubmit", text: hookText(await send(hooks.UserPromptSubmit)) })
+
+  for (const go of gates.splice(0)) go()
+  await runtime.close()
+  rmSync(dir, { recursive: true, force: true })
+
+  return rows.map(({ name, text }) => ({ name, lines: text ? text.split("\n").length : 0, chars: text.length, text }))
+}
+
+/** What a hook injects of a wait's answer: nothing where nothing changed. */
+const hookText = (answer: string) => (answer.trim() === "nothing changed" ? "" : answer.trim())
+
 if (import.meta.main) {
   const print = process.argv.includes("--print")
   const report = (label: string, format: Formatter) => {
@@ -179,4 +384,17 @@ if (import.meta.main) {
   }
 
   report("the present", now)
+
+  const turn = await midTurn({ PostToolUse: TELLS.PostToolUse!.ask, UserPromptSubmit: TELLS.UserPromptSubmit!.ask })
+
+  console.log("\na turn, as injected")
+  for (const row of turn) {
+    console.log(`${String(row.lines).padStart(5)} lines ${String(row.chars).padStart(6)} chars  ${row.name}`)
+    if (print && row.text) console.log(row.text.replace(/^/gm, "      | "))
+  }
+  for (const kind of ["call:", "  PostToolUse", "UserPromptSubmit"]) {
+    const of = turn.slice(2).filter((r) => r.name.startsWith(kind))
+
+    console.log(`${String(of.reduce((s, r) => s + r.lines, 0)).padStart(5)} lines ${String(of.reduce((s, r) => s + r.chars, 0)).padStart(6)} chars  ${kind.trim()}, summed over the turn`)
+  }
 }
