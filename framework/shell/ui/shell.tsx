@@ -11,6 +11,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { call, changes, read } from "./client.ts"
+import { Frame, TabCommands, useFrames } from "./frame.tsx"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
@@ -55,6 +56,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   const [at, setAt] = useState(parse)
   const [routes, setRoutes] = useState<Record<string, string>>(() => (at.key.startsWith("/") ? { [at.key]: at.route } : {}))
   const [listeners] = useState(() => new Set<() => void>())
+  // Every tab's frame, and the commands of the one looked at, which the palette offers first.
+  const frames = useFrames()
   const up = useRef(false)
   const stream = useMemo(
     () => ({
@@ -206,6 +209,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     launch: (s: SurfaceEntry) => void open(s.open),
     select: (at: string) => go(at),
     settings: () => go("settings"),
+    lead: (done: () => void) => <TabCommands frames={frames} at={active} done={done} />,
   }
   const away = (at: string) => go(successor(strip, at) ?? "new")
 
@@ -275,7 +279,9 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
                         active={active === row.at}
                         navigate={(route) => go(row.at, route)}
                       >
-                        <Page />
+                        <Frame frames={frames} title={row.title} name={row.surface}>
+                          <Page />
+                        </Frame>
                       </TabProvider>
                     </TabError>
                   ) : (

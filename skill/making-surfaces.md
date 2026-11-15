@@ -31,6 +31,15 @@ The agent does the work through handles. What only the person may decide is an a
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`; read its code in `framework/` there rather than guessing its interfaces.
 
+## The frame
+
+The shell draws one bar above every tab, the same for every surface: the title, the surface's `title` fact at `/` or its name; the page's menus; an Actions menu; and at the right what waits on the person. `ui/index.tsx` returns its content alone, with no bar of its own.
+
+- The actions are there by themselves: every handle the view offers at the tab's route and at `/`, by its name, its description on hover, and with a prompt for its inputs. An ask stands out at the right of the bar. So the person can do from the frame what the agent can do from the command; name and describe handles for both.
+- The page's own commands, presentation such as a lens, a pane or a fold, are menus: `useMenus([{ id: "view", label: "View", items }])` from the kit. Every entry is in the palette too.
+- ⌘K or Ctrl+K opens the palette over all of it: the tab's asks, actions and menus first, then the surfaces to open and the tabs to switch to.
+- A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes; its menus join the frame's.
+
 ## Looks
 
 A page follows the person's palette, light or dark mode, by the shell's theming tokens, so it never needs to know which is chosen.

@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, Composer, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain, ToggleGroup, ToggleGroupItem } from "babavoss/kit/index.ts"
+import { Button, Composer, Empty, EmptyDescription, EmptyHeader, EmptyTitle, ToggleGroup, ToggleGroupItem, useMenus } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "note"
@@ -194,6 +194,24 @@ export default function Lab() {
   const injections = entries.filter((e) => e.kind === "hook" || e.kind === "word").map((e) => e.i)
   const allOpen = injections.length > 0 && injections.every((i) => open.has(i))
 
+  // The page's own commands, in the frame's View menu and the palette: how the timeline is shown, and the next run's model.
+  useMenus([
+    {
+      id: "view",
+      label: "View",
+      items: [
+        {
+          kind: "action",
+          id: "injections",
+          label: allOpen ? "Fold injections" : "Open injections",
+          disabled: !injections.length,
+          run: () => setOpen(allOpen ? new Set() : new Set([...open, ...injections])),
+        },
+        { kind: "choice", id: "model", label: "Model", value: model, options: MODELS.map((m) => ({ id: m, label: m })), set: setModel },
+      ],
+    },
+  ])
+
   // The timeline follows its end while the person is at it, and stays where they scrolled to otherwise.
   useLayoutEffect(() => {
     const el = scroller.current
@@ -202,7 +220,7 @@ export default function Lab() {
   }, [entries.length, open])
 
   return (
-    <Plain label="Lab">
+    <>
       <div className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col border-r" aria-label="Timeline">
           <header className="flex h-9 shrink-0 items-center gap-2 border-b px-3 text-xs">
@@ -320,7 +338,7 @@ export default function Lab() {
           )}
         </aside>
       </div>
-    </Plain>
+    </>
   )
 }
 

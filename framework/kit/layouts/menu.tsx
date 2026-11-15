@@ -1,5 +1,7 @@
-// The header every layout shares: a menu bar, the util's command surface. Menus are data; every action a util offers is
-// in one, even where a button also does it. The same items draw a context menu, so a right click offers what a menu does.
+// The menus every page shares: the util's command surface. Menus are data; every action a util offers is in one, even
+// where a button also does it. The same items draw a context menu, so a right click offers what a menu does. Where a
+// host frames the page, as the shell frames each tab, the menus go to it and it draws them; else a menu bar here does.
+import { createContext, useContext, useId, useLayoutEffect } from "react"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { ContextMenu as Context, Menubar as Menu } from "radix-ui"
 
@@ -8,7 +10,7 @@ import { ContextMenu as Context, Menubar as Menu } from "radix-ui"
  * separator; or a submenu. `keys` names the shortcut an action will have; shown, not yet bound.
  */
 export type MenuItem =
-  | { kind: "action"; id: string; label: string; run: () => void; disabled?: boolean; keys?: string }
+  | { kind: "action"; id: string; label: string; run: () => void; disabled?: boolean; keys?: string; hint?: string }
   | { kind: "check"; id: string; label: string; checked: boolean; set: (checked: boolean) => void; disabled?: boolean; keys?: string }
   | { kind: "choice"; id: string; label: string; value: string; options: { id: string; label: string }[]; set: (value: string) => void; disabled?: boolean }
   | { kind: "separator"; id: string }
@@ -29,7 +31,7 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
     switch (item.kind) {
       case "action":
         return (
-          <M.Item key={item.id} disabled={item.disabled} className={menuItem} onSelect={item.run}>
+          <M.Item key={item.id} disabled={item.disabled} className={menuItem} onSelect={item.run} title={item.hint}>
             {item.label}
             <Keys keys={item.keys} />
           </M.Item>
@@ -89,30 +91,58 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
 /** The context menu's kit, which shares the menu bar's parts. */
 export const ContextKit = Context as unknown as typeof Menu
 
+/** What frames a page: it is given each part's menus, under the part's own id, and draws them; undefined takes them back. */
+export type MenuHost = { label?: string; menus: Menu[] }
+export const MenuHostContext = createContext<((id: string, given: MenuHost | undefined) => void) | null>(null)
+
+/**
+ * Give the frame a page is in its menus, and a label that names the page where nothing else does; without a frame,
+ * nothing happens. Returns whether a frame took them.
+ */
+export function useMenus(menus: Menu[], label?: string): boolean {
+  const host = useContext(MenuHostContext)
+  const id = useId()
+
+  // Each render's menus, so a menu's actions are never stale; taken back when the page goes.
+  useLayoutEffect(() => host?.(id, { label, menus }))
+  useLayoutEffect(() => () => host?.(id, undefined), [host, id])
+
+  return host !== null
+}
+
+/** The menus as a row of triggers, each dropping its items: what a menu bar and a frame draw. */
+export function MenuTriggers({ menus }: { menus: Menu[] }) {
+  return (
+    <Menu.Root aria-label="Menu" className="flex min-w-0 items-center gap-0.5">
+      {menus.map((menu) => (
+        <Menu.Menu key={menu.id}>
+          <Menu.Trigger
+            disabled={menu.disabled}
+            className={`flex h-row items-center rounded-md px-2 outline-none select-none data-highlighted:bg-foreground/8 data-[state=open]:bg-foreground/8 data-disabled:opacity-40 ${menu.id === "scope" ? "font-medium" : ""}`}
+          >
+            {menu.label}
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Content align="start" sideOffset={4} className={menuContent}>
+              <MenuItems items={menu.items} />
+            </Menu.Content>
+          </Menu.Portal>
+        </Menu.Menu>
+      ))}
+    </Menu.Root>
+  )
+}
+
 /**
  * The layout's top row, the menu bar: the scope's menu first, named by the open one, then the util's own, then View,
- * the layout's, last. Named by the util.
+ * the layout's, last. Named by the util. Inside a frame it draws nothing: its menus are the frame's.
  */
 export function MenuBar({ label, menus }: { label: string; menus: Menu[] }) {
+  if (useMenus(menus, label)) return null
+
   return (
     <header aria-label={label} className="flex h-menubar shrink-0 items-center gap-2 border-b bg-sidebar px-1">
-      <Menu.Root aria-label="Menu" className="flex min-w-0 items-center gap-0.5">
-        {menus.map((menu) => (
-          <Menu.Menu key={menu.id}>
-            <Menu.Trigger
-              disabled={menu.disabled}
-              className={`flex h-row items-center rounded-md px-2 outline-none select-none data-highlighted:bg-foreground/8 data-[state=open]:bg-foreground/8 data-disabled:opacity-40 ${menu.id === "scope" ? "font-medium" : ""}`}
-            >
-              {menu.label}
-            </Menu.Trigger>
-            <Menu.Portal>
-              <Menu.Content align="start" sideOffset={4} className={menuContent}>
-                <MenuItems items={menu.items} />
-              </Menu.Content>
-            </Menu.Portal>
-          </Menu.Menu>
-        ))}
-      </Menu.Root>
+      <MenuTriggers menus={menus} />
     </header>
   )
 }

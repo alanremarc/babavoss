@@ -1,8 +1,9 @@
 // The surface's page, shown in its tab: what the surface says, and the person's decision. Anything else the person wants
-// changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's.
+// changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's. The shell frames it: the
+// title, the menus and the surface's actions are in the bar above, so the page is its content alone.
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, Plain } from "babavoss/kit/index.ts"
+import { Button } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Root = { greeting: string; proposed?: string; accept?: Handle; decline?: Handle }
@@ -18,31 +19,29 @@ export default function Greeting() {
   }
 
   return (
-    <Plain label="Greeting">
-      <div className="mx-auto flex w-full max-w-xl flex-col gap-6 overflow-auto p-6">
-        <h1 className="text-3xl font-medium">{view?.greeting}</h1>
-        {view?.proposed !== undefined ? (
-          <section className="flex flex-col gap-3 rounded-lg border p-4" aria-label="Proposed greeting">
-            <p className="text-muted-foreground">The agent proposes</p>
-            <p className="text-xl">{view.proposed}</p>
-            <div className="flex gap-2">
-              {view.accept && <Button onClick={() => void decide(view.accept!)}>Accept</Button>}
-              {view.decline && (
-                <Button variant="outline" onClick={() => void decide(view.decline!)}>
-                  Decline
-                </Button>
-              )}
-            </div>
-          </section>
-        ) : (
-          <p className="text-muted-foreground">Ask the agent for another greeting. What it proposes shows here, for you to accept or decline.</p>
-        )}
-        {(refused || error) && (
-          <p role="alert" className="text-destructive">
-            {refused || error}
-          </p>
-        )}
-      </div>
-    </Plain>
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 overflow-auto p-6">
+      <h1 className="text-3xl font-medium">{view?.greeting}</h1>
+      {view?.proposed !== undefined ? (
+        <section className="flex flex-col gap-3 rounded-lg border p-4" aria-label="Proposed greeting">
+          <p className="text-muted-foreground">The agent proposes</p>
+          <p className="text-xl">{view.proposed}</p>
+          <div className="flex gap-2">
+            {view.accept && <Button onClick={() => void decide(view.accept!)}>Accept</Button>}
+            {view.decline && (
+              <Button variant="outline" onClick={() => void decide(view.decline!)}>
+                Decline
+              </Button>
+            )}
+          </div>
+        </section>
+      ) : (
+        <p className="text-muted-foreground">Ask the agent for another greeting. What it proposes shows here, for you to accept or decline.</p>
+      )}
+      {(refused || error) && (
+        <p role="alert" className="text-destructive">
+          {refused || error}
+        </p>
+      )}
+    </div>
   )
 }
