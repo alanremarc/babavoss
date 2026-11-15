@@ -1,14 +1,16 @@
-// The notifications: one button at the strip's right and its panel, the same for every surface. Each notice heard while
+// The notifications: one button at the strip's right and the drawer it pulls in from the right edge, under the strip and
+// over the content, the same for every surface; Escape, the button or a press outside it closes it. Each notice heard while
 // the page is open is a toast, once: the surface, what happened, and who did it where not the person; clicking it goes
 // where it happened and counts it seen. A toast that passes goes into the button, which counts what the person has not
-// seen: the notices others caused since they last opened the panel, less those they looked at by their toast. The count
+// seen: the notices others caused since they last opened the drawer, less those they looked at by their toast. The count
 // and the mark are the shell's, at /activity/notices, so a refresh or a page opened later counts from the log, and no
-// old toast is shown again. The panel opens on the notices, what the surfaces chose to say; a switch shows all activity,
+// old toast is shown again; the shell reads the notices once, for the tabs they dot too. The drawer opens on the notices,
+// what the surfaces chose to say; a switch shows all activity,
 // the same with a line for every call. It groups by how long ago, names who did each, and goes where one happened.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "cn"
 import { BellIcon } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "../../kit/components/popover"
+import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
 import { ToggleGroup, ToggleGroupItem } from "../../kit/components/toggle-group"
 import { call, read, type Notice } from "./client.ts"
@@ -22,7 +24,7 @@ type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number
 export type Group = { label: string; rows: Row[] }
 type Stream<T = void> = { subscribe: (fn: (value: T) => void) => () => void }
 
-const NOTICES = "/activity/notices"
+export const NOTICES = "/activity/notices"
 const ALL = "/activity"
 const MINUTE = 60_000
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -74,6 +76,12 @@ export const inView = (rows: Row[], shown: Shown, surface = "all", who: Who | "a
 /** The count the button shows: what the shell counts unseen, less the toasts still showing, which count once they go into it. */
 export const badgeOf = (unseen: number, showing: number, open: boolean): number => (open ? 0 : Math.max(0, unseen - showing))
 
+/**
+ * The notices the person has not seen, of the newest kept: the newest `unseen` that others caused. The shell counts them
+ * from its mark, which may skip one looked at alone; these are the newest of that count, near enough to dot where they are.
+ */
+export const unseenRows = (rows: Row[], unseen: number): Row[] => rows.filter((r) => r.kind !== "call" && r.who !== "person").slice(0, Math.max(0, unseen))
+
 /** The entry a notice heard as a toast is, the newest that reads the same; undefined where none does. */
 export const entryOf = (rows: Row[], notice: Notice): Row | undefined =>
   rows.find((r) => r.what === notice.text && (notice.from === undefined || r.surface === notice.from) && (notice.at === undefined || r.at === notice.at))
@@ -81,7 +89,7 @@ export const entryOf = (rows: Row[], notice: Notice): Row | undefined =>
 const clock = (when: string) => new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
 /** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking. */
-function useFeed(path: string, changes: Stream, live: boolean) {
+export function useFeed(path: string, changes: Stream, live: boolean) {
   const [rows, setRows] = useState<Row[]>([])
   const [earlier, setEarlier] = useState<string>()
   const [unseen, setUnseen] = useState(0)
@@ -133,11 +141,26 @@ function useFeed(path: string, changes: Stream, live: boolean) {
   return { rows, earlier, unseen, more, load }
 }
 
+/** The notices as the shell reads them once, for the drawer and for the tabs they dot. */
+export type Feed = ReturnType<typeof useFeed>
+
 /**
- * The button, its panel and the toasts. `changes` tells of every change, `notices` of each notice as it is heard; `go`
- * goes to a place, a tab and the route within it; `title` names a toast whose notice names no surface.
+ * The button, its drawer and the toasts. `changes` tells of every change, `notices` of each notice as it is heard, `told`
+ * is the feed of notices; `go` goes to a place, a tab and the route within it; `title` names a toast whose notice names no surface.
  */
-export function Notifications({ changes, notices, go, title }: { changes: Stream; notices: Stream<Notice>; go: (at: string) => void; title: string }) {
+export function Notifications({
+  changes,
+  notices,
+  told,
+  go,
+  title,
+}: {
+  changes: Stream
+  notices: Stream<Notice>
+  told: Feed
+  go: (at: string) => void
+  title: string
+}) {
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState<Shown>("notifications")
   const [surface, setSurface] = useState("all")
@@ -146,12 +169,11 @@ export function Notifications({ changes, notices, go, title }: { changes: Stream
   // Toasts clicked through, until the shell has taken them as seen.
   const [looking, setLooking] = useState(0)
   const button = useRef<HTMLButtonElement>(null)
-  const told = useFeed(NOTICES, changes, true)
   const all = useFeed(ALL, changes, open && shown === "all")
   const marked = useRef(0)
   const newest = told.rows[0]?.n ?? 0
 
-  // Opening the panel sees every notice in it, and so does one heard while it is open.
+  // Opening the drawer sees every notice in it, and so does one heard while it is open.
   useEffect(() => {
     if (!open || newest <= marked.current) return
     marked.current = newest
@@ -203,30 +225,40 @@ export function Notifications({ changes, notices, go, title }: { changes: Stream
   return (
     <>
       <Toasts toasts={toasts} into={button} dismiss={(id) => setToasts((all) => all.filter((t) => t.id !== id))} className="top-13 right-2" from="top" />
-      <Popover
-        open={open}
-        onOpenChange={(next) => {
-          if (next) setShown("notifications")
-          setOpen(next)
+      <button
+        ref={button}
+        type="button"
+        aria-label={badge ? `Notifications, ${badge} new` : "Notifications"}
+        aria-expanded={open}
+        title="Notifications"
+        data-state={open ? "open" : "closed"}
+        data-notifications
+        className="relative grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
+        onClick={() => {
+          if (!open) setShown("notifications")
+          setOpen(!open)
         }}
       >
-        <PopoverTrigger
-          ref={button}
-          aria-label={badge ? `Notifications, ${badge} new` : "Notifications"}
-          title="Notifications"
-          className="relative grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
+        <BellIcon className="size-4" aria-hidden />
+        {badge > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-0.5 text-badge leading-none font-medium text-primary-foreground tabular-nums">
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          top="top-11"
+          aria-label="Notifications"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          // The button toggles the drawer itself; a press on it is no press outside.
+          onInteractOutside={(e) => {
+            if (button.current?.contains(e.target as Node)) e.preventDefault()
+          }}
         >
-          <BellIcon className="size-4" aria-hidden />
-          {badge > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-0.5 text-badge leading-none font-medium text-primary-foreground tabular-nums">
-              {badge > 9 ? "9+" : badge}
-            </span>
-          )}
-        </PopoverTrigger>
-        <PopoverContent side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label="Notifications" className="w-[min(24rem,calc(100vw-16px))] gap-0 p-0">
           <div className="flex flex-col gap-1.5 border-b px-2.5 pt-2 pb-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-large font-medium">{shown === "all" ? "All activity" : "Notifications"}</span>
+              <SheetTitle>{shown === "all" ? "All activity" : "Notifications"}</SheetTitle>
               <ToggleGroup type="single" size="sm" spacing={0} variant="outline" value={shown} onValueChange={(v) => v && setShown(v as Shown)} aria-label="Show">
                 <ToggleGroupItem value="notifications">Notifications</ToggleGroupItem>
                 <ToggleGroupItem value="all">All activity</ToggleGroupItem>
@@ -253,7 +285,7 @@ export function Notifications({ changes, notices, go, title }: { changes: Stream
               </div>
             )}
           </div>
-          <ol className="max-h-[min(28rem,60vh)] overflow-y-auto overscroll-contain py-1" aria-label="Entries">
+          <ol className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1" aria-label="Entries">
             {!groups.length && (
               <li className="px-2.5 py-6 text-center text-muted-foreground">
                 {feed.rows.length ? "Nothing matches" : shown === "all" ? "Nothing has happened yet" : "No notifications yet"}
@@ -310,8 +342,8 @@ export function Notifications({ changes, notices, go, title }: { changes: Stream
               </li>
             )}
           </ol>
-        </PopoverContent>
-      </Popover>
+        </SheetContent>
+      </Sheet>
     </>
   )
 }

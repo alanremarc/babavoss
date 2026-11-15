@@ -1,7 +1,7 @@
-// What a tab's frame offers, worked out without a page, from the surface's views alone: the actions a view offers the
-// person and which are asks, ordered by the view's `menu` fact; the places a view names under `at` and what each is
-// called; the tree below a tab as Help searches it; what an input form's fields make of the inputs; and every menu
-// entry as one command of the palette.
+// What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers and
+// which are asks, ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
+// below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
+// input form's fields make of the inputs; and every menu entry as one command of the palette.
 import type { Menu, MenuItem } from "../../kit/layouts/menu.tsx"
 import { handles, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
 
@@ -166,14 +166,14 @@ export function argsOf(open: Schema, fields: Record<string, string | boolean | u
   return args
 }
 
-/** What Help searches: an action offered at a place, or a place, with what it is called and the place it is in. */
+/** What the tab menu's search finds: an action offered at a place, or a place, with what it is called and the place it is in. */
 export type Found = { kind: "action"; action: Offered; label: string; where: string } | { kind: "place"; at: string; label: string }
 
-/** How far Help reads below a tab: views read in all, and places deep from `/`. */
+/** How far the search reads below a tab: views read in all, and places deep from `/`. */
 export const HELP = { views: 60, depth: 4 }
 
 /**
- * The tree below a tab as Help searches it: breadth-first from `/` along the places each view names, reading at most
+ * The tree below a tab as its menu's search reads it: breadth-first from `/` along the places each view names, reading at most
  * `caps.views` views and none deeper than `caps.depth`. A place beyond the caps is still found, by its row; its actions are not.
  */
 export async function indexOf(read: (path: string) => Promise<View | undefined>, caps = HELP): Promise<Found[]> {
@@ -211,7 +211,7 @@ export async function indexOf(read: (path: string) => Promise<View | undefined>,
   return found
 }
 
-/** What Help finds for a query: places and actions whose words hold every word of it, the places first, at most `cap`. */
+/** What the search finds for a query: places and actions whose words hold every word of it, the places first, at most `cap`. */
 export function search(found: Found[], query: string, cap = 30): Found[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
 
@@ -224,4 +224,93 @@ export function search(found: Found[], query: string, cap = 30): Found[] {
   }
 
   return [...found.filter((f) => f.kind === "place" && hit(f)), ...found.filter((f) => f.kind === "action" && hit(f))].slice(0, cap)
+}
+
+/** Whether `path` is `place` or below it, within one tab. */
+export const under = (path: string, place: string): boolean => place === "/" || path === place || path.startsWith(`${place}/`)
+
+/**
+ * Where the tab's menu puts a dot on the way to what waits on the person elsewhere in the tab: `targets` are the paths
+ * of asks and of unseen notices, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
+ * is dotted where a target is at it or below; a way back up, where a target is below it and not below the route. What
+ * stands at the route or at `/` is in the menu's sections, dotted there, and needs no way; a notice about no place is `/`.
+ */
+export function dotted(targets: readonly string[], route: string, go: readonly { at: string; up?: boolean }[]): Set<string> {
+  const away = targets.filter((t) => t !== route && t !== "/")
+
+  return new Set(go.filter((g) => away.some((t) => (g.up ? under(t, g.at) && !under(t, route) : under(t, g.at)))).map((g) => g.at))
+}
+
+/** The unseen notices a tab is about, as paths within it: its own address, a notice about no place, as `/`. */
+export function noticesIn(address: string, notices: readonly { at: string | null }[]): string[] {
+  return notices.flatMap((n) => (n.at && (n.at === address || n.at.startsWith(`${address}/`)) ? [n.at.slice(address.length) || "/"] : []))
+}
+
+/** A tab's menu as its parts make it: what the shell's own controls for every tab are, after a line. */
+export type TabMenuParts = {
+  /** The surface's title, and the actions at `/` and its `menu` fact. */
+  surface: { label: string; actions: Offered[]; menu?: Json }
+  /** Where the tab is below `/`: the place's name, its actions and its `menu` fact. */
+  place?: { label: string; actions: Offered[]; menu?: Json }
+  /** Go's entries, the way back up first, each dotted where `dots` holds its path. */
+  go: { at: string; label: string; up?: boolean }[]
+  dots: ReadonlySet<string>
+  start: (action: Offered) => void
+  navigate: (at: string) => void
+  controls: MenuItem[]
+}
+
+/** More places than Go shows without a field to filter them. */
+export const MANY = 8
+
+/**
+ * The tab's menu, top to bottom: the surface's actions at `/` under its title; where the tab is below `/`, the place's
+ * actions under its name; Go, the places and the way back up, a submenu with a field where there are more than MANY;
+ * then the shell's own controls. Asks stand first in their group, marked, and so does the label over them; Go and the
+ * places in it carry a dot on the way to what waits elsewhere.
+ */
+export function tabMenu({ surface, place, go, dots, start, navigate, controls }: TabMenuParts): MenuItem[] {
+  const section = (id: string, s: { label: string; actions: Offered[]; menu?: Json }): MenuItem[] => {
+    const items = grouped(s.actions, s.menu, start)
+
+    return items.length ? [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items] : []
+  }
+  const ups = go.filter((g) => g.up)
+  const places = go.filter((g) => !g.up)
+  const entry = (g: TabMenuParts["go"][number]): MenuItem => ({
+    kind: "action",
+    id: `go ${g.at}`,
+    label: g.label,
+    hint: g.at,
+    run: () => navigate(g.at),
+    ...(dots.has(g.at) && { mark: true }),
+  })
+  const goItems: MenuItem[] = [...ups.map(entry), ...(ups.length && places.length ? [{ kind: "separator" as const, id: "places-edge" }] : []), ...places.map(entry)]
+  const parts: MenuItem[][] = [
+    section("surface", surface),
+    place ? section("place", place) : [],
+    goItems.length
+      ? [{ kind: "submenu" as const, id: "go", label: "Go", items: goItems, ...(places.length > MANY && { search: "Filter places" }), ...(go.some((g) => dots.has(g.at)) && { mark: true }) }]
+      : [],
+    controls,
+  ].filter((p) => p.length)
+
+  return parts.flatMap((p, n): MenuItem[] => [...(n ? [{ kind: "separator" as const, id: `part-${n}` }] : []), ...p])
+}
+
+/** What the search finds as entries of the tab's menu: a place goes there, an action starts, an ask marked. */
+export function foundItems(found: Found[], navigate: (at: string) => void, start: (action: Offered) => void): MenuItem[] {
+  return found.map((f) =>
+    f.kind === "place"
+      ? { kind: "action", id: `place ${f.at}`, label: f.label, hint: f.at, run: () => navigate(f.at) }
+      : {
+          kind: "action",
+          id: `action ${f.action.path} ${key(f.action.handle)}`,
+          label: f.label,
+          note: f.where,
+          hint: f.action.handle.description,
+          run: () => start(f.action),
+          ...(f.action.ask && { mark: true }),
+        }
+  )
 }

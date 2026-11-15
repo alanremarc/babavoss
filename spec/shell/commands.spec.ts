@@ -1,16 +1,33 @@
-// The frame's commands: which of a view's handles the person is offered as actions, which are asks, how they are named
-// and grouped by a view's menu fact; the places a view names and the tree Help searches; what a form's fields make of
-// their inputs, and every menu entry as a command of the palette.
+// What a tab offers: which of a view's handles the person is offered as actions, which are asks, how they are named and
+// grouped by a view's menu fact; the places a view names and the tree the search reads; the tab's menu and the dots on
+// the way to what waits on the person; what a form's fields make of their inputs, and every menu entry as a command.
 import { describe, expect, it } from "bun:test"
 import { handle, type View } from "../../framework/core/surface/view.ts"
-import { actionItems, argsOf, commandsOf, grouped, indexOf, labelOf, named, offered, parentOf, placesOf, search } from "../../framework/shell/ui/commands.ts"
-import type { Menu } from "../../framework/kit/layouts/menu.tsx"
+import {
+  actionItems,
+  argsOf,
+  commandsOf,
+  dotted,
+  foundItems,
+  grouped,
+  indexOf,
+  labelOf,
+  MANY,
+  named,
+  noticesIn,
+  offered,
+  parentOf,
+  placesOf,
+  search,
+  tabMenu,
+} from "../../framework/shell/ui/commands.ts"
+import type { Menu, MenuItem } from "../../framework/kit/layouts/menu.tsx"
 
 const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 }, {}, true)
 const note = handle("note", "Say where issue 3 stands", { n: 3 }, { text: "string" })
 const person: View = { n: 3, title: "Draft", approve, note_: note, more: [{ note }] }
 
-describe("the frame's actions", () => {
+describe("a tab's actions", () => {
   it("offers every handle of the view once, in the view's order, and knows an ask by its mark", () => {
     const actions = offered("/issues/3", person)
 
@@ -54,7 +71,7 @@ describe("the frame's actions", () => {
   })
 })
 
-describe("the frame's menus", () => {
+describe("the palette's commands", () => {
   const set: string[] = []
   const menus: Menu[] = [
     {
@@ -85,7 +102,7 @@ describe("the frame's menus", () => {
   })
 })
 
-describe("the frame's menus from the surface", () => {
+describe("a tab's menus from the surface", () => {
   const start = handle("start", "Give issue 3 to a lane", { n: 3 }, { lane: "number" })
   const done = handle("done", "Mark issue 3 done", { n: 3 })
   const describe_ = handle("describe", "Rewrite what issue 3 is about", { n: 3 }, { about: "string" })
@@ -146,5 +163,80 @@ describe("the frame's menus from the surface", () => {
     reads.length = 0
     await indexOf(read, { views: 10, depth: 0 })
     expect(reads).toEqual(["/"])
+  })
+})
+
+describe("the tab's menu", () => {
+  const add = handle("add", "Add an issue", {}, { title: "string" })
+  const done = handle("done", "Mark issue 3 done", { n: 3 })
+  const at = (path: string, view: View) => offered(path, view)
+  const shape = (items: MenuItem[]): string[] =>
+    items.map((i) => {
+      const dot = "mark" in i && i.mark ? " •" : ""
+
+      if (i.kind === "separator") return "---"
+      if (i.kind === "submenu") return `> ${i.label}${dot} [${shape(i.items).join(", ")}]${i.search ? " (filter)" : ""}`
+
+      return `${i.kind === "label" ? "# " : ""}${i.label}${dot}`
+    })
+  const controls: MenuItem[] = [{ kind: "action", id: "close", label: "Close tab", run: () => {} }]
+  const parts = { start: () => {}, navigate: () => {}, controls }
+
+  it("holds the surface's actions under its title, the place's under its name, its asks first and dotted, Go, then the shell's", () => {
+    const items = tabMenu({
+      ...parts,
+      surface: { label: "Queue", actions: at("/", { add }) },
+      place: { label: "Draft", actions: at("/issues/3", { done, approve }) },
+      go: [
+        { at: "/issues", label: "issues", up: true },
+        { at: "/", label: "Queue", up: true },
+        { at: "/issues/3/runs", label: "Runs" },
+      ],
+      dots: new Set(["/issues/3/runs"]),
+    })
+
+    expect(shape(items)).toEqual(["# Queue", "Add…", "---", "# Draft •", "Approve •", "---", "Done", "---", "> Go • [issues, Queue, ---, Runs •]", "---", "Close tab"])
+  })
+
+  it("leaves out what is empty, and gives Go a field to filter where it lists more than a few places", () => {
+    const go = Array.from({ length: MANY + 1 }, (_, n) => ({ at: `/issues/${n}`, label: `Issue ${n}` }))
+    const items = tabMenu({ ...parts, surface: { label: "Queue", actions: [] }, go, dots: new Set() })
+
+    expect(shape(items)[0]).toEndWith("(filter)")
+    expect(shape(items).slice(1)).toEqual(["---", "Close tab"])
+  })
+
+  it("dots the way to what waits elsewhere: the place Go lists at it or above it, or the way back up that leads to it", () => {
+    const go = [{ at: "/", label: "Queue", up: true }, { at: "/issues/3/runs", label: "Runs" }]
+
+    expect([...dotted(["/issues/4"], "/issues/3", go)]).toEqual(["/"])
+    expect([...dotted(["/issues/3/runs/1"], "/issues/3", go)]).toEqual(["/issues/3/runs"])
+    expect([...dotted(["/issues/3", "/"], "/issues/3", go)]).toEqual([])
+    expect([...dotted(["/issues/4"], "/", [{ at: "/issues/4" }, { at: "/issues/5" }])]).toEqual(["/issues/4"])
+  })
+
+  it("knows which unseen notices are about a tab, as paths within it, one about no place as its root", () => {
+    const notices = [{ at: "/tabs/2/issues/4" }, { at: "/tabs/2" }, { at: "/tabs/21/issues/1" }, { at: null }, { at: "/tabs/3" }]
+
+    expect(noticesIn("/tabs/2", notices)).toEqual(["/issues/4", "/"])
+  })
+
+  it("makes what the search finds entries that go to a place or start an action, an ask dotted, each naming where it is", () => {
+    const went: string[] = []
+    const items = foundItems(
+      [
+        { kind: "place", at: "/issues/3", label: "Draft" },
+        { kind: "action", action: offered("/issues/3", { approve })[0]!, label: "Approve", where: "Draft" },
+      ],
+      (to) => went.push(to),
+      (a) => went.push(a.handle.name)
+    )
+
+    expect(items.map((i) => (i.kind === "action" ? [i.label, i.note, i.mark === true] : []))).toEqual([
+      ["Draft", undefined, false],
+      ["Approve", "Draft", true],
+    ])
+    for (const i of items) if (i.kind === "action") i.run()
+    expect(went).toEqual(["/issues/3", "approve"])
   })
 })
