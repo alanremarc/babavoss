@@ -9,7 +9,7 @@
 // The URL is the surface path: / home, also where no tab is, /tabs/N/route a tab, /settings the appearance. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
-import { Activity, Component, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
+import { Activity, Component, startTransition, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { CircleAlertIcon, LocateFixedIcon, SettingsIcon, XIcon } from "lucide-react"
 import type { Handle, View } from "../../core/index.ts"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
@@ -22,9 +22,12 @@ import { noticesIn, type Offered } from "./commands.ts"
 import { Home, HomeTab, useHomeKey, type TabEntry } from "./home.tsx"
 import { backTo, shortcut, type SurfaceEntry } from "./home.ts"
 import type { Drawers } from "./inputs.tsx"
-import { NOTICES, Notifications, unseenRows, useFeed } from "./notifications.tsx"
+import { NOTICES, Notifications, unseenRows, useFeed, type Page as NoticesPage } from "./notifications.tsx"
 import { Settings } from "./settings.tsx"
-import { ChangesContext, TabProvider } from "./tab.tsx"
+import { ChangesContext, Ready, TabProvider, tabCache } from "./tab.tsx"
+import { boot, booted, servedAs } from "./boot.ts"
+import { Connection, Overlay, type Connected } from "./connection.tsx"
+import { cachesBy } from "./live.ts"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
@@ -65,9 +68,10 @@ class TabError extends Component<{ children: ReactNode }, { error?: string }> {
 }
 
 export function Shell({ surfaces }: { surfaces: Registry }) {
-  const [root, setRoot] = useState<RootView>()
+  // What the page was served with is its first frame: the shell at /, the turn, the notices, and the shown tab's views.
+  const [root, setRoot] = useState<RootView | undefined>(() => booted<RootView>("/"))
   const [error, setError] = useState("")
-  const [connected, setConnected] = useState(false)
+  const [connected, setConnected] = useState<Connected>("connecting")
   const [pending, setPending] = useState(false)
   const [at, setAt] = useState(parse)
   const [routes, setRoutes] = useState<Record<string, string>>(() => (at.key.startsWith("/") ? { [at.key]: at.route } : {}))
@@ -81,6 +85,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   // Each tab's reloads: raising one reads its views again.
   const [reloads, setReloads] = useState<Record<string, number>>({})
   const up = useRef(false)
+  // Each tab's views, read once for its page and its menu, kept while it is open; the shown tab's seeded with the page.
+  const [caches] = useState(() => cachesBy((address) => tabCache(address, boot().views)))
   const stream = useMemo(
     () => ({
       subscribe: (fn: () => void) => {
@@ -89,8 +95,9 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         return () => void listeners.delete(fn)
       },
       connected: () => up.current,
+      cacheOf: caches.of,
     }),
-    [listeners]
+    [listeners, caches]
   )
   const rows = root?.tabs ?? []
   const active = at.key === HOME || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : HOME
@@ -122,11 +129,13 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     [hearers]
   )
   // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
-  const [seen, setSeen] = useState<ReadonlySet<string>>()
+  const [seen, setSeen] = useState<ReadonlySet<string> | undefined>(() => root && new Set([...root.tabs.map((r) => r.at), active]))
   // Whose move it is, as the runtime hears it from the harness's hooks.
-  const [turn, setTurn] = useState<Turn>()
+  const [turn, setTurn] = useState<Turn | undefined>(() => boot().turn)
   // The notices, read once: the drawer's, and what dots the tabs until seen.
-  const told = useFeed(NOTICES, stream, true)
+  const [servedNotices] = useState(() => booted<NoticesPage>(NOTICES))
+  const told = useFeed(NOTICES, stream, true, servedNotices)
+  const served = useRef(root !== undefined)
   const unseen = useMemo(() => unseenRows(told.rows, told.unseen), [told.rows, told.unseen])
 
   useEffect(() => commands.subscribeAsks(asksMoved), [commands])
@@ -134,24 +143,43 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
 
-    void load()
+    let first = true
+    let ever = false
+
+    if (!served.current) void load()
 
     return changes(
-      () => {
+      (change) => {
+        const opening = first
+
+        first = false
+        // The stream's first change, of the version the page was served, says nothing new: what is shown is so.
+        if (servedAs(opening && served.current, change.version)) return
+        caches.changed()
         void load()
         for (const fn of listeners) fn()
       },
       (connected) => {
-        if (up.current !== connected) for (const fn of listeners) fn()
+        // Coming up the first time changes nothing; going down, or coming back, is told.
+        if (up.current !== connected && ever) for (const fn of listeners) fn()
+        ever ||= connected
         up.current = connected
-        setConnected(connected)
+        setConnected((was) => (connected ? "up" : was === "connecting" ? "connecting" : "lost"))
       },
       (notice) => {
         for (const fn of hearers) fn(notice)
       },
       setTurn
     )
-  }, [listeners, hearers])
+  }, [listeners, hearers, caches])
+
+  // A closed tab's views go with it.
+  useEffect(() => {
+    if (root) caches.keep(root.tabs.map((r) => r.at))
+  }, [root, caches])
+
+  // A tab's page is drawn once it is first shown, and kept: a tab not yet looked at reads nothing.
+  const [drawn, setDrawn] = useState<ReadonlySet<string>>(() => new Set([at.key]))
 
   useEffect(() => {
     document.title = root?.title ?? "babavoss"
@@ -176,6 +204,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
 
   useEffect(() => {
     if (active !== HOME) setShown(active)
+    setDrawn((d) => (d.has(active) ? d : new Set([...d, active])))
   }, [active])
 
   // A closed tab in the URL falls back to home.
@@ -187,8 +216,15 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     const url = urlOf(key, route ?? routes[key])
 
     if (location.pathname !== url) history.pushState(null, "", url)
-    if (route) setRoutes((previous) => ({ ...previous, [key]: route }))
-    setAt({ key, route: route ?? routes[key] ?? "/" })
+
+    const move = () => {
+      if (route) setRoutes((previous) => ({ ...previous, [key]: route }))
+      setAt({ key, route: route ?? routes[key] ?? "/" })
+    }
+
+    // Moving within the tab shown keeps it as it is until what the new place reads is known; another tab is shown at once.
+    if (key === at.key) startTransition(move)
+    else move()
   }
   const act = async (path: string, handle: Handle) => {
     setError("")
@@ -372,41 +408,40 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           })),
         ]}
       />
-      {!connected && (
-        <p className="border-b px-4 py-1 text-muted-foreground" role="status">
-          {root ? "Reconnecting…" : "Connecting…"}
-        </p>
-      )}
-      {error && (
-        <Alert variant="destructive" className="mx-3 my-2 w-auto">
-          <CircleAlertIcon />
-          <AlertTitle>Refused</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-          <AlertAction>
-            <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setError("")}>
-              <XIcon />
-            </Button>
-          </AlertAction>
-        </Alert>
-      )}
-      {offer && offered && (
-        <Alert className="mx-3 my-2 w-auto">
-          <LocateFixedIcon />
-          <AlertTitle>
-            The agent points to {entries.find((e) => e.at === offered.key)?.label ?? offered.key}
-            {offered.route !== "/" && <span className="font-mono text-muted-foreground"> {offered.route}</span>}
-          </AlertTitle>
-          <AlertAction className="flex gap-1">
-            <Button size="sm" onClick={() => go(offered.key, offered.route)}>
-              Go there
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setOffer(undefined)}>
-              <XIcon />
-            </Button>
-          </AlertAction>
-        </Alert>
-      )}
         <main className="relative flex min-h-0 flex-1 flex-col">
+          {/* Over the content, never above it: nothing that comes or goes here moves the page. */}
+          <Overlay>
+            <Connection state={connected} />
+            {error && (
+              <Alert variant="destructive" className="w-auto shadow-md">
+                <CircleAlertIcon />
+                <AlertTitle>Refused</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+                <AlertAction>
+                  <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setError("")}>
+                    <XIcon />
+                  </Button>
+                </AlertAction>
+              </Alert>
+            )}
+            {offer && offered && (
+              <Alert className="w-auto shadow-md">
+                <LocateFixedIcon />
+                <AlertTitle>
+                  The agent points to {entries.find((e) => e.at === offered.key)?.label ?? offered.key}
+                  {offered.route !== "/" && <span className="font-mono text-muted-foreground"> {offered.route}</span>}
+                </AlertTitle>
+                <AlertAction className="flex gap-1">
+                  <Button size="sm" onClick={() => go(offered.key, offered.route)}>
+                    Go there
+                  </Button>
+                  <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={() => setOffer(undefined)}>
+                    <XIcon />
+                  </Button>
+                </AlertAction>
+              </Alert>
+            )}
+          </Overlay>
           <TabContent address="settings" hidden={active !== "settings"}>
             <Settings title={root?.title ?? "babavoss"} />
           </TabContent>
@@ -433,10 +468,12 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           {rows.map((row) => {
             const Page = surfaces[row.surface]?.default
 
+            const visible = active === row.at || (active === HOME && back === row.at)
+
             return (
               <TabContent key={row.at} address={row.at} hidden={active !== row.at}>
-                <Activity mode={active === row.at || (active === HOME && back === row.at) ? "visible" : "hidden"}>
-                  {row.broken !== undefined ? (
+                <Activity mode={visible ? "visible" : "hidden"}>
+                  {!visible && !drawn.has(row.at) ? null : row.broken !== undefined ? (
                     <Alert variant="destructive" className="m-3 w-auto">
                       <AlertTitle>This tab is broken</AlertTitle>
                       <AlertDescription>{row.broken}</AlertDescription>
@@ -462,7 +499,9 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
                           {...(refused?.at === row.at && { refused: refused.reason })}
                           dismiss={() => setRefused(undefined)}
                         >
-                          <Page />
+                          <Ready>
+                            <Page />
+                          </Ready>
                         </Actions>
                       </TabProvider>
                     </TabError>

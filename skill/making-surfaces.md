@@ -59,6 +59,8 @@ A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` 
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
 
+A page reads its views with `useLive(path)` and is shown once its first reads have answered, those that depend on others too, as the queue's selected issue does on its list; until then its tab is its quiet ground. So a page draws no loading state of its own, and an empty state it draws is true. When a path it reads moves, as with the route, it keeps the view it had until the new one lands; a change by anyone replaces the view in place. `error` says why a read failed, beside the view it had. A refresh is served with the shell and the shown tab's views at `/` and at its route, so it is drawn whole at once.
+
 ## The tab and its menu
 
 A tab is the home of one instance of a surface, with its own state. The page's strip holds home, the babavoss mark, which also shows whether the agent is working, then the tabs, then the notifications. Each tab carries its surface's menu, the same for every surface and made from its views alone: over the tab, or with it focused, its icon gives way to dots that open the menu, as a right click or Shift+F10 does. A page cannot add to it or replace it: `ui/index.tsx` returns its content, which fills the tab under the strip, and optionally `icon` and `drawers`.

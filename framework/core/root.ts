@@ -8,6 +8,8 @@ export type RootDefinition = {
   surface: AnySurface
   /** The page: a directory with index.html and assets served under /_/, or a hosting that serves them. */
   ui: Ui
+  /** The paths whose views the page at a path needs first: given with its html, read as the person (door.ts). */
+  boot?: (path: string) => string[]
 }
 
 export const defineRoot = (definition: RootDefinition): RootDefinition => {

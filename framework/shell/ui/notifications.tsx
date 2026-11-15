@@ -20,7 +20,7 @@ export type Who = "person" | "agent" | "surface"
 export type Row = { n: number; when: string; who: Who; kind?: "notice" | "call"; surface: string; at: string | null; what: string }
 /** What the panel shows: the notices alone, or all activity. */
 export type Shown = "notifications" | "all"
-type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number }
+export type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number }
 export type Group = { label: string; rows: Row[] }
 type Stream<T = void> = { subscribe: (fn: (value: T) => void) => () => void }
 
@@ -88,11 +88,12 @@ export const entryOf = (rows: Row[], notice: Notice): Row | undefined =>
 
 const clock = (when: string) => new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-/** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking. */
-export function useFeed(path: string, changes: Stream, live: boolean) {
-  const [rows, setRows] = useState<Row[]>([])
-  const [earlier, setEarlier] = useState<string>()
-  const [unseen, setUnseen] = useState(0)
+/** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking; `served` what the page was served there, so it is not read at first. */
+export function useFeed(path: string, changes: Stream, live: boolean, served?: Page) {
+  const [rows, setRows] = useState<Row[]>(() => (Array.isArray(served?.entries) ? served.entries : []))
+  const [earlier, setEarlier] = useState<string | undefined>(served?.earlier?.at)
+  const [unseen, setUnseen] = useState(served?.unseen ?? 0)
+  const fresh = useRef(served !== undefined)
   const older = useRef<Row[]>([])
   const load = useCallback(async () => {
     const page = await read<Page>(path).catch(() => undefined)
@@ -123,7 +124,8 @@ export function useFeed(path: string, changes: Stream, live: boolean) {
 
     let timer: ReturnType<typeof setTimeout> | undefined
 
-    void load()
+    if (!fresh.current) void load()
+    fresh.current = false
 
     const off = changes.subscribe(() => {
       timer ??= setTimeout(() => {

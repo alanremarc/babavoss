@@ -10,6 +10,7 @@ import { defineRoot } from "../../framework/core/root.ts"
 import { reach } from "../../framework/core/runtime/reach.ts"
 import { startRuntime, rootVersion, RELOAD_MS, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
 import { admitted } from "../../framework/core/runtime/door.ts"
+import { BOOT_ID, island } from "../../framework/core/runtime/boot.ts"
 import { ACTOR_HEADER, SERVICE_HEADER, endpointFile, findService, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { request as httpRequest, type IncomingMessage } from "node:http"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
@@ -55,7 +56,7 @@ const scratch = () => {
   return dir
 }
 /** A root whose page is ui/ under its directory; its runtime entry is never woken, the spec starts the runtime in its own process. */
-const root = (dir: string) => {
+const root = (dir: string, boot?: (path: string) => string[]) => {
   const ui = join(dir, "ui")
 
   mkdirSync(ui, { recursive: true })
@@ -64,10 +65,10 @@ const root = (dir: string) => {
 
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1.0" }))
 
-  return defineRoot({ name: "p", ui, surface: counter })
+  return defineRoot({ name: "p", ui, surface: counter, ...(boot && { boot }) })
 }
-const started = async (dir: string, more: Partial<RuntimeOptions> = {}) => {
-  const runtime = await startRuntime(root(dir), ["--session", "S"], {
+const started = async (dir: string, more: Partial<RuntimeOptions> = {}, boot?: (path: string) => string[]) => {
+  const runtime = await startRuntime(root(dir, boot), ["--session", "S"], {
     env: { BABAVOSS_HOME: dir },
     entry: join(dir, "scripts/open.ts"),
     idleMs: 60_000,
@@ -168,6 +169,25 @@ describe("the door", () => {
     expect(admitted(request({ host: `localhost:${port}`, origin: "http://evil.example" }), port)).toBe(false)
     expect((await get("/_/missing.js")).status).toBe(404)
     expect((await get("/")).headers.get(SERVICE_HEADER)).toBe(endpoint.token)
+  })
+
+  it("serves the page with what it shows first, as the person reads it, in an island nothing a view says can break out of", async () => {
+    const { base, post } = await started(scratch(), {}, (path) => (path === "/notes/2" ? ["/", "/n", "/nowhere"] : ["/"]))
+
+    await post("/", { handle: "bump", args: { by: 3 } })
+
+    const text = await (await fetch(base + "/notes/2", { headers: { accept: "text/html" } })).text()
+    const served = JSON.parse(new RegExp(`<script type="application/json" id="${BOOT_ID}">(.*?)</script>`).exec(text)![1]!)
+
+    // The views the root names for the path, read as the person; one with nothing there is left for the page to ask.
+    expect(served).toEqual({ version: expect.any(Number), turn: expect.objectContaining({ agent: "unknown" }), views: { "/": { n: 3, person: true, bump: expect.anything(), later: expect.anything() }, "/n": { n: 3 } } })
+    expect(text.indexOf(BOOT_ID)).toBeLessThan(text.indexOf('<meta name="babavoss:root"'))
+
+    const hostile = { "/": { said: "</script><script>alert(1)</script> <!-- & \u2028 $& $1" } }
+    const element = island({ version: 1, turn: null, views: hostile })
+    const inner = element.slice(element.indexOf(">") + 1, -"</script>".length)
+
+    expect([/[<>&\u2028]/.test(inner), JSON.parse(inner).views]).toEqual([false, hostile])
   })
 
   it("streams a change event on every commit and command, and each call as it is answered, and is found by its endpoint", async () => {

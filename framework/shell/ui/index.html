@@ -19,7 +19,8 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The page's ground and the strip's bar before the script draws them, as it will: React takes their place. -->
+    <div id="root"><div class="flex h-dvh min-h-64 flex-col overflow-hidden text-xs"><nav class="h-11 shrink-0 border-b bg-sidebar"></nav></div></div>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>

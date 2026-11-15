@@ -5,7 +5,7 @@
 // What waits on the person is dotted, and so is every step of the way to it. Around the tab's content: the line that says
 // why an action was refused, and the modal an action with inputs opens, the page's drawer for it or a form of its inputs.
 // While the tab is shown, its entries are commands of the palette, and its asks dot it in the strip.
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { XIcon } from "lucide-react"
 import { DropdownKit, SearchMenu, type Menu, type MenuItem } from "../../kit/layouts/menu.tsx"
 import type { Args, View } from "../../core/surface/view.ts"
@@ -27,7 +27,7 @@ import {
   type Offered,
 } from "./commands.ts"
 import { Inputs, type Drawers } from "./inputs.tsx"
-import { ChangesContext, doorOf, useTab, type Door } from "./tab.tsx"
+import { ChangesContext, doorOf, useCached, useTab, useTabCache, type Door } from "./tab.tsx"
 
 /**
  * Each tab's commands, by its address, for the palette, while the tab is shown; and how many asks it offers where it was
@@ -79,17 +79,11 @@ export function useTabCommands(): TabCommands {
   return store
 }
 
-/** The view at a path under the tab, kept current; none where nothing is there, or with no path. */
-function useView(live: Door["live"], path: string | undefined): View | undefined {
-  const [shown, setShown] = useState<{ path: string; view?: View }>()
+/** The view at a path under the tab, kept current, from the tab's cache: none where nothing is there, or with no path. */
+function useView(door: Door, path: string | undefined): View | undefined {
+  const entry = useCached<View>(door.cache, path)
 
-  useEffect(() => {
-    if (path === undefined) return setShown(undefined)
-
-    return live(path, (view) => setShown({ path, view }), () => setShown({ path }))
-  }, [live, path])
-
-  return shown && shown.path === path ? shown.view : undefined
+  return entry?.error === undefined ? entry?.view : undefined
 }
 
 /** The tree below the tab as the search reads it: read as the menu opens, again only after something changed. */
@@ -135,9 +129,9 @@ function useModel({
 }): Model {
   // The surface's root, where the tab is, and the place above it: a route that is no path of the surface offers nothing.
   const up = parentOf(route)
-  const root = useView(door.live, "/")
-  const here = useView(door.live, route === "/" ? undefined : route)
-  const above = useView(door.live, up === undefined || up === "/" ? undefined : up)
+  const root = useView(door, "/")
+  const here = useView(door, route === "/" ? undefined : route)
+  const above = useView(door, up === undefined || up === "/" ? undefined : up)
   const found = useIndex(door.read, !!menu)
   const shown = title ?? named(name)
   const atRoot = offered("/", root)
@@ -240,7 +234,8 @@ export function Actions({
   children: ReactNode
 }) {
   const tab = useTab()
-  const model = useModel({ door: tab, route: tab.route, title, name, start, navigate: tab.navigate })
+  const cache = useTabCache()
+  const model = useModel({ door: { ...tab, cache }, route: tab.route, title, name, start, navigate: tab.navigate })
   const call = async (action: Offered, inputs: Args = {}) => {
     const answer = await tab.call(action.path, action.handle.name, { ...action.handle.args, ...inputs })
 
@@ -270,13 +265,16 @@ export function Actions({
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
       {asking && (
-        <Inputs
+        // The modal waits on its view alone: the tab's content stays as it is.
+        <Suspense fallback={null}>
+          <Inputs
           key={`${asking.path} ${asking.handle.name} ${JSON.stringify(asking.handle.args)}`}
           action={asking}
           drawer={drawers[asking.handle.name]}
           call={call}
           close={answered}
-        />
+          />
+        </Suspense>
       )}
     </>
   )

@@ -10,7 +10,9 @@
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
-// never in a view.
+// never in a view. And with what it shows first, so its first frame is whole: an island of JSON, the root's state as the
+// person reads it now: the change it counts the stream from, whose move it is, and the views at the paths the root names
+// for the page's path. The page reads it before it draws, and the stream's first change says whether it is still so.
 // Only this machine's clients: loopback host, own origin, the service token on everything but the page, as a header or
 // as the cookie the page response sets, named after the port. A runtime that gives way answers 503 with STALE_HEADER, having
 // done nothing, and ends: its clients ask again, of the one in its place. A client's probe for whether it is up never waits.
@@ -24,6 +26,7 @@ import { NEEDS } from "../present/present.ts"
 import type { Args } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
+import { island } from "./boot.ts"
 import { driverOf, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unknownTurn, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
@@ -48,6 +51,8 @@ export type DoorOptions = {
   current?: () => Promise<string | undefined>
   /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. */
   about?: Record<string, string>
+  /** The paths whose views the page at a path needs first, given with its html in the boot island. */
+  boot?: (path: string) => string[]
 }
 
 /** How long a line about the root's own code is still given to a page that connects. */
@@ -344,9 +349,29 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
         return res.end(served.error)
       }
-      res.writeHead(200, { "content-type": "text/html", "set-cookie": `${cookieName(port)}=${options.identity.token}; Path=/; SameSite=Strict; HttpOnly` })
+      // Read in one go, so the views are of the version the island says; a view that cannot be read is the page's to ask for.
+      const version = running.version()
+      const views: Record<string, unknown> = {}
 
-      return res.end(served.html.replaceAll("%TOKEN%", options.identity.token).replace("</head>", `${about()}</head>`))
+      for (const at of options.boot?.(path) ?? []) {
+        try {
+          const view = running.read(at, "person")
+
+          if (view !== undefined) views[at] = view
+        } catch {}
+      }
+
+      // A replacer function, so a `$` a view holds is never read as a pattern.
+      const boot = island({ version, turn: turnNow(), views })
+
+      // The page carries the state it was served with, so it is never kept: a refresh is served it anew.
+      res.writeHead(200, {
+        "content-type": "text/html",
+        "cache-control": "no-store",
+        "set-cookie": `${cookieName(port)}=${options.identity.token}; Path=/; SameSite=Strict; HttpOnly`,
+      })
+
+      return res.end(served.html.replaceAll("%TOKEN%", options.identity.token).replace("</head>", () => `${boot}${about()}</head>`))
     }
     if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
 
