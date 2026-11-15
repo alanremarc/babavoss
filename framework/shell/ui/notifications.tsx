@@ -16,7 +16,7 @@
 // back; Escape on the first level closes.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "../../kit/cn.ts"
-import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LayersIcon } from "lucide-react"
+import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LogsIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
 import { BY, ChannelIcon, ChannelItem, Heading, HistoryLine, keepFocus, MARK, Mark, moveIn, NextTurn } from "./activity.tsx"
@@ -314,7 +314,7 @@ export function Notifications({
         className="relative flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full px-1.5 text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
         onClick={() => toggle(!open)}
       >
-        <LayersIcon className="size-4" aria-hidden />
+        <LogsIcon className="size-4" aria-hidden />
         {waiting > 0 && <span className="text-meta tabular-nums">{waiting > 9 ? "9+" : waiting}</span>}
         {badge > 0 && <span aria-hidden data-unseen={badge} className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
       </button>
