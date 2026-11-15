@@ -75,6 +75,8 @@ type Props = {
   tabs: TabEntry[]
   /** Home's shortcut, as the person reads it. */
   keys: string
+  /** The session's harness, by its adapter's name, once known. */
+  harness?: string
   /** Ending the person's move, while their changes wait for the agent: `run` says what it did. */
   disabled: boolean
   loading: boolean
@@ -101,7 +103,7 @@ function Does({ row }: { row: HomeRow }) {
  * none open. A line names the thing and says at its end what Enter does on it. Enter with the
  * command key opens another tab of an open tab's surface.
  */
-export function Home({ title, notice, surfaces, icons, tabs, keys, disabled, loading, launch, select, leave }: Props) {
+export function Home({ title, notice, surfaces, icons, tabs, keys, harness, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
   const [picked, setPicked] = useState("")
   const rows = rowsOf(surfaces, tabs)
@@ -184,7 +186,7 @@ export function Home({ title, notice, surfaces, icons, tabs, keys, disabled, loa
           </CommandList>
         </Command>
       </div>
-      <About className="mt-auto max-w-[560px] pt-6">
+      <About className="mt-auto max-w-[560px] pt-6" harness={harness}>
         <span className="whitespace-nowrap">
           <CommandShortcut className="ml-0 tracking-normal">{keys}</CommandShortcut> Home
         </span>
@@ -203,8 +205,11 @@ function TabGlyph({ tab }: { tab: TabEntry }) {
   )
 }
 
-/** One muted line: the root and its version, then the session shortened, whole on hover and copied on a click; and a later release, where one is out. */
-function About({ className, children }: { className?: string; children?: ReactNode }) {
+/** A harness as the person knows it, by its adapter's name; one not known here is said by that name. */
+const HARNESSES: Record<string, string> = { claude: "Claude Code", codex: "Codex" }
+
+/** One muted line: the root and its version, then the session shortened, whole on hover and copied on a click, and its harness once a hook said it; and a later release, where one is out. */
+function About({ className, harness, children }: { className?: string; harness?: string; children?: ReactNode }) {
   const [facts] = useState(() => ({ root: about("root"), version: about("version"), session: about("session"), update: about("update") }))
   const [copied, setCopied] = useState(false)
   const { root, version, session, update } = facts
@@ -233,6 +238,11 @@ function About({ className, children }: { className?: string; children?: ReactNo
           >
             {copied ? "Copied" : `session ${session.slice(0, 8)}`}
           </button>
+        )}
+        {harness && (
+          <span className="whitespace-nowrap" title="The harness this session's agent runs in, as its hooks say">
+            {HARNESSES[harness] ?? harness}
+          </span>
         )}
         {update && (
           <span className="truncate" title={`babavoss ${update} is out; the agent is told how to take it`}>

@@ -4,7 +4,7 @@
 // only while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "../../kit/cn.ts"
-import { between, drawn, eased, EYES, next, ORBIT_MS, orbiting, REST, within, type Drawn, type Gaze } from "./gaze.ts"
+import { between, drawn, eased, EYES, MOVES, next, ORBIT_MS, orbiting, REST, within, type Drawn, type Gaze } from "./gaze.ts"
 import type { Standing } from "./turn.ts"
 
 const put = (el: SVGEllipseElement | null | undefined, { cx, cy, rx, ry, turn }: Drawn) => {
@@ -22,9 +22,10 @@ const round = (eyes: (SVGEllipseElement | null)[], into: number, angle: number) 
  * Moves the eyes. While `looking`: one move after another in no fixed order, each an eased turn and then a rest; frames
  * are asked for only during a turn, a rest is a timer, and a page not shown waits. Stopping eases the eyes back to rest.
  * While `lost`, whatever else: the larger eye comes to the centre and the smaller goes round it, until the page has its
- * runtime again, when it finishes its round and both return to where they rest.
+ * runtime again, when it finishes its round and both return to where they rest. `only` names the one move to make, again
+ * and again, in place of one after another: a move looked at on its own.
  */
-function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean, lost: boolean) {
+function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean, lost: boolean, only?: string) {
   const at = useRef<Gaze>(REST)
   const orbit = useRef({ into: 0, angle: 0 })
 
@@ -62,7 +63,7 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
       // A page nobody looks at does not animate: look again once it is shown.
       if (document.hidden) return void (timer = window.setTimeout(move, 1500))
 
-      const { name, through, turn: turns, rest } = next(last)
+      const { name, through, turn: turns, rest } = MOVES.find((m) => m.name === only) ?? next(last)
       const go = (i: number) => {
         if (stopped) return
         if (i === through.length) return void (timer = window.setTimeout(move, within(rest)))
@@ -125,14 +126,17 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [eyes, looking, lost])
+  }, [eyes, looking, lost, only])
 }
 
-/** The eyes alone, in the current colour; `looking` has them look about; `lost` reddens the larger and sends the smaller round it. */
-export function Eyes({ looking = false, lost = false, className }: { looking?: boolean; lost?: boolean; className?: string }) {
+/**
+ * The eyes alone, in the current colour; `looking` has them look about, or make the one `move` named again and again; `lost`
+ * reddens the larger and sends the smaller round it.
+ */
+export function Eyes({ looking = false, lost = false, move, className }: { looking?: boolean; lost?: boolean; move?: string; className?: string }) {
   const eyes = useRef<(SVGEllipseElement | null)[]>([])
 
-  useGaze(eyes, looking, lost)
+  useGaze(eyes, looking, lost, move)
 
   return (
     <svg viewBox="0 0 100 100" aria-hidden className={cn("overflow-visible", className)}>
@@ -157,14 +161,14 @@ export function Eyes({ looking = false, lost = false, className }: { looking?: b
   )
 }
 
-/** The mark with the agent's standing on it; `animate` false keeps it still, the work shown by its tint alone. */
-export function Logo({ standing, animate = true, lost = false }: { standing: Standing; animate?: boolean; lost?: boolean }) {
+/** The mark with the agent's standing on it; `animate` false keeps it still, the work shown by its tint alone; `move` as the eyes'. */
+export function Logo({ standing, animate = true, lost = false, move }: { standing: Standing; animate?: boolean; lost?: boolean; move?: string }) {
   // A page that lost its runtime knows nothing of the turn: the mark says the loss, and nothing else, until it is back.
   const working = standing.state === "working" && !lost
 
   return (
     <span data-turn={lost ? "lost" : standing.state} data-animate={animate || undefined} className="relative grid size-[22px] place-items-center">
-      <Eyes looking={working && animate} lost={lost} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
+      <Eyes looking={working && animate} lost={lost} move={move} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
     </span>
   )
 }

@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.52.0
+
+- A session's runtime knows which harness its agent runs in: a hook names its adapter with what it tells of the turn, in the header `babavoss-harness`, and the runtime keeps the one last heard beside the session's state. The page is given it in the turn, as `harness`, and home's foot says it after the session: Claude Code, Codex, or an adapter's own name. A session whose hooks were never heard has none. `hookContext(event, baba, harness)` takes the adapter's name as its third argument. Nothing to adapt in a project.
+
 ## 0.51.4
 
 - An open tab's line in home's list carries its mark on its icon, as its pill in the strip does: broken, waiting on the person, or needing the agent. The words beside its name are gone, what it needs and "previous" alike; hovering the icon says them. Nothing to adapt.

@@ -96,7 +96,7 @@ async function hook(args: string[]) {
 
     if (!section.enable || !section.events.includes(event.event)) return
 
-    const context = await hookContext(event, baba)
+    const context = await hookContext(event, baba, adapter.name)
 
     if (context) console.log(adapter.hookOutput(event, context))
   } catch {}
