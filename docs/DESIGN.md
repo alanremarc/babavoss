@@ -78,10 +78,10 @@ role → agent      the answer, written by the runtime, and nothing else: the wh
 person → role     the ui: the same handles, called as the person; an ask answered
 role → person     the ui: the views, live
 agent ↔ person   the conversation, which the role is no part of; the agent hands over the page's address when it is worth seeing
-unasked          nothing: a closed role is its skill's description in context, where the skill shows it, and no process;
-                 an open one speaks only when the agent calls it
-aware            the agent learns what the person did on the page the next time it calls; the skill says when to look,
-                 and wait holds a call until something changes
+unasked          a closed role is its skill's description in context, and no process. An open one tells the agent what changed
+                 since the session last read it, with the person's next message and after a tool call, where the harness
+                 has hooks; elsewhere it speaks only when the agent calls it
+aware            so the agent learns what the person did on the page without asking; wait holds a call until something changes
 not a canvas     the page shows the role's own views; the agent changes what the person sees only by calling handles
 ```
 
@@ -98,6 +98,11 @@ loop:       change a role in .baba/ → test it → provision it
 provision:  one generated SKILL.md per role in .claude/skills/NAME and .agents/skills/NAME, and baba's, which the package
             carries; skills no role stands behind are removed, and a skill not made here is never written over;
             installing in .baba/ provisions, so a clone has its skills
+harness:    the harness's configuration beside .baba/ is compiled from .baba/: the roles' is primary, the harness's follows.
+            What is compiled is skills, and hooks where a harness has them: Claude Code's, into its settings, among the
+            person's own, which are left as they are
+hooks:      soft control only: a hook adds context, know-how and news of the surface, and never blocks or decides; what
+            may not happen stays the person's to set in the harness. The person's own layer outranks a project's
 versions:   none to match: the command, the skill baba and the know-how all come from the framework .baba/ names, so they
             are always of one version
 update:     a role's door says when a later release is out, asked of the repository at most once a day; the agent takes
@@ -105,5 +110,6 @@ update:     a role's door says when a later release is out, asked of the reposit
 release:    a tag vX.Y.Z of this repository; every version on main is one, with its section in CHANGELOG.md, written for
             the agent that adapts a project to it
 keeps:      what the roles' sessions write is beside .baba/: ~/.babavoss/ for the person's home, the project's .babavoss/ otherwise
-later:      tests that run a role under a harness; a root surface over a project's roles
+later:      tests that run a role under a harness; a root surface over a project's roles; root context and know-how
+            declared in .baba/; hooks for harnesses besides Claude Code
 ```

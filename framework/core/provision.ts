@@ -2,7 +2,9 @@
 // directory .baba/ is in. A provisioned skill is one generated file, SKILL.md: the role's own description and know-how
 // from its ROLE.md, around the part that is the same for every role, how to open it and how to operate it. baba, the
 // skill that maintains .baba/, is provisioned with them, from this package, so it is always the one for this framework.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+// The framework's hook is provisioned too, where the harness has hooks: it tells the agent what it did not ask for.
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readJsonFile, writeJsonFile } from "./state/json-file.ts"
@@ -10,6 +12,12 @@ import { readJsonFile, writeJsonFile } from "./state/json-file.ts"
 /** Where the harnesses read skills, relative to a project or to the person's home: Claude Code, and Codex with the rest. */
 export const SKILL_FOLDERS = [".claude/skills", ".agents/skills"]
 export const ROLES_DIR = "roles"
+/** The harness events the framework's hook is provisioned for: it adds context there and blocks nothing. */
+export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse"]
+/** Claude Code's settings beside .baba/: the person's too, so only the framework's own hooks in it are written. */
+const SETTINGS = ".claude/settings.json"
+/** How the framework's hooks are told from the person's: by the command they run. */
+const HOOK = '/.baba/node_modules/babavoss/bin/baba.ts" hook'
 /** What was provisioned last, kept in .baba/: skills no role stands behind any more are removed, and no other skill is touched. */
 const RECORD = "provisioned.json"
 const NAME = /^[a-z][a-z0-9-]*$/
@@ -60,6 +68,49 @@ export function roleSkill(baba: string, name: string): string {
   return `---\nname: ${name}\ndescription: ${description}\ncompatibility: Requires Bun 1.4 or later\n---\n\n${opening(name)}\n\n${OPERATING}\n${body && `\n${body}\n`}`
 }
 
+type Handler = { type?: string; command?: string }
+type Group = { matcher?: string; hooks?: Handler[] }
+type Settings = { hooks?: Record<string, Group[]> } & Record<string, unknown>
+
+/**
+ * Writes the framework's hook into Claude Code's settings beside `baba`, for each of its events, and leaves everything
+ * else in the file as it is: the person's settings and their own hooks.
+ */
+export function provisionHooks(baba: string) {
+  const root = dirname(baba)
+  const file = join(root, SETTINGS)
+  let settings: Settings
+
+  try {
+    settings = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Settings) : {}
+  } catch {
+    throw new Error(`${file} is not JSON: correct it, and provision again`)
+  }
+
+  // Under a project the harness names its root; under the person's home, the home is it. Silent where bun or the package is missing.
+  const dir = root === realpathSync(homedir()) ? "$HOME" : "${CLAUDE_PROJECT_DIR}"
+  const ours: Group = { hooks: [{ type: "command", command: `bun "${dir}${HOOK} 2>/dev/null || true` }] }
+  const hooks: Record<string, Group[]> = {}
+
+  for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
+    const kept = groups
+      .map((group) => ({ ...group, hooks: (group.hooks ?? []).filter((handler) => !handler.command?.includes(HOOK)) }))
+      .filter((group) => group.hooks.length)
+
+    if (kept.length) hooks[event] = kept
+  }
+  for (const event of HOOK_EVENTS) hooks[event] = [...(hooks[event] ?? []), ours]
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, `${JSON.stringify({ ...settings, hooks }, null, 2)}\n`)
+}
+
+/** A skill of this name beside `baba` that provisioning did not make, and so will not write over; undefined where there is none. */
+export function taken(baba: string, name: string): string | undefined {
+  const before = readJsonFile<string[]>(join(baba, RECORD)) ?? []
+
+  return SKILL_FOLDERS.map((folder) => join(folder, name)).find((dir) => existsSync(join(dirname(baba), dir)) && !before.includes(dir))
+}
+
 /**
  * Writes the skills of `baba`, a .baba/ directory, into the harnesses' skill folders beside it: baba itself and one per
  * role. Answers with what it wrote and removed, relative to the directory .baba/ is in.
@@ -76,9 +127,12 @@ export function provision(baba: string): { written: string[]; removed: string[] 
   }
 
   const files = SKILL_FOLDERS.flatMap((folder) => [...skills].map(([name, text]) => ({ file: join(root, folder, name, "SKILL.md"), text })))
-  const taken = files.find(({ file }) => existsSync(dirname(file)) && !before.includes(relative(root, dirname(file))))
 
-  if (taken) throw new Error(`${dirname(taken.file)} exists already and was not provisioned from here: name the role otherwise, or remove what is there`)
+  for (const name of skills.keys()) {
+    const other = taken(baba, name)
+
+    if (other) throw new Error(`${other} exists already and was not provisioned from here: name the role otherwise, or remove what is there`)
+  }
 
   const now = files.map(({ file }) => relative(root, dirname(file)))
   const removed = before.filter((dir) => !now.includes(dir))
@@ -89,6 +143,7 @@ export function provision(baba: string): { written: string[]; removed: string[] 
     writeFileSync(file, text)
   }
   writeJsonFile(record, now)
+  provisionHooks(baba)
 
   return { written: now, removed }
 }

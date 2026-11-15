@@ -14,8 +14,8 @@ A TypeScript framework for roles an agent plays. A role is a tool the agent work
 
 ```text
 package.json                the package babavoss, at the repository's root, where a git dependency finds it
-bin/baba.ts                 the package's command: init, new, provision
-framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, update.ts
+bin/baba.ts                 the package's command: init, new, provision, hook
+framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, hook.ts, update.ts
 framework/shell/            the shell: tabs, page hosting and build, layouts, components
 skill/SKILL.md              baba, the skill that maintains .baba/; provisioned as it is
 template/                   the role a new one starts from: a shell of one util; `baba new` copies it
@@ -34,6 +34,7 @@ A project that uses it:
   roles/NAME/               a role: ROLE.md, scripts/open.ts, src/, ui/, spec/
   provisioned.json          the skills provisioning wrote last
 .claude/skills/NAME/  .agents/skills/NAME/   generated: one SKILL.md per role, and baba's
+.claude/settings.json       the person's, with the framework's hook written into it
 .babavoss/                  what the roles' sessions write
 ```
 

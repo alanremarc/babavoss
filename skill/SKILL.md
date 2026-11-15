@@ -12,7 +12,7 @@ Run the commands below from that `.baba/` directory.
 
 1. Make or change a role. `bun run baba new NAME` makes `roles/NAME/` from the template, a role that runs as it is. Agree with the person first what it is for: its job, your part, what they see on the page and what they decide there.
 2. Test it. `bun test roles/NAME` runs its specs: one story per rule of its surface. `bun check` checks its types.
-3. Provision it. `bun run baba provision` writes the skills of every role beside `.baba/`. A new role is found by a new session of the harness; tell the person. A change to a role's code needs no provisioning, and a running role loads it by itself.
+3. Provision it. `bun run baba provision` writes the skills of every role beside `.baba/`, and the framework's hook into the harness's settings: through it you are told what changed in an open role, such as what the person did on its page, without asking. A new role is found by a new session of the harness; tell the person. A change to a role's code needs no provisioning, and a running role loads it by itself.
 
 Then open the role as its skill says, give the person its page, and build it one step at a time, each ending in something they can see there.
 

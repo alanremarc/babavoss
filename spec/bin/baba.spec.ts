@@ -87,7 +87,10 @@ test("provision follows the roles: a changed description is written again, a rol
 test("provision never writes over a skill it did not make", () => {
   mkdirSync(join(project, ".claude/skills/video-editor"), { recursive: true })
   writeFileSync(join(project, ".claude/skills/video-editor/SKILL.md"), "the person's own\n")
-  expect(run(["new", "video-editor"])).toMatchObject({ status: 1, err: expect.stringContaining("was not provisioned from here") })
+  expect(run(["new", "video-editor"])).toMatchObject({ status: 2, err: expect.stringContaining("was not provisioned from here") })
+  // Nothing was made, so provisioning goes on as before.
+  expect(existsSync(join(baba, "roles/video-editor"))).toBe(false)
+  expect(run(["provision"]).status).toBe(0)
   expect(readFileSync(join(project, ".claude/skills/video-editor/SKILL.md"), "utf8")).toBe("the person's own\n")
   expect(existsSync(join(project, ".agents/skills/video-editor"))).toBe(false)
 })
@@ -95,4 +98,68 @@ test("provision never writes over a skill it did not make", () => {
 test("outside any .baba/, the command says to make one", () => {
   expect(run(["provision"], tmpdir())).toMatchObject({ status: 2, err: expect.stringContaining("baba init") })
   expect(run([])).toMatchObject({ status: 2, err: expect.stringContaining("baba new NAME") })
+})
+
+test("provision writes the framework's hook into Claude Code's settings for each event, once, and leaves the person's settings and hooks as they are", () => {
+  const file = join(project, ".claude/settings.json")
+  const ours = { hooks: [{ type: "command", command: 'bun "${CLAUDE_PROJECT_DIR}/.baba/node_modules/babavoss/bin/baba.ts" hook 2>/dev/null || true' }] }
+  const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
+
+  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ hooks: { SessionStart: [ours], UserPromptSubmit: [ours], PostToolUse: [ours] } })
+  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs, ours], Stop: [theirs] } }))
+  expect(run(["provision"]).status).toBe(0)
+  expect(run(["provision"]).status).toBe(0)
+  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+    attribution: { commit: "" },
+    hooks: { PostToolUse: [theirs, ours], Stop: [theirs], SessionStart: [ours], UserPromptSubmit: [ours] },
+  })
+  writeFileSync(file, "{ not json")
+  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not JSON") })
+  writeFileSync(file, "{}")
+  expect(run(["provision"]).status).toBe(0)
+})
+
+test("the hook tells the agent what changed in an open role since the session last read it, and says nothing when nothing did", () => {
+  expect(run(["new", "desk"]).status).toBe(0)
+
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "", BABAVOSS_BIN: join(project, "bin") }
+  const door = (...args: string[]) => spawnSync(process.execPath, [join(baba, "roles/desk/scripts/open.ts"), ...args], { cwd: project, encoding: "utf8", env })
+  const hook = (event: string) =>
+    spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], {
+      cwd: project,
+      encoding: "utf8",
+      env,
+      input: JSON.stringify({ session_id: "hooked", hook_event_name: event }),
+    })
+
+  // Nothing is open in the session yet.
+  expect(hook("SessionStart")).toMatchObject({ status: 0, stdout: "" })
+  expect(door().status).toBe(0)
+  try {
+    expect(hook("SessionStart").stdout).toStartWith("The role desk is open in this session. Its current state is read with `")
+    expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
+
+    // The person proposes on the page: a call the agent did not make.
+    const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/desk/service.json"), "utf8")) as { port: number; token: string }
+    const person = spawnSync("curl", [
+      "-s", "-X", "POST", `http://127.0.0.1:${endpoint.port}/tabs/1`,
+      "-H", "accept: application/json", "-H", "content-type: application/json", "-H", `babavoss-service: ${endpoint.token}`, "-H", "babavoss-actor: person",
+      "-d", JSON.stringify({ handle: "propose", args: { text: "good morning" } }),
+    ])
+
+    expect(person.status).toBe(0)
+
+    const told = hook("UserPromptSubmit").stdout
+
+    expect(told).toStartWith("The role desk changed since this session last read it; the person may have acted on its page:\n")
+    expect(told).toContain("good morning")
+    // Told once: the session has now been answered.
+    expect(hook("UserPromptSubmit").stdout).toBe("")
+    // After a tool call the context is named as such, which is how the harness takes it there.
+    expect(hook("PostToolUse").stdout).toBe("")
+    expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
+  } finally {
+    door("close")
+  }
+  expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], { cwd: project, encoding: "utf8", env, input: "not json" })).toMatchObject({ status: 0, stdout: "" })
 })
