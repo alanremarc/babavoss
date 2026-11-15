@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.25.0
+
+- The shell offers `show at=PATH` at `/` while a tab is open: the person's page brings that tab to the front and opens that route. While the person is writing in a field, or acted on the page in the last few seconds, the page offers the place to click to instead. `/` carries `pointed`, the place last shown and its count.
+- A place is a path the surface has a view for, so give each thing its own path (`/issues/:n`), name it under `at` in rows, and keep the page's selection in `useTab().route` with `navigate`, so a refresh, a link and the agent's pointing land on it.
+
 ## 0.24.0
 
 - The shell is now the root surface of `.baba/`, and there is no picker tab. At `/`, `utils` is now `surfaces`, each `{ name, description, open }`. With no surfaces, `/` has `empty`, and with no `.baba/` it has `missing`.
