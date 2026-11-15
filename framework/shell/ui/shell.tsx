@@ -1,5 +1,7 @@
 // The shell page: the surface's root view drives the tab strip and the launcher; each tab shows its util's component.
-// The URL is the surface path: / the launcher, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
+// The strip is the launcher's "+", then the open tabs newest first. A tab the person opens becomes theirs to look at; one
+// the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are.
+// The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { CircleAlertIcon, SettingsIcon, XIcon } from "lucide-react"
@@ -8,9 +10,10 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/comp
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { call, changes, read } from "./client.ts"
-import { Launcher, type UtilEntry } from "./launcher.tsx"
+import { Launcher, LauncherButton, type TabEntry, type UtilEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
+import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent } from "./tabs.tsx"
 
 /** A util's presentation: its component, and the icon the strip and the launcher show. */
@@ -74,6 +77,16 @@ export function Shell({ utils }: { utils: Registry }) {
   const rows = root?.tabs ?? []
   const active = at.key === "new" || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : "new"
   const icons = useMemo(() => Object.fromEntries(Object.entries(utils).map(([name, u]) => [name, u.icon])), [utils])
+  const strip = useMemo(() => newestFirst(rows), [rows])
+  const entries: TabEntry[] = strip.map((row) => ({
+    at: row.at,
+    n: row.n,
+    util: row.util,
+    label: row.title ?? `${row.util} ${row.n}`,
+    icon: icons[row.util] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
+  }))
+  // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
+  const [seen, setSeen] = useState<ReadonlySet<string>>()
 
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -125,6 +138,10 @@ export function Shell({ utils }: { utils: Registry }) {
     }
   }, [root, at.key])
 
+  useEffect(() => {
+    if (root) setSeen((s) => (!s ? new Set([...root.tabs.map((r) => r.at), active]) : s.has(active) ? s : new Set([...s, active])))
+  }, [root, active])
+
   // A closed tab in the URL falls back to the launcher.
   useEffect(() => {
     if (root && at.key !== active) history.replaceState(null, "", urlOf(active, routes[active]))
@@ -157,10 +174,23 @@ export function Shell({ utils }: { utils: Registry }) {
   }
   const open = async (handle: Handle) => {
     const view = await act("/", handle)
-    const opened = view?.tabs.filter((r) => r.util === handle.args.util).at(-1)
+    const opened = newestFirst(view?.tabs.filter((r) => r.util === handle.args.util) ?? [])[0]
 
     if (opened) go(opened.at, "/")
   }
+
+  const choices = {
+    utils: root?.utils ?? [],
+    icons,
+    tabs: entries,
+    active,
+    disabled: pending || !root,
+    loading: !root,
+    launch: (u: UtilEntry) => (u.open ? void open(u.open) : go(rows.find((r) => r.util === u.name)?.at ?? "new")),
+    select: (at: string) => go(at),
+    settings: () => go("settings"),
+  }
+  const away = (at: string) => go(successor(strip, at) ?? "new")
 
   return (
     <div className="flex h-dvh min-h-64 flex-col overflow-hidden text-xs">
@@ -188,16 +218,7 @@ export function Shell({ utils }: { utils: Registry }) {
           </TabContent>
           {active === "new" && (
             <TabContent address="new" hidden={false}>
-              <Launcher
-                title={root?.title}
-                utils={root?.utils ?? []}
-                icons={icons}
-                tabs={rows}
-                disabled={pending || !root}
-                loading={!root}
-                launch={(u) => (u.open ? void open(u.open) : go(rows.find((r) => r.util === u.name)?.at ?? "new"))}
-                settings={() => go("settings")}
-              />
+              <Launcher title={root?.title} {...choices} />
             </TabContent>
           )}
           {rows.map((row) => {
@@ -243,34 +264,16 @@ export function Shell({ utils }: { utils: Registry }) {
       <SurfaceTabs
         active={active}
         onSelect={(key) => go(key)}
-        home={
-          <Button
-            variant="ghost"
-            size="icon"
-            role="tab"
-            id="tab-new"
-            aria-label="Launcher"
-            title="Launcher"
-            aria-selected={active === "new"}
-            aria-controls="content-new"
-            tabIndex={active === "new" ? 0 : -1}
-            className="rounded-full text-muted-foreground hover:bg-foreground/6 aria-selected:bg-foreground/11"
-            onClick={() => go("new")}
-          >
-            <svg viewBox="16 24 80 52" fill="currentColor" aria-hidden>
-              <circle cx="39.772" cy="50" r="18" />
-              <circle cx="77.5" cy="50" r="12.728" />
-            </svg>
-          </Button>
-        }
+        home={<LauncherButton {...choices} />}
         items={[
-          ...rows.map((row) => ({
+          ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go(strip[0]?.at ?? "new") }] : []),
+          ...strip.map((row, i) => ({
             id: row.at,
-            label: row.title ?? `${row.util} ${row.n}`,
-            icon: icons[row.util] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
-            ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && go("new")) }),
+            label: entries[i]!.label,
+            icon: entries[i]!.icon,
+            unseen: !!seen && !seen.has(row.at) && row.at !== active,
+            ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && away(row.at)) }),
           })),
-          ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go("new") }] : []),
         ]}
       />
     </div>
