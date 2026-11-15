@@ -42,7 +42,9 @@ export const whoOf = (cause: Cause | undefined, actor: string): string | undefin
 
 /** A notice in one line: who says it and where, what happened, and by whom. */
 export const noticeLine = (notice: Noticed, who: string) => {
-  const where = [notice.from, notice.at].filter(Boolean).join(" ")
+  // A place at its surface's name says the surface already.
+  const named = !!notice.from && !!notice.at && (notice.at === `/${notice.from}` || notice.at.startsWith(`/${notice.from}/`))
+  const where = [!named && notice.from, notice.at].filter(Boolean).join(" ")
 
   return `${where && `${where}: `}${notice.text} (by ${BY[who] ?? who})`
 }

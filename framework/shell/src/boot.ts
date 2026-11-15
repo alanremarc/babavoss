@@ -2,12 +2,12 @@
 // tabs, who is needed and where the agent pointed; the notices, for the bell and the tabs they dot; and, where the page
 // is a tab's, that tab's view at its / and at its route. The other tabs are read once they are shown.
 import { NOTICES } from "./activity.ts"
-import { within } from "./surface.ts"
+import { addressed } from "./surface.ts"
 
-/** The paths whose views the page at `path` needs in its first frame. */
+/** The paths whose views the page at `path` needs in its first frame: a tab's by the address the path names it by. */
 export function bootPaths(path: string): string[] {
-  const tab = within(path)
-  const address = tab && `/tabs/${tab.n}`
+  const tab = addressed(path)
+  const address = tab && ("n" in tab ? `/tabs/${tab.n}` : `/${tab.name}`)
 
   return ["/", NOTICES, ...(address ? [address, ...(tab.path === "/" ? [] : [address + tab.path])] : [])]
 }

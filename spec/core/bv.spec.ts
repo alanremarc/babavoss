@@ -6,8 +6,8 @@ import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFil
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
-import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../framework/core/runtime/service.ts"
+import { ACTOR_HEADER, CALL_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
+import { ACTOR_HEADER as actorHeader, CALL_HEADER as callHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../framework/core/runtime/service.ts"
 
 const client = resolve("framework/core/bv/bv.ts")
 const roots: string[] = []
@@ -204,7 +204,7 @@ it("loads an edit of the root's code into the running runtime: the same process 
 it("an open names the page each time, and calls it new only once", () => {
   const s = setup()
 
-  expect(s.open().out).toContain("a new address: open it in the harness's browser if it has one, and otherwise give it to the person")
+  expect(s.open().out).toContain(`page: http://127.0.0.1:${s.endpoint().port}  a new address\n`)
 
   const again = s.open().out
 
@@ -224,7 +224,7 @@ it("takes another address where the session's last one is taken, and announces i
   const squatter = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } })
 
   try {
-    expect(s.run(["/"]).out).toContain("a new address: open it in the harness's browser")
+    expect(s.run(["/"]).out).toContain("  a new address\n")
     expect(s.endpoint().port).not.toBe(port)
   } finally {
     squatter.stop(true)
@@ -254,16 +254,17 @@ it("reads program code from stdin", () => {
   expect(s.run(["-e", "-"], client, 'console.log(await root.read("/"))').out).toContain("count: 0")
 })
 it("prints the full help", () => expect(setup().run(["help"]).out).toContain("Stop at the first refusal"))
-it("opens with the commands and no pointer to a fuller guide: what an agent is pointed to, it reads", () => {
+it("opens with the page and the command, and of the command's words only what the skill does not say; no pointer to a fuller guide", () => {
   const out = setup().open().out
 
-  expect(out).toContain("wait for the person")
+  expect(out).toMatch(/^page: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: demo; demo wait \[SECONDS\] waits for the person, then tells what changed\n/)
   expect(out).not.toContain("help")
 })
 it("door installs bv", () => {
   const s = setup()
 
-  expect(s.open().out).toContain("bv is now a command on this machine")
+  // Put in place without a word of it: the answer names the command to call.
+  expect(s.open().out).not.toContain("is now a command")
   expect(statSync(join(s.bin, "bv")).mode & 0o111).toBeTruthy()
 })
 it("installed bv runs as an extensionless command", () => {
@@ -301,7 +302,7 @@ it("door works when bin cannot be written", () => {
   expect(answer.status, answer.err).toBe(0)
   expect(answer.out).toContain("cannot put bv beside bun")
   expect(answer.out).toContain("allow writing there (under a sandbox, in the harness settings)")
-  expect(answer.out).toContain(`bun '${s.entry}' PATH`)
+  expect(answer.out).toContain(`command: bun '${s.entry}'`)
 })
 it("door takes a request", () => {
   const s = setup()
@@ -312,6 +313,7 @@ it("door takes a request", () => {
 it("duplicates the framework's constants exactly", () => {
   expect(SERVICE_HEADER).toBe(serviceHeader)
   expect(ACTOR_HEADER).toBe(actorHeader)
+  expect(CALL_HEADER).toBe(callHeader)
   expect(endpointFile("state")).toBe(join("state", ENDPOINT_FILE))
 })
 
@@ -346,7 +348,7 @@ it("refused runtime names what the harness must allow", () => {
 it("makes a root's word and uses it", () => {
   const s = setup()
 
-  expect(s.open().out).toContain("demo is now a command")
+  expect(s.open().out).toContain("command: demo;")
   const answer = spawnSync(join(s.bin, "demo"), ["/"], { env: s.env, encoding: "utf8" })
 
   expect(answer.status, answer.stderr).toBe(0)
@@ -358,7 +360,7 @@ it("keeps another command's word and uses bv NAME", () => {
 
   writeFileSync(occupied, "#!/bin/sh\nexit 0\n", { mode: 0o755 })
   s.env.PATH = `${s.bin}:${process.env.PATH}`
-  expect(s.open().out).toContain("bv demo PATH")
+  expect(s.open().out).toContain("command: bv demo;")
   expect(readFileSync(occupied, "utf8")).toContain("exit 0")
   expect(s.run(["demo", "/"]).out).toContain("add: bv demo / add")
 })
@@ -527,7 +529,7 @@ it("a project handle runs exactly as printed from the project root", () => {
     const answer = s.open()
 
     expect(answer.status).toBe(0)
-    expect(answer.stdout).toContain("call it as .babavoss/bin/demo, from the project directory")
+    expect(answer.stdout).toContain("command: .babavoss/bin/demo, from the project's directory;")
 
     const line = answer.stdout.split("\n").find((line) => line.startsWith("add: "))!
     const command = line.slice(5).split("   ")[0]!.replace("text=string", "text=Printed").split(" ")

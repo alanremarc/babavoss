@@ -30,6 +30,8 @@ export interface Running<M> {
   cause(): Cause | undefined
   /** The view at `path` as an actor sees it; the person by default. */
   read(path: string, actor?: string): View | undefined
+  /** What a read or a call of a path with nothing at it is answered with: the surface's word for it, else that nothing is there. */
+  absent(path: string): string
   /** An actor's call: refused unless the view at `path` offers the handle with these fixed args and the open args fit. */
   call(path: string, name: string, args: Args, actor: string): Promise<Answer>
   /** Told after every change of the model, every command started or ended, and once on failure. */
@@ -113,6 +115,13 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     return p
   }
   const read = (path: string, actor = "person") => surface.view(model, path, actor)
+  const absent = (path: string) => {
+    try {
+      return surface.absent?.(model, path) ?? `nothing at ${path}`
+    } catch {
+      return `nothing at ${path}`
+    }
+  }
   const commit = (next: M, by: Cause) => {
     ports.save({ model: next })
     model = next
@@ -239,6 +248,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     cause: () => cause,
     failure: () => failure,
     read,
+    absent,
     call: (path, name, args, actor) =>
       enqueue((): Answer => {
         if (stopped) return refused(failure ?? "surface stopped")
@@ -252,7 +262,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
           return refused(failure!)
         }
-        if (!view) return refused(`nothing at ${path}`)
+        if (!view) return refused(absent(path))
 
         const admitted = admit(view, path, name, args)
 

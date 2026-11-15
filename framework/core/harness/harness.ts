@@ -61,8 +61,14 @@ export const NONE: Tokens = { input: 0, cache_write: 0, cache_read: 0, output: 0
 
 /** The moments of a session the framework's hook knows, named as the harnesses commonly name their hooks. */
 export type Moment = "SessionStart" | "UserPromptSubmit" | "PostToolUse" | "Stop" | "SessionEnd"
-/** One hook's input, read: the session's id, the harness's own name for its event, the framework's moment, and whether a start is a compaction's. */
-export type HookEvent = { session?: string; event: string; moment: Moment; compact?: boolean }
+/** How a session started, where its harness says: new, resumed, cleared, after a compaction, or forked from another. */
+export type Source = "startup" | "resume" | "clear" | "compact" | "fork"
+export const SOURCES: readonly Source[] = ["startup", "resume", "clear", "compact", "fork"]
+/** One hook's input, read: the session's id, the harness's own name for its event, the framework's moment, and at a start its source where said. */
+export type HookEvent = { session?: string; event: string; moment: Moment; source?: Source }
+/** A start's source in a hook's input; undefined where it is none the framework knows. */
+export const sourceOf = (event: string, source: unknown): { source: Source } | {} =>
+  event === "SessionStart" && (SOURCES as readonly unknown[]).includes(source) ? { source: source as Source } : {}
 
 /** What a set-up face did: the paths it wrote or removed, relative to the project, and a line to say to the person. */
 export type SetUp = { paths: string[]; said?: string }

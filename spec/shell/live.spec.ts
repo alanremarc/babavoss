@@ -19,7 +19,9 @@ const settled = () => new Promise((done) => setTimeout(done, 0))
 describe("the page's boot", () => {
   it("names the shell, its notices, and a tab's views at its / and its route, for the page's path", () => {
     expect(bootPaths("/")).toEqual(["/", "/activity/notices"])
-    expect(bootPaths("/settings")).toEqual(["/", "/activity/notices"])
+    expect(bootPaths("/activity")).toEqual(["/", "/activity/notices"])
+    expect(bootPaths("/settings")).toEqual(["/", "/activity/notices", "/settings"])
+    expect(bootPaths("/queue/issues/40")).toEqual(["/", "/activity/notices", "/queue", "/queue/issues/40"])
     expect(bootPaths("/tabs/3")).toEqual(["/", "/activity/notices", "/tabs/3"])
     expect(bootPaths("/tabs/3/issues/40")).toEqual(["/", "/activity/notices", "/tabs/3", "/tabs/3/issues/40"])
   })

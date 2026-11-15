@@ -2,7 +2,8 @@
 // message and ends when the agent stops; between, each tool call says it is still working. It is information, never
 // control: kept in memory alone, told to the page, and a runtime that starts again does not know it until the next hook.
 // Hooks can miss: an interrupted turn has no Stop, a harness without hooks says nothing. So working with no word from
-// the hooks for STALE_MS, and no call of the agent's under way, reads as unknown rather than stuck.
+// the hooks for STALE_MS, and no call of the agent's under way, reads as unknown rather than stuck. Where the hooks have
+// gone quiet (Hooks), a call under way keeps nothing: calls alone never read as work.
 
 /** What a hook tells of the turn: begun with a message, still under way, ended, or the session gone. */
 export type TurnEvent = "started" | "working" | "ended" | "gone"
@@ -35,6 +36,33 @@ export function reading(turn: Turn, now: number, busy = false): Turn {
   if (turn.agent !== "working" || busy || now - turn.heard <= STALE_MS) return turn
 
   return { agent: "unknown", since: turn.heard + STALE_MS, heard: turn.heard }
+}
+
+/**
+ * The hooks' silence, as the agent's word finds it. Each run of the word is one tool call of the agent's, and a harness's
+ * hooks speak after each tool call; so a run that begins more than HUSH_MS after another run's last answer, with no hook
+ * heard since, finds them quiet. One tool call that runs long, a wait or a program of many calls, is one run, and never
+ * finds them so. `ever`: a hook was heard in this session; `told`: the agent was told of this stretch of silence, which the
+ * next hook heard ends; `last`: the run answered last since a hook was heard, and when.
+ */
+export type Hooks = { ever: boolean; told: boolean; last?: { call: string; at: number } }
+export const HUSH_MS = 10_000
+export const QUIET_LINE = "baba: this session's hooks are not being heard; what changes is told only when you read it. Start a new session to get them back."
+export const NO_HOOKS_LINE = "baba: no hook of this session's harness is heard; what changes is told only when you read it."
+
+export const unheardHooks = (): Hooks => ({ ever: false, told: false })
+/** A hook was heard: the silence, if any, has ended. */
+export const hooksHeard = (): Hooks => ({ ever: true, told: false })
+/** A run of the word was answered at `now`. */
+export const answered = (hooks: Hooks, call: string, now: number): Hooks => ({ ...hooks, last: { call, at: now } })
+
+/** What a run of the word asking at `now` is told of the hooks' silence: a line once a stretch, where they are quiet. */
+export function hushed(hooks: Hooks, call: string, now: number): { hooks: Hooks; line?: string } {
+  const quiet = hooks.last !== undefined && hooks.last.call !== call && now - hooks.last.at > HUSH_MS
+
+  if (hooks.told || !quiet) return { hooks }
+
+  return { hooks: { ...hooks, told: true }, line: hooks.ever ? QUIET_LINE : NO_HOOKS_LINE }
 }
 
 /** What a harness that can be driven from code does: starts a turn of the session's agent with a message. */
