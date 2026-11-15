@@ -1,11 +1,13 @@
 // The root's util: the roles in a .baba/, read from its directory. A role is made and changed in code, by the agent
 // through the skill baba; here they are only seen.
 import { action, surface, view, type Update } from "../../core/index.ts"
-import { describedRoles, type Described } from "../../core/provision.ts"
+import { describedRoles } from "../../core/provision.ts"
 
-export type Model = { roles: Described[]; error?: string }
+/** A role as the list names it: what it does and when to use it. Its know-how is told by its tab. */
+type Listed = { name: string; description: string }
+export type Model = { roles: Listed[]; error?: string }
 type Command = { kind: "read" }
-type Event = { kind: "read"; roles: Described[] } | { kind: "failed"; error: string }
+type Event = { kind: "read"; roles: Listed[] } | { kind: "failed"; error: string }
 
 /** `baba` is the .baba/ directory; undefined where the session's directory has none. */
 export function rolesSurface(baba: string | undefined) {
@@ -35,7 +37,7 @@ export function rolesSurface(baba: string | undefined) {
     update: (model, message): Update<Model, Command> =>
       message.kind === "call" ? pages.update(model, message) : message.kind === "read" ? { model: { roles: message.roles } } : { model: { ...model, error: message.error } },
     view: pages.view,
-    run: async (_command, send) => send({ kind: "read", roles: describedRoles(baba!) }),
+    run: async (_command, send) => send({ kind: "read", roles: describedRoles(baba!).map(({ name, description }) => ({ name, description })) }),
     failed: (_command, error) => ({ kind: "failed", error }),
   })
 }

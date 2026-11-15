@@ -14,11 +14,12 @@ A TypeScript framework for roles an agent plays. A role is a tool the agent work
 
 ```text
 package.json                the package babavoss, at the repository's root, where a git dependency finds it
-bin/baba.ts                 the package's command: init, new, role, start, provision, hook
+bin/baba.ts                 the package's command: init, new, start, provision, hook
 framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, hook.ts, update.ts
 framework/shell/            the shell: tabs, page hosting and build, layouts, components
 framework/root/             the root of a .baba/: the one runtime and page of a session, with the roles as its tabs
-skill/SKILL.md              baba, the skill that maintains .baba/; provisioned as it is
+skill/SKILL.md              baba: the words that make an agent aware of the roles; provisioned as a skill, and given by the hook
+skill/making-roles.md       how a role is made and changed; read from the package when needed
 template/                   the role a new one starts from: a surface, a component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
 spec/{core,shell,bin}/      the specs, mirroring the code
@@ -36,8 +37,7 @@ A project that uses it:
 .baba/                      the roles' package: package.json names the framework, installing provisions
   roles/NAME/               a role: ROLE.md, src/role.ts, ui/index.tsx, spec/
   .root/                    generated from the roles: their surfaces as one module, and the root's page
-  provisioned.json          the skills provisioning wrote last
-.claude/skills/NAME/  .agents/skills/NAME/   generated: one SKILL.md per role, and baba's
+.claude/skills/baba/  .agents/skills/baba/   generated: baba's SKILL.md
 .claude/settings.json       the person's, with the framework's hook written into it
 .babavoss/                  what the roles' sessions write
 ```
@@ -64,5 +64,5 @@ Style, which no tool enforces:
 
 ## Skills
 
-- A description says what the role does and when to use it: a phrase and a "use when", never a sentence about the skill.
-- How a role is opened and operated is the same in every skill: provisioning writes it, from framework/core/provision.ts.
+- skill/SKILL.md is given to every session of a project, so every line of it earns its place; what is needed only to make a role is in skill/making-roles.md.
+- A role's description says what it does and when to use it: a phrase and a "use when".

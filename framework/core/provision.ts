@@ -1,13 +1,12 @@
-// Provisioning: a project's roles are code in its .baba/ directory, and each is given to the harnesses as a skill in the
-// directory .baba/ is in. A provisioned skill is one generated file, SKILL.md: the role's own description and know-how
-// from its ROLE.md, around the part that is the same for every role, how to open it and how to operate it. baba, the
-// skill that maintains .baba/, is provisioned with them, from this package, so it is always the one for this framework.
-// The framework's hook is provisioned too, where the harness has hooks: it tells the agent what it did not ask for.
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+// Provisioning: a project's roles are code in its .baba/ directory, and what the harnesses beside it are given is one
+// thing, the content that makes an agent aware of them. Where a harness has hooks, the framework's hook delivers it: the
+// skill baba's words and the root's present at a session's start, the present's changes after. The skill baba itself is
+// written too, for harnesses without hooks and as the way back in. Roles get no skills of their own: a role teaches
+// the agent by its tab on the root's surface, where its own know-how, from its ROLE.md, stands among its facts.
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { readJsonFile, writeJsonFile } from "./state/json-file.ts"
 
 /** Where the harnesses read skills, relative to a project or to the person's home: Claude Code, and Codex with the rest. */
 export const SKILL_FOLDERS = [".claude/skills", ".agents/skills"]
@@ -18,30 +17,10 @@ export const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse"]
 const SETTINGS = ".claude/settings.json"
 /** How the framework's hooks are told from the person's: by the command they run. */
 const HOOK = '/.baba/node_modules/babavoss/bin/baba.ts" hook'
-/** What was provisioned last, kept in .baba/: skills no role stands behind any more are removed, and no other skill is touched. */
-const RECORD = "provisioned.json"
 const NAME = /^[a-z][a-z0-9-]*$/
-/** Names a role cannot take: the skill's and the root's own util. */
+/** Names a role cannot take: the root's and its own util's. */
 export const RESERVED = ["baba", "roles"]
 const BABA = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
-
-/** How every role is operated: what the agent knows before its first command. */
-export const OPERATING = `## Operating it
-
-- An answer shows everything that is true now. Do not look for it in the role's code or in what it keeps on disk, and never change either to get something done.
-- A line that ends in a description is an action offered now, printed as the exact command. Copy it and give a value where it says \`name=string\`. An action that is not printed is not offered.
-- A fact named \`at\` is a path with more behind it: read it with the command for its detail and the actions offered there. The role is a tab: its facts and actions are at its tab's path, which the answer names, and \`/\` is the root, which lists every open tab.
-- Every answer says what changed since you last looked, including what the person did on the page.
-- A refusal gives its reason. Read again and act on what is offered; do not repeat the call.
-- The person watches and acts on the page. Whenever the role names a new address, open it in the harness's browser if it has one, and otherwise give the address to the person.
-- For more than a few calls of one kind, write one program with the command's \`-e\`: \`role.read(path)\`, \`role.call(path, handle, args)\` and \`role.wait(seconds)\`. Print each result and stop at the first refusal.`
-
-/** .baba/ as a skill reaches it: every skill folder is two directories under the one .baba/ is in. */
-const FROM_SKILL = "<the directory this file is in>/../../../.baba"
-
-const opening = (name: string) => `Run \`bun ${FROM_SKILL}/node_modules/babavoss/bin/baba.ts role ${name}\` from the project's directory. Its answer is the role: it is opened as a tab of the root of .baba/ when it is not open yet, and the answer is what is true there now and what can be done.
-
-If \`bun\` is missing, tell the person to install it with \`curl -fsSL https://bun.sh/install | bash\`. If that file is missing, run \`bun install\` in ${FROM_SKILL} and run it again. If the answer says something must be allowed, pass that line to the person.`
 
 /** A role's ROLE.md: its description, and under the frontmatter its own know-how. */
 function readRole(file: string): { description: string; body: string } {
@@ -72,8 +51,8 @@ const written = (file: string, text: string) => {
 }
 
 /**
- * Generates the root of `baba` from its roles, and answers with its directory: roles.ts, the surfaces by name, which the
- * root's runtime imports; and the page, index.html, main.tsx and styles.css, the shell with each role's component.
+ * Generates the root of `baba` from its roles, and answers with its directory: roles.ts, the surfaces by name and what
+ * each role's ROLE.md tells, which the root's runtime imports; and the page, index.html, main.tsx and styles.css, the shell with each role's component.
  */
 export function generateRoot(baba: string): string {
   const dir = join(baba, ROOT_DIR)
@@ -83,7 +62,7 @@ export function generateRoot(baba: string): string {
 
   written(
     join(dir, "roles.ts"),
-    `${head}${names.map((name, i) => `import r${i} from "../${ROLES_DIR}/${name}/src/role.ts"\n`).join("")}\nexport default { ${names.map((name, i) => `${JSON.stringify(name)}: r${i}`).join(", ")} }\n`
+    `${head}${names.map((name, i) => `import r${i} from "../${ROLES_DIR}/${name}/src/role.ts"\n`).join("")}\nexport default { ${names.map((name, i) => `${JSON.stringify(name)}: r${i}`).join(", ")} }\nexport const described = ${JSON.stringify(describedRoles(baba), null, 2)}\n`
   )
   written(
     join(dir, "main.tsx"),
@@ -99,15 +78,18 @@ export function generateRoot(baba: string): string {
   return dir
 }
 
-export type Described = { name: string; description: string }
+/** A role as its ROLE.md tells it: what it does and when to use it, and its own know-how, empty where it has none. */
+export type Described = { name: string; description: string; knowhow: string }
 
-/** The roles in a .baba/ directory with their descriptions; one whose ROLE.md has none says so in its place. */
+/** The roles in a .baba/ directory as their ROLE.md tells them; one whose ROLE.md has no description says so in its place. */
 export const describedRoles = (baba: string): Described[] =>
   roles(baba).map((name) => {
     try {
-      return { name, description: readRole(join(baba, ROLES_DIR, name, "ROLE.md")).description }
+      const { description, body } = readRole(join(baba, ROLES_DIR, name, "ROLE.md"))
+
+      return { name, description, knowhow: body }
     } catch {
-      return { name, description: "ROLE.md has no description yet" }
+      return { name, description: "ROLE.md has no description yet", knowhow: "" }
     }
   })
 
@@ -119,13 +101,6 @@ export function findBaba(from: string): string | undefined {
     if (existsSync(join(baba, "package.json"))) return baba
     if (dir === dirname(dir)) return undefined
   }
-}
-
-/** The skill of a role, as provisioned. */
-export function roleSkill(baba: string, name: string): string {
-  const { description, body } = readRole(join(baba, ROLES_DIR, name, "ROLE.md"))
-
-  return `---\nname: ${name}\ndescription: ${description}\ncompatibility: Requires Bun 1.4 or later\n---\n\n${opening(name)}\n\n${OPERATING}\n${body && `\n${body}\n`}`
 }
 
 type Handler = { type?: string; command?: string }
@@ -164,47 +139,20 @@ export function provisionHooks(baba: string) {
   writeFileSync(file, `${JSON.stringify({ ...settings, hooks }, null, 2)}\n`)
 }
 
-/** A skill of this name beside `baba` that provisioning did not make, and so will not write over; undefined where there is none. */
-export function taken(baba: string, name: string): string | undefined {
-  const before = readJsonFile<string[]>(join(baba, RECORD)) ?? []
-
-  return SKILL_FOLDERS.map((folder) => join(folder, name)).find((dir) => existsSync(join(dirname(baba), dir)) && !before.includes(dir))
-}
-
 /**
- * Writes the skills of `baba`, a .baba/ directory, into the harnesses' skill folders beside it: baba itself and one per
- * role. Answers with what it wrote and removed, relative to the directory .baba/ is in.
+ * Provisions `baba`, a .baba/ directory: the skill baba in the harnesses' skill folders beside it, the framework's hook
+ * in Claude Code's settings there, and the root generated from the roles. Answers with what it wrote, relative to the
+ * directory .baba/ is in.
  */
-export function provision(baba: string): { written: string[]; removed: string[] } {
+export function provision(baba: string): string[] {
   const root = dirname(baba)
-  const record = join(baba, RECORD)
-  const before = readJsonFile<string[]>(record) ?? []
-  const skills = new Map<string, string>([["baba", readFileSync(BABA, "utf8")]])
+  const skill = readFileSync(BABA, "utf8")
 
-  for (const name of roles(baba)) {
+  for (const name of roles(baba))
     if (!NAME.test(name) || RESERVED.includes(name)) throw new Error(`${join(baba, ROLES_DIR, name)}: a role's name is lowercase kebab-case, and not ${RESERVED.join(" or ")}`)
-    skills.set(name, roleSkill(baba, name))
-  }
-
-  const files = SKILL_FOLDERS.flatMap((folder) => [...skills].map(([name, text]) => ({ file: join(root, folder, name, "SKILL.md"), text })))
-
-  for (const name of skills.keys()) {
-    const other = taken(baba, name)
-
-    if (other) throw new Error(`${other} exists already and was not provisioned from here: name the role otherwise, or remove what is there`)
-  }
-
-  const now = files.map(({ file }) => relative(root, dirname(file)))
-  const removed = before.filter((dir) => !now.includes(dir))
-
-  for (const dir of removed) rmSync(join(root, dir), { recursive: true, force: true })
-  for (const { file, text } of files) {
-    mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, text)
-  }
-  writeJsonFile(record, now)
+  for (const folder of SKILL_FOLDERS) written(join(root, folder, "baba", "SKILL.md"), skill)
   provisionHooks(baba)
   generateRoot(baba)
 
-  return { written: now, removed }
+  return [...SKILL_FOLDERS.map((folder) => join(folder, "baba")), SETTINGS, relative(root, join(baba, ROOT_DIR))]
 }

@@ -55,7 +55,7 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
     for (const [name, role] of roles) {
       const text = await changed(role, session).catch(() => undefined)
 
-      if (text) lines.push(`${name === "baba" ? "The roles' tabs" : `The role ${name}`} changed since this session last read them; the person may have acted on the page:\n${text}`)
+      if (text) lines.push(`${name === "baba" ? "The root of .baba/" : `The role ${name}`} changed since this session last read it; the person may have acted on the page:\n${text}`)
     }
 
   return lines.length ? lines.join("\n\n") : undefined
