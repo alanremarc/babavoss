@@ -8,7 +8,8 @@
 // notices is marked by asks at /activity/notices, which are no activity and change nothing at /. What
 // a surface throws breaks only what it was asked for: a tab it cannot restore or show at / is listed as broken, with why
 // and what to do, and close stays offered; a path it cannot show says so, and the rest of the tab works; a tab it cannot
-// open is not made.
+// open is not made. A surface whose code does not load is listed as broken with why, and cannot be opened; its open tabs
+// keep what they hold, broken, until its code loads again.
 //
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
@@ -16,7 +17,7 @@
 import { action, handles, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenOf, type Entry, type Seen } from "./activity.ts"
 
-/** `broken`: why the tab's surface could not restore its kept model, which is then kept as it was saved. */
+/** `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved. */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string }
 /** Where the agent last pointed the person, and how many times it has: the page goes there when the count moves. */
 export type Pointed = { at: string; n: number }
@@ -79,12 +80,16 @@ export const attentionOf = (value: Json | undefined): Attention[] =>
 
 /**
  * The shell over `surfaces`, by name. `baba` is the .baba/ they are from; where there is none, the desktop says so.
+ * `broken` names the surfaces of that .baba/ whose code did not load, with why (loading.ts).
  * A session's state kept from before is read as it was: its picker tab is dropped, and a tab's `util` is its surface.
  */
-export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surface<ShellModel, ShellEvent, ShellCommand> {
+export function shell(surfaces: Record<string, AnySurface>, baba?: string, broken: Record<string, string> = {}): Surface<ShellModel, ShellEvent, ShellCommand> {
   const held = new Map(Object.entries(surfaces))
+  const unloaded = new Map(Object.entries(broken).filter(([name]) => !held.has(name)))
+  /** Why a surface that does not load is broken, and what mends it. */
+  const unloadable = (name: string) => `the ${name} surface does not load (${unloaded.get(name)}); fix its code, and it is loaded again`
 
-  for (const name of held.keys()) if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error(`A surface's name is lowercase kebab-case: ${name}`)
+  for (const name of [...held.keys(), ...unloaded.keys()]) if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error(`A surface's name is lowercase kebab-case: ${name}`)
 
   const open = action({
     name: "open",
@@ -94,6 +99,7 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
     update(model: ShellModel, { surface: name }): Update<ShellModel, ShellCommand> {
       const s = held.get(name)
 
+      if (unloaded.has(name)) return { refused: `no ${name} tab is opened: ${unloadable(name)}` }
       if (!s) return { refused: `no surface ${name}` }
 
       // A tab that would be broken from the start is not made: its surface's code is at fault, and the refusal says how.
@@ -222,8 +228,11 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
       title: "baba",
-      ...(baba === undefined ? { missing: MISSING } : !held.size && { empty: EMPTY }),
-      surfaces: [...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
+      ...(baba === undefined ? { missing: MISSING } : !held.size && !unloaded.size && { empty: EMPTY }),
+      surfaces: [
+        ...[...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
+        ...[...unloaded.keys()].map((name) => ({ name, broken: unloadable(name) })),
+      ],
       tabs: model.tabs.map((tab) => ({ at: `/tabs/${tab.n}`, n: tab.n, surface: tab.surface, close: close.bind({ n: tab.n }) })),
       ...(model.tabs.length > 0 && { show: show.bind({}) }),
       ...(model.pointed && { pointed: model.pointed }),
@@ -323,6 +332,8 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
           const name = t.surface ?? (t.util === PICKER ? undefined : t.util)
           const s = name === undefined ? undefined : held.get(name)
 
+          if (name !== undefined && unloaded.has(name) && t.model !== undefined)
+            return [{ n: t.n, surface: name, model: t.model, broken: `tab ${t.n} is broken: ${unloadable(name)}, with the state the tab keeps` }]
           // A tab with no model holds nothing, and one whose surface is gone has nothing to show it.
           if (name === undefined || !s || t.model === undefined) return []
           try {
