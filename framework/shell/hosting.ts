@@ -1,5 +1,5 @@
 // The shell page: bundle source on demand; built releases serve files directly. What the page is built from is installed
-// by the role's door before it opens.
+// by the root's door before it opens.
 import { existsSync, readFileSync, mkdtempSync, readdirSync, statSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import type { IncomingMessage, ServerResponse } from "node:http"
@@ -10,7 +10,7 @@ import type { UiHosting } from "../core/index.ts"
 const here = dirname(fileURLToPath(import.meta.url))
 const frameworkRoot = resolve(here, "..")
 
-/** Where a release puts the built page, under the role's ui directory. */
+/** Where a release puts the built page, under the root's ui directory. */
 export const BUILT = "dist"
 
 const TYPES: Record<string, string> = {
@@ -163,7 +163,7 @@ export async function buildUi(dir: string | URL, out: string): Promise<void> {
   })
 
   if (!result.success) throw new AggregateError(result.logs, "page build failed")
-  // The shell's page brings no styles of its own, so that they are compiled once: without the role's, it would show bare.
+  // The shell's page brings no styles of its own, so that they are compiled once: without the root's, it would show bare.
   if (shell && !styles.size)
     throw new Error("the page has no stylesheet: import one from its entry, such as ./styles.css, which imports the shell's ui/styles.css")
   for (const [name, css] of styles) await Bun.write(join(out, name), css)

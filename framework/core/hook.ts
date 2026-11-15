@@ -1,12 +1,12 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
 // baba would, its text and the root's answer, the root started; with each message of the person and after each tool call, what changed in
-// an open role since the session was last answered, as when the person acted on its page. It steers and informs, and
+// an open root since the session was last answered, as when the person acted on its page. It steers and informs, and
 // blocks nothing: a hook that finds nothing says nothing, and one that fails is silent.
 import { readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type OpenRole } from "./bv/bv.ts"
+import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 
 /** What a harness gives a hook on standard input; Claude Code's names. */
 export type HookInput = { session_id?: string; hook_event_name?: string; source?: string }
@@ -15,14 +15,14 @@ type Endpoint = { port: number; token: string; dir: string }
 const ROOT = fileURLToPath(new URL("../root/scripts/open.ts", import.meta.url))
 const SKILL = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
 
-/** Where the roles of a .baba/ keep what their sessions write: beside it, or in the person's home's own place. */
+/** Where the roots of a .baba/ keep what their sessions write: beside it, or in the person's home's own place. */
 export const homeOf = (baba: string) => join(dirname(baba) === realpathSync(homedir()) ? homedir() : dirname(baba), ".babavoss")
 
-/** What changed in an open role since the session was last answered; undefined where nothing did, or its runtime is asleep. */
-async function changed(role: OpenRole, session: string): Promise<string | undefined> {
-  const endpoint = load<Endpoint>(join(role.state, ENDPOINT_FILE))
+/** What changed in an open root since the session was last answered; undefined where nothing did, or its runtime is asleep. */
+async function changed(root: OpenRoot, session: string): Promise<string | undefined> {
+  const endpoint = load<Endpoint>(join(root.state, ENDPOINT_FILE))
 
-  if (!endpoint || endpoint.dir !== role.state) return undefined
+  if (!endpoint || endpoint.dir !== root.state) return undefined
 
   const answer = await fetch(`http://127.0.0.1:${endpoint.port}/_/wait?seconds=0`, {
     headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
@@ -33,29 +33,29 @@ async function changed(role: OpenRole, session: string): Promise<string | undefi
   return answer.ok && text && text !== "nothing changed" ? text : undefined
 }
 
-/** The context a hook adds for the agent, for the roles of `baba`, a .baba/ directory; undefined when there is none to add. */
+/** The context a hook adds for the agent, for the roots of `baba`, a .baba/ directory; undefined when there is none to add. */
 export async function hookContext(input: HookInput, baba: string): Promise<string | undefined> {
   const session = input.session_id
 
   if (!session || !/^[A-Za-z0-9._-]+$/.test(session)) return undefined
   process.env.BABAVOSS_HOME ??= homeOf(baba)
 
-  const roles = Object.entries(load<Record<string, OpenRole>>(registryFile(session)) ?? {})
+  const roots = Object.entries(load<Record<string, OpenRoot>>(registryFile(session)) ?? {})
   const lines: string[] = []
 
   if (input.hook_event_name === "SessionStart") {
     // What invoking the skill baba gives, given unasked: its text, and the root started, which the skill would have the
-    // agent do. The root's answer is its version, its page's address, the roles and the tabs open in this session.
+    // agent do. The root's answer is its version, its page's address, the roots and the tabs open in this session.
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
     lines.push(readFileSync(SKILL, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
     if (root.exitCode === 0 && answer) lines.push(`The root of .baba/ was started for this session, and answered:\n${answer}`)
   } else
-    for (const [name, role] of roles) {
-      const text = await changed(role, session).catch(() => undefined)
+    for (const [name, root] of roots) {
+      const text = await changed(root, session).catch(() => undefined)
 
-      if (text) lines.push(`${name === "baba" ? "The root of .baba/" : `The role ${name}`} changed since this session last read it; the person may have acted on the page:\n${text}`)
+      if (text) lines.push(`${name === "baba" ? "The root of .baba/" : `The root ${name}`} changed since this session last read it; the person may have acted on the page:\n${text}`)
     }
 
   return lines.length ? lines.join("\n\n") : undefined

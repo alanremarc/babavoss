@@ -1,8 +1,8 @@
-// The role's first spec, as stories: actors see views, call what those views offer and are told what changed.
-// Nothing here reads the model. Write one test per rule of the role, in the words the person would use for it.
+// The surface's first spec, as stories: actors see views, call what those views offer and are told what changed.
+// Nothing here reads the model. Write one test per rule of the surface, in the words the person would use for it.
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
-import greeting from "../src/role.ts"
+import greeting from "../src/surface.ts"
 
 test("the agent proposes a greeting, and only the person is offered the decision", async () => {
   const { agent, person } = story(greeting)

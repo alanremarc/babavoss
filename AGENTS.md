@@ -1,6 +1,6 @@
 # babavoss
 
-A TypeScript framework for roles an agent plays. A role is a tool the agent works with for a person: a surface the agent reads and acts on through a command, and a page where the person watches and steers over the same surface. A project's roles are code in its `.baba/` directory, a Bun package that names this framework; provisioning gives each to the harnesses as a skill. baba is the skill that maintains `.baba/`, carried by the framework's package and provisioned with the roles. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
+A TypeScript framework for surfaces an agent works on. A surface is a tool the agent works with for a person: what is true now and what can be done now, read and acted on through a command, and a tab where the person watches and steers over the same thing. A project's surfaces are code in its `.baba/` directory, a Bun package that names this framework. `.baba/` has a root, one runtime and one page per session, whose first tab is the picker of surfaces and which holds each open surface as a tab. An agent is made aware by one piece of content, baba's words and the root's present, delivered by hooks and, where there are none, by the skill baba. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
 
 ## Rules
 
@@ -17,15 +17,15 @@ package.json                the package babavoss, at the repository's root, wher
 bin/baba.ts                 the package's command: init, new, start, provision, hook
 framework/core/             the framework's layers; bv/ holds bv and the door; provision.ts, hook.ts, update.ts
 framework/shell/            the shell: tabs, page hosting and build, layouts, components
-framework/root/             the root of a .baba/: the one runtime and page of a session, with the roles as its tabs
-skill/SKILL.md              baba: the words that make an agent aware of the roles; provisioned as a skill, and given by the hook
-skill/making-roles.md       how a role is made and changed; read from the package when needed
-template/                   the role a new one starts from: a surface, a component and a spec; `baba new` copies it
+framework/root/             the root of a .baba/: the one runtime and page of a session, the picker and the surfaces as its tabs
+skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
+skill/making-surfaces.md    how a surface is made and changed; read from the package when needed
+template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
 spec/{core,shell,bin}/      the specs, mirroring the code
 spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network
 docs/DESIGN.md              the design
-.baba/                      this repository's own roles: its framework is the checkout, linked by its postinstall, not a release
+.baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
 .claude/  .agents/          provisioned from .baba/: baba's skill and the framework's hook; a harness started here runs this checkout
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .babavoss/                  what sessions here write; ignored by git
@@ -34,20 +34,21 @@ docs/DESIGN.md              the design
 A project that uses it:
 
 ```text
-.baba/                      the roles' package: package.json names the framework, installing provisions
-  roles/NAME/               a role: ROLE.md, src/role.ts, ui/index.tsx, spec/
-  .root/                    generated from the roles: their surfaces as one module, and the root's page
+.baba/                      the surfaces' package: package.json names the framework, installing provisions
+  surfaces/NAME/            a surface: src/surface.ts, ui/index.tsx, spec/
+  .root/                    generated from the surfaces: all of them as one module, and the root's page
 .claude/skills/baba/  .agents/skills/baba/   generated: baba's SKILL.md
 .claude/settings.json       the person's, with the framework's hook written into it
-.babavoss/                  what the roles' sessions write
+.babavoss/                  what the root's sessions write
 ```
 
 ## Code
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
-- A role imports the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`. Here the root package links itself.
+- A surface imports the framework only as the package, `babavoss/core/…`, and the shell as `babavoss/shell/…`. Here the root package links itself.
+- In the core, a root is what a runtime serves: a name, a surface and a page. The root of a .baba/ is one; the specs' notes fixture is another.
 - Production never imports spec.
-- The version is semantic, in package.json, set by hand. Every version on main is a release: a change to the package raises it and adds its section to CHANGELOG.md, written for the agent that adapts a project's roles to it. On main, the Release workflow tags a new version vX.Y.Z; tags are never moved.
+- The version is semantic, in package.json, set by hand. Every version on main is a release: a change to the package raises it and adds its section to CHANGELOG.md, written for the agent that adapts a project's surfaces to it. On main, the Release workflow tags a new version vX.Y.Z; tags are never moved.
 
 Style, which no tool enforces:
 
@@ -64,5 +65,5 @@ Style, which no tool enforces:
 
 ## Skills
 
-- skill/SKILL.md is given to every session of a project, so every line of it earns its place; what is needed only to make a role is in skill/making-roles.md.
-- A role's description says what it does and when to use it: a phrase and a "use when".
+- skill/SKILL.md is given to every session of a project, so every line of it earns its place; what is needed only to make a surface is in skill/making-surfaces.md.
+- A surface's description says what it does and when to use it: a phrase and a "use when". How it is worked is said by its views; no file of instructions stands beside a surface.

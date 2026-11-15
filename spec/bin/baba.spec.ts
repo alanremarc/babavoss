@@ -1,12 +1,13 @@
-// The package's command, as a project uses it: init makes .baba/ and provisions, new makes a role from the template,
+// The package's command, as a project uses it: init makes .baba/ and provisions, new makes a surface from the template,
 // provision writes the skill baba and the hook beside .baba/ and generates the root, and the hook makes a session aware.
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { VERSION } from "../../framework/core/update.ts"
+import { poll } from "../support/poll.ts"
 
 const checkout = fileURLToPath(new URL("../..", import.meta.url))
 const project = realpathSync(mkdtempSync(join(tmpdir(), "baba-")))
@@ -37,40 +38,32 @@ test("init makes .baba/ as a package that names the framework and provisions whe
   expect(run(["init"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 })
 
-test("new makes a role from the template, with a passing spec, and the root is generated with it; a role gets no skill of its own", () => {
+test("new makes a surface from the template, with a passing spec, and the root is generated with it; a surface gets no skill and no file of instructions", () => {
   expect(run(["new", "Month Close"])).toMatchObject({ status: 2, err: expect.stringContaining("kebab-case") })
-  expect(run(["new", "roles"])).toMatchObject({ status: 2, err: expect.stringContaining("not baba or roles") })
+  expect(run(["new", "surfaces"])).toMatchObject({ status: 2, err: expect.stringContaining("not baba or surfaces") })
 
   const made = run(["new", "month-close"])
 
   expect(made.status, made.err).toBe(0)
-  // The root is generated from the roles: their surfaces by name, what their ROLE.md tells, and the page with each one's component.
-  expect(readFileSync(join(baba, ".root/roles.ts"), "utf8")).toContain('import r0 from "../roles/month-close/src/role.ts"')
-  expect(readFileSync(join(baba, ".root/roles.ts"), "utf8")).toContain('"description": "Do WHAT for WHO. Use when TASK is needed."')
-  expect(readFileSync(join(baba, ".root/main.tsx"), "utf8")).toContain('import * as p0 from "../roles/month-close/ui/index.tsx"')
+  expect(readdirSync(join(baba, "surfaces/month-close")).sort()).toEqual(["spec", "src", "ui"])
+  // The root is generated from the surfaces: each by name, and the page with each one's component.
+  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('import s0 from "../surfaces/month-close/src/surface.ts"')
+  expect(readFileSync(join(baba, ".root/main.tsx"), "utf8")).toContain('import * as p0 from "../surfaces/month-close/ui/index.tsx"')
   for (const folder of FOLDERS) expect(existsSync(join(project, folder, "month-close"))).toBe(false)
   expect(run(["new", "month-close"])).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 
-  const spec = spawnSync(process.execPath, ["test", "roles/month-close"], { cwd: baba, encoding: "utf8" })
+  const spec = spawnSync(process.execPath, ["test", "surfaces/month-close"], { cwd: baba, encoding: "utf8" })
 
   expect(spec.status, spec.stderr).toBe(0)
   expect(spec.stderr).toContain("3 pass")
 })
 
-test("provision follows the roles: what a ROLE.md tells is generated again, and a role that is gone is gone from the root", () => {
+test("provision generates the root from the surfaces that are there, from anywhere in the project", () => {
   expect(run(["new", "reel-maker"]).status).toBe(0)
-
-  const role = join(baba, "roles/reel-maker/ROLE.md")
-  const generated = () => readFileSync(join(baba, ".root/roles.ts"), "utf8")
-
-  writeFileSync(role, "---\ndescription: Cut reels from footage. Use when a reel is asked for.\n---\n\nAsk before publishing.\n")
-  // From anywhere in the project: the nearest .baba/ above.
+  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('"reel-maker": s')
+  rmSync(join(baba, "surfaces/reel-maker"), { recursive: true })
   expect(run(["provision"], project).status).toBe(0)
-  expect(generated()).toContain('"description": "Cut reels from footage. Use when a reel is asked for."')
-  expect(generated()).toContain('"knowhow": "Ask before publishing."')
-  rmSync(join(baba, "roles/reel-maker"), { recursive: true })
-  expect(run(["provision"]).status).toBe(0)
-  expect(generated()).not.toContain("reel-maker")
+  expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).not.toContain("reel-maker")
   for (const folder of FOLDERS) expect(existsSync(skill(folder, "baba"))).toBe(true)
 })
 
@@ -98,10 +91,8 @@ test("provision writes the framework's hook into Claude Code's settings for each
   expect(run(["provision"]).status).toBe(0)
 })
 
-test("a session's start gives what the skill baba gives and starts the root; an open role teaches by its tab; the hook tells what changed there", async () => {
+test("a session's start gives what the skill baba gives and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)
-  writeFileSync(join(baba, "roles/desk/ROLE.md"), "---\ndescription: Keep a greeting. Use when one is asked for.\n---\n\nPropose, then wait for the person.\n")
-  expect(run(["provision"]).status).toBe(0)
 
   const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "" }
   const command = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: project, encoding: "utf8", env })
@@ -116,7 +107,7 @@ test("a session's start gives what the skill baba gives and starts the root; an 
   const started = hook("SessionStart")
 
   try {
-    // The skill's own words, then the root's answer: its version, its page's address and how to show it, the roles.
+    // The skill's own words, then the root's answer: its version, its page's address and how to show it, the surfaces.
     expect(started.status).toBe(0)
     expect(started.stdout).toStartWith(`${body}\n\nThe root of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
@@ -128,14 +119,14 @@ test("a session's start gives what the skill baba gives and starts the root; an 
     expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
     expect(existsSync(join(baba, ".babavoss"))).toBe(false)
 
-    // The root lists the role with what its ROLE.md says of it, and offers to open it, to the agent and to the person.
+    // The root lists the surface with what it says it is for, and offers to open it, to the agent and to the person.
     const word = join(project, ".babavoss/bin/baba")
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
-    expect(started.stdout).toContain('"desk"\t"Keep a greeting. Use when one is asked for."')
+    expect(started.stdout).toContain('"desk"\t"Keep a greeting the person has agreed to. Use when the greeting is to be changed."')
     expect(started.stdout).toContain('.babavoss/bin/baba / open util="desk"')
 
-    // The person opens it on the page: the agent is told with their next message, the role's know-how with it.
+    // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
     const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
     const person = (path: string, handle: string, args: Record<string, string>) =>
       fetch(`http://127.0.0.1:${endpoint.port}${path}`, {
@@ -151,7 +142,7 @@ test("a session's start gives what the skill baba gives and starts the root; an 
 
     expect(opened).toStartWith("The root of .baba/ changed since this session last read it; the person may have acted on the page:\n")
     expect(opened).toContain('+ tabs.1.util: "desk"')
-    expect(opened).toContain('+ tabs.1.facts.knowhow: "Propose, then wait for the person."')
+    expect(opened).toContain('+ tabs.1.facts.how: "Propose a greeting when the person asks for another.')
     expect(opened).toContain('+ tabs.1.facts.greeting: "hello"')
 
     const tab = /\+ tabs\.1\.at: "(\/tabs\/\d+)"/.exec(opened)![1]!
@@ -159,7 +150,7 @@ test("a session's start gives what the skill baba gives and starts the root; an 
     // The tab's own path offers its actions, as the exact commands.
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
 
-    // The page holds the role's component beside the root's.
+    // The page holds the surface's component beside the picker's.
     const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
     const script = /\/_\/[^"]*\.js/.exec(html)![0]
 
@@ -177,6 +168,15 @@ test("a session's start gives what the skill baba gives and starts the root; an 
     expect(hook("UserPromptSubmit").stdout).toBe("")
     expect(hook("PostToolUse").stdout).toBe("")
     expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
+
+    // Fully from the surface: what its code says it is for is what the picker lists, as soon as the code says it; and a
+    // surface made by hand is in the root as soon as it is on disk. Nothing is provisioned for either.
+    const code = join(baba, "surfaces/desk/src/surface.ts")
+
+    writeFileSync(code, readFileSync(code, "utf8").replace("Keep a greeting the person has agreed to.", "Keep the house greeting."))
+    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain("Keep the house greeting.")
+    cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/by-hand"), { recursive: true })
+    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"by-hand"')
   } finally {
     command("start", "close")
   }

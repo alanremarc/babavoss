@@ -1,4 +1,4 @@
-// Specify a role's behavior entirely through its actors and outside world.
+// Specify a root's behavior entirely through its actors and outside world.
 import { expect, test } from "bun:test"
 import { action, view } from "../../framework/core/surface/authoring.ts"
 import { story } from "../../framework/core/surface/story.ts"

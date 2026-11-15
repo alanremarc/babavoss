@@ -1,8 +1,8 @@
 # BabaVoss
 
-Canonical design, cut down to what holds while the product is reshaped: the vocabulary, the architecture, how agent, role and person meet, and how a project's roles are kept, provisioned and updated. Details and limits belong in code and specs.
+Canonical design, cut down to what holds while the product is reshaped: the vocabulary, the architecture, how agent, surface and person meet, and how a project's surfaces are kept, made known and updated. Details and limits belong in code and specs.
 
-A TypeScript framework for roles an agent plays. The person talks to the agent; the agent is the interface, and a role is a tool it works with for them: a desk of what is true now and what can be done now, read and acted on by the agent through the role's command line. Where the person has something to see or do, the role has a page over the same surface. The agent makes a role before a task that deserves one, or when asked, and keeps it for later. A project's roles are code in its .baba/ directory; each is given to the harness as a skill by provisioning. The framework is primitives; the shell is a preset over them; baba is the skill that makes and maintains the roles.
+A TypeScript framework for surfaces an agent works on. The person talks to the agent; the agent is the interface, and a surface is a tool it works with for them: what is true now and what can be done now, read and acted on by the agent through a command. The person has a page over the same surface, where they watch and decide. The agent makes a surface before a task that deserves one, or when asked, and keeps it for later. A project's surfaces are code in its .baba/ directory. .baba/ has a root, which is itself a surface: the picker of surfaces, with each open surface beside it as a tab. An agent learns of surfaces, and of each one, from the surface alone. The framework is primitives; the shell is a preset over them; baba is what makes an agent aware.
 
 ## Vocabulary
 
@@ -10,20 +10,11 @@ A TypeScript framework for roles an agent plays. The person talks to the agent; 
 Parties
   person       Asks, decides, supplies what the agent cannot.
   agent        Computes the next step from context: input, instructions, current state.
-  harness      Hosts the agent: Claude Code, Codex. Owns sessions, skills and the agent's shell.
-  role         Software and promptware an agent operates for a person: a tool it works with, and a tab for the person. Code in .baba/,
-               a tab of the root once opened.
-
-Role parts
-  skill        baba's alone: the words that make an agent aware of the roles and how the root is worked. A role has none.
-  know-how     A role's own instructions, in its ROLE.md: told by its tab, as a fact, once it is open.
-  word         A role's command, its own name: `payments /rules`. How the agent reads its views, calls its handles, waits and closes it.
-  bv           The one program behind every role's word: finds what the session has open, wakes the runtime and passes one request to it.
-  state        Role data that persists across the turns of a session.
-  surface      Program the role runs: init, restore, update, view, run, failed.
-  ui           Web page over the surface, for the person: renders views and calls handles; presentation, navigation and private drafts are its own.
+  harness      Hosts the agent: Claude Code, Codex. Owns sessions, skills, hooks and the agent's shell.
 
 Surface
+  surface      A tool an agent works with for a person, as a program: init, restore, update, view, run, failed. What it is for
+               is its description; how it is worked is what its views say. Code in .baba/, a tab of the root once opened.
   model        Private domain state.
   view         Public facts and handles at a path.
   handle       Offered action with fixed and typed open arguments.
@@ -32,19 +23,27 @@ Surface
   command      Effect run outside update; reports events back.
   actor        Identity responsible for a call: the agent or the person.
   ask          Handle offered to the person only; the agent places it and waits on it.
+  ui           A surface's part of the page, for the person: renders views and calls handles; presentation, navigation and
+               private drafts are its own.
+
+Root
+  .baba/       The surfaces' package, in a project or in the person's home: it names the framework, and holds one directory per surface.
+  root         What .baba/ is to a session: one runtime and one page. Its surface is the picker and the open tabs.
+  picker       The root's first tab: the surfaces, each with what it is for.
+  tab          A surface opened in the root, by the agent or by the person; the same surface may be open in several.
+  word         The root's command, its own name, baba. How the agent reads views, calls handles, waits and closes it.
+  bv           The one program behind the word: finds what the session has open, wakes the runtime and passes one request to it.
+  state        What the open tabs hold, kept across the turns of a session.
+  baba         The words that make an agent aware of the root and how it is worked; also the package's command: init, new, start, provision.
+  provision    Writes what makes an agent aware beside .baba/: the framework's hook, and the skill baba.
 
 Turns
   session      Harness conversation; the unit of state, runtime, page and directory. A subagent works within it, in its name.
   turn         One computation of the agent.
-  present      Current state and what changed since the session was last answered, carried by the answers to the role's word.
-
-Project
-  .baba/       The roles' package, in a project or in the person's home: it names the framework, and holds one directory per role.
-  provision    Writes what makes an agent aware beside .baba/: the skill baba and the framework's hook; generates the root.
-  baba         The skill that makes and maintains the roles in .baba/; also the package's command: init, new, provision.
+  present      The root at /, whole or as what changed since the session was last answered: every open tab's facts.
 
 Shell
-  util         A mini-role in the shell, one per workflow or job: its own surface, its own component, opened as a tab.
+  util         A surface of its own in the shell, with its own component, opened as a tab. The root's utils are the picker and the surfaces.
   layout       The frame a util's page is built in: the workbench, the plain layout, the welcome page.
   document     What a workbench util works on, one at a time, in the strip of open ones; tools find, the document shows.
   scope        What a util with several opens first, a project or a repository; the welcome page lists them.
@@ -53,75 +52,75 @@ Shell
 ## Architecture
 
 ```text
-person ↔ agent ↔ harness ──skill, then its word─↔ role's runtime ─┬─ surface: model, views, commands
-   └─────────────── browser ↔ ui ──────────────────────────┘      └─ state
+person ↔ agent ↔ harness ──hooks; the word──↔ root's runtime ─┬─ root surface: picker, tabs ─ surface: model, views, commands
+   └─────────────── browser ↔ page ─────────────────────┘      └─ state
 ```
 
 ```text
-Open
-  skill → the agent runs the role's door, scripts/open.ts → the role is open in this session and its word is on the path → the session's runtime
-          wakes → the page's address, how to call, the whole view; then, when a later release is out, how to take it
+Start
+  session starts → hook → the root starts → baba's words and the whole present reach the agent: the page's address, the
+                   word, the surfaces and the open tabs; then, when a later release is out, how to take it
+  without hooks  → the skill baba says the same words, and to start the root
 
 Turn
-  call → update → model → views → ui; the answer carries the result and what else changed since the session was last answered
-  page → the agent hands the person the session's page when something is worth seeing or answering; nothing opens by itself
-  ask  → the agent places it and waits → ui offers it → person answers → the wait returns with the answer
+  call → update → model → views → page; the answer carries the result and what else changed since the session was last answered
+  hook → with the person's message, and after a tool call: what changed in the present since the session was last answered
+  page → the agent opens the page in the harness's browser where it has one, else hands the person its address
+  ask  → the agent places it and waits → the page offers it → the person answers → the wait returns with the answer
 ```
 
-## Agent, role, person
+## Agent, surface, person
 
 ```text
-agent → role      the role's word: read a view, call a handle the view offers, wait, close
-role → agent      the answer, written by the runtime, and nothing else: the whole view at open, after it what changed
-                 since the session was last answered
-person → role     the ui: the same handles, called as the person; an ask answered
-role → person     the ui: the views, live
-agent ↔ person   the conversation, which the role is no part of; the agent hands over the page's address when it is worth seeing
-unasked          a closed role is its skill's description in context, and no process. An open one tells the agent what changed
-                 since the session last read it, with the person's next message and after a tool call, where the harness
-                 has hooks; elsewhere it speaks only when the agent calls it
-aware            so the agent learns what the person did on the page without asking; wait holds a call until something changes
-not a canvas     the page shows the role's own views; the agent changes what the person sees only by calling handles
+agent → surface   the word: read a view, call a handle the view offers, wait
+surface → agent   the answer to a command; and unasked, through hooks, what changed since the session was last answered
+person → surface  the page: the same handles, called as the person; an ask answered; a surface opened from the picker
+surface → person  the page: the views, live
+agent ↔ person    the conversation, which the surface is no part of
+learned           a surface has no skill and no instructions beside it. An agent chooses it by its description, in the
+                  picker, and works it by what its views say, read once it is open. So a surface the person opens is the
+                  agent's to take up as soon as the present tells of it
+not woken         what the person does on the page while no turn runs reaches the agent with their next message; nothing
+                  starts a turn
+not a canvas      the page shows the surfaces' own views; the agent changes what the person sees only by calling handles
 ```
 
-The agent is the role's first user and the surface is built for it: a reader that reads everything each time and remembers nothing. The page is the same surface for the person. Neither is drawn by the other.
+The agent is a surface's first user and it is built for it: a reader that reads everything each time and remembers nothing. The page is the same surface for the person. Neither is drawn by the other.
 
-## Roles
+## .baba/
 
 ```text
-.baba/:     a Bun package beside the harnesses' skill folders, in a project or in the person's home; package.json names the
-            framework, a release of this repository, and nothing else does; roles/NAME/ is a role: ROLE.md, its description
-            and own know-how; src/role.ts, its surface; ui/index.tsx, its page, a component; spec/, its rules
-root:       what .baba/ is to a session: one runtime and one page, which the framework provides and generates from the roles.
-            Its first tab lists them with what each does and when to use it, and offers to open each; a role is a util
-            of it, opened as a tab by the agent or by the person. It runs with no roles at all. At / the agent is told
-            what changes in any open tab
+.baba/:     a Bun package beside the harnesses' configuration, in a project or in the person's home; package.json names the
+            framework, a release of this repository, and nothing else does; surfaces/NAME/ is a surface: src/surface.ts,
+            the surface; ui/index.tsx, its component; spec/, its rules
+root:       one runtime and one page per session, which the framework provides and generates from the surfaces. It runs
+            with none at all. Its first tab is the picker; a surface is a util of it, opened as a tab as often as
+            wanted. At / the agent is told what changes in any open tab
+dynamic:    the root follows .baba/ by itself: a surface made or removed, and a change to one's code, are loaded into the
+            running root, and the page follows. Nothing is provisioned for a surface
 start:      by `baba start`, by hand or by the agent, and by the hook when a session starts; either way the answer is the
             framework's version, the page's address with the word to open it in the harness's browser where it has one,
-            the roles and the open tabs. It sleeps when idle and any command wakes it where it was
-aware:      one piece of content makes an agent aware: the skill baba's words, how the root is worked, and after them the
-            present. Hooks deliver it: whole at a session's start, with the root started, and as what changed with
-            each message of the person and after each tool call. The skill baba is the same words for a harness
-            without hooks, and the way back in
-teaches:    a role has no skill. Its ROLE.md is its description, by which the root lists it, and its know-how, which stands
-            among its tab's facts once it is open; so an agent learns a role from the surface, when it is opened,
-            whoever opened it. A role the person opens on the page is the agent's to take up with the next present
+            the surfaces and the open tabs. It sleeps when idle and any command wakes it where it was
+aware:      one piece of content makes an agent aware: baba's words, how the root is worked, and after them the present.
+            Hooks deliver it: whole at a session's start, with the root started, and as what changed with each message
+            of the person and after each tool call. The skill baba is the same words for a harness without hooks, and
+            the way back in
 bootstrap:  one command, the package's init: makes .baba/, installs the framework and provisions
-loop:       change a role in .baba/ → test it → provision it
-provision:  writes the skill baba, which the package carries, into .claude/skills and .agents/skills beside .baba/, the
-            framework's hook into the harness's settings, and generates the root; installing in .baba/ provisions
-harness:    the harness's configuration beside .baba/ is compiled from .baba/: the roles' is primary, the harness's follows.
-            What is compiled is the one skill, and hooks where a harness has them: Claude Code's, into its settings,
-            among the person's own, which are left as they are
-hooks:      soft control only: a hook adds context, know-how and news of the surface, and never blocks or decides; what
-            may not happen stays the person's to set in the harness. The person's own layer outranks a project's
-versions:   none to match: the command, the skill baba and the know-how all come from the framework .baba/ names, so they
-            are always of one version
-update:     a role's door says when a later release is out, asked of the repository at most once a day; the agent takes
-            it in .baba/, reads the changelog from the version the roles ran on up, and adapts the roles
+loop:       change a surface in .baba/ → test it → work it in the root
+provision:  writes the framework's hook into the harness's settings beside .baba/, and the skill baba, which the package
+            carries, into .claude/skills and .agents/skills; installing in .baba/ provisions
+harness:    the harness's configuration beside .baba/ is compiled from .baba/: baba's is primary, the harness's follows.
+            What is compiled is hooks where a harness has them, Claude Code's, into its settings, among the person's own,
+            which are left as they are; and the one skill
+hooks:      soft control only: a hook adds context, the words and the present, and never blocks or decides; what may not
+            happen stays the person's to set in the harness. The person's own layer outranks a project's
+versions:   none to match: the command, baba's words and the root all come from the framework .baba/ names, so they are
+            always of one version
+update:     the root's door says when a later release is out, asked of the repository at most once a day; the agent takes
+            it in .baba/, reads the changelog from the version the surfaces ran on up, and adapts them
 release:    a tag vX.Y.Z of this repository; every version on main is one, with its section in CHANGELOG.md, written for
             the agent that adapts a project to it
-keeps:      what the roles' sessions write is beside .baba/: ~/.babavoss/ for the person's home, the project's .babavoss/ otherwise
-later:      tests that run a role under a harness; root context and know-how
-            declared in .baba/; hooks for harnesses besides Claude Code
+keeps:      what the root's sessions write is beside .baba/: ~/.babavoss/ for the person's home, the project's .babavoss/ otherwise
+later:      a way for the page to start a turn, such as ending the person's move; tests that run a surface under a
+            harness; hooks for harnesses besides Claude Code
 ```

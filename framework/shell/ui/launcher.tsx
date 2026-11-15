@@ -9,7 +9,7 @@ export type UtilEntry = { name: string; description: string; open?: Handle }
 /** Whose page this is, from the meta tags the runtime serves the page with; presentation, never in a view. */
 const about = (key: string): string | undefined => document.querySelector<HTMLMetaElement>(`meta[name="babavoss:${key}"]`)?.content || undefined
 
-/** The launcher: the role's title, the utils as a command palette, the shortcuts, and whose page it is at the bottom. */
+/** The launcher: the root's title, the utils as a command palette, the shortcuts, and whose page it is at the bottom. */
 export function Launcher({
   title,
   utils,
@@ -83,11 +83,11 @@ export function Launcher({
   )
 }
 
-/** One muted line: the role and its version, then the session shortened, whole on hover and copied on a click. */
+/** One muted line: the root and its version, then the session shortened, whole on hover and copied on a click. */
 function About() {
-  const [facts] = useState(() => ({ role: about("role"), version: about("version"), session: about("session") }))
+  const [facts] = useState(() => ({ root: about("root"), version: about("version"), session: about("session") }))
   const [copied, setCopied] = useState(false)
-  const { role, version, session } = facts
+  const { root, version, session } = facts
 
   useEffect(() => {
     if (!copied) return
@@ -97,11 +97,11 @@ function About() {
     return () => clearTimeout(timer)
   }, [copied])
 
-  if (!role && !session) return null
+  if (!root && !session) return null
 
   return (
     <footer className="mt-auto flex w-full max-w-[560px] flex-wrap justify-center gap-x-3 px-2 pt-6 text-meta text-muted-foreground">
-      {role && <span>{version ? `${role} ${version}` : role}</span>}
+      {root && <span>{version ? `${root} ${version}` : root}</span>}
       {session && (
         <button
           type="button"

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { defineRole } from "../../framework/core/role.ts"
+import { defineRoot } from "../../framework/core/root.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
@@ -16,7 +16,7 @@ const setup = async () => {
 
   dirs.push(dir)
 
-  const role = defineRole({
+  const root = defineRoot({
     name: "text",
     ui: dir,
     surface: {
@@ -44,7 +44,7 @@ const setup = async () => {
 
   let ended = 0
   const start = async () => {
-    const runtime = await startRuntime(role, ["--session", "S"], {
+    const runtime = await startRuntime(root, ["--session", "S"], {
       entry: join(dir, "scripts/open.ts"),
       env: { BABAVOSS_HOME: dir },
       idleMs: 60_000,

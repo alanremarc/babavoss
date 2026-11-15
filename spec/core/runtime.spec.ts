@@ -6,9 +6,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, describe, expect, it } from "bun:test"
-import { defineRole } from "../../framework/core/role.ts"
+import { defineRoot } from "../../framework/core/root.ts"
 import { reach } from "../../framework/core/runtime/reach.ts"
-import { startRuntime, roleVersion, RELOAD_MS } from "../../framework/core/runtime/runtime.ts"
+import { startRuntime, rootVersion, RELOAD_MS } from "../../framework/core/runtime/runtime.ts"
 import { admitted } from "../../framework/core/runtime/door.ts"
 import { ACTOR_HEADER, SERVICE_HEADER, endpointFile, findService, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { request as httpRequest, type IncomingMessage } from "node:http"
@@ -54,20 +54,20 @@ const scratch = () => {
 
   return dir
 }
-/** A role whose page is ui/ under its directory; its runtime entry is never woken, the spec starts the runtime in its own process. */
-const role = (dir: string) => {
+/** A root whose page is ui/ under its directory; its runtime entry is never woken, the spec starts the runtime in its own process. */
+const root = (dir: string) => {
   const ui = join(dir, "ui")
 
   mkdirSync(ui, { recursive: true })
-  writeFileSync(join(ui, "index.html"), "<head><meta name=t content=%TOKEN%></head><script src=/_/role.js></script>")
-  writeFileSync(join(ui, "role.js"), "// page")
+  writeFileSync(join(ui, "index.html"), "<head><meta name=t content=%TOKEN%></head><script src=/_/root.js></script>")
+  writeFileSync(join(ui, "root.js"), "// page")
 
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1.0" }))
 
-  return defineRole({ name: "p", ui, surface: counter })
+  return defineRoot({ name: "p", ui, surface: counter })
 }
 const started = async (dir: string) => {
-  const runtime = await startRuntime(role(dir), ["--session", "S"], { env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
+  const runtime = await startRuntime(root(dir), ["--session", "S"], { env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
 
   if (!runtime) throw new Error("not started")
   closers.push(() => runtime.close())
@@ -114,7 +114,7 @@ describe("the door", () => {
     expect((await post("/", { args: {} })).status).toBe(400)
   })
 
-  it("serves the role's page for a browser, keeps the token on everything else, and refuses other machines", async () => {
+  it("serves the root's page for a browser, keeps the token on everything else, and refuses other machines", async () => {
     const dir = scratch()
     const { base, endpoint, get } = await started(dir)
     const page = await fetch(base + "/notes/2", { headers: { accept: "text/html,*/*" } })
@@ -122,9 +122,9 @@ describe("the door", () => {
 
     expect([page.headers.get("content-type"), text.includes("%TOKEN%"), text.includes("content=")]).toEqual(["text/html", false, true])
     expect(text).toContain(
-      `<meta name="babavoss:role" content="p"><meta name="babavoss:version" content="1.0"><meta name="babavoss:session" content="S"></head>`
+      `<meta name="babavoss:root" content="p"><meta name="babavoss:version" content="1.0"><meta name="babavoss:session" content="S"></head>`
     )
-    expect((await fetch(base + "/_/role.js")).headers.get("content-type")).toBe("text/javascript")
+    expect((await fetch(base + "/_/root.js")).headers.get("content-type")).toBe("text/javascript")
     expect(page.headers.get("set-cookie")).toContain(`babavoss-service-${new URL(base).port}=`)
     expect((await fetch(base + "/n", { headers: { accept: "application/json", cookie: page.headers.get("set-cookie")!.split(";")[0]! } })).status).toBe(200)
 
@@ -142,7 +142,7 @@ describe("the door", () => {
 
     const broken = await fetch(base + "/", { headers: { accept: "text/html" } })
 
-    expect([broken.status, await broken.text()]).toEqual([500, "the role's ui has no index.html"])
+    expect([broken.status, await broken.text()]).toEqual([500, "the root's ui has no index.html"])
 
     const request = (headers: Record<string, string>) => ({ headers }) as unknown as IncomingMessage
     const port = Number(new URL(base).port)
@@ -187,7 +187,7 @@ describe("the door", () => {
 describe("reach", () => {
   it("goes through the session's runtime: views, calls, refusals, the page", async () => {
     const dir = scratch()
-    const p = role(dir)
+    const p = root(dir)
     const { base } = await started(dir)
     const through = await reach(p, { id: "S" }, { env: { BABAVOSS_HOME: dir } })
 
@@ -200,7 +200,7 @@ describe("reach", () => {
 
   it("never runs the surface in its own process: with no runtime up and none that starts, a door fails and the model stays unwritten", async () => {
     const dir = scratch()
-    const p = role(dir)
+    const p = root(dir)
 
     expect(reach(p, { id: "S" }, { env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts") })).rejects.toThrow("the runtime failed to start")
     expect(existsSync(join(dir, "sessions", "S", "p", "model.json"))).toBe(false)
@@ -225,9 +225,9 @@ it("refuses a definition without its surface or ui", () => {
   const whole = { name: "p", ui: scratch(), surface: counter }
   const without = (...parts: string[]) => Object.fromEntries(Object.entries(whole).filter(([key]) => !parts.includes(key))) as typeof whole
 
-  expect(() => defineRole(without("surface"))).toThrow("role p has no surface:")
-  expect(() => defineRole(without("ui"))).toThrow("role p has no ui:")
-  expect(defineRole(whole)).toBe(whole)
+  expect(() => defineRoot(without("surface"))).toThrow("root p has no surface:")
+  expect(() => defineRoot(without("ui"))).toThrow("root p has no ui:")
+  expect(defineRoot(whole)).toBe(whole)
 })
 
 /** The events an open page hears on its stream, collected as they come. */
@@ -268,7 +268,7 @@ it("takes changed code in place: the same process, address and token, the state 
 
   const waiting = get("/_/wait?seconds=20", { accept: "text/plain" }).then((response) => response.text())
   // The code as edited: the same surface, saying one fact more. Its entry runs again in this process, as under bun --hot.
-  const edited = defineRole({
+  const edited = defineRoot({
     name: "p",
     ui: join(dir, "ui"),
     surface: {
@@ -312,15 +312,15 @@ describe("changed code while work runs", () => {
     failed: (_c, error) => ({ kind: "failed", error }),
   })
   const edited = (dir: string) =>
-    defineRole({ name: "h", ui: join(dir, "ui"), surface: { ...holder, view: (m, path) => (path === "/" ? { ...holding.view(m, path), edited: true } : undefined) } })
+    defineRoot({ name: "h", ui: join(dir, "ui"), surface: { ...holder, view: (m, path) => (path === "/" ? { ...holding.view(m, path), edited: true } : undefined) } })
   const begun = async (swapWaitMs?: number) => {
     const dir = scratch()
     const lines: string[] = []
     const opts = { ...options(dir), log: (line: string) => lines.push(line), swapWaitMs }
 
-    role(dir)
+    root(dir)
 
-    const runtime = await startRuntime(defineRole({ name: "h", ui: join(dir, "ui"), surface: holder }), ["--session", "S"], opts)
+    const runtime = await startRuntime(defineRoot({ name: "h", ui: join(dir, "ui"), surface: holder }), ["--session", "S"], opts)
 
     closers.push(() => runtime!.close())
 
@@ -381,7 +381,7 @@ describe("changed code while work runs", () => {
 
 it("starts again in place when the framework's own code changed: the same address, the state as saved, a new token for pages to take", async () => {
   const dir = scratch()
-  const first = await startRuntime(role(dir), ["--session", "S"], { ...options(dir), stamp: 1 })
+  const first = await startRuntime(root(dir), ["--session", "S"], { ...options(dir), stamp: 1 })
   const before = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))!
   const call = (endpoint: Endpoint, by: number) =>
     fetch(`http://127.0.0.1:${endpoint.port}/`, {
@@ -392,7 +392,7 @@ it("starts again in place when the framework's own code changed: the same addres
 
   expect((await call(before, 3)).status).toBe(200)
 
-  const again = await startRuntime(role(dir), ["--session", "S"], { ...options(dir), stamp: 2 })
+  const again = await startRuntime(root(dir), ["--session", "S"], { ...options(dir), stamp: 2 })
 
   closers.push(() => again!.close())
 
@@ -410,7 +410,7 @@ it("goes on with the code before it when changed code does not start from what w
 
   await post("/", { handle: "bump", args: { by: 3 } }, { [ACTOR_HEADER]: "agent" })
 
-  const broken = defineRole({
+  const broken = defineRoot({
     name: "p",
     ui: join(dir, "ui"),
     surface: {
@@ -432,7 +432,7 @@ it("tells open pages to load again when the page's own files change, and not whe
 
   mkdirSync(src)
 
-  const runtime = await startRuntime(role(dir), ["--session", "W"], { ...options(dir), watch: [src, join(dir, "ui")] })
+  const runtime = await startRuntime(root(dir), ["--session", "W"], { ...options(dir), watch: [src, join(dir, "ui")] })
 
   closers.push(() => runtime!.close())
 
@@ -445,20 +445,20 @@ it("tells open pages to load again when the page's own files change, and not whe
   const page = await listen(base, endpoint.token)
 
   await poll(() => page.heard.length).toBe(1)
-  writeFileSync(join(src, "role.ts"), "// edited")
+  writeFileSync(join(src, "root.ts"), "// edited")
   await sleep(RELOAD_MS + 400)
   expect(page.heard).not.toContain("page")
-  writeFileSync(join(dir, "ui", "role.js"), "// a new page")
+  writeFileSync(join(dir, "ui", "root.js"), "// a new page")
   await poll(() => page.heard, { timeout: 5000 }).toContain("page")
   page.stop()
 })
 
-it("reads the version from the package beside the role entry", () => {
+it("reads the version from the package beside the root entry", () => {
   const dir = scratch()
   const entry = join(dir, "scripts/open.ts")
 
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "2.3.4" }))
-  expect(roleVersion(entry)).toBe("2.3.4")
+  expect(rootVersion(entry)).toBe("2.3.4")
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "3.0.0" }))
-  expect(roleVersion(entry)).toBe("3.0.0")
+  expect(rootVersion(entry)).toBe("3.0.0")
 })

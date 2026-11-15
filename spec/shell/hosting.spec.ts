@@ -20,8 +20,8 @@ describe("a built page", () => {
 
     dirs.push(ui)
     mkdirSync(join(ui, BUILT, "assets"), { recursive: true })
-    writeFileSync(join(ui, BUILT, "index.html"), '<script type="module" src="/_/assets/role.js"></script>')
-    writeFileSync(join(ui, BUILT, "assets", "role.js"), "export {}")
+    writeFileSync(join(ui, BUILT, "index.html"), '<script type="module" src="/_/assets/root.js"></script>')
+    writeFileSync(join(ui, BUILT, "assets", "root.js"), "export {}")
     writeFileSync(join(ui, "secret.txt"), "source, not shipped to a browser")
 
     const hosted = await shellUi(ui)({} as Server)
@@ -40,20 +40,20 @@ describe("a built page", () => {
       return sent
     }
 
-    expect(await hosted.page("/tabs/1")).toContain("/_/assets/role.js")
-    expect(get("/_/assets/role.js")).toEqual({ status: 200, type: "text/javascript", body: "export {}" })
+    expect(await hosted.page("/tabs/1")).toContain("/_/assets/root.js")
+    expect(get("/_/assets/root.js")).toEqual({ status: 200, type: "text/javascript", body: "export {}" })
     expect(get("/_/assets/missing.js")).toEqual({ passed: true })
     expect(get("/_/../secret.txt")).toEqual({ passed: true })
     await hosted.close()
   })
 })
 
-for (const role of ["spec/support/notes"]) {
-  it(`${role}: bundles source, reloads edits and serves the release`, async () => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-role-")))
+for (const root of ["spec/support/notes"]) {
+  it(`${root}: bundles source, reloads edits and serves the release`, async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-root-")))
 
     dirs.push(dir)
-    for (const name of ["ui", "src"]) cpSync(resolve(role, name), join(dir, name), { recursive: true })
+    for (const name of ["ui", "src"]) cpSync(resolve(root, name), join(dir, name), { recursive: true })
     symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
     const serve = async () => {
@@ -94,7 +94,7 @@ for (const role of ["spec/support/notes"]) {
       const assets = [...html.matchAll(/(?:src|href)="([^" ]+\.(?:js|css))"/g)].map((match) => match[1]!)
 
       expect(assets.some((asset) => asset.endsWith(".js"))).toBe(true)
-      // One stylesheet: the role's, which imports the shell's, so no rule is there twice to override the other.
+      // One stylesheet: the root's, which imports the shell's, so no rule is there twice to override the other.
       expect(assets.filter((asset) => asset.endsWith(".css"))).toHaveLength(1)
 
       let scripts = ""

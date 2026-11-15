@@ -1,5 +1,5 @@
-// The role's door: opens it in a session, or serves the session's runtime. The agent runs it; nothing else does.
+// The root's door: opens it in a session, or serves the session's runtime. The agent runs it; nothing else does.
 import { main } from "babavoss/core/bv/door.ts"
-import role from "../src/role.ts"
+import root from "../src/root.ts"
 
-await main(role)
+await main(root)

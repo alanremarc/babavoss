@@ -1,8 +1,8 @@
-// The root's page: the shell with its one util, the roles.
+// The root's page where there is no .baba/: the shell with the picker alone. With one, the page is generated.
 import { createRoot } from "react-dom/client"
-import { UsersIcon } from "lucide-react"
+import { LayoutGridIcon } from "lucide-react"
 import { Shell } from "../../shell/ui/index.ts"
-import { Roles } from "./roles.tsx"
+import { Surfaces } from "./surfaces.tsx"
 import "./styles.css"
 
-createRoot(document.getElementById("root")!).render(<Shell utils={{ roles: { component: Roles, icon: <UsersIcon aria-hidden /> } }} />)
+createRoot(document.getElementById("root")!).render(<Shell utils={{ surfaces: { component: Surfaces, icon: <LayoutGridIcon aria-hidden /> } }} />)

@@ -1,19 +1,18 @@
 #!/usr/bin/env bun
-// baba, the package's command: makes a project's .baba/ directory, makes a role in it from the template, and provisions
-// the roles as skills. It works on the .baba/ it is run in, or the nearest one above.
+// baba, the package's command: makes a project's .baba/ directory, makes a surface in it from the template, and provisions:
+// the skill baba, the hook and the root. It works on the .baba/ it is run in, or the nearest one above.
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { hookContext, hookOutput, type HookInput } from "../framework/core/hook.ts"
-import { findBaba, provision, RESERVED, ROLES_DIR, ROOT_DIR } from "../framework/core/provision.ts"
+import { findBaba, NAME, provision, RESERVED, SURFACES_DIR, ROOT_DIR } from "../framework/core/provision.ts"
 import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
 const USAGE = `baba init [--from SPEC]   make .baba/ in this directory, install the framework and provision; SPEC names the framework, a release by default
-baba new NAME             make the role NAME from the template in .baba/roles/NAME, and provision
-baba start [--session ID] start the root of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the roles and the open tabs
-baba provision            write the skill baba and the framework's hook into the harnesses' configuration beside .baba/, and generate the root from the roles
+baba new NAME             make the surface NAME from the template in .baba/surfaces/NAME, and provision
+baba start [--session ID] start the root of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the surfaces and the open tabs
+baba provision            write the skill baba and the framework's hook into the harnesses' configuration beside .baba/, and generate the root from the surfaces
 baba hook                 what a harness's hook runs: reads the hook's input, prints the context to add`
-const NAME = /^[a-z][a-z0-9-]*$/
 const TEMPLATE = fileURLToPath(new URL("../template", import.meta.url))
 const TSCONFIG = {
   compilerOptions: {
@@ -31,7 +30,7 @@ const TSCONFIG = {
     noUncheckedIndexedAccess: true,
     jsx: "react-jsx",
   },
-  include: [ROLES_DIR, "node_modules/babavoss/framework/shell/ui/css.d.ts"],
+  include: [SURFACES_DIR, "node_modules/babavoss/framework/shell/ui/css.d.ts"],
 }
 
 class Refusal extends Error {}
@@ -59,12 +58,12 @@ function init(args: string[]) {
 
   if (args.length && !from) throw new Refusal(USAGE)
   if (existsSync(join(baba, "package.json"))) throw new Refusal(`${baba} is there already: provision it with \`baba provision\``)
-  mkdirSync(join(baba, ROLES_DIR), { recursive: true })
-  // The framework these roles run on is named here and nowhere else. Installing provisions, so a clone has its skills.
+  mkdirSync(join(baba, SURFACES_DIR), { recursive: true })
+  // The framework these surfaces run on is named here and nowhere else. Installing provisions, so a clone is ready.
   writeFileSync(
     join(baba, "package.json"),
     json({
-      name: "roles",
+      name: "surfaces",
       version: "0.1.0",
       private: true,
       type: "module",
@@ -78,18 +77,18 @@ function init(args: string[]) {
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })
 
   if (install.exitCode !== 0) throw new Refusal(`cannot install the framework; allow bun to reach github.com and the package registry, then run: cd '${baba}' && bun install`)
-  console.log(`${baba} is made. A new session of the harness begins with it: ask there for a role, or with /baba`)
+  console.log(`${baba} is made. A new session of the harness begins with it: ask there for a surface, or with /baba`)
 }
 
 function create(args: string[]) {
   const [name] = args
   const baba = found()
 
-  if (!name || !NAME.test(name) || RESERVED.includes(name)) throw new Refusal(`a role's name is lowercase kebab-case, such as month-close, and not ${RESERVED.join(" or ")}`)
+  if (!name || !NAME.test(name) || RESERVED.includes(name)) throw new Refusal(`a surface's name is lowercase kebab-case, such as month-close, and not ${RESERVED.join(" or ")}`)
 
-  const dir = join(baba, ROLES_DIR, name)
+  const dir = join(baba, SURFACES_DIR, name)
 
-  if (existsSync(dir)) throw new Refusal(`${dir} is there already: name the role otherwise`)
+  if (existsSync(dir)) throw new Refusal(`${dir} is there already: name the surface otherwise`)
   cpSync(TEMPLATE, dir, { recursive: true })
   console.log(`made ${dir}`)
   report(provision(baba))

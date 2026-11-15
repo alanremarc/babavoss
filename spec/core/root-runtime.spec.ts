@@ -1,5 +1,5 @@
-// The role opened through its cli: answers carry agent and person changes.
-import { notesRole } from "../support/notes.ts"
+// The root opened through its cli: answers carry agent and person changes.
+import { notesRoot } from "../support/notes.ts"
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -36,7 +36,7 @@ it("opens notes, carries changes after calls, and reports a person's change in t
 
   dirs.push(state)
 
-  const entry = join(notesRole(join(state, "role")), "scripts/open.ts")
+  const entry = join(notesRoot(join(state, "root")), "scripts/open.ts")
   const cli = (...args: string[]) => run(entry, ["--session", "S", ...args], "", state)
   const start = cli()
 

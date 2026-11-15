@@ -1,4 +1,4 @@
-// The update note: said when a later release is out than the one the roles run on, with how to take it.
+// The update note: said when a later release is out than the one the surfaces run on, with how to take it.
 import { expect, test } from "bun:test"
 import { later, updateNote, VERSION } from "../../framework/core/update.ts"
 
@@ -21,7 +21,7 @@ test("a release is later by its numbers", () => {
 test("a later release is told with the command that takes it and what to do after; the same or an earlier one, or none, is silence", async () => {
   const note = await told("99.0.0")
 
-  expect(note).toStartWith(`babavoss 99.0.0 is out; these roles run on ${VERSION}.`)
+  expect(note).toStartWith(`babavoss 99.0.0 is out; these surfaces run on ${VERSION}.`)
   expect(note).toContain("`bun add babavoss@github:alanremarc/babavoss#v99.0.0` in /project/.baba")
   expect(note).toContain("CHANGELOG.md")
   expect(await told(VERSION)).toBeUndefined()

@@ -33,13 +33,13 @@ export const lastPort = (dir: string): number | undefined => {
 
 /**
  * The environment refuses what a runtime requires: a resident process, a file lock, loopback. Not a fault to retry: the
- * role does not run here, and the message says why, for an agent to read.
+ * root does not run here, and the message says why, for an agent to read.
  */
 export class Denied extends Error {}
 /** How a runtime the environment refuses ends, so the process that woke it can say why. */
 export const DENIED_EXIT = 78
 
-const LOOPBACK_REFUSED = "the sandbox refuses loopback connections, and the role is reached through its runtime over loopback"
+const LOOPBACK_REFUSED = "the sandbox refuses loopback connections, and the root is reached through its runtime over loopback"
 
 /** A file system error that says not allowed rather than broken, as a sandbox around the state directory says it; else the error. */
 export const deniedState = (error: unknown, dir: string): unknown =>
@@ -127,7 +127,7 @@ export async function findService(dir: string, signal?: AbortSignal): Promise<En
 }
 
 /**
- * Starts the role's runtime entry for a session, detached, logging to the session's state directory; it owns that directory
+ * Starts the root's runtime entry for a session, detached, logging to the session's state directory; it owns that directory
  * from then on. It runs in the directory the session runs in, as recorded, whoever wakes it and from wherever; before any
  * record, or when the recorded one is gone, in the waker's.
  */
@@ -138,7 +138,7 @@ export function wakeService(dir: string, entry: string | URL, session: string, e
   const recorded = sessionCwd(dir)
 
   try {
-    // Under bun's hot reload: a change in the role's code is loaded into the runtime, which stays up at its address.
+    // Under bun's hot reload: a change in the root's code is loaded into the runtime, which stays up at its address.
     const child = spawn(process.execPath, ["--hot", typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
       detached: true,
       stdio: ["ignore", "ignore", log],

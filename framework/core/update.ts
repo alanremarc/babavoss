@@ -1,4 +1,4 @@
-// Says when a later babavoss is released than the one these roles run on. The repository is asked at most once a day,
+// Says when a later babavoss is released than the one these surfaces run on. The repository is asked at most once a day,
 // briefly, and a failure to reach it is silence. BABAVOSS_LATEST, when set, is the answer, and nothing is asked.
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -41,12 +41,12 @@ async function latest(home: string, now: number): Promise<string | undefined> {
   return version
 }
 
-/** What to tell the agent when a later release is out: how to take it in `baba`, the roles' package, and what to do after. */
+/** What to tell the agent when a later release is out: how to take it in `baba`, the surfaces' package, and what to do after. */
 export async function updateNote(home: string, baba: string, now = Date.now()): Promise<string | undefined> {
   const version = await latest(home, now)
 
   return version && later(version, VERSION)
-    ? `babavoss ${version} is out; these roles run on ${VERSION}. Update, unless the person said not to: run \`bun add babavoss@github:${REPOSITORY}#v${version}\` in ${baba}, ` +
-        `read node_modules/babavoss/CHANGELOG.md there from ${VERSION} up, adapt the roles to what changed, and run their specs`
+    ? `babavoss ${version} is out; these surfaces run on ${VERSION}. Update, unless the person said not to: run \`bun add babavoss@github:${REPOSITORY}#v${version}\` in ${baba}, ` +
+        `read node_modules/babavoss/CHANGELOG.md there from ${VERSION} up, adapt the surfaces to what changed, and run their specs`
     : undefined
 }

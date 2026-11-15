@@ -1,4 +1,4 @@
-// The role's page, shown in its tab: what the surface says, and the person's decision. Anything else the person wants
+// The surface's page, shown in its tab: what the surface says, and the person's decision. Anything else the person wants
 // changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's.
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"

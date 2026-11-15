@@ -1,4 +1,4 @@
-// Builds a role's page for a release:  bun node_modules/babavoss/framework/shell/build.ts UI_DIR OUT_DIR
+// Builds a root's page for a release:  bun node_modules/babavoss/framework/shell/build.ts UI_DIR OUT_DIR
 import { buildUi } from "./hosting.ts"
 
 const [ui, out] = process.argv.slice(2)

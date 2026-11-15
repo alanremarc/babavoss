@@ -1,7 +1,7 @@
 // The notes fixture: notes the agent keeps for the person, with reminders. The core: harness-free, a surface over one model,
 // with a page the person sees it through.
 import { setTimeout as sleep } from "node:timers/promises"
-import { action, defineRole, surface, view, type Update } from "babavoss/core/index.ts"
+import { action, defineRoot, surface, view, type Update } from "babavoss/core/index.ts"
 import { shellUi } from "babavoss/shell/index.ts"
 
 type Note = { text: string; due?: "pending" | "due" }
@@ -66,7 +66,7 @@ const pages = view([add, remove, clear, remind], {
   },
 })
 
-export default defineRole({
+export default defineRoot({
   name: "demo",
   // The page: the notes as the person sees them, served from ui/ by the shell's hosting; the surface is the same.
   ui: shellUi(new URL("../ui/", import.meta.url)),
