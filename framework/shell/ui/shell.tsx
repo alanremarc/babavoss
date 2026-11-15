@@ -1,6 +1,9 @@
 // The shell page: the shell's view at / drives the tab strip and the launcher; each tab shows its surface's component.
 // The strip is the launcher's "+", then the open tabs newest first. A tab the person opens becomes theirs to look at; one
-// the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are.
+// the agent opens takes its place beside the "+", marked until looked at, and the person stays where they are. A tab that
+// is broken or needs someone is marked in the strip and the launcher, from / where the shell gathers who is needed. Each
+// notice heard while the page is open is a toast, once: the surface, what happened, and who did it where not the person;
+// clicking it goes where it happened.
 // The URL is the surface path: / the launcher where no tab is, /tabs/N/route a tab, /settings the appearance. It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
@@ -9,18 +12,23 @@ import type { Handle, View } from "../../core/index.ts"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
-import { call, changes, read } from "./client.ts"
+import { Toasts, type ToastItem } from "../../kit/components/toast"
+import { call, changes, read, type Notice } from "./client.ts"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
 import { newestFirst, successor } from "./strip.ts"
-import { SurfaceTabs, TabContent } from "./tabs.tsx"
+import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
 
 /** Each surface's page module: its component, the default export, and the icon the strip and the launcher show. */
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
 /** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
 type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
-type RootView = { title: string; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[] }
+/** A tab that is needed, as / gathers it. */
+type Need = { at: string; surface: string } & TabNeed
+type RootView = { title: string; needs?: Need[]; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[] }
+/** The most toasts shown at once; an older one goes first. */
+const TOASTS = 4
 type At = { key: string; route: string }
 
 const parse = (): At => {
@@ -84,7 +92,11 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     surface: row.surface,
     label: row.title ?? `${row.surface} ${row.n}`,
     icon: icons[row.surface] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
+    needs: (root?.needs ?? []).filter((need) => need.at === row.at).map(({ who, why }) => ({ who, why })),
+    ...(row.broken !== undefined && { broken: row.broken }),
   }))
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const heard = useRef<(notice: Notice) => void>(() => {})
   // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
   const [seen, setSeen] = useState<ReadonlySet<string>>()
 
@@ -102,7 +114,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         if (up.current !== connected) for (const fn of listeners) fn()
         up.current = connected
         setConnected(connected)
-      }
+      },
+      (notice) => heard.current(notice)
     )
   }, [listeners])
 
@@ -156,6 +169,19 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     } finally {
       setPending(false)
     }
+  }
+  // A notice names its tab by `at`, and the route within it, where it goes on a click.
+  heard.current = (notice) => {
+    const tab = notice.at && /^(\/tabs\/\d+)(\/.*)?$/.exec(notice.at)
+    const toast: ToastItem = {
+      id: Date.now() + Math.random(),
+      title: notice.from ?? root?.title ?? "baba",
+      text: notice.text,
+      ...(notice.by && { meta: `by ${notice.by}` }),
+      ...(tab && { onSelect: () => go(tab[1]!, tab[2] ?? "/") }),
+    }
+
+    setToasts((all) => [...all, toast].slice(-TOASTS))
   }
   const open = async (handle: Handle) => {
     const view = await act("/", handle)
@@ -246,6 +272,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           })}
         </main>
       </ChangesContext.Provider>
+      <Toasts toasts={toasts} dismiss={(id) => setToasts((all) => all.filter((t) => t.id !== id))} className="right-2 bottom-13" />
       <SurfaceTabs
         active={active}
         onSelect={(key) => go(key)}
@@ -257,6 +284,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
             label: entries[i]!.label,
             icon: entries[i]!.icon,
             unseen: !!seen && !seen.has(row.at) && row.at !== active,
+            needs: entries[i]!.needs,
+            broken: entries[i]!.broken,
             ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && away(row.at)) }),
           })),
         ]}

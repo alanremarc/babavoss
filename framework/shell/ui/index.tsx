@@ -2,4 +2,4 @@
 // surface's component in its tabs. And what a surface's component uses to reach its tab: its context, live views, and the door.
 export { Shell as default, type Registry } from "./shell.tsx"
 export { TabProvider, useTab, useLive, type TabContext } from "./tab.tsx"
-export { read, call, changes, type Answer, type Change } from "./client.ts"
+export { read, call, changes, type Answer, type Change, type Notice } from "./client.ts"

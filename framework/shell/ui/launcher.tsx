@@ -1,16 +1,18 @@
 // The launcher: one palette to open a surface and to switch to an open tab, found by name. It drops from the strip's "+"
-// and from ⌘K or Ctrl+K anywhere on the page; where no tab is open it is the page itself.
+// and from ⌘K or Ctrl+K anywhere on the page; where no tab is open it is the page itself. A tab row says what stands in
+// it, broken or who it needs, and its footer says, quietly, when a later babavoss is out.
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "cn"
 import { BoxIcon, PlusIcon, SettingsIcon } from "lucide-react"
 import type { Handle } from "../../core/index.ts"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Popover, PopoverContent, PopoverTrigger } from "../../kit/components/popover"
+import { standing, type TabNeed } from "./tabs.tsx"
 
 /** A surface as the desktop lists it. */
 export type SurfaceEntry = { name: string; description: string; open: Handle }
 /** An open tab as the launcher offers it, newest first. */
-export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode }
+export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode; needs?: TabNeed[]; broken?: string }
 
 type Choices = {
   surfaces: SurfaceEntry[]
@@ -71,7 +73,7 @@ function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, sel
               <CommandItem key={tab.at} value={`tab ${tab.at}`} keywords={[tab.label, tab.surface, String(tab.n)]} onSelect={() => select(tab.at)}>
                 <Glyph>{tab.icon}</Glyph>
                 <span className="min-w-0 flex-1 truncate text-foreground">{tab.label}</span>
-                <span className="max-w-[40%] truncate pl-2 text-meta">{tab.at === active ? "current" : `${tab.surface} ${tab.n}`}</span>
+                <Standing tab={tab} active={tab.at === active} />
               </CommandItem>
             ))}
           </CommandGroup>
@@ -86,6 +88,28 @@ function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, sel
         </CommandGroup>
       </CommandList>
     </Command>
+  )
+}
+
+/** What the row of an open tab says at its end: broken, or who it needs and why, else which it is. */
+function Standing({ tab, active }: { tab: TabEntry; active: boolean }) {
+  const said = standing(tab)
+  const person = tab.needs?.find((n) => n.who === "person")
+  const first = tab.broken !== undefined ? "broken" : (person ?? tab.needs?.[0])?.why
+
+  return (
+    <span
+      title={said.join("\n") || undefined}
+      className={cn(
+        "flex max-w-[50%] min-w-0 items-center gap-1.5 pl-2 text-meta",
+        tab.broken !== undefined ? "text-destructive" : person ? "text-foreground" : undefined
+      )}
+    >
+      {first !== undefined && (
+        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", tab.broken !== undefined ? "bg-destructive" : person ? "bg-warning" : "bg-muted-foreground/70")} />
+      )}
+      <span className="truncate">{first ?? (active ? "current" : `${tab.surface} ${tab.n}`)}</span>
+    </span>
   )
 }
 
@@ -183,11 +207,11 @@ export function LauncherButton({ launch, select, settings, ...choices }: Choices
   )
 }
 
-/** One muted line: the root and its version, then the session shortened, whole on hover and copied on a click. */
+/** One muted line: the root and its version, then the session shortened, whole on hover and copied on a click; and a later release, where one is out. */
 function About({ className, children }: { className?: string; children?: ReactNode }) {
-  const [facts] = useState(() => ({ root: about("root"), version: about("version"), session: about("session") }))
+  const [facts] = useState(() => ({ root: about("root"), version: about("version"), session: about("session"), update: about("update") }))
   const [copied, setCopied] = useState(false)
-  const { root, version, session } = facts
+  const { root, version, session, update } = facts
 
   useEffect(() => {
     if (!copied) return
@@ -213,6 +237,11 @@ function About({ className, children }: { className?: string; children?: ReactNo
           >
             {copied ? "Copied" : `session ${session.slice(0, 8)}`}
           </button>
+        )}
+        {update && (
+          <span className="truncate" title={`babavoss ${update} is out; the agent is told how to take it`}>
+            babavoss {update} is out: ask the agent to update
+          </span>
         )}
       </span>
       {children}

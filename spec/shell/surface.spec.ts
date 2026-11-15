@@ -343,6 +343,94 @@ describe("the shell surface", () => {
     expect(await agent.call("/", "open", { surface: "counter" })).toMatchObject({ outcome: "written", view: { tabs: [{ at: "/tabs/1" }] } })
   })
 
+  it("gathers who each tab needs first at /, as needs, and no longer among the tab's facts", async () => {
+    type Ask = { asking?: "person" | "agent" | "both" | "bad" }
+    const ask = action({
+      name: "ask",
+      description: "ask",
+      subject: {},
+      inputs: { who: "string" },
+      update: (_m: Ask, { who }): Update<Ask, never> => ({ model: who ? { asking: who as Ask["asking"] } : {} }),
+    })
+    const needing = view([ask], {
+      "/": (m) => ({
+        title: "Asker",
+        ...(m.asking === "person" && { attention: { who: "person", why: "to decide" } }),
+        ...(m.asking === "both" && { attention: [{ who: "person", why: "to decide" }, { who: "agent", why: "to draft" }] }),
+        ...(m.asking === "bad" && { attention: "someone" }),
+        ask: ask.bind({}),
+      }),
+    })
+    const asker = surface<Ask, { kind: "none" }, never>({
+      description: "asks",
+      init: () => ({}),
+      update: (m, msg) => (msg.kind === "call" ? needing.update(m, msg) : { model: m }),
+      view: needing.view,
+      run: async () => {},
+      failed: () => ({ kind: "none" }),
+    })
+    const { agent } = story(shell({ asker, counter }, BABA))
+
+    await agent.call("/", "open", { surface: "counter" })
+    await agent.call("/", "open", { surface: "asker" })
+    expect(agent.sees()).not.toHaveProperty("needs")
+    await agent.call("/tabs/2", "ask", { who: "person" })
+    expect(Object.keys(agent.sees()!)).toEqual(["title", "needs", "surfaces", "tabs"])
+    expect(agent.sees()).toMatchObject({ needs: [{ at: "/tabs/2", surface: "asker", who: "person", why: "to decide" }] })
+    expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({})
+    // The tab's own path still says it.
+    expect(agent.sees("/tabs/2")).toMatchObject({ attention: { who: "person", why: "to decide" } })
+    await agent.call("/tabs/2", "ask", { who: "both" })
+    expect(agent.sees()!.needs).toEqual([
+      { at: "/tabs/2", surface: "asker", who: "person", why: "to decide" },
+      { at: "/tabs/2", surface: "asker", who: "agent", why: "to draft" },
+    ])
+    // What is not attention is not gathered, and stays a fact of its tab.
+    await agent.call("/tabs/2", "ask", { who: "bad" })
+    expect(agent.sees()).not.toHaveProperty("needs")
+    expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({ attention: "someone" })
+    await agent.call("/tabs/2", "ask", { who: "" })
+    agent.told()
+    await agent.call("/tabs/2", "ask", { who: "person" })
+    expect(agent.told()).toEqual([
+      '+ needs.0.at: "/tabs/2"',
+      '+ needs.0.surface: "asker"',
+      '+ needs.0.who: "person"',
+      '+ needs.0.why: "to decide"',
+    ])
+  })
+
+  it("gives a tab's notices with the tab's path whole and its surface named", async () => {
+    type Said = { n: number }
+    const say = action({
+      name: "say",
+      description: "say",
+      subject: {},
+      inputs: {},
+      update: (m: Said): Update<Said, never> => ({ model: { n: m.n + 1 }, notices: ["said once", { text: "said there", at: "/things/1" }] }),
+    })
+    const speaking = view([say], { "/": (m) => ({ n: m.n, say: say.bind({}) }) })
+    const sayer = surface<Said, { kind: "none" }, never>({
+      description: "says",
+      init: () => ({ n: 0 }),
+      update: (m, msg) => (msg.kind === "call" ? speaking.update(m, msg) : { model: m }),
+      view: speaking.view,
+      run: async () => {},
+      failed: () => ({ kind: "none" }),
+    })
+    const r = run(shell({ sayer }, BABA), memory())
+    const heard: unknown[] = []
+
+    r.notices(({ cause: _cause, ...n }) => heard.push(n))
+    await r.call("/", "open", { surface: "sayer" }, "agent")
+    await r.call("/tabs/1", "say", {}, "person")
+    expect(heard).toEqual([
+      { text: "said once", at: "/tabs/1", from: "sayer" },
+      { text: "said there", at: "/tabs/1/things/1", from: "sayer" },
+    ])
+    await r.stop()
+  })
+
   it("names tabs and paths, and refuses bad surface names", () => {
     expect(within("/tabs/3")).toEqual({ n: 3, path: "/" })
     expect(within("/tabs/3/notes/2/")).toEqual({ n: 3, path: "/notes/2" })

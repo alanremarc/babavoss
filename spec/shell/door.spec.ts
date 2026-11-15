@@ -1,5 +1,6 @@
 // The shell through the runtime's door, as the agent's text: what changes in a tab is said once in an answer, and what
-// the person did there is still told at / on the agent's next request.
+// the person did there is still told at / on the agent's next request; who a tab needs is said first, and its notices once,
+// to the agent as lines and to the page as events.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -24,9 +25,18 @@ const note = action({
   description: "note",
   subject: {},
   inputs: { text: "string" },
-  update: (m: Model, { text }): Update<Model, never> => ({ model: { ...m, note: text } }),
+  update: (m: Model, { text }): Update<Model, never> => ({ model: { ...m, note: text }, ...(text && { notices: [`noted ${text}`] }) }),
 })
-const pages = view([bump, note], { "/": (m) => ({ title: "Counter", n: m.n, note: m.note, bump: bump.bind({}), note_: note.bind({}) }) })
+const pages = view([bump, note], {
+  "/": (m) => ({
+    title: "Counter",
+    n: m.n,
+    note: m.note,
+    ...(m.n > 5 && { attention: { who: "person", why: "to say whether so many is right" } }),
+    bump: bump.bind({}),
+    note_: note.bind({}),
+  }),
+})
 const counter = surface<Model, { kind: "none" }, never>({
   description: "counts",
   init: () => ({ n: 0, note: "" }),
@@ -43,7 +53,7 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-it("says a tab's change once in the answer to a call there, and still tells at / what the person did in the tab", async () => {
+const started = async () => {
   const dir = mkdtempSync(join(tmpdir(), "shell-door-"))
 
   dirs.push(dir)
@@ -72,15 +82,57 @@ it("says a tab's change once in the answer to a call there, and still tells at /
       })
     ).text()
 
+  return { runtime, endpoint, request }
+}
+
+it("says a tab's change once in the answer to a call there, and still tells at / what the person did in the tab", async () => {
+  const { request } = await started()
+
   expect(await request("/?open")).toContain('/ open surface="counter"   open a counter tab')
   expect(await request("/", { handle: "open", args: { surface: "counter" } })).toContain("tabs.0.facts.n: 0")
   // The agent's own call: its change is in the answer once, not again under tabs.0.facts.
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
   // The person acts in the tab; the agent's next call there says its own change, and at / what the person did.
   await request("/tabs/1", { handle: "note", args: { text: "mine" } }, true)
-  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe('n: 2 → 3\nchanged by the person:\ntabs.0.facts.note: "" → "mine"')
+  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe(
+    'n: 2 → 3\nnotices:\ncounter /tabs/1: noted mine (by the person)\nchanged by the person:\ntabs.0.facts.note: "" → "mine"'
+  )
   // A read of the tab shows it whole, so nothing of it is repeated from /.
   await request("/tabs/1", { handle: "bump", args: { by: 1 } }, true)
   expect(await request("/tabs/1")).not.toContain("changed:")
   expect(await request("/")).not.toContain("changed:")
+})
+
+it("says first at / who a tab needs, tells its notices once as lines by who caused them, and gives the page each as an event", async () => {
+  const { runtime, endpoint, request } = await started()
+  const stream = await fetch(`http://127.0.0.1:${runtime.port}/`, { headers: { accept: "text/event-stream", [SERVICE_HEADER]: endpoint.token } })
+  const reader = stream.body!.getReader()
+  let events = ""
+  const read = async (until: string) => {
+    while (!events.includes(until)) events += new TextDecoder().decode((await reader.read()).value)
+  }
+
+  await request("/?open")
+  await request("/", { handle: "open", args: { surface: "counter" } })
+  expect(await request("/tabs/1", { handle: "note", args: { text: "mine" } })).toBe('note: "" → "mine"')
+  await request("/tabs/1", { handle: "note", args: { text: "theirs" } }, true)
+  await request("/tabs/1", { handle: "bump", args: { by: 6 } }, true)
+  expect(await request("/_/wait?seconds=0")).toBe(
+    [
+      "notices:",
+      "counter /tabs/1: noted theirs (by the person)",
+      "changed by the person:",
+      '+ needs.0.at: "/tabs/1"',
+      '+ needs.0.surface: "counter"',
+      '+ needs.0.who: "person"',
+      '+ needs.0.why: "to say whether so many is right"',
+      "tabs.0.facts.n: 0 → 6",
+      'tabs.0.facts.note: "mine" → "theirs"',
+    ].join("\n")
+  )
+  expect((await request("/")).split("\n").slice(0, 3)).toEqual(['title: "baba"', "needs: at\tsurface\twho\twhy", '"/tabs/1"\t"counter"\t"person"\t"to say whether so many is right"'])
+  await read("noted theirs")
+  expect(events).toContain('event: notice\ndata: {"text":"noted mine","at":"/tabs/1","from":"counter","by":"the agent"}')
+  expect(events).toContain('event: notice\ndata: {"text":"noted theirs","at":"/tabs/1","from":"counter"}')
+  await reader.cancel()
 })
