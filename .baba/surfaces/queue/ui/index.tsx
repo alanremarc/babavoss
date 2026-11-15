@@ -1,5 +1,6 @@
-// The queue's page: the session's work in two views, switched at the top of the sidebar. The list has the issues as
-// one-liners in the sidebar on the right, grouped by where they stand, and the selected one in the content; the map has the
+// The queue's page: the session's work in three views, switched from the toolbar at its foot. The list has the open issues
+// as one-liners in the sidebar on the right, grouped by where they stand, and the selected one in the content; the archive
+// is the same over the issues that are done; the map has the
 // issues as a plane of narratives in the content, and the selected one, or the narratives, in the sidebar. Both show an
 // issue with the one Detail. Which view and what is selected is the tab's route, so a refresh and the agent's pointing land
 // on it: /issues/N and /narratives/ID in the list, the same below /map in the map. The person approves or drops a draft
@@ -13,6 +14,7 @@ import { useLive, useTab, type DrawerProps } from "babavoss/shell/ui/index.tsx"
 import { Detail } from "./detail.tsx"
 import { Narratives, Plane, type Node } from "./map.tsx"
 import { Label, Lane, Line, Mark, Modes, hue, type Lens, type Root, type Status, type Told, type Whole } from "./parts.tsx"
+import { Peek, usePeek } from "./peek.tsx"
 
 export const icon = <ListTodoIcon aria-hidden />
 
@@ -97,12 +99,14 @@ function IssueDrawer({ handle, view, submit, close }: DrawerProps) {
 
 export const drawers = { add: IssueDrawer, add_from: IssueDrawer, draft: IssueDrawer, draft_from: IssueDrawer }
 
-const GROUPS: { status: Status; label: string }[] = [
+type Group = { status: Status; label: string }
+/** What the list shows, the work that is open; and what the archive shows, the work that is done. */
+const OPEN: Group[] = [
   { status: "lane", label: "In progress" },
   { status: "backlog", label: "Backlog" },
   { status: "draft", label: "Drafts" },
-  { status: "done", label: "Done" },
 ]
+const ARCHIVE: Group[] = [{ status: "done", label: "Done" }]
 
 /** Every narrative's view, kept current: its about, and how many passes each of its issues had, which / does not list. */
 function useNarratives(root: Root | undefined) {
@@ -122,13 +126,18 @@ function useNarratives(root: Root | undefined) {
   return told
 }
 
-/** The issues as the list's sidebar has them: grouped by where they stand, the lanes first with how many are busy. */
-function Stack({ root, picked, colorOf, go }: { root: Root; picked?: number; colorOf: (id: string) => string; go: (route: string) => void }) {
+/**
+ * The issues as a sidebar has them: grouped by where they stand, the lanes first with how many are busy. A line is the
+ * issue's standing as an icon in its narrative's hue, its number and its title; resting on one brings a glance at it.
+ */
+function Stack({ root, groups, picked, colorOf, go }: { root: Root; groups: Group[]; picked?: number; colorOf: (id: string) => string; go: (route: string) => void }) {
   const busy = root.lanes - root.free.length
+  const peek = usePeek()
 
   return (
-    <div className="py-2">
-      {GROUPS.map(({ status, label }) => {
+    <div className="py-2" onMouseLeave={peek.out}>
+      <Peek peek={peek} root={root} colorOf={colorOf} go={go} />
+      {groups.map(({ status, label }) => {
         const rows = root.issues.filter((issue) => issue.status === status)
 
         if (!rows.length && status !== "lane") return null
@@ -153,16 +162,18 @@ function Stack({ root, picked, colorOf, go }: { root: Root; picked?: number; col
                 <li key={issue.n}>
                   <button
                     type="button"
-                    onClick={() => go(`/issues/${issue.n}`)}
+                    onClick={() => {
+                      peek.close()
+                      go(`/issues/${issue.n}`)
+                    }}
+                    onMouseEnter={(event) => peek.over(issue.n, event.currentTarget)}
                     aria-current={issue.n === picked}
-                    title={issue.title}
-                    className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
+                    className="hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none"
                   >
-                    <Mark status={issue.status} />
-                    <span className="min-w-0 flex-1 truncate">{issue.title}</span>
+                    <Mark status={issue.status} color={colorOf(issue.narrative)} />
+                    <span className="text-muted-foreground/70 shrink-0 text-meta tabular-nums">#{issue.n}</span>
+                    <span className={`min-w-0 flex-1 truncate ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}>{issue.title}</span>
                     {issue.lane && <Lane lane={issue.lane} />}
-                    <span className="size-1.5 shrink-0 rounded-full" style={{ background: colorOf(issue.narrative) }} title={issue.narrative} />
-                    <span className="text-muted-foreground/70 w-6 text-right text-meta tabular-nums">#{issue.n}</span>
                   </button>
                 </li>
               ))}
@@ -200,17 +211,21 @@ export default function Queue() {
   const { view: root, error } = useLive<Root>("/")
   const { call, route, navigate } = useTab()
   const told = useNarratives(root)
-  const lens: Lens = route === "/map" || route.startsWith("/map/") ? "map" : "list"
-  const place = lens === "map" ? route.slice("/map".length) || "/" : route
+  const lens: Lens = (["map", "archive"] as const).find((name) => route === `/${name}` || route.startsWith(`/${name}/`)) ?? "list"
+  const prefix = lens === "list" ? "" : `/${lens}`
+  const place = route.slice(prefix.length) || "/"
   const named = Number(/^\/issues\/(\d+)$/.exec(place)?.[1]) || undefined
   const focus = /^\/narratives\/([^/]+)$/.exec(place)?.[1]
   const issues = root?.issues ?? []
-  // The list always shows an issue: the one in the route, else the first; the map shows one only where the route names it.
-  const picked = issues.find((issue) => issue.n === named)?.n ?? (lens === "list" && !focus ? issues[0]?.n : undefined)
+  // The list and the archive always show an issue: the one in the route, else their first, open work in the list and done
+  // in the archive; the map shows one only where the route names it.
+  const first = issues.find((issue) => (issue.status === "done") === (lens === "archive")) ?? (lens === "list" ? issues[0] : undefined)
+  const picked = issues.find((issue) => issue.n === named)?.n ?? (lens !== "map" && !focus ? first?.n : undefined)
   const { view: whole } = useLive<Whole>(picked ? `/issues/${picked}` : "/")
   const [refused, setRefused] = useState("")
-  const go = (to: string) => navigate(lens === "map" ? `/map${to === "/" ? "" : to}` : to)
-  const switchTo = (next: Lens) => navigate(next === "map" ? `/map${place === "/" ? "" : place}` : place)
+  const go = (to: string) => navigate(prefix ? `${prefix}${to === "/" ? "" : to}` : to)
+  // Another view begins at its own first issue, but for the map, which keeps what was selected.
+  const switchTo = (next: Lens) => navigate(next === "list" ? "/" : next === "map" ? `/map${place === "/" ? "" : place}` : "/archive")
   const index = new Map((root?.narratives ?? []).map((x, i) => [x.id, i]))
   const colorOf = (id: string) => hue(index.get(id) ?? 0)
   const byN = new Map(issues.map((issue) => [issue.n, issue]))
@@ -271,8 +286,8 @@ export default function Queue() {
       <main className="flex min-w-0 flex-1 flex-col overflow-auto">
         {focus && told[focus] ? <Narrative told={told[focus]!} color={colorOf(focus)} go={go} /> : (detail(true) ?? (!issues.length && empty))}
       </main>
-      <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label="Issues">
-        {root && <Stack root={root} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
+      <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label={lens === "archive" ? "Archive" : "Issues"}>
+        {root && <Stack root={root} groups={lens === "archive" ? ARCHIVE : OPEN} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
       </aside>
     </div>
   )
