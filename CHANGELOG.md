@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.21.1
+
+- A tab whose surface throws on the state it keeps, for example after the surface's code changed, no longer breaks the root. `/` lists it with `broken` saying why, in place of `title` and `facts`, and keeps `close` offered. Reading the tab says the same, calls into it are refused, and its page shows the reason. A surface that changes the shape of its model should still give a `restore` that takes the earlier shape.
+- The session's command is installed again where it was still the one from before 0.21.0, whose programs were given `role` and not `root`.
+
 ## 0.21.0
 
 - What the agent works with is a surface, no longer an app. A project's surfaces are code in its `.baba/` directory: a Bun package that names the framework, `"babavoss": "github:alanremarc/babavoss#v0.21.0"`, with one directory per surface under `surfaces/`.
