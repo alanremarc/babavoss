@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.30.0
+
+- The framework has a harness layer, `babavoss/core/harness/index.ts`: a `Harness` interface whose sessions report normalised events, Claude Code's adapter (`claudeCode()`, with the pure `claudeEvents(line)` parser), and `fakeHarness()` for stories. A surface that drives an agent uses it instead of spawning `claude` itself.
+- A session the adapter starts has a home of its own, which reaches the person's login through a link, never a copy; the link and the account files the harness writes there are removed when the session's home is released.
+
 ## 0.29.0
 
 - The framework's hook is now also provisioned for `Stop`, `StopFailure` and `SessionEnd`. It tells the session's runtime whose move it is, adds no context at those events and never blocks stopping. Installing in `.baba/` provisions it again.
