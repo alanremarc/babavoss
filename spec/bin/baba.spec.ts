@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { OPERATING } from "../../framework/core/provision.ts"
+import { VERSION } from "../../framework/core/update.ts"
 
 const checkout = fileURLToPath(new URL("../..", import.meta.url))
 const project = realpathSync(mkdtempSync(join(tmpdir(), "baba-")))
@@ -132,11 +133,21 @@ test("the hook tells the agent what changed in an open role since the session la
       input: JSON.stringify({ session_id: "hooked", hook_event_name: event }),
     })
 
-  // Nothing is open in the session yet.
-  expect(hook("SessionStart")).toMatchObject({ status: 0, stdout: "" })
+  const root = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", ...args], { cwd: baba, encoding: "utf8", env })
+  // A session's start starts the root, roles open or none: its version, its page's address and how to show it, the roles.
+  const started = hook("SessionStart")
+
+  expect(started.status).toBe(0)
+  expect(started.stdout).toContain(`baba ${VERSION}\n`)
+  expect(started.stdout).toMatch(/page: http:\/\/127\.0\.0\.1:\d+  a new address: open it in the harness's browser if it has one, and otherwise give it to the person\n/)
+  expect(started.stdout).toContain('"desk"')
+  expect(started.stdout).not.toContain("is open in this session")
+  // By hand it is the same runtime, at the same address, wherever in the project it is started from.
+  expect(root().stdout).toContain(/page: http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0])
+  expect(existsSync(join(baba, ".babavoss"))).toBe(false)
   expect(door().status).toBe(0)
   try {
-    expect(hook("SessionStart").stdout).toStartWith("The role desk is open in this session. Its current state is read with `")
+    expect(hook("SessionStart").stdout).toContain("The role desk is open in this session. Its current state is read with `")
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
 
     // The person proposes on the page: a call the agent did not make.
@@ -160,6 +171,7 @@ test("the hook tells the agent what changed in an open role since the session la
     expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
   } finally {
     door("close")
+    root("close")
   }
   expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], { cwd: project, encoding: "utf8", env, input: "not json" })).toMatchObject({ status: 0, stdout: "" })
 })

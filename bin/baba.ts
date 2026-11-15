@@ -2,14 +2,15 @@
 // baba, the package's command: makes a project's .baba/ directory, makes a role in it from the template, and provisions
 // the roles as skills. It works on the .baba/ it is run in, or the nearest one above.
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { basename, dirname, join, resolve } from "node:path"
+import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { hookContext, hookOutput, type HookInput } from "../framework/core/hook.ts"
-import { provision, ROLES_DIR, taken } from "../framework/core/provision.ts"
+import { findBaba, provision, ROLES_DIR, taken } from "../framework/core/provision.ts"
 import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
 const USAGE = `baba init [--from SPEC]   make .baba/ in this directory, install the framework and provision; SPEC names the framework, a release by default
 baba new NAME             make the role NAME from the template in .baba/roles/NAME, and provision
+baba start [--session ID] start the root of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the roles
 baba provision            write the skills of baba and of every role, and the framework's hook, into the harnesses' configuration beside .baba/
 baba hook                 what a harness's hook runs: reads the hook's input, prints the context to add`
 const NAME = /^[a-z][a-z0-9-]*$/
@@ -43,13 +44,16 @@ const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
 
 /** The .baba/ directory the command works on: the one it is run in, or the nearest above. */
 function found(): string {
-  for (let dir = resolve(process.cwd()); ; dir = dirname(dir)) {
-    const baba = basename(dir) === ".baba" ? dir : join(dir, ".baba")
-
-    if (existsSync(join(baba, "package.json"))) return baba
-    if (dir === dirname(dir)) throw new Refusal("there is no .baba/ here or above: make one with `baba init`")
-  }
+  return findBaba(process.cwd()) ?? refuse("there is no .baba/ here or above: make one with `baba init`")
 }
+
+const refuse = (message: string): never => {
+  throw new Refusal(message)
+}
+/** The root's door, which opens the root of a .baba/ in a session. */
+const ROOT = fileURLToPath(new URL("../framework/root/scripts/open.ts", import.meta.url))
+/** Without a harness's session, as when the person starts it by hand, the session is this one. */
+const BY_HAND = "by-hand"
 
 function report({ written, removed }: ReturnType<typeof provision>) {
   for (const dir of removed) console.log(`removed ${dir}`)
@@ -109,7 +113,12 @@ try {
 
   if (command === "init") init(args)
   else if (command === "new") create(args)
-  else if (command === "provision" && !args.length) report(provision(found()))
+  else if (command === "start") {
+    const harness = process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID
+    const session = args.includes("--session") || harness ? [] : ["--session", BY_HAND]
+
+    process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...session, ...args], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
+  } else if (command === "provision" && !args.length) report(provision(found()))
   else if (command === "hook") {
     // Never in the agent's way: whatever fails here, the hook says nothing.
     try {

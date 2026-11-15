@@ -4,6 +4,7 @@ import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import type { RoleDefinition } from "../role.ts"
 import { startRuntime } from "../runtime/runtime.ts"
+import { findBaba } from "../provision.ts"
 import { updateNote } from "../update.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenRole } from "./bv.ts"
@@ -12,9 +13,9 @@ export async function main(role: RoleDefinition) {
   const args = process.argv.slice(2)
   const directory = dirname(dirname(realpathSync(process.argv[1]!)))
   // A role lives in a .baba/ directory and keeps what it writes beside it: in the person's home, or in a project. One run
-  // from elsewhere keeps it where the door was run.
+  // from elsewhere keeps it beside the .baba/ of the directory the door was run in, or in that directory where there is none.
   const at = directory.lastIndexOf("/.baba/")
-  const beside = at < 0 ? process.cwd() : directory.slice(0, at)
+  const beside = at < 0 ? dirname(findBaba(process.cwd()) ?? join(process.cwd(), ".baba")) : directory.slice(0, at)
   const root = beside === realpathSync(homedir()) ? undefined : beside
 
   process.env.BABAVOSS_HOME ??= join(root ?? homedir(), ".babavoss")

@@ -8,6 +8,8 @@ A role is software you operate for the person: a surface you read and act on thr
 
 Run the commands below from that `.baba/` directory.
 
+`bun run baba start` starts the root of `.baba/` for this session, where a hook has not already: it answers with the framework's version, its page's address and the roles. Open the page in the harness's browser if it has one, and otherwise give the address to the person.
+
 ## The loop
 
 1. Make or change a role. `bun run baba new NAME` makes `roles/NAME/` from the template, a role that runs as it is. Agree with the person first what it is for: its job, your part, what they see on the page and what they decide there.

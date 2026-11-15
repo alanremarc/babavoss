@@ -204,7 +204,7 @@ it("loads an edit of the role's code into the running runtime: the same process 
 it("an open names the page each time, and calls it new only once", () => {
   const s = setup()
 
-  expect(s.open().out).toContain("a new address: give it to the person")
+  expect(s.open().out).toContain("a new address: open it in the harness's browser if it has one, and otherwise give it to the person")
 
   const again = s.open().out
 
@@ -224,7 +224,7 @@ it("takes another address where the session's last one is taken, and announces i
   const squatter = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } })
 
   try {
-    expect(s.run(["/"]).out).toContain("a new address: give it to the person")
+    expect(s.run(["/"]).out).toContain("a new address: open it in the harness's browser")
     expect(s.endpoint().port).not.toBe(port)
   } finally {
     squatter.stop(true)

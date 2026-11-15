@@ -5,7 +5,7 @@
 // The framework's hook is provisioned too, where the harness has hooks: it tells the agent what it did not ask for.
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join, relative } from "node:path"
+import { basename, dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readJsonFile, writeJsonFile } from "./state/json-file.ts"
 
@@ -31,7 +31,7 @@ export const OPERATING = `## Operating it
 - A fact named \`at\` is a path with more behind it: read it with the command for its detail and the actions offered there. Where the role has tabs, a tab's actions are offered at the tab's path, not at \`/\`.
 - Every answer says what changed since you last looked, including what the person did on the page.
 - A refusal gives its reason. Read again and act on what is offered; do not repeat the call.
-- The person watches and acts on the page. Give them its address whenever the role names a new one.
+- The person watches and acts on the page. Whenever the role names a new address, open it in the harness's browser if it has one, and otherwise give the address to the person.
 - For more than a few calls of one kind, write one program with the command's \`-e\`: \`role.read(path)\`, \`role.call(path, handle, args)\` and \`role.wait(seconds)\`. Print each result and stop at the first refusal.`
 
 /** .baba/ as a skill reaches it: every skill folder is two directories under the one .baba/ is in. */
@@ -59,6 +59,28 @@ export function roles(baba: string): string[] {
   return (existsSync(dir) ? readdirSync(dir).sort() : []).filter(
     (name) => existsSync(join(dir, name, "ROLE.md")) && existsSync(join(dir, name, "scripts/open.ts"))
   )
+}
+
+export type Described = { name: string; description: string }
+
+/** The roles in a .baba/ directory with their descriptions; one whose ROLE.md has none says so in its place. */
+export const describedRoles = (baba: string): Described[] =>
+  roles(baba).map((name) => {
+    try {
+      return { name, description: readRole(join(baba, ROLES_DIR, name, "ROLE.md")).description }
+    } catch {
+      return { name, description: "ROLE.md has no description yet" }
+    }
+  })
+
+/** The .baba/ directory of a directory: the one it is, or the nearest in it or above; undefined where there is none. */
+export function findBaba(from: string): string | undefined {
+  for (let dir = resolve(from); ; dir = dirname(dir)) {
+    const baba = basename(dir) === ".baba" ? dir : join(dir, ".baba")
+
+    if (existsSync(join(baba, "package.json"))) return baba
+    if (dir === dirname(dir)) return undefined
+  }
 }
 
 /** The skill of a role, as provisioned. */

@@ -7,7 +7,7 @@ import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 7
+export const VERSION = 8
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const ENDPOINT_FILE = "service.json"
@@ -239,7 +239,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     const announce = () => {
       if (path === "close") return
       if (role.page !== page) {
-        console.log(`page: ${page}  a new address: give it to the person`)
+        console.log(`page: ${page}  a new address: open it in the harness's browser if it has one, and otherwise give it to the person`)
         role.page = page
         save(file, roles)
       } else if (!path) console.log(`page: ${page}`)
