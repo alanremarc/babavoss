@@ -1,6 +1,6 @@
 // The babavoss mark, the two eyes of the brand, as the strip's first tab, home; and the agent's standing in it: at rest,
 // looking about like a face that thinks while the agent works, a tint instead where motion is reduced or the person turned
-// the mark's animation off in the settings, and a count of the person's changes waiting. The eyes sit on an invisible sphere, gaze.ts; here they are moved, a frame at a time and
+// the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the activity. The eyes sit on an invisible sphere, gaze.ts; here they are moved, a frame at a time and
 // only while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "cn"
@@ -165,14 +165,6 @@ export function Logo({ standing, animate = true, lost = false }: { standing: Sta
   return (
     <span data-turn={lost ? "lost" : standing.state} data-animate={animate || undefined} className="relative grid size-[22px] place-items-center">
       <Eyes looking={working && animate} lost={lost} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
-      {standing.state === "waiting" && !lost && (
-        <span
-          aria-hidden
-          className="absolute -top-1 -right-1.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-muted-foreground px-0.5 text-badge leading-none font-medium text-background tabular-nums ring-2 ring-sidebar"
-        >
-          {standing.waiting > 9 ? "9+" : standing.waiting}
-        </span>
-      )}
     </span>
   )
 }

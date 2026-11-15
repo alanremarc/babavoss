@@ -19,6 +19,7 @@ import {
   toastsAfter,
   unseenRows,
   whoBy,
+  waitingRows,
   type Row,
 } from "../../framework/shell/ui/notifications.tsx"
 
@@ -408,4 +409,12 @@ describe("the activity log", () => {
     expect(entryOf(rows, { text: "Approved #12", at: "/tabs/1/things/12", from: "queue" })?.n).toBe(5)
     expect(entryOf(rows, { text: "Approved #12", at: "/tabs/1/things/12", from: "lab" })).toBeUndefined()
   })
+})
+
+it("what the agent sees next is the person's latest calls, as many as wait for its turn", () => {
+  const row = (n: number, who: Row["who"], kind: Row["kind"]): Row => ({ n, when: "2026-01-01T00:00:00Z", who, kind, surface: "queue", at: "/tabs/1", what: `call ${n}` })
+  const rows = [row(6, "agent", "call"), row(5, "person", "call"), row(4, "person", "notice"), row(3, "person", "call"), row(2, "person", "call")]
+
+  expect(waitingRows(rows, 2).map((r) => r.n)).toEqual([5, 3])
+  expect(waitingRows(rows, 0)).toEqual([])
 })

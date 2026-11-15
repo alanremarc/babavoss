@@ -14,7 +14,7 @@
 // what waits alone. A line too long is cut; clicking it shows it whole.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "cn"
-import { AppWindowIcon, BellIcon, BotIcon, CircleDotIcon, UserRoundIcon } from "lucide-react"
+import { AppWindowIcon, BotIcon, CircleDotIcon, LayersIcon, UserRoundIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
 import { call, read, type Notice } from "./client.ts"
@@ -114,6 +114,9 @@ export const badgeOf = (unseen: number, showing: number, open: boolean): number 
  * from its mark, which may skip one looked at alone; these are the newest of that count, near enough to dot where they are.
  */
 export const unseenRows = (rows: Row[], unseen: number): Row[] => rows.filter((r) => r.kind !== "call" && r.who !== "person").slice(0, Math.max(0, unseen))
+
+/** The person's latest calls, as many as the agent has not been told of: what it is told with their next message, newest first. */
+export const waitingRows = (rows: Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.kind === "call").slice(0, Math.max(0, waiting))
 
 /** What was new as the log opened on `rows`, the shell counting `unseen`: kept so, though opening sees it all. */
 export const openedOn = (rows: Row[], unseen: number): Opened => ({ fresh: new Set(unseenRows(rows, unseen).map((r) => r.n)), newest: rows[0]?.n ?? 0 })
@@ -357,12 +360,15 @@ export function Notifications({
   told,
   go,
   title,
+  waiting = 0,
 }: {
   changes: Stream
   notices: Stream<Notice>
   told: Feed
   go: (at: string) => void
   title: string
+  /** How many of the person's own calls the agent has not been told of yet: it is, with their next message. */
+  waiting?: number
 }) {
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState<Shown>("notices")
@@ -375,7 +381,9 @@ export function Notifications({
   const content = useRef<HTMLDivElement>(null)
   // Whether the drawer closes back to the button: by Escape, not by a press elsewhere or by going to a place.
   const back = useRef(false)
-  const all = useFeed(ALL, changes, open && shown === "all")
+  const all = useFeed(ALL, changes, open && (shown === "all" || waiting > 0))
+  // What the agent is told next: the person's latest calls, as many as wait for its next turn.
+  const next = waitingRows(all.rows, waiting)
   const needs = useNeeds(changes, open)
   const marked = useRef(0)
   const isOpen = useRef(open)
@@ -442,6 +450,7 @@ export function Notifications({
   const badge = badgeOf(told.unseen, toasts.filter((t) => t.counts).length + looking, open)
   const feed = shown === "all" ? all : told
   const rows = inView(feed.rows, shown)
+  const said = ["Activity", badge ? `${badge} new` : "", waiting ? `${waiting} of your changes wait for the agent's next turn` : ""].filter(Boolean).join(", ")
   const groups = groupsOf(rows, new Date())
   const fresh = feed.rows.some((r) => isNew(r, opened))
 
@@ -458,15 +467,16 @@ export function Notifications({
       <button
         ref={button}
         type="button"
-        aria-label={badge ? `Activity, ${badge} new` : "Activity"}
+        aria-label={said}
         aria-expanded={open}
-        title={badge ? `Activity, ${badge} new` : "Activity"}
+        title={said}
         data-state={open ? "open" : "closed"}
         data-notifications
-        className="relative grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
+        className="relative flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full px-1.5 text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/11 data-[state=open]:text-foreground"
         onClick={() => toggle(!open)}
       >
-        <BellIcon className="size-4" aria-hidden />
+        <LayersIcon className="size-4" aria-hidden />
+        {waiting > 0 && <span className="text-meta tabular-nums">{waiting > 9 ? "9+" : waiting}</span>}
         {badge > 0 && <span aria-hidden data-unseen={badge} className="absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" />}
       </button>
       <Sheet open={open} onOpenChange={toggle}>
@@ -537,6 +547,18 @@ export function Notifications({
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-2 outline-none"
             onKeyDown={moveIn}
           >
+            {next.length > 0 && (
+              <section aria-label="The agent sees next" className="border-b border-border/60 pb-2">
+                <Heading>
+                  The agent sees next <span className="font-normal">· with your next message</span>
+                </Heading>
+                {next.map((row) => (
+                  <div role="listitem" key={`next-${row.n}`}>
+                    <Line row={row} fresh={false} lit={false} open={expanded === -row.n} toggle={() => setExpanded((n) => (n === -row.n ? undefined : -row.n))} go={goTo} />
+                  </div>
+                ))}
+              </section>
+            )}
             {needs.length > 0 && (
               <section aria-label="Needs you" className="border-b border-border/60 pb-2">
                 <Heading>Needs you</Heading>
