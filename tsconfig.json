@@ -17,6 +17,6 @@
     "noUncheckedIndexedAccess": true,
     "jsx": "react-jsx"
   },
-  "include": ["packages", "skills", "examples", "spec"],
+  "include": ["skills", "spec"],
   "exclude": ["skills/baba/assets/template", "**/node_modules/**"]
 }
