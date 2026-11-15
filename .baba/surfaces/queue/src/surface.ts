@@ -23,7 +23,7 @@ const made = (m: Model, title: string, about: string, status: Issue["status"]): 
     : { refused: "An issue needs a title and a line about it" }
 const add = action({
   name: "add",
-  description: "Add an issue the person asked for to the bottom of the backlog: a short imperative title, and about, a sentence or two on what changes and why",
+  description: "Add an issue the person asked for to the bottom of the backlog: a short imperative title, and about, brief markdown on what changes and why",
   subject: {},
   inputs: { title: "string", about: "string" },
   update: (m: Model, { title, about }): Result => made(m, title, about, "backlog"),
@@ -45,7 +45,7 @@ const approve = action({
 })
 const describe = action({
   name: "describe",
-  description: ({ n }) => `Rewrite what issue ${n} is about, in a sentence or two`,
+  description: ({ n }) => `Rewrite what issue ${n} is about, as brief markdown`,
   subject: { n: "number" },
   inputs: { about: "string" },
   update: (m: Model, { n, about }): Result =>
