@@ -9,7 +9,7 @@
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
-import { action, surface, view, type AnySurface, type Call, type Json, type Surface, type Update, type View } from "../../core/index.ts"
+import { action, handles, surface, view, type AnySurface, type Call, type Json, type Surface, type Update, type View } from "../../core/index.ts"
 
 /** `broken`: why the tab's surface could not restore its kept model, which is then kept as it was saved. */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string }
@@ -160,15 +160,17 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
       tabs: model.tabs.map((tab) => ({ at: `/tabs/${tab.n}`, n: tab.n, surface: tab.surface, close: close.bind({ n: tab.n }) })),
     }),
   })
-  /** A tab as the desktop lists it, for the actor: its surface's title and facts at /, the paths whole; or why it is broken. */
-  const said = (tab: Tab, actor?: string): { title?: string; facts?: Json; broken?: string } => {
+  /** A tab as the desktop lists it, for the actor: its surface's title, actions and facts at /, the paths whole; or why it is broken. */
+  const said = (tab: Tab, actor?: string): { title?: string; actions?: string[]; facts?: Json; broken?: string } => {
     const seen = shown(tab, "/", actor)
 
     if ("broken" in seen) return { broken: seen.broken }
 
     const { title, ...rest } = seen.ok ?? {}
+    // What can be done in the tab, by name: their commands are at the tab's path, so what is possible is known from / alone.
+    const actions = [...new Set(handles(rest).map((h) => h.name))]
 
-    return { ...(typeof title === "string" && { title }), facts: facts(whole(rest, `/tabs/${tab.n}`)) }
+    return { ...(typeof title === "string" && { title }), ...(actions.length && { actions }), facts: facts(whole(rest, `/tabs/${tab.n}`)) }
   }
   /** A call into a tab, or its refusal with why: where its surface cannot show the call's path, or fails on the call itself. */
   const called = (tab: Tab, call: Call, model: ShellModel): Update<ShellModel, ShellCommand> => {

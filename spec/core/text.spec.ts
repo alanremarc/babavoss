@@ -93,7 +93,7 @@ it("1: reads relative facts, quoted table rows and handle declarations; unknown 
 
   expect(response.headers.get("content-type")).toBe("text/plain")
   expect(text).toContain('rows: at\ttext\n"/one"\t"two words"')
-  expect(text).toContain("rows.0.do: bv text /one set id=1 n=number yes=boolean   Set values")
+  expect(text).toContain("do: bv text /one set id=1 n=number yes=boolean   Set values")
   expect(text).toContain("n: 0")
 
   const missing = await request("/missing")
@@ -210,4 +210,15 @@ it("10: where the person changed a fact after the agent did, the person's change
   await request("/one", { handle: "set", args: { id: 1, n: 1, yes: false } }, false, "agent:S")
   await request("/one", { handle: "set", args: { id: 1, n: 2, yes: false } }, false)
   expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person and you:\nn: 0 → 2")
+})
+it("11: a read of / is the present whole, by the word or a program's root.read, and what changes is counted from it", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 3, yes: true } }, false)
+  expect(await (await request("/")).text()).not.toContain("changed")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+  await request("/one", { handle: "set", args: { id: 1, n: 4, yes: true } }, false)
+  await request("/", undefined, false, "agent:S")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
 })

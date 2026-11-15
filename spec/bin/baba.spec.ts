@@ -163,11 +163,11 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const opened = hook("UserPromptSubmit").stdout
 
     expect(opened).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
-    expect(opened).toContain('+ tabs.0.surface: "desk"')
-    expect(opened).toContain('+ tabs.0.facts.how: "Propose a greeting when the person asks for another.')
-    expect(opened).toContain('+ tabs.0.facts.greeting: "hello"')
+    expect(opened).toMatch(/\n\+ \/tabs\/\d+ desk "Greeting"\nactions: propose /)
+    expect(opened).toContain('\nhow: "Propose a greeting when the person asks for another.')
+    expect(opened).toContain('\ngreeting: "hello"')
 
-    const tab = /\+ tabs\.0\.at: "(\/tabs\/\d+)"/.exec(opened)![1]!
+    const tab = /\+ (\/tabs\/\d+) desk/.exec(opened)![1]!
 
     // The tab's own path offers its actions, as the exact commands.
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)

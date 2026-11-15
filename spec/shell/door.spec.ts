@@ -73,12 +73,14 @@ it("says a tab's change once in the answer to a call there, and still tells at /
     ).text()
 
   expect(await request("/?open")).toContain('/ open surface="counter"   open a counter tab')
-  expect(await request("/", { handle: "open", args: { surface: "counter" } })).toContain("tabs.0.facts.n: 0")
-  // The agent's own call: its change is in the answer once, not again under tabs.0.facts.
+  expect(await request("/", { handle: "open", args: { surface: "counter" } })).toStartWith('+ /tabs/1 counter "Counter"\nactions: bump, note')
+  // The agent's own call: its change is in the answer once, not again under the tab's heading.
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
   // The person acts in the tab; the agent's next call there says its own change, and at / what the person did.
   await request("/tabs/1", { handle: "note", args: { text: "mine" } }, true)
-  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe('n: 2 → 3\nchanged by the person:\ntabs.0.facts.note: "" → "mine"')
+  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe(
+    'n: 2 → 3\nchanged by the person:\n/tabs/1 counter "Counter"\nnote: "" → "mine"'
+  )
   // A read of the tab shows it whole, so nothing of it is repeated from /.
   await request("/tabs/1", { handle: "bump", args: { by: 1 } }, true)
   expect(await request("/tabs/1")).not.toContain("changed:")

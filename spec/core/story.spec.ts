@@ -70,7 +70,7 @@ test("told gives the whole view, then only changes, then nothing", async () => {
 
   expect(agent.told()).toEqual(["items: []", "add: add + text:string", "fetch: fetch + text:string"])
   await agent.call("/", "add", { text: "One" })
-  expect(agent.told()).toEqual(['+ items.0: "One"', "- items"])
+  expect(agent.told()).toEqual(['items: [] → ["One"]'])
   expect(agent.told()).toEqual([])
 })
 
@@ -80,9 +80,9 @@ test("one actor is told what the other did", async () => {
   agent.told()
   person.told()
   await person.call("/", "add", { text: "One" })
-  expect(agent.told()).toEqual(['+ items.0: "One"', "- items"])
+  expect(agent.told()).toEqual(['items: [] → ["One"]'])
   await agent.call("/", "add", { text: "Two" })
-  expect(person.told()).toEqual(['+ items.0: "One"', '+ items.1: "Two"', "- items"])
+  expect(person.told()).toEqual(['items: [] → ["One", "Two"]'])
 })
 
 test("a held command can report an event that changes the view", async () => {
@@ -142,7 +142,7 @@ test("restart keeps saved state and each actor's told record", async () => {
   expect(world.commands()).toEqual([])
   expect(agent.sees()).toMatchObject({ items: ["One"] })
   expect(person.told()).toEqual([])
-  expect(agent.told()).toEqual(['+ items.0: "One"', "- items"])
+  expect(agent.told()).toEqual(['items: [] → ["One"]'])
   await agent.call("/", "add", { text: "Two" })
   expect(person.sees()).toMatchObject({ items: ["One", "Two"] })
 })

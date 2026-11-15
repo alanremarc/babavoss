@@ -153,16 +153,17 @@ describe("the shell surface", () => {
     ])
   })
 
-  it("tells the agent at / what changes in a tab: each tab carries its surface's facts, without its handles", async () => {
+  it("tells the agent at / what changes in a tab: each tab carries its surface's facts, without its handles, and its actions by name", async () => {
     const { agent, person, world } = story(shell({ counter }, BABA))
 
     await agent.call("/", "open", { surface: "counter" })
     await world.settle({ kind: "tab", n: 1, event: { kind: "bumped" } })
     expect(agent.sees("/")!.tabs).toMatchObject([{ at: "/tabs/1", surface: "counter", title: "Counter", facts: { n: 1, detail: { at: "/tabs/1/n" } } }])
-    expect(JSON.stringify(agent.sees("/")!.tabs)).not.toContain("bump")
+    expect(JSON.stringify((agent.sees("/")!.tabs as { facts: unknown }[])[0]!.facts)).not.toContain("bump")
+    expect(agent.sees("/")!.tabs).toMatchObject([{ actions: ["bump", "later"] }])
     agent.told()
     await person.call("/tabs/1", "bump", { by: 2 })
-    expect(agent.told()).toEqual(["tabs.0.facts.n: 1 → 3"])
+    expect(agent.told()).toEqual(['/tabs/1 counter "Counter"', "n: 1 → 3"])
   })
 
   it("gives the paths a surface names under at whole, and a tab's page its own back", async () => {
