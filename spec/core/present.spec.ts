@@ -1,7 +1,7 @@
 // The present as the agent reads it: a view whole, and what changed between two views, told as events on things.
 import { describe, expect, it } from "bun:test"
 import { CAP, diff, entries, lines, rebase, tell, whole, type Change } from "../../framework/core/present/present.ts"
-import { handle, type Json } from "../../framework/core/surface/index.ts"
+import { detail, handle, type Json } from "../../framework/core/surface/index.ts"
 
 const say = { command: "baba" }
 const HOW = "Keep this true as the work moves."
@@ -50,6 +50,16 @@ describe("whole", () => {
       'issues: at\tn\ttitle\tstatus\n"/tabs/3/issues/1"\t1\t"Issue 1"\t"backlog"',
     ])
   })
+  it("leaves detail out, a list's rows and a fact, and says in one line how much there is and where it is read", () => {
+    const view = root([issue(1), detail(issue(2, "done", { note: "merged" })), detail(issue(3, "done"))], { tokens: detail(1200) })
+
+    expect(whole(view, say).slice(-3)).toEqual([
+      "free: [1, 2]",
+      'issues: at\tn\ttitle\tstatus\n"/tabs/3/issues/1"\t1\t"Issue 1"\t"backlog"',
+      "+2 more in issues, tokens in detail; read /tabs/3",
+    ])
+    expect(whole({ count: detail(3), name: "x" }, { ...say, path: "/tabs/1" })).toEqual(['name: "x"', "+count in detail; read /tabs/1"])
+  })
   it("says the root's own: one open for every surface, by the name column; who is needed, first; where the person was pointed, by its place", () => {
     const need = { at: "/tabs/3", surface: "queue", who: "person", why: "to approve a draft" }
     const view = {
@@ -88,8 +98,14 @@ describe("diff", () => {
     expect(told({ rows: [{ name: "a", v: 1 }] }, { rows: [{ name: "a", v: 2 }] })).toEqual(["rows a: v 1 → 2"])
     expect(told({ rows: [{ v: 1 }, { v: 2 }] }, { rows: [{ v: 1 }, { v: 3 }] })).toEqual(["rows.1.v: 2 → 3"])
   })
-  it("tells a reorder alone in one line", () => {
-    expect(told(root([issue(1), issue(2), issue(3)]), root([issue(3), issue(1), issue(2)]))).toEqual(['/tabs/3 queue "Queue"', "issues: order now 3, 1, 2"])
+  it("tells a reorder by what moved, never as the whole order, and as how many where many moved", () => {
+    const ns = (...n: number[]) => root(n.map((x) => issue(x)))
+
+    expect(told(ns(1, 2, 3), ns(3, 1, 2))).toEqual(['/tabs/3 queue "Queue"', "/tabs/3/issues/3 moved to the top"])
+    expect(told(ns(1, 2, 3, 4), ns(1, 3, 2, 4))).toEqual(['/tabs/3 queue "Queue"', "/tabs/3/issues/2 moved down"])
+    expect(told(ns(1, 2, 3, 4), ns(2, 3, 4, 1))).toEqual(['/tabs/3 queue "Queue"', "/tabs/3/issues/1 moved to the end"])
+    expect(told(ns(1, 2, 3, 4, 5, 6), ns(6, 5, 4, 3, 2, 1))).toEqual(['/tabs/3 queue "Queue"', "issues: 5 rows moved; read /tabs/3 for the order"])
+    expect(told({ rows: [{ n: 1 }, { n: 2 }] }, { rows: [{ n: 2 }, { n: 1 }] })).toHaveLength(1)
   })
   it("tells a row added or removed in one line, and several added at once as a table", () => {
     expect(told(root([issue(1), issue(2)]), root([issue(2), issue(4)]))).toEqual([
@@ -117,20 +133,24 @@ describe("diff", () => {
     ])
     expect(told({ about: long }, { about: `${long}!` })).toEqual([`about → ${JSON.stringify(long.slice(0, 100))}… (${long.length + 1} chars; read /)`])
   })
-  it("tells a tab opened whole under its heading, its standing prose with it, and a tab closed in one line", () => {
+  it("tells a tab opened in one line, its heading, its actions by name and where to read it, and a tab closed in one line", () => {
     const empty = { title: "baba", surfaces: [], tabs: [] }
     const opened = { ...empty, tabs: [{ at: "/tabs/4", n: 4, surface: "queue", title: "Queue", actions: ["add"], facts: { how: HOW, lanes: 5 } }] }
 
-    expect(told(empty, opened)).toEqual([
-      '+ /tabs/4 queue "Queue"',
-      "actions: add   each one's command is at /tabs/4",
-      `how: ${JSON.stringify(HOW)}`,
-      "lanes: 5",
-    ])
+    expect(told(empty, opened)).toEqual(['+ /tabs/4 queue "Queue", actions: add; read /tabs/4'])
     expect(told(opened, empty)).toEqual(['- /tabs/4 queue "Queue" closed'])
   })
   it("tells a tab's actions by what was offered or withdrawn", () => {
     expect(told(root([]), root([], {}, { actions: ["add", "approve"] }))).toEqual(['/tabs/3 queue "Queue"', "actions: + approve, - draft"])
+  })
+  it("counts detail that stays detail, and tells a row that became detail, or stopped being it, by what changed in it", () => {
+    const rows = (...r: Json[]) => root([], { issues: r, tokens: detail(5) })
+
+    expect(told(rows(issue(1), detail(issue(2))), rows(issue(1), detail(issue(2, "done"))))).toEqual(['/tabs/3 queue "Queue"', "detail changed: 1 in issues; read /tabs/3"])
+    expect(told(rows(issue(1)), rows(detail(issue(1, "done"))))).toEqual(['/tabs/3 queue "Queue"', '/tabs/3/issues/1: status "backlog" → "done"'])
+    expect(told(rows(detail(issue(1))), rows(issue(1, "lane")))).toEqual(['/tabs/3 queue "Queue"', '/tabs/3/issues/1: status "backlog" → "lane"'])
+    expect(told(rows(issue(1)), rows(issue(1), detail(issue(2))))).toEqual(['/tabs/3 queue "Queue"', "detail changed: 1 in issues; read /tabs/3"])
+    expect(told(root([], { tokens: detail(5) }), root([], { tokens: detail(6) }))).toEqual(['/tabs/3 queue "Queue"', "detail changed: tokens in detail; read /tabs/3"])
   })
   it("says nothing where nothing changed", () => {
     expect(told(root([issue(1)]), root([issue(1)]))).toEqual([])

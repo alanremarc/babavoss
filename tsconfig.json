@@ -15,7 +15,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": { "@/*": ["./.baba/*"] }
   },
   "include": ["bin", "framework", "spec", ".baba/surfaces"],
   "exclude": ["**/node_modules/**"]

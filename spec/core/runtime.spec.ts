@@ -303,7 +303,7 @@ it("takes changed code in place: the same process, address and token, the state 
   await poll(() => page.heard).toEqual(["change", "turn"])
   await (await get("/?open", { accept: "text/plain" })).text()
 
-  // Changed code is no notice: it ends no wait, which tells it when it ends.
+  // Changed code is no event in the work: it ends no wait, and what it changes is told to no one.
   const waiting = get("/_/wait?seconds=1", { accept: "text/plain" }).then((response) => response.text())
   // The code as edited: the same surface, saying one fact more. Its entry runs again in this process, as under bun --hot.
   const edited = defineRoot({
@@ -319,7 +319,7 @@ it("takes changed code in place: the same process, address and token, the state 
   expect(again!.port).toBe(runtime.port)
   expect(readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))).toEqual(endpoint)
   expect(await (await get("/")).json()).toMatchObject({ n: 3, doubled: 6 })
-  expect(await waiting).toContain("+ doubled: 6")
+  expect(await waiting).toBe("nothing changed")
   expect(page.heard.filter((event) => event === "change").length).toBeGreaterThan(1)
   page.stop()
 })

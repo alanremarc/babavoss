@@ -53,7 +53,15 @@ update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! },
 
 A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page under all activity, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person's notifications.
 
-The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there.
+The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
+
+What is there to be looked up rather than followed, rows that are finished or counters, wrap in `detail(value)` from `babavoss/core/index.ts`, a fact or a row of a list. The page and a read of the tab see it as an ordinary value; the shell's present at `/` leaves it out and counts it in one line, `+19 more in issues; read /tabs/3`, and a change to it there is one line too.
+
+```ts
+issues: [...open.map(row), ...done.map((issue) => detail(row(issue)))],
+```
+
+An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way. An update may return `quiet: true` for an event of the same kind.
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
@@ -84,11 +92,20 @@ What is only the page's, presentation such as a lens, a fold or a pane, and a ch
 
 Whose move it is is the shell's too: the mark at the strip's start moves while the agent works and counts the person's changes that wait for its next turn, and home offers to end their move. A surface makes no busy indicator and no end-of-move button of its own.
 
+## A page's own
+
+A page is a React component the shell wraps in its tab. Inside the tab everything is the surface's: any library installed in `.baba/`, any pattern, its own CSS. The kit is where to start, and the project's own shadcn components stand beside it. The strip, a tab's menu, the activity, a drawer's frame and the theme's tokens are the shell's.
+
+- A library: `bun add NAME` in `.baba/`, then import it. The page has one React, the framework's, whatever a library brings. A library's own stylesheet is imported from the page, `import "NAME/dist/style.css"`; it is not scoped, so restyle it to the tokens in `ui/styles.css`.
+- A shadcn component: `bunx shadcn@latest add NAME` in `.baba/` writes it to `components/ui/`, shared by every surface, imported as `@/components/ui/NAME`. It reads the tokens the shell's theme defines, so it follows the palette and the mode. The css file `components.json` names is not part of the page: what the CLI writes there changes nothing.
+- Tailwind sees every file in `.baba/` but `node_modules`. A package whose own classes must be generated is named by a `@source` line in `ui/styles.css`, its path from there: `@source "../../../node_modules/NAME";`.
+- The shell's services, by convention, from `useShell()`: `toast(text, at?)`, a toast from the tab that clicking returns to, kept nowhere and not told to the agent, where what both sides should know is a notice from `update`; `open(surface)`, its tab, the open one or a new one; `go(at)`, a place by its whole path, `/queue/issues/3`; `appearance`, `{ mode, theme }`, for a library that must be told them, such as a chart's or an editor's. A page drawn by the tokens needs none of it.
+
 ## Looks
 
 A page follows the person's palette, light or dark mode, by the shell's theming tokens, so it never needs to know which is chosen.
 
-- Use the kit's components and layouts first: they are already in the design language.
+- Use the kit's components and layouts first, then the project's shadcn components: they are already in the design language.
 - Then the tokens, through Tailwind classes; `framework/kit/defaults.css` defines them:
   - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the shell's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
   - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px; Tailwind's `text-sm` and up for headings.
@@ -97,7 +114,7 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
   - frame: `h-menubar`, `h-bar` and `h-row`, the heights of a compact header, a bar, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
 - Never hard-code a colour, a font or a size where a token fits.
 
-Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
+Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` and `@source` work in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
 
 ## The harnesses
 

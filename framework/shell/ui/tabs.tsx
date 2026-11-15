@@ -5,7 +5,7 @@
 // waits on the person, by one dot: needing them, an ask, a notice they have not seen, or a tab the agent opened that they
 // have not looked at; needing the agent, quietly; and why, as its tooltip. At its right stands what is the session's.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { cn } from "cn"
+import { cn } from "../../kit/cn.ts"
 import { ChevronDownIcon } from "lucide-react"
 import { MenuDropdown } from "../../kit/layouts/menu.tsx"
 import { tabScrollOffset } from "./tab-scroll"

@@ -4,10 +4,10 @@
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { CONFIG_FILE, loadConfig, sectionOf } from "../framework/core/config.ts"
+import { loadConfig, sectionOf } from "../framework/core/config.ts"
 import { ADAPTERS } from "../framework/core/harness/index.ts"
 import { hookContext } from "../framework/core/hook.ts"
-import { findBaba, NAME, provision, RESERVED, SURFACES_DIR, ROOT_DIR, type Provisioned } from "../framework/core/provision.ts"
+import { findBaba, NAME, provision, RESERVED, scaffold, SURFACES_DIR, ROOT_DIR, type Provisioned } from "../framework/core/provision.ts"
 import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
 const USAGE = `baba init [--from SPEC]   make .baba/ in this directory, install the framework and provision; SPEC names the framework, a release by default
@@ -16,24 +16,6 @@ baba start [--session ID] start the shell of .baba/ for this session, or the ses
 baba provision            make each harness .baba/baba.config.ts enables aware of the surfaces, withdraw from the others, and generate the root from the surfaces
 baba hook [HARNESS]       what a harness's hook runs, claude by default: reads the hook's input, prints the context to add`
 const TEMPLATE = fileURLToPath(new URL("../template", import.meta.url))
-const TSCONFIG = {
-  compilerOptions: {
-    lib: ["ESNext", "DOM", "DOM.Iterable"],
-    target: "ESNext",
-    module: "Preserve",
-    moduleDetection: "force",
-    allowImportingTsExtensions: true,
-    verbatimModuleSyntax: true,
-    erasableSyntaxOnly: true,
-    noEmit: true,
-    types: ["bun"],
-    strict: true,
-    skipLibCheck: true,
-    noUncheckedIndexedAccess: true,
-    jsx: "react-jsx",
-  },
-  include: [SURFACES_DIR, CONFIG_FILE, "node_modules/babavoss/framework/shell/ui/css.d.ts"],
-}
 
 class Refusal extends Error {}
 
@@ -74,7 +56,7 @@ function init(args: string[]) {
       dependencies: { babavoss: from ?? `github:${REPOSITORY}#v${VERSION}` },
     })
   )
-  writeFileSync(join(baba, "tsconfig.json"), json(TSCONFIG))
+  scaffold(baba)
   writeFileSync(join(baba, ".gitignore"), `node_modules\n${ROOT_DIR}\n`)
 
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })

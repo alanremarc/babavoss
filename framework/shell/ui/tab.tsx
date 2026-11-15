@@ -19,6 +19,22 @@ export type TabContext = {
   live: <V = View>(path: string, onView: (view: V) => void, onError?: (error: string) => void, onConnected?: (up: boolean) => void) => () => void
 }
 
+/**
+ * What a page may ask of the shell beyond its tab, used by convention and never needed: `open` shows a tab of a surface,
+ * the one open or else a new one; `go` goes to a place by its whole path, as `/queue/issues/3`; `toast` raises a toast from
+ * the tab, which clicking returns to, kept nowhere and not told to the agent, since what happened to both sides is a notice
+ * of the surface's `update`; `appearance` is the person's mode and theme, for a library that must be told them.
+ */
+export type ShellServices = {
+  open: (surface: string) => Promise<void>
+  go: (at: string) => void
+  toast: (address: string, text: string, at?: string) => void
+  appearance: { mode: "light" | "dark"; theme: string }
+}
+
+/** The shell's services as the shell gives them; a page drawn without the shell has them do nothing. */
+export const ServicesContext = createContext<ShellServices>({ open: async () => {}, go: () => {}, toast: () => {}, appearance: { mode: "light", theme: "neutral" } })
+
 /** The tab's context as the shell holds it: with its cache, which useLive reads. */
 const Context = createContext<(TabContext & { cache: LiveCache }) | null>(null)
 
@@ -135,6 +151,14 @@ export function useTab(): TabContext {
   if (!tab) throw new Error("useTab is for a surface's component inside the shell")
 
   return tab
+}
+
+/** The shell's services, for a page: `toast` here is from this tab, its `at` a path within it. */
+export function useShell(): Omit<ShellServices, "toast"> & { toast: (text: string, at?: string) => void } {
+  const services = useContext(ServicesContext)
+  const address = useContext(Context)?.address ?? ""
+
+  return useMemo(() => ({ ...services, toast: (text: string, at?: string) => services.toast(address, text, at) }), [services, address])
 }
 
 /** The tab's cache of its views, which the shell's frame around the page reads too. */

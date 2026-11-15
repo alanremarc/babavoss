@@ -15,7 +15,7 @@
 // its notices, and they stay dotted until it is left; Mark all seen sees them all. Escape, Backspace or the left arrow go
 // back; Escape on the first level closes.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
-import { cn } from "cn"
+import { cn } from "../../kit/cn.ts"
 import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LayersIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
@@ -144,6 +144,9 @@ function useNeeds(changes: Stream, live: boolean): Need[] {
 
 const QUIET = "cursor-pointer text-meta text-muted-foreground/70 outline-none hover:text-foreground focus-visible:underline focus-visible:underline-offset-4"
 
+/** A notice as the shell hears it: from the stream, or a page's own toast, `kept: false`, which is in no log and returns to its place. */
+export type Heard = Notice & { kept?: false }
+
 /**
  * The button, its drawer and the toasts. `changes` tells of every change, `notices` of each notice as it is heard, `told`
  * is the feed of notices; `go` goes to a place, a tab and the route within it; `title` names the shell's own channel and a
@@ -160,7 +163,7 @@ export function Notifications({
   waiting = 0,
 }: {
   changes: Stream
-  notices: Stream<Notice>
+  notices: Stream<Heard>
   told: Feed
   go: (at: string) => void
   title: string
@@ -258,7 +261,7 @@ export function Notifications({
     }
     setOpen(to)
   }
-  const heard = useRef<(notice: Notice) => void>(() => {})
+  const heard = useRef<(notice: Heard) => void>(() => {})
 
   // A notice opens the activity on its channel, by its tab; while the drawer is open it comes in there, not as a toast.
   heard.current = (notice) => {
@@ -268,8 +271,8 @@ export function Notifications({
       text: notice.text,
       title: notice.from ?? title,
       mark: <Mark label={BY[who]}>{MARK[who]}</Mark>,
-      counts: notice.by !== undefined,
-      onSelect: () => toggle(true, tabIn(notice.at)),
+      counts: notice.by !== undefined && notice.kept !== false,
+      onSelect: () => (notice.kept === false && notice.at ? go(notice.at) : toggle(true, tabIn(notice.at))),
     }
 
     setToasts((all) => toastsAfter(all, toast, isOpen.current))
