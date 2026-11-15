@@ -102,7 +102,8 @@ it("answers with the code on disk after it is replaced, deleted and made again, 
 
   const after = bv("/")
 
-  expect(after.out).toContain("its runtime started again with the code as it is")
+  // Started again, having cut nothing: the agent is answered by the code as it is, and told nothing of how.
+  expect(after.out).not.toContain("its runtime started again")
   expect(after.out).toContain('edition: "checked out"')
   expect(after.out).toContain('latest: "kept"')
 

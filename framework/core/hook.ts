@@ -1,5 +1,6 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
-// baba would, its text and the shell's answer, the shell started; after each tool call, what was heard in an open root since
+// baba would, its text and the shell's answer, the shell started; where the session had the text before, as after a
+// compaction or a resume, the text's reminder in its place (wordsFor); after each tool call, what was heard in an open root since
 // the agent was last told, one line each: notices, and where the person acted; with each message of the person, that and
 // then what changed at / since the agent was last told it, by who changed it: the person on its page, the surface by itself,
 // or the agent with them. What the agent's own calls alone changed or gave, their answers told it. It steers and informs,
@@ -13,7 +14,7 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
-import type { HookEvent } from "./harness/harness.ts"
+import type { HookEvent, Source } from "./harness/harness.ts"
 import type { TurnEvent } from "./runtime/turn.ts"
 
 type Endpoint = { port: number; token: string; dir: string }
@@ -22,10 +23,17 @@ type Endpoint = { port: number; token: string; dir: string }
 const TURNS: Record<string, TurnEvent> = { UserPromptSubmit: "started", PostToolUse: "working", Stop: "ended", SessionEnd: "gone" }
 
 /** What a moment tells of the turn: a session that starts or resumes waits for the person; one compacted may be mid-turn, so it says nothing. */
-export const turnOf = (event: HookEvent): TurnEvent | undefined => TURNS[event.moment] ?? (event.moment === "SessionStart" && !event.compact ? "ended" : undefined)
+export const turnOf = (event: HookEvent): TurnEvent | undefined =>
+  TURNS[event.moment] ?? (event.moment === "SessionStart" && event.source !== "compact" ? "ended" : undefined)
+
+/**
+ * Which of baba's words a session's start is given: the whole, where the agent has not had them, as in a new or cleared
+ * session or where the harness does not say; their reminder, where it had them and they are in its context or its summary.
+ */
+export const wordsFor = (source: Source | undefined): "whole" | "reminder" => (source === "compact" || source === "resume" || source === "fork" ? "reminder" : "whole")
 
 const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
-const SKILL = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
+const WORDS = { whole: fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url)), reminder: fileURLToPath(new URL("../../skill/reminder.md", import.meta.url)) }
 
 /** Where the roots of a .baba/ keep what their sessions write: beside it, or in the person's home's own place. */
 export const homeOf = (baba: string) => join(dirname(baba) === realpathSync(homedir()) ? homedir() : dirname(baba), ".babavoss")
@@ -92,7 +100,7 @@ export async function hookContext(input: HookEvent, baba: string): Promise<strin
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
-    lines.push(readFileSync(SKILL, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
+    lines.push(readFileSync(WORDS[wordsFor(input.source)], "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
     if (root.exitCode === 0 && answer) lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
     await tell()
   } else if (turn === "ended" || turn === "gone") await tell()

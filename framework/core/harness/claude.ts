@@ -12,7 +12,7 @@ import { homedir } from "node:os"
 import { basename, dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Json } from "../surface/view.ts"
-import type { Adapter, Harness, HarnessEvent, HookEvent, Loaded, Moment, Request, Session, SetUp, Start, Tokens } from "./harness.ts"
+import { sourceOf, type Adapter, type Harness, type HarnessEvent, type HookEvent, type Loaded, type Moment, type Request, type Session, type SetUp, type Start, type Tokens } from "./harness.ts"
 import { editJson, pruned, withHooks, without, type Hooks } from "./setup.ts"
 
 /** A Bash command that is the root's word: the command a project's root names for itself, or `bun run baba`. */
@@ -287,7 +287,7 @@ export const PLUGIN = fileURLToPath(new URL("../../../plugin/claude", import.met
 export const PLUGIN_LINK = ".claude/skills/baba"
 /** Claude Code's settings beside .baba/: the person's, where older provisioning wrote the framework's hooks. */
 const SETTINGS = ".claude/settings.json"
-const PLUGIN_FILES = ["SKILL.md", ".claude-plugin", "hooks"]
+const PLUGIN_FILES = ["SKILL.md", "reminder.md", ".claude-plugin", "hooks"]
 
 /** Whether the skill folder at `link` is baba's: a link to a babavoss plugin, or a folder of baba's files alone whose skill is baba. */
 function ours(link: string): boolean {
@@ -358,7 +358,7 @@ export const claude: Adapter<ClaudeOptions> = {
     const event = str(i.hook_event_name)
     const moment = (event === "StopFailure" ? "Stop" : (CLAUDE_EVENTS as readonly string[]).includes(event) ? event : undefined) as Moment | undefined
 
-    return moment && { session: str(i.session_id) || undefined, event, moment, ...(event === "SessionStart" && i.source === "compact" && { compact: true }) }
+    return moment && { session: str(i.session_id) || undefined, event, moment, ...sourceOf(event, i.source) }
   },
   hookOutput: (event, context) => postToolUse(event, context),
   run: () => claudeCode(),
