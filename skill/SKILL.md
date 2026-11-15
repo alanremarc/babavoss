@@ -18,7 +18,8 @@ Its answer names the page's address, the command to use, the surfaces and the op
 - A line that ends in a description is an action offered now, printed as the exact command. Copy it and give a value where it says `name=string`. An action that is not printed is not offered.
 - A fact named `at` is a path with more behind it: read it with the command for its detail and the actions offered there. A tab's actions are offered at the tab's path, not at `/`.
 - A surface is shared and live: the person acts on the page while you work, and is meant to, and a surface's own work changes it too. What moved between two looks is that, not an error or a stale read.
-- With the person's messages and as you work, you are told what changed at `/` since you were last answered, by who changed it: the person, the surface, or you with them. What your own calls alone changed is not told again. Read a tab's path for the rest.
+- `/` says first, under `needs`, which tabs need the person or you, and why: what is the person's, wait for; what is yours, take up.
+- With the person's messages and as you work, you are told what just happened, under `notices`, once, and what changed at `/` since you were last answered, by who: the person, the surface, or you with them. What your own calls alone did is not told again. Read a tab's path for the rest.
 - What the person did is a move to take up and build on, never to undo or overwrite. Where they changed what you were about to, theirs stands: read again and work from it.
 - A refusal gives its reason, which may be that the person or the surface moved first. Read again and act on what is offered; do not repeat the call.
 - For more than a few calls of one kind, write one program with the command's `-e`: `root.read(path)`, `root.call(path, handle, args)` and `root.wait(seconds)`. Print each result and stop at the first refusal.

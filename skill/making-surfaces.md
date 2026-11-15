@@ -22,10 +22,33 @@ surfaces/NAME/
 Everything an agent learns of a surface, it learns from the surface. There is no file of instructions beside it.
 
 - `description` is how the shell lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
-- How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what is waited for, what comes next. Keep it short, since it is read each time.
+- How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what comes next; who is waited for is `attention`, below. Keep it short, since it is read each time.
 - What is mechanical needs no words: what an input may be is in the handle's description, and an action that may not be taken now is not offered.
 
 The agent does the work through handles. What only the person may decide is an ask, offered to them alone on the page. The page shows what the surface says and offers the person their decisions; anything else they want changed, they tell the agent.
+
+## Speaking to the shell
+
+A surface tells the shell two kinds of thing, and the shell tells both sides: the agent in its present, the person on the page.
+
+| Kind | What | Written as |
+|---|---|---|
+| a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
+| a notice from `update` | what just happened, told once and kept nowhere | `notices`, beside `model` and `commands` |
+
+`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab in the strip and shows the why; a list says it of both. Where an ask is offered, say it: the ask is how the person decides, `attention` is that they are waited for.
+
+```ts
+...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
+```
+
+A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
+
+```ts
+update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
+```
+
+A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`; read its code in `framework/` there rather than guessing its interfaces.
 

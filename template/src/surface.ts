@@ -2,7 +2,8 @@
 // agent ever learns of this tool: `description` is how the shell lists it, and so how it is chosen; `how`, a fact
 // at /, is how it is to be worked, read each time. Here the agent proposes a greeting and the person, on the page,
 // accepts or declines it. Replace the greeting with the surface's own work and keep the shape: the agent does the work
-// through handles, a fact at / says what is waited for, and what only the person may decide is an ask.
+// through handles, `attention` at / says who is needed and why, what only the person may decide is an ask, and a notice
+// says what just happened.
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
 
 export type Model = { greeting: string; proposed?: string }
@@ -21,7 +22,7 @@ const accept = action({
   subject: {},
   inputs: {},
   ask: true,
-  update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed ?? m.greeting } }),
+  update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed ?? m.greeting }, notices: [`The greeting is now "${m.proposed}"`] }),
 })
 const decline = action({
   name: "decline",
@@ -29,7 +30,7 @@ const decline = action({
   subject: {},
   inputs: {},
   ask: true,
-  update: (m: Model): Update<Model, never> => ({ model: { greeting: m.greeting } }),
+  update: (m: Model): Update<Model, never> => ({ model: { greeting: m.greeting }, notices: [`"${m.proposed}" was declined`] }),
 })
 const pages = view([propose, accept, decline], {
   "/": (m) => ({
@@ -38,7 +39,7 @@ const pages = view([propose, accept, decline], {
     greeting: m.greeting,
     ...(m.proposed !== undefined && {
       proposed: m.proposed,
-      waiting: "the person, to accept or decline the proposed greeting on the page",
+      attention: { who: "person", why: "to accept or decline the proposed greeting" },
       accept: accept.bind({}),
       decline: decline.bind({}),
     }),
