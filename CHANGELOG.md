@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.51.1
+
+- Home no longer offers a command that ends the person's move, "End my move" or "Copy the message that ends my move": the person writes to the agent themselves. What they did on the page still waits for its next turn and is counted on the activity's button. Nothing to adapt.
+
 ## 0.51.0
 
 - The appearance's mode "system" follows the machine the runtime is on, where the runtime can tell its mode, and the browser's `prefers-color-scheme` only where it cannot: an embedded browser can report light on a dark machine. The page is served with the machine's mode, so its first frame is right, and a page shown in system mode asks again every five seconds. Today the runtime can tell on macOS, from `AppleInterfaceStyle`; elsewhere nothing changes. `BABAVOSS_SYSTEM_MODE=browser` in the runtime's environment leaves the answer to the browser.

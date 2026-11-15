@@ -37,7 +37,7 @@ import { cachesBy } from "./live.ts"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { cycled, newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
-import { endable, endMove, standingOf } from "./turn.ts"
+import { standingOf } from "./turn.ts"
 
 /**
  * Each surface's page module: its component, the default export; the icon the strip and home show; and the
@@ -513,7 +513,6 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
                 tabs={entries}
                 back={entries.find((e) => e.at === back)}
                 keys={homeKeys}
-                {...(turn && endable(turn) && { end: { drivable: turn.drivable, run: () => endMove(turn.drivable) } })}
                 disabled={pending || !root}
                 loading={!root}
                 launch={(handle) => void open(handle)}

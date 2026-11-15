@@ -90,7 +90,7 @@ An action with inputs opens a modal. The shell makes a form of its inputs, one f
 
 What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
 
-Whose move it is is the shell's too: the mark at the strip's start moves while the agent works and counts the person's changes that wait for its next turn, and home offers to end their move. A surface makes no busy indicator and no end-of-move button of its own.
+Whose move it is is the shell's too: the mark at the strip's start moves while the agent works and counts the person's changes that wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
 
 ## A page's own
 

@@ -68,9 +68,6 @@ export function hushed(hooks: Hooks, call: string, now: number): { hooks: Hooks;
 /** What a harness that can be driven from code does: starts a turn of the session's agent with a message. */
 export type Driver = { startTurn(message: string): Promise<{ started: true } | { cannot: string }> }
 
-/** The message the person would send to end their move, where no driver can start the turn for them. */
-export const END_MESSAGE = "I've made changes on the page: take them up."
-
 /**
  * The driver for a session's harness, where one can be driven. None can be yet: a harness started by the person in a terminal
  * takes its turns from the person alone, so this says so, and the page offers the message instead.

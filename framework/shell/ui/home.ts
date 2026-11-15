@@ -31,16 +31,15 @@ export type TabChoice = { at: string; surface: string; label: string }
 
 /**
  * A line of home's list. Each thing stands once: an open tab, which Enter goes to, with its surface's open where another
- * may be opened; a surface with no tab open, which Enter opens; one that does not load; or a command of the shell's.
+ * may be opened; a surface with no tab open, which Enter opens; or one that does not load.
  */
 export type HomeRow =
   | { kind: "tab"; value: string; at: string; surface: string; label: string; another?: Handle }
   | { kind: "surface"; value: string; name: string; description: string; open: Handle }
   | { kind: "broken"; value: string; name: string; broken: string }
-  | { kind: "command"; value: string; label: string }
 
-/** Home's list, in the order it is read: the open tabs, newest first as given; the surfaces with no tab open; the shell's commands. */
-export function rowsOf(surfaces: readonly SurfaceEntry[], tabs: readonly TabChoice[], commands: readonly { value: string; label: string }[] = []): HomeRow[] {
+/** Home's list, in the order it is read: the open tabs, newest first as given; then the surfaces with no tab open. */
+export function rowsOf(surfaces: readonly SurfaceEntry[], tabs: readonly TabChoice[]): HomeRow[] {
   const offered = choices(surfaces)
   const openOf = (name: string) => {
     const choice = offered.find((u) => u.name === name)
@@ -57,7 +56,6 @@ export function rowsOf(surfaces: readonly SurfaceEntry[], tabs: readonly TabChoi
     ...offered
       .filter((u) => !tabs.some((tab) => tab.surface === u.name))
       .map((u): HomeRow => ("broken" in u ? { kind: "broken", value: `surface ${u.name}`, ...u } : { kind: "surface", value: `surface ${u.name}`, ...u })),
-    ...commands.map((c): HomeRow => ({ kind: "command", ...c })),
   ]
 }
 
@@ -65,7 +63,6 @@ export function rowsOf(surfaces: readonly SurfaceEntry[], tabs: readonly TabChoi
 export function doesOf(row: HomeRow): { enter?: string; other?: string } {
   if (row.kind === "tab") return { enter: "Go to tab", ...(row.another && { other: "Open another" }) }
   if (row.kind === "surface") return { enter: "Open" }
-  if (row.kind === "command") return { enter: "Run" }
 
   return {}
 }

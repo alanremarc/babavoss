@@ -52,15 +52,14 @@ it("home lists each thing once: the open tabs, the surfaces with none open, the 
     { name: "lab", description: "Watch an agent", open: { ...open, args: { surface: "lab" } } },
     { name: "bad", broken: "SyntaxError" },
   ]
-  const rows = rowsOf(surfaces, [{ at: "/tabs/2", surface: "queue", label: "Queue" }], [{ value: "end move", label: "End my move" }])
+  const rows = rowsOf(surfaces, [{ at: "/tabs/2", surface: "queue", label: "Queue" }])
 
   expect(rows.map((row) => [row.kind, row.value])).toEqual([
     ["tab", "tab /tabs/2"],
     ["surface", "surface lab"],
     ["broken", "surface bad"],
-    ["command", "end move"],
   ])
-  expect(rows.map(doesOf)).toEqual([{ enter: "Go to tab", other: "Open another" }, { enter: "Open" }, {}, { enter: "Run" }])
+  expect(rows.map(doesOf)).toEqual([{ enter: "Go to tab", other: "Open another" }, { enter: "Open" }, {}])
   // A tab whose surface cannot be opened again offers no other thing.
   expect(doesOf(rowsOf([], [{ at: "/tabs/1", surface: "gone", label: "Gone" }])[0]!)).toEqual({ enter: "Go to tab" })
 })

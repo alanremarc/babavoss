@@ -1,14 +1,13 @@
 // Home: the shell's first tab, at /, and what the page shows where no tab is. It is the shell's own page, as a surface's
 // page is its surface's, filling the page under the strip: a search focused at once, then what the shell offers at /, the
-// surfaces to open, the settings among them, the open tabs to switch to, and the shell's own commands, among them ending
-// the person's move while their changes wait. A surface's actions and places are in its tab's menu, never here. Typing
+// surfaces to open, the settings among them, the open tabs to switch to. A surface's actions and places are in its tab's menu, never here. Typing
 // filters them; arrows and Enter choose. Escape clears what is typed, then returns to the tab shown before. Its shortcut,
 // ⌘P or Ctrl+P by default, goes home from anywhere, and from home back. A surface that does not load is listed, broken,
 // and cannot be opened. Its footer says whose page it is, and when a later babavoss is out.
 import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "../../kit/cn.ts"
 import type { Handle } from "../../core/index.ts"
-import { BoxIcon, SendIcon } from "lucide-react"
+import { BoxIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Logo } from "./mark.tsx"
 import type { Standing as TurnStanding } from "./turn.ts"
@@ -79,7 +78,6 @@ type Props = {
   /** Home's shortcut, as the person reads it. */
   keys: string
   /** Ending the person's move, while their changes wait for the agent: `run` says what it did. */
-  end?: { drivable: boolean; run: () => Promise<string> }
   disabled: boolean
   loading: boolean
   launch: (open: Handle) => void
@@ -91,7 +89,7 @@ type Props = {
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl "
 
 /** What a line is, said at its end where it is not the chosen one; the chosen one says what Enter does there instead. */
-const KIND = { tab: "tab", surface: "surface", broken: "surface", command: "command" } as const
+const KIND = { tab: "tab", surface: "surface", broken: "surface" } as const
 
 /** A line's end: what kind of thing it is, giving way on the chosen line to what Enter does. */
 function Does({ row }: { row: HomeRow }) {
@@ -110,22 +108,17 @@ function Does({ row }: { row: HomeRow }) {
 }
 
 /**
- * Home's page: the root's title, then one list of what the shell has, each thing once: the open tabs, the surfaces with
- * none open, the shell's commands. A line names the thing; the chosen line and the foot say what Enter does on it, and
+ * Home's page: the root's title, then one list of what the shell has, each thing once: the open tabs, then the surfaces with
+ * none open. A line names the thing; the chosen line and the foot say what Enter does on it, and
  * what Enter with the command key does where that is something else.
  */
-export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, disabled, loading, launch, select, leave }: Props) {
+export function Home({ title, notice, surfaces, icons, tabs, back, keys, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
-  const [ended, setEnded] = useState<string>()
   const [picked, setPicked] = useState("")
-  const ending = end ? [{ value: "end move", label: end.drivable ? "End my move" : "Copy the message that ends my move" }] : []
-  const rows = rowsOf(surfaces, tabs, ending)
+  const rows = rowsOf(surfaces, tabs)
   const chosen = rows.find((row) => row.value === picked)
   const does = chosen ? doesOf(chosen) : {}
   const tabOf = (at: string) => tabs.find((tab) => tab.at === at)
-
-  // What ending the move last did is said until the turn moves on.
-  useEffect(() => setEnded(undefined), [end?.drivable, !end])
 
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-4 pt-[max(16px,10vh)] pb-3 text-body" aria-label="Home">
@@ -174,17 +167,6 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, end, di
                       </CommandItem>
                     )
                   }
-                  if (row.kind === "command")
-                    return (
-                      <CommandItem key={row.value} value={row.value} keywords={["end my move", "agent", "turn", "changes", "command", "run"]} onSelect={() => void end?.run().then(setEnded)}>
-                        <Glyph>
-                          <SendIcon aria-hidden />
-                        </Glyph>
-                        <span className="shrink-0 text-foreground">{row.label}</span>
-                        <span className="min-w-0 flex-1 truncate pl-1.5 text-meta">{ended ?? (end?.drivable ? "start the agent's turn with your changes" : "nothing here can start the agent's turn")}</span>
-                        <Does row={row} />
-                      </CommandItem>
-                    )
                   if (row.kind === "broken")
                     return (
                       <CommandItem key={row.value} value={row.value} keywords={[row.name, "broken", row.broken]} disabled data-broken="">
