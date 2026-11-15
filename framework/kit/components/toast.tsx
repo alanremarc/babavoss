@@ -4,7 +4,7 @@
 // dismissed shrinks into it, so the eye learns where they went; with reduced motion it only fades. Given `away`, every toast
 // leaves at once, a short slide toward the edge, as when what keeps them opens. What a toast says is the caller's.
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react"
-import { cn } from "cn"
+import { cn } from "../cn.ts"
 import { XIcon } from "lucide-react"
 
 /** A toast: `text` its line, `title` where it is from, `meta` more of that, `mark` the small sign before it. */

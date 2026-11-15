@@ -2,7 +2,7 @@
 // it live: closed by Escape, by a press outside it, or by its owner. `top` is where it starts, as a Tailwind class. Its
 // text is the frame's body size, since it stands outside the page that set it.
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "../cn.ts"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
