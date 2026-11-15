@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.22.2
+
+- The shell's strip now starts with a "+", the launcher: it opens a palette to open a surface, switch to an open tab or reach settings, filtered as you type, also on ⌘K / Ctrl+K anywhere on the page.
+- Open tabs now run newest first: a new tab appears right after the "+". One the person opens becomes active; one the agent opens is marked with a dot until looked at and does not take focus.
+- Closing the active tab now lands on the next older tab instead of the launcher page.
+- Surfaces need no change.
+
 ## 0.22.1
 
 - A running root no longer goes on serving old code after a hot reload fails or misses a change, as a checkout, a delete-and-recreate or briefly broken code can cause: its runtime notices before it answers, or when bun logs the failure, and gives way to a fresh one at the same address, which says so and what it cut.
