@@ -1,9 +1,11 @@
-// The root opened through its cli: answers carry agent and person changes.
+// The root opened through its cli: answers carry agent and person changes, and come from the code on disk however it was
+// changed under the running root.
 import { notesRoot } from "../support/notes.ts"
 import { spawnSync } from "node:child_process"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, expect, it } from "bun:test"
 import { endpointFile, readJsonFile, type Endpoint } from "babavoss/core/index.ts"
 
@@ -65,3 +67,50 @@ it("opens notes, carries changes after calls, and reports a person's change in t
   expect(cli("/notes/1", "remind", "n=1", "seconds=0.2").status).toBe(0)
   expect(cli("wait", "2").out).toContain("due: 0 → 1")
 })
+
+it("answers with the code on disk after it is replaced, deleted and made again, or broken and then mended", async () => {
+  const state = mkdtempSync(join(tmpdir(), "demo-"))
+
+  dirs.push(state)
+
+  const root = notesRoot(join(state, "root"))
+  const entry = join(root, "scripts/open.ts")
+  const source = join(root, "src/root.ts")
+  const original = readFileSync(source, "utf8")
+  const opener = readFileSync(entry, "utf8")
+  // The agent calls through the standalone client, which loads none of the root's code: only the runtime does.
+  const bv = (...args: string[]) => run(join(process.cwd(), "framework/core/bv/bv.ts"), ["--session", "S", "demo", ...args], "", state)
+  const edition = (name: string) => original.replace("due: m.items.filter", `edition: "${name}",\n    due: m.items.filter`)
+
+  expect(run(entry, ["--session", "S"], "", state).status).toBe(0)
+  expect(bv("/", "add", "text=kept").status).toBe(0)
+
+  // Written to a temporary file and renamed over the source, as editors and agents' tools write.
+  writeFileSync(`${source}.tmp`, edition("renamed"))
+  renameSync(`${source}.tmp`, source)
+  expect(bv("/").out).toContain('edition: "renamed"')
+
+  // Gone for a moment, the entry with it, as a checkout leaves them: the hot reload in between fails on the missing files.
+  rmSync(source)
+  rmSync(entry)
+  await sleep(400)
+  writeFileSync(entry, opener)
+  writeFileSync(source, edition("checked out"))
+
+  const after = bv("/")
+
+  expect(after.out).toContain("its runtime started again with the code as it is")
+  expect(after.out).toContain('edition: "checked out"')
+  expect(after.out).toContain('latest: "kept"')
+
+  // Broken code is said in the answer, with the file it is in; mended, the next answer is from it.
+  writeFileSync(source, `${original}\nexport const broken = (`)
+
+  const broken = bv("/")
+
+  expect(broken.status).toBe(1)
+  expect(broken.err).toContain("demo's runtime did not start; it said:")
+  expect(broken.err).toContain(`${source}:`)
+  writeFileSync(source, edition("mended"))
+  expect(bv("/").out).toContain('edition: "mended"')
+}, 30_000)

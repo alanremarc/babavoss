@@ -1,15 +1,17 @@
 #!/bin/sh
 // 2>/dev/null; exec bun --loader :ts "$0" --word "${0##*/}" "$@"
 // The standalone session client, copied into the home’s bin or beside Bun; no root code or framework imports.
-import { readFileSync, mkdirSync, writeFileSync, renameSync, openSync, closeSync } from "node:fs"
+import { readFileSync, mkdirSync, writeFileSync, renameSync, openSync, closeSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 9
+export const VERSION = 10
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
+export const PROBE_HEADER = "babavoss-probe"
+export const STALE_HEADER = "babavoss-stale"
 export const ENDPOINT_FILE = "service.json"
 export type OpenRoot = { directory: string; entry: string; state: string; command?: string; page?: string }
 export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".babavoss"), "sessions", session, "open.json")
@@ -156,12 +158,12 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       if (!endpoint || endpoint.dir !== root.state) return
       try {
         const response = await fetch(`http://127.0.0.1:${endpoint.port}/`, {
-          headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token },
+          headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token, [PROBE_HEADER]: "1" },
           signal: AbortSignal.timeout(300),
         })
 
         await response.body?.cancel()
-        if (response.headers.get(SERVICE_HEADER) === endpoint.token) return endpoint
+        if (response.headers.get(SERVICE_HEADER) === endpoint.token && !response.headers.has(STALE_HEADER)) return endpoint
       } catch {}
     }
     /** The session's runtime for this root: the one up, or one woken. */
@@ -171,8 +173,12 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       if (endpoint) return endpoint
 
       let failed: Error | undefined
+      const logFile = join(root.state, "service.log")
+      let logged = 0
       const wake = () => {
-        const log = openSync(join(root.state, "service.log"), "a", 0o600)
+        const log = openSync(logFile, "a", 0o600)
+
+        logged = statSync(logFile).size
         // Under bun's hot reload: a change in the root's code is loaded into the runtime, which stays up at its address.
         const child = spawn(process.execPath, ["--hot", root.entry, "--serve", session, command], {
           cwd: root.directory,
@@ -193,13 +199,29 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       let child = wake()
       let woken = Date.now()
 
+      // Code that does not load says why where its runtime logs, as bun does, a line beginning with error: and the file it is in.
+      const said = () => readFileSync(logFile).subarray(logged).toString("utf8").trim().split("\n").slice(-20).join("\n")
+      let erred = false
+
       while (!endpoint && Date.now() < until && !failed) {
         await sleep(50)
         endpoint = await find()
-        if (endpoint || (child.exitCode === null && child.signalCode === null)) continue
+        if (endpoint) continue
+        if (child.exitCode === null && child.signalCode === null) {
+          // Under hot reload a process whose code does not load stays, waiting for a change: it is ended, and its words said.
+          if (erred) {
+            child.kill()
+            throw new Error(`${name}'s runtime did not start; it said:\n${said()}`)
+          }
+          erred = /^error: /m.test(said())
+          continue
+        }
         // It ended without serving. With 0, the runtime before it was still letting go of the session, and the next one
         // woken finds it free; with anything else it failed, and would again.
-        if (child.exitCode !== 0) break
+        if (child.exitCode !== 0) {
+          if (child.exitCode !== 78 && said()) throw new Error(`${name}'s runtime did not start; it said:\n${said()}`)
+          break
+        }
         if (Date.now() - woken >= 250) {
           child = wake()
           woken = Date.now()
@@ -223,16 +245,22 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
           ...(body !== undefined && { body }),
           headers: { accept, "content-type": "application/json", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
         })
+      const until = Date.now() + 15_000
 
-      try {
-        return await send()
-      } catch (error) {
-        // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when its code changes.
-        if (!refused(error)) throw error
+      for (;;) {
+        try {
+          const response = await send()
+
+          // It gave way, having done nothing: its code changed and was not loaded in place. The one woken in its place answers.
+          if (!response.headers.has(STALE_HEADER) || Date.now() >= until) return response
+          await response.body?.cancel()
+          await sleep(50)
+        } catch (error) {
+          // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when its code changes.
+          if (!refused(error) || Date.now() >= until) throw error
+        }
         endpoint = await reach()
         page = `http://127.0.0.1:${endpoint.port}`
-
-        return send()
       }
     }
     // An open always names the page; any other answer names it only when the address is not the one last named.
