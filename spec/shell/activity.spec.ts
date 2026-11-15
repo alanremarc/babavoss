@@ -1,11 +1,26 @@
 // The shell's activity: entries from notices, marked so, and from calls that gave none, the shell's own open, close and
 // show, the bound, what is kept from before, /activity and /activity/notices and their pages, what the agent is told of it,
-// what the person has seen of the notices and its asks, and the notifications' grouping, views, badge and toasts' entries.
+// what the person has seen of the notices and its asks, and the activity log's grouping, times, views, what is new, badge and toasts.
 import { describe, expect, it } from "bun:test"
 import { action, story, surface, view, type Call, type Update } from "../../framework/core/index.ts"
 import { KEPT, PAGE, linesOf, lookAt, record, restored, said, seenFrom, seeUpto, unseenOf, type Entry, type Line } from "../../framework/shell/src/activity.ts"
 import { shell, type ShellModel } from "../../framework/shell/src/surface.ts"
-import { badgeOf, entryOf, groupOf, groupsOf, inView, unseenRows, type Row } from "../../framework/shell/ui/notifications.tsx"
+import {
+  agoOf,
+  badgeOf,
+  entryOf,
+  groupOf,
+  groupsOf,
+  inView,
+  isNew,
+  needLine,
+  needsOf,
+  openedOn,
+  toastsAfter,
+  unseenRows,
+  whoBy,
+  type Row,
+} from "../../framework/shell/ui/notifications.tsx"
 
 type Model = { n: number }
 type Event = { kind: "rang" }
@@ -302,31 +317,51 @@ describe("the person's notifications", () => {
   })
 })
 
-describe("the notifications panel", () => {
+describe("the activity log", () => {
   const now = new Date(2026, 10, 15, 16, 0, 0)
   const at = (minutes: number) => new Date(now.getTime() - minutes * 60_000)
   const row = (n: number, when: Date, who: Row["who"] = "agent", surface = "queue"): Row => ({ n, when: when.toISOString(), who, surface, at: "/tabs/1", what: "x" })
 
-  it("groups by how long ago, in runs, newest first", () => {
-    expect(groupOf(at(1), now)).toBe("Just now")
-    expect(groupOf(at(30), now)).toBe("Last hour")
-    expect(groupOf(at(120), now)).toBe("Today")
+  it("groups by when, in runs, newest first", () => {
+    expect(groupOf(at(1), now)).toBe("Now")
+    expect(groupOf(at(59), now)).toBe("Now")
+    expect(groupOf(at(120), now)).toBe("Earlier today")
     expect(groupOf(new Date(2026, 10, 14, 9), now)).toBe("Yesterday")
     expect(groupOf(new Date(2026, 10, 2, 9), now)).toBe("Nov 2")
     expect(groupOf(new Date(2025, 0, 2, 9), now)).toBe("Jan 2, 2025")
-    expect(groupsOf([row(4, at(1)), row(3, at(2)), row(2, at(30)), row(1, at(120))], now).map((g) => [g.label, g.rows.map((r) => r.n)])).toEqual([
-      ["Just now", [4, 3]],
-      ["Last hour", [2]],
-      ["Today", [1]],
+    expect(groupsOf([row(4, at(1)), row(3, at(2)), row(2, at(90)), row(1, at(60 * 24))], now).map((g) => [g.label, g.rows.map((r) => r.n)])).toEqual([
+      ["Now", [4, 3]],
+      ["Earlier today", [2]],
+      ["Yesterday", [1]],
     ])
   })
 
-  it("shows the notices alone, unfiltered, or all activity filtered by surface and by who", () => {
+  it("says how long ago as now, minutes and hours, then the clock time", () => {
+    expect(agoOf(new Date(now.getTime() - 20_000), now)).toBe("now")
+    expect(agoOf(at(2), now)).toBe("2m")
+    expect(agoOf(at(59), now)).toBe("59m")
+    expect(agoOf(at(60), now)).toBe("1h")
+    expect(agoOf(at(5 * 60 + 59), now)).toBe("5h")
+    expect(agoOf(at(7 * 60), now)).toBe(at(7 * 60).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))
+  })
+
+  it("shows the notices, all activity, or none where it shows what waits alone", () => {
     const rows = [row(4, at(1), "surface", "lab"), { ...row(3, at(1), "person"), kind: "call" as const }, { ...row(2, at(1)), kind: "notice" as const }, row(1, at(1))]
 
-    expect(inView(rows, "notifications", "queue", "person").map((r) => r.n)).toEqual([4, 2, 1])
-    expect(inView(rows, "all", "queue").map((r) => r.n)).toEqual([3, 2, 1])
-    expect(inView(rows, "all", "all", "person").map((r) => r.n)).toEqual([3])
+    expect(inView(rows, "notices").map((r) => r.n)).toEqual([4, 2, 1])
+    expect(inView(rows, "all").map((r) => r.n)).toEqual([4, 3, 2, 1])
+    expect(inView(rows, "needs")).toEqual([])
+  })
+
+  it("pins what needs the person, not the agent, as a line", () => {
+    const needs = [
+      { at: "/tabs/1", surface: "queue", who: "person" as const, why: "to approve or drop 1 draft" },
+      { at: "/tabs/2", surface: "lab", who: "agent" as const, why: "to answer" },
+    ]
+
+    expect(needsOf(needs).map((n) => n.at)).toEqual(["/tabs/1"])
+    expect(needLine("to approve or drop 1 draft")).toBe("Approve or drop 1 draft")
+    expect(needLine("review the plan")).toBe("Review the plan")
   })
 
   it("takes as unseen the newest notices others caused, as many as the shell counts, which dot where they are", () => {
@@ -336,10 +371,35 @@ describe("the notifications panel", () => {
     expect(unseenRows(rows, 0)).toEqual([])
   })
 
+  it("keeps new what was unseen as it opened, and a notice by another heard while open, until it closes", () => {
+    const rows = [row(5, at(1), "person"), row(4, at(1), "surface"), row(3, at(1)), row(2, at(1))]
+    const opened = openedOn(rows, 2)
+
+    expect([...opened.fresh]).toEqual([4, 3])
+    expect(opened.newest).toBe(5)
+    expect(rows.filter((r) => isNew(r, opened)).map((r) => r.n)).toEqual([4, 3])
+    expect(isNew(row(6, at(0)), opened)).toBe(true)
+    expect(isNew(row(7, at(0), "person"), opened)).toBe(false)
+    expect(isNew({ ...row(8, at(0)), kind: "call" }, opened)).toBe(false)
+    expect(isNew(row(6, at(0)), openedOn([], 0))).toBe(true)
+  })
+
+  it("shows no toast while the log is open, and the newest few while it is closed", () => {
+    expect(toastsAfter([1, 2], 3, true)).toEqual([1, 2])
+    expect(toastsAfter([1, 2], 3, false)).toEqual([1, 2, 3])
+    expect(toastsAfter([1, 2, 3, 4], 5, false)).toEqual([2, 3, 4, 5])
+  })
+
   it("counts a toast on the button once it has gone into it, and nothing while the drawer is open", () => {
     expect(badgeOf(3, 1, false)).toBe(2)
     expect(badgeOf(0, 2, false)).toBe(0)
     expect(badgeOf(3, 0, true)).toBe(0)
+  })
+
+  it("names who caused a notice heard", () => {
+    expect(whoBy(undefined)).toBe("person")
+    expect(whoBy("the surface")).toBe("surface")
+    expect(whoBy("the agent")).toBe("agent")
   })
 
   it("finds the entry a toast was, the newest that reads the same", () => {
