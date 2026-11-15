@@ -112,8 +112,8 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
               <ChevronRightIcon aria-hidden className={`${item.mark ? "" : "ml-auto"} size-glyph shrink-0 ${muted}`} />
             </M.SubTrigger>
             <M.Portal>
-              {/* A submenu opens over its parent's edge, covering the arrow it grew from, its first entry level with that entry: up by its own padding, and by its field where it has one. */}
-              <M.SubContent sideOffset={-28} alignOffset={item.search ? -32 : -4} className={menuContent}>
+              {/* A submenu stands a little off its parent, as a menu does off what it hangs from, its first entry level with the entry it grew from: up by its own padding, and by its field where it has one. */}
+              <M.SubContent sideOffset={8} alignOffset={item.search ? -32 : -4} className={menuContent}>
                 {item.search ? <SearchMenu placeholder={item.search} items={item.items} kit={M} /> : <MenuItems items={item.items} kit={M} />}
               </M.SubContent>
             </M.Portal>
