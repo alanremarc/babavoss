@@ -35,7 +35,7 @@ export type Menu = {
 }
 
 export const muted = "text-muted-foreground"
-export const menuItem = `relative flex h-row cursor-default items-center gap-2 rounded-md pr-2 pl-7 outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-40 data-highlighted:bg-foreground/8 data-[state=open]:bg-foreground/8`
+export const menuRow = `relative flex h-row cursor-default items-center gap-2 rounded-md pr-2 outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-40 data-highlighted:bg-foreground/8 data-[state=open]:bg-foreground/8`
 export const menuContent = "z-50 min-w-48 max-w-96 rounded-lg bg-popover p-1 text-body text-popover-foreground shadow-md ring-1 ring-foreground/10"
 
 /** The one mark of what waits on the person, beside an entry: on it, and on every label and submenu on the way to it. */
@@ -45,6 +45,10 @@ const Keys = ({ keys }: { keys?: string }) => (keys ? <span className={`ml-auto 
 
 /** A menu's entries, nested where a submenu opens: a row of triggers', a dropdown's or a context menu's, which share their parts. */
 export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: typeof Menu }) {
+  // The room at the left is for a mark or a tick: a menu that has neither starts its entries at its edge.
+  const pad = items.some((item) => item.kind === "check" || item.kind === "choice" || ("mark" in item && item.mark)) ? "pl-7" : "pl-2"
+  const menuItem = `${menuRow} ${pad}`
+
   return items.map((item) => {
     switch (item.kind) {
       case "action":
@@ -75,7 +79,7 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
       case "choice":
         return (
           <M.Group key={item.id} aria-label={item.label}>
-            <M.Label className={`flex h-row items-center pl-7 text-meta ${muted}`}>{item.label}</M.Label>
+            <M.Label className={`flex h-row items-center ${pad} text-meta ${muted}`}>{item.label}</M.Label>
             <M.RadioGroup value={item.value} onValueChange={item.set}>
               {item.options.map((o) => (
                 <M.RadioItem key={o.id} value={o.id} disabled={item.disabled} className={menuItem}>
@@ -92,7 +96,7 @@ export function MenuItems({ items, kit: M = Menu }: { items: MenuItem[]; kit?: t
         return <M.Separator key={item.id} className="-mx-1 my-1 h-px bg-border" />
       case "label":
         return (
-          <M.Label key={item.id} className={`relative flex h-row min-w-0 items-center pl-7 ${item.strong ? "font-medium text-foreground" : `text-meta ${muted}`}`}>
+          <M.Label key={item.id} className={`relative flex h-row min-w-0 items-center ${pad} ${item.strong ? "font-medium text-foreground" : `text-meta ${muted}`}`}>
             {item.mark && <Mark />}
             <span className="truncate">{item.label}</span>
           </M.Label>
@@ -214,9 +218,9 @@ export function SearchMenu({
           <MenuItems items={items} kit={kit} />
         </div>
       ) : asked ? (
-        <p className={`flex h-row items-center pl-7 ${muted}`}>Nothing matches</p>
+        <p className={`flex h-row items-center pl-2 ${muted}`}>Nothing matches</p>
       ) : (
-        empty && <p className={`flex h-row items-center pl-7 ${muted}`}>{empty}</p>
+        empty && <p className={`flex h-row items-center pl-2 ${muted}`}>{empty}</p>
       )}
     </>
   )
