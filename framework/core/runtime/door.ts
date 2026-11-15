@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url"
 import type { Noticed, Running } from "../surface/run.ts"
 import { textArgs, textSession, textView } from "./text.ts"
 import { NEEDS } from "../present/present.ts"
-import type { Args } from "../surface/view.ts"
+import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
@@ -156,6 +156,23 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       .join("")
   const actorText = `agent:${options.about?.session ?? "session"}`
   const text = textSession(running, options.identity.dir, actorText, options.command ?? "bv root")
+  /**
+   * Where nothing stands at a path, a fact of the view above it: /tabs/3/issues is the fact issues of /tabs/3, so a read can
+   * take one fact of a view rather than all of it. Nothing where no view above has the fact.
+   */
+  const factAt = (path: string): Json | undefined => {
+    const parts = path.split("/").filter(Boolean)
+
+    for (let i = parts.length - 1; i > 0; i--) {
+      const above = running.read(`/${parts.slice(0, i).join("/")}`, actorText)
+      let value: Json | undefined = above
+
+      for (const part of parts.slice(i)) value = value && typeof value === "object" && !Array.isArray(value) ? value[part] : undefined
+      if (above !== undefined) return value === undefined ? undefined : { [parts.at(-1)!]: value }
+    }
+
+    return undefined
+  }
   const streams = new Set<ServerResponse>()
   // What the runtime has to say of the root's code, until an answer to the agent carries it; a wait ends for it too.
   let said: string | undefined
@@ -236,6 +253,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
         if (!TURN_EVENTS.includes(event)) return reply(400, `the turn is told as one of ${TURN_EVENTS.join(", ")}`)
         turn = turned(turn, event, Date.now())
+        if (event === "started") text.turned()
         pushTurn()
 
         return reply(200, "")
@@ -284,9 +302,11 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           return reply(200, told((heard ? text.heard() : text.tell()) || "nothing changed"))
         }
         if (req.method === "GET") {
-          const view = running.read(path, actorText)
+          const view = running.read(path, actorText) ?? factAt(path)
           const open = path === "/" && url.searchParams.has("open")
           const lines = view === undefined ? [`nothing at ${path}`] : textView(view, path, options.command ?? "bv root")
+
+          if (path !== "/") text.touch(path)
           const use = open ? [`${options.about?.root} ${options.about?.version}`] : []
 
           // A read of / is the present whole, and what changes is counted from it; any other read is its own, and what was heard.
@@ -299,6 +319,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
           const before = running.read(path, actorText)
           const args = textArgs(before, call.handle, call.args ?? {})
+
+          text.touch(path)
           const answer = await running.call(path, call.handle, args, actorText)
           const heard = { path, handle: call.handle, args, actor: actorText, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
@@ -357,7 +379,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         try {
           const view = running.read(at, "person")
 
-          if (view !== undefined) views[at] = view
+          if (view !== undefined) views[at] = revealed(view)
         } catch {}
       }
 
@@ -393,8 +415,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
         // A program's read of / gives the agent the present whole, as the word's does.
         if (path === "/" && actor === actorText && view !== undefined) text.seen()
+        else if (actor === actorText) text.touch(path)
 
-        return view === undefined ? json(res, 404, { error: `nothing at ${path}` }) : json(res, 200, view)
+        // A client reads detail as ordinary values: only the agent's present at / tells it apart.
+        return view === undefined ? json(res, 404, { error: `nothing at ${path}` }) : json(res, 200, revealed(view))
       } catch (error) {
         return json(res, 500, { error: error instanceof Error ? error.message : String(error) })
       }
@@ -409,12 +433,14 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       }
       if (typeof call.handle !== "string") return json(res, 400, { error: "a call names a handle" })
 
+      if (actor === actorText) text.touch(path)
+
       const answer = await running.call(path, call.handle, (call.args ?? {}) as Args, actor)
       const heard = { path, handle: call.handle, args: call.args ?? {}, actor, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
       for (const res of streams) res.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
 
-      return json(res, answer.outcome === "written" ? 200 : 409, answer)
+      return json(res, answer.outcome === "written" ? 200 : 409, answer.outcome === "written" ? { ...answer, view: revealed(answer.view) } : answer)
     }
 
     return json(res, 405, { error: `${req.method} is not a door` })

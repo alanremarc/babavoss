@@ -1,7 +1,7 @@
-// What was heard and not yet told to the agent: the notices others gave, and the places the person acted in. It is kept on
-// disk beside the present as told, so a runtime that starts again, after it slept or gave way to changed code, still tells
-// each line once. Only the newest FOLD notices are kept as lines: an older one is counted, and the count is told as one line
-// that says where the notices are read whole.
+// What was heard and not yet told to the agent: the notices others gave, the places the person acted in, and the tabs
+// they opened or closed. It is kept on disk beside the present as told, so a runtime that starts again, after it slept or
+// gave way to changed code, still tells each line once. Only the newest FOLD notices are kept as lines: an older one is
+// counted, and the count is told as one line that says where the notices are read whole.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
 
@@ -57,6 +57,12 @@ export function heardRecord(dir: string) {
       if (kept.acted.includes(place)) return
       kept.acted.push(place)
       if (said) kept.lines.push({ line: `the person acted on ${place}` })
+      save()
+    },
+    /** A line of what the person did that is not a notice, as a tab opened or closed: heard once, as said. */
+    line(line: string) {
+      if (kept.lines.some((l) => l.line === line)) return
+      kept.lines.push({ line })
       save()
     },
     /** How many lines wait to be told. */

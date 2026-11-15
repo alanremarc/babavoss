@@ -9,9 +9,9 @@ export type Answer = { outcome: "written"; view: View } | { outcome: "refused"; 
 export type Saved = { model: unknown }
 /**
  * A commit's cause: an actor's call, at its path, or an event reported by a command, which carries the actor that started
- * it. A commit and the notices it gave share one cause.
+ * it. A commit and the notices it gave share one cause. `quiet` where the update said the commit is bookkeeping.
  */
-export type Cause = { actor: string; call: boolean; path?: string }
+export type Cause = { actor: string; call: boolean; path?: string; quiet?: true }
 /** A notice as heard: its text, the path it is about and who says it where given, and the cause of the commit that gave it. */
 export type Noticed = { text: string; at?: string; from?: string; cause: Cause }
 export type Ports<M> = {
@@ -148,7 +148,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
   const event = (e: E, actor: string) => {
     if (stopped) return
 
-    const by: Cause = { actor, call: false }
+    let by: Cause = { actor, call: false }
     let r: ReturnType<typeof surface.update>
 
     try {
@@ -159,6 +159,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         return
       }
+      if (r.quiet) by = { ...by, quiet: true }
       commit(r.model, by)
     } catch (error) {
       fail(error)
@@ -259,7 +260,6 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
         if (typeof admitted === "string") return refused(admitted)
 
         const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now() }
-        const by: Cause = { actor, call: true, path }
         let r: ReturnType<typeof surface.update>
 
         try {
@@ -268,6 +268,8 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
           return refused(message(e))
         }
         if ("refused" in r) return refused(r.refused)
+
+        const by: Cause = { actor, call: true, path, ...(r.quiet && { quiet: true as const }) }
 
         let answer: View
 

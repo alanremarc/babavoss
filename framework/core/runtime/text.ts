@@ -2,7 +2,7 @@
 // present as it was last told, with who changed what since, told at a boundary; JSON clients keep their own presentation.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
-import { diff, entries, placeOf, rebase, tell, whole, type Change } from "../present/present.ts"
+import { diff, entries, placeOf, rebase, tabAt, tabsIn, tell, whole, type Change } from "../present/present.ts"
 import { handles, type Args, type Json } from "../surface/view.ts"
 import type { Cause, Noticed, Running } from "../surface/run.ts"
 import { isPerson } from "../session.ts"
@@ -58,10 +58,17 @@ export const textView = (view: Json | undefined, path: string, command: string):
  * the surfaces change while the agent works waits for the next boundary. A change is the person's when their call made it,
  * the agent's when its own did, through the word or a program, and the surface's when a command's event did; what only the
  * agent's own calls changed or gave is never told back, their answers told it. What was heard is kept on disk until it is
- * told (heard.ts), so a runtime that starts again tells it, once.
+ * told (heard.ts), so a runtime that starts again tells it, once; who changed what is kept beside it, for the same reason.
+ *
+ * What is told is cut to what the agent needs. A quiet commit, the page's own bookkeeping, is told in no way; nor is a
+ * change of no one's, as code loaded again or a state restored makes. A notice stands for the changes of the commit that
+ * gave it: they are not told again, unless a later commit with none changed them since; what waits on the agent always is.
+ * And a tab the agent is not working in, one it neither read nor called in this turn or the one before, and that does not
+ * need it, is told in one line, who changed it and to read it; its notices are still told.
  */
 export function textSession<M>(running: Running<M>, dir: string, actor: string, command: string) {
   const file = join(dir, "presented", "text.json")
+  const byFile = join(dir, "presented", "by.json")
   let before = readJsonFile<Json>(file)
   const root = () => running.read("/", actor)
   const read = () => {
@@ -74,8 +81,12 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   let last = read()
   let marks = entries(last)
   let version = running.version()
-  // Who changed each fact since the session was last told the present, by the facts' keys by identity, so a row moved keeps its own.
-  const by = new Map<string, Set<string>>()
+  const kept = readJsonFile<{ by?: Record<string, string[]>; plain?: string[] }>(byFile)
+  // Who changed each fact since the session was last told the present, by the facts' keys by identity, so a row moved keeps
+  // its own; and which of them a commit changed that gave no notice, so no notice stands for them.
+  const by = new Map<string, Set<string>>(Object.entries(kept?.by ?? {}).map(([k, w]) => [k, new Set(w)]))
+  const plain = new Set<string>(kept?.plain ?? [])
+  const keep = () => writeJsonFile(byFile, { by: Object.fromEntries([...by].map(([k, w]) => [k, [...w]])), plain: [...plain] })
   // What was heard since it was last told; the places the person acted in, each heard once, and not where their notice was.
   const heard = heardRecord(dir)
   const place = (path: string) => {
@@ -87,11 +98,22 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   }
   /** The person's calls that changed / since the present was last told: what waits for the agent's next boundary. */
   let acts = 0
+  /** Whether the commit about to be told of gave a notice: they are heard before its subscribers are told. */
+  let noticed = false
+  // The tabs the agent read or called in this turn, and in the one before: what it is working in.
+  let touched = new Set<string>()
+  let previous = new Set<string>()
+  const touch = (path: string) => {
+    const at = tabAt(last, path)
+
+    if (at) touched.add(at)
+  }
 
   running.notices((notice) => {
     const who = whoOf(notice.cause, actor)!
 
-    if (who === "person" && notice.cause.path !== undefined) heard.acted(place(notice.cause.path), false)
+    noticed = true
+    if (who === "person" && notice.cause.path !== undefined && !notice.cause.quiet) heard.acted(place(notice.cause.path), false)
     if (who !== "you") heard.notice(noticeLine(notice, who))
   })
 
@@ -102,60 +124,85 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     const cause = running.cause()
     const view = read()
     const now = entries(view)
-    const who = whoOf(cause, actor)
+    // A quiet commit, the page's own, is no one's to tell, as one of no known cause is, as when code is loaded again.
+    const who = cause?.quiet ? undefined : whoOf(cause, actor)
+    const explained = noticed
+    const changed = [...new Set([...now.keys(), ...marks.keys()])].filter((key) => now.get(key) !== marks.get(key))
 
-    for (const key of new Set([...now.keys(), ...marks.keys()]))
-      if (now.get(key) === marks.get(key)) continue
-      // A commit of no known cause, as when code is loaded again, and the agent's own, which its answer told: no one's to tell.
-      else if (!who || who === "you") by.delete(key)
-      else by.set(key, (by.get(key) ?? new Set()).add(who))
+    noticed = false
+    for (const key of changed)
+      if (who === "you") {
+        by.delete(key)
+        plain.delete(key)
+      } else if (who) {
+        by.set(key, (by.get(key) ?? new Set()).add(who))
+        // A notice stands for the value its commit left; a later commit with none takes that back.
+        if (explained) plain.delete(key)
+        else plain.add(key)
+      }
+    if (who && changed.length) keep()
     // A call of the person's that changed / waits for the agent's next boundary.
-    if (who === "person" && [...now.keys(), ...marks.keys()].some((key) => now.get(key) !== marks.get(key))) acts += 1
+    if (who === "person" && changed.length) acts += 1
     // What the agent's own call changed, it knows: the present as told takes it, so only what others change stays to be told.
     if (who === "you" && before !== undefined) {
       before = rebase(before, last, view)
       if (before !== undefined) writeJsonFile(file, before)
     }
+    // A tab the agent opened is one it works in.
+    if (who === "you") for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => x.at === t.at)) touched.add(t.at)
+    // The person's call that gave no notice is still heard: in a tab, as where they acted, which the agent reads if it
+    // matters; outside every tab, as the tabs they opened or closed.
+    if (who === "person" && cause?.path !== undefined) {
+      const tab = tabAt(view, cause.path) ?? tabAt(last, cause.path)
+
+      if (tab || !tabsIn(view).length) heard.acted(place(cause.path), true)
+      else {
+        for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => x.at === t.at)) heard.line(`the person opened ${[t.surface, t.at].filter(Boolean).join(" ")}`)
+        for (const t of tabsIn(last)) if (!tabsIn(view).some((x) => x.at === t.at)) heard.line(`the person closed ${[t.surface, t.at].filter(Boolean).join(" ")}`)
+      }
+    }
     marks = now
     last = view
-    // The person's call that gave no notice is still heard, as where they acted: the agent reads there if it matters.
-    if (who === "person" && cause?.path !== undefined) heard.acted(place(cause.path), true)
   })
 
-  // Who made a change: everyone who changed a fact it covers. Unnamed where the change came before this runtime, or from code loaded again.
+  /** The keys of `by` a change covers: its own, and every one below them. */
+  const under = (change: Change) =>
+    [...by.keys()].filter((k) => change.keys.some((key) => k === key || k.startsWith(`${key}.`) || k.startsWith(`${key}[`) || k.startsWith(`${key}#`)))
+  // Who made a change: everyone who changed a fact it covers. Unnamed where no one did, as when code is loaded again.
   const whose = (change: Change) => {
-    const names = new Set<string>()
-    let known = true
+    const names = new Set(under(change).flatMap((k) => [...by.get(k)!]))
 
-    for (const key of change.keys) {
-      let found = false
-
-      for (const [k, who] of by)
-        if (k === key || k.startsWith(`${key}.`) || k.startsWith(`${key}[`) || k.startsWith(`${key}#`)) {
-          found = true
-          for (const w of who) names.add(w)
-        }
-      if (!found) known = false
-    }
-
-    return known ? names : names.size ? new Set([...names, "unknown"]) : undefined
+    return names.size ? names : undefined
   }
-  const others = (change: Change) => [...(whose(change) ?? ["unknown"])].some((w) => w !== "you")
-  const head = (change: Change) => {
+  const names = (who: Set<string>) => {
+    const order = ["person", "surface", ...[...who].filter((w) => !BY[w]).sort(), "you"]
+    const said = order.filter((w) => who.has(w)).map((w) => BY[w] ?? w)
+
+    return said.length > 1 ? `${said.slice(0, -1).join(", ")} and ${said.at(-1)}` : said[0]!
+  }
+  /** Told: a change someone but the agent alone made, which no notice already stands for, unless it is of what waits on the agent. */
+  const told = (change: Change) => {
     const who = whose(change)
-    const order = ["person", "surface", ...[...(who ?? [])].filter((w) => !BY[w] && w !== "unknown").sort(), "you"]
-    const names = who ? order.filter((w) => who.has(w)).map((w) => BY[w] ?? w) : []
 
-    return names.length ? `changed by ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]}:` : "changed:"
+    return !!who && [...who].some((w) => w !== "you") && (change.waits === true || under(change).some((k) => plain.has(k)))
   }
-  // What changed of / since the session was last told it, that not only the agent's own calls changed; the whole root where it was never told.
+  const head = (change: Change) => `changed by ${names(whose(change)!)}:`
+  // What changed of / since the session was last told it, that is to be told; the whole root where it was never told.
   const since = (now: Json | undefined): Change[] =>
-    before === undefined ? whole(now, { command }).map((line) => ({ line, keys: [], where: "/" })) : diff(before, now, { command }).filter(others)
+    before === undefined ? whole(now, { command }).map((line) => ({ line, keys: [], where: "/" })) : diff(before, now, { command }).filter(told)
+  /** The tabs the agent works in: those it read or called in this turn or the one before, and those that need it. */
+  const working = (now: Json | undefined) => {
+    const needs = isNeeds(now) ? now.needs.filter((n) => n.who === "agent").map((n) => n.at) : []
+
+    return new Set([...touched, ...previous, ...needs])
+  }
   // The present told: what changes is counted from `now`.
   const seen = (now: Json | undefined) => {
     if (now !== undefined) writeJsonFile(file, now)
     before = now
     by.clear()
+    plain.clear()
+    keep()
     acts = 0
   }
   // What was heard, under `notices:`, and forgotten.
@@ -163,6 +210,22 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     const out = heard.take()
 
     return out.length ? ["notices:", ...out] : []
+  }
+  /** Changes as a boundary tells them: in full where the agent works, and a tab it does not work in as one line, who changed it. */
+  const weighed = (changes: Change[], now: Json | undefined): string[] => {
+    const at = working(now)
+    const tabs = new Map(tabsIn(now).map((t) => [t.heading, t.at]))
+    const full: Change[] = []
+    const aside = new Map<string, Set<string>>()
+
+    for (const change of changes) {
+      const tab = change.tab === undefined ? undefined : tabs.get(change.tab)
+
+      if (tab === undefined || at.has(tab)) full.push(change)
+      else aside.set(change.tab!, new Set([...(aside.get(change.tab!) ?? []), ...whose(change)!]))
+    }
+
+    return [...tell(full, head), ...[...aside].map(([heading, who]) => `${heading}: changed by ${names(who)}; read it`)]
   }
 
   return {
@@ -173,10 +236,17 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     noticed: () => heard.size(),
     /** How many of the person's calls changed / since the present was last told: what waits for the agent's next boundary. */
     waiting: () => acts,
-    /** What changed at / since the session was last told it, by others than the agent alone. */
+    /** What changed at / since the session was last told it, to be told. */
     changed: () => since(root()),
     /** The session was given / whole, as a program's read of it: what changes is counted from here. */
     seen: () => seen(root()),
+    /** The agent read or called at `path`: the tab it is in is one it works in. */
+    touch,
+    /** A new turn began: what the agent worked in during the last one is still its work, and what it did before that is not. */
+    turned() {
+      previous = touched
+      touched = new Set()
+    },
     /** An answer to a call or a read: its own lines, then what was heard since. The present is left for a boundary. */
     answer: (lines: string[]) => [...lines, ...notices()].join("\n"),
     /** What was heard since, alone, as after a tool call. */
@@ -191,7 +261,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
       const changes = whole ? [] : since(now)
       const said = whole
         ? [...lines, ...notices()]
-        : [...notices(), ...(fresh && changes.length ? ["changed:", ...changes.map((c) => c.line)] : tell(changes, head))]
+        : [...notices(), ...(fresh && changes.length ? ["changed:", ...changes.map((c) => c.line)] : weighed(changes, now))]
 
       seen(now)
 
@@ -199,3 +269,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     },
   }
 }
+
+/** A root that gathers who is needed. */
+const isNeeds = (view: Json | undefined): view is { needs: { at: string; who: string }[] } =>
+  !!view && typeof view === "object" && !Array.isArray(view) && Array.isArray(view.needs)
