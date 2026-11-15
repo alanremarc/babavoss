@@ -6,7 +6,7 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
-import { BUILT, shellUi, buildUi } from "../../packages/babavoss/shell/index.ts"
+import { BUILT, shellUi, buildUi } from "../../skills/baba/framework/shell/index.ts"
 
 const dirs: string[] = []
 
@@ -55,7 +55,7 @@ for (const app of ["skills/baba", "spec/support/notes"]) {
     dirs.push(dir)
     for (const name of ["ui", "src"]) cpSync(resolve(app, name), join(dir, name), { recursive: true })
     cpSync(resolve("skills/baba/package.json"), join(dir, "package.json"))
-    symlinkSync(resolve("packages/babavoss"), join(dir, "framework"))
+    symlinkSync(resolve("skills/baba/framework"), join(dir, "framework"))
     symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
     const serve = async () => {
@@ -149,7 +149,7 @@ it("refuses to build a shell page that imports no stylesheet, and says what to i
   dirs.push(dir)
   for (const name of ["ui", "src"]) cpSync(resolve("skills/baba", name), join(dir, name), { recursive: true })
   cpSync(resolve("skills/baba/package.json"), join(dir, "package.json"))
-  symlinkSync(resolve("packages/babavoss"), join(dir, "framework"))
+  symlinkSync(resolve("skills/baba/framework"), join(dir, "framework"))
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
   writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
 

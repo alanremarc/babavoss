@@ -1,6 +1,6 @@
 // What the build util does outside its model: reads the briefs kept in the project's apps, writes one back, and makes an
-// app from the template, depending on the framework at the version this skill does. A project's own apps live in skills/NAME and are
-// installed in that project by links to them from the harness's skill folders.
+// app from the template. A project's own apps live in skills/NAME and are installed in that project by links to them from
+// the harness's skill folders. An app holds no framework and names none: it runs on this skill's.
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -36,13 +36,7 @@ const write = (file: string, brief: Brief) => {
   renameSync(temporary, file)
 }
 
-/** The framework version this skill depends on: what an app made here depends on too. */
-const named = (): string => (JSON.parse(readFileSync(join(carried, "package.json"), "utf8")) as { dependencies: { babavoss: string } }).dependencies.babavoss
-
-export function buildPorts(
-  project: string,
-  source: { template: string; framework: string } = { template: join(carried, "assets/template"), framework: named() }
-): BuildPorts {
+export function buildPorts(project: string, template: string = join(carried, "assets/template")): BuildPorts {
   // One write at a time for a file, in the order asked, so a later brief is never overwritten by an earlier one.
   const writes = new Map<string, Promise<void>>()
 
@@ -73,13 +67,7 @@ export function buildPorts(
       if (taken) throw new Error(`${relative(project, taken)} exists already: name the app otherwise, or remove what is there`)
       mkdirSync(dir, { recursive: true })
       try {
-        cpSync(source.template, dir, { recursive: true })
-        // The template names the framework at the version it was written for; the app is made for this skill's.
-        const manifest = join(dir, "package.json")
-        const pack = JSON.parse(readFileSync(manifest, "utf8")) as { dependencies: Record<string, string> }
-
-        pack.dependencies.babavoss = source.framework
-        writeFileSync(manifest, `${JSON.stringify(pack, null, 2)}\n`)
+        cpSync(template, dir, { recursive: true })
         for (const name of NAMED) {
           const file = join(dir, name)
 

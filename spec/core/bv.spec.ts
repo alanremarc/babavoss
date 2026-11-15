@@ -6,11 +6,11 @@ import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFil
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, expect, it } from "bun:test"
-import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION, reloads } from "../../packages/babavoss/core/bv/bv.ts"
-import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../packages/babavoss/core/runtime/service.ts"
-import { installedIn, SKILL_FOLDERS } from "../../packages/babavoss/core/skill-folders.ts"
+import { ACTOR_HEADER, ENDPOINT_FILE, SERVICE_HEADER, VERSION, reloads } from "../../skills/baba/framework/core/bv/bv.ts"
+import { ACTOR_HEADER as actorHeader, SERVICE_HEADER as serviceHeader, endpointFile } from "../../skills/baba/framework/core/runtime/service.ts"
+import { installedIn, SKILL_FOLDERS } from "../../skills/baba/framework/core/skill-folders.ts"
 
-const client = resolve("packages/babavoss/core/bv/bv.ts")
+const client = resolve("skills/baba/framework/core/bv/bv.ts")
 const roots: string[] = []
 
 function setup() {

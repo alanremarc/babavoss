@@ -9,6 +9,7 @@ import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync,
 import { homedir } from "node:os"
 import { delimiter, dirname, join, resolve } from "node:path"
 import { createInterface } from "node:readline"
+import { fileURLToPath } from "node:url"
 import * as claudeCode from "../harness-adapters/claude-code/index.ts"
 import * as codex from "../harness-adapters/codex/index.ts"
 
@@ -416,6 +417,8 @@ const childEnv = (options: AgentOptions): NodeJS.ProcessEnv => {
   const env = { ...(options.env ?? process.env) }
 
   for (const name of PARENT_VARS) delete env[name]
+  // An app the agent opens runs on the baba this framework is in, wherever the agent's home is.
+  env.BABA_SKILL = fileURLToPath(new URL("../../../", import.meta.url))
   if (options.home) {
     for (const name of PERSONAL_VARS) delete env[name]
     env.HOME = options.home

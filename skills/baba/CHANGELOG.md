@@ -2,6 +2,14 @@
 
 What each version of baba changed, newest first. The framework is babavoss, released as the tag of the same version in this repository. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change.
 
+## 0.21.0
+
+- baba provides the runtime to every app. The framework is in the skill's own directory, under `framework/`, with the packages it runs on; an app holds no copy of either and names no release. Updating baba updates what every app runs on.
+- An app's door, `scripts/open.ts`, finds baba where skills are kept and hands the app over to it: where `BABA_SKILL` says, beside the app, among a harness's skills in a project above it, or among the person's. It says so when baba is not installed.
+- When an app first opens, its `node_modules` is made a link to baba's packages, so its imports and its type check resolve. An app has no packages of its own; a door refuses one that does.
+- An app is no longer told that it names an older framework: there is one, baba's.
+- To move an app from 0.20.0: take `scripts/open.ts` from the template, delete `dependencies` and `devDependencies` from its package.json, delete its `node_modules`, and write `node_modules/babavoss/framework/shell/ui/css.d.ts` in its tsconfig.json.
+
 ## 0.20.0
 
 - The version follows on from the framework's earlier releases on npm, which ended at 0.19.1; the product had been 0.2.0. The framework is no longer released to npm.

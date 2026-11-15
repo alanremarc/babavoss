@@ -190,11 +190,9 @@ test("the app is made in skills/NAME as real files, with its brief, and installe
     expect(readFileSync(join(project, folder, "month-close/SKILL.md"), "utf8")).toContain("name: month-close")
   }
 
-  // It holds no copy of the framework: it depends on it, at the version this skill does.
+  // It holds no copy of the framework and names none: it runs on baba's.
   expect(existsSync(join(app, "framework"))).toBe(false)
-  expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).dependencies.babavoss).toBe(
-    JSON.parse(readFileSync("skills/baba/package.json", "utf8")).dependencies.babavoss
-  )
+  expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).dependencies).toBeUndefined()
   expect(readFileSync(join(app, "SKILL.md"), "utf8")).toContain("name: month-close")
   expect(readFileSync(join(app, "src/app.ts"), "utf8")).toContain('name: "month-close"')
   expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).name).toBe("month-close")

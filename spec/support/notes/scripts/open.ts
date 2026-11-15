@@ -1,53 +1,31 @@
-// The app's door: opens a session or serves its resident runtime. What the app depends on is installed first where it is
-// missing, the framework among it, at the release package.json names: a tag of its repository, github:OWNER/REPO#vX.Y.Z.
-// Only a failure of that is said. Nothing here may import a package: this is what runs before there are any.
-import { readFileSync } from "node:fs"
+// The app's door: opens a session or serves its resident runtime. An app runs on baba, the skill that holds the framework
+// and its packages, and holds no copy of either: this finds baba where skills are kept and hands the app over to it.
+// Nothing here may import a package: baba's are linked to the app when it first opens.
+import { existsSync, realpathSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const named = (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies.babavoss
-/** The version the release named is: its tag's, vX.Y.Z; none where a path or a link is named, as when a framework fix is tried. */
-const version = /#v(\d[^\s#]*)$/.exec(named ?? "")?.[1]
-/**
- * The framework's version as installed for this app: in a node_modules here or above, read as files, never through bun's
- * resolver, which answers from its own cache.
- */
-const found = (): string | undefined => {
-  for (let dir = root; ; dir = dirname(dir)) {
-    try {
-      return (JSON.parse(readFileSync(join(dir, "node_modules/babavoss/package.json"), "utf8")) as { version: string }).version
-    } catch {
-      if (dir === dirname(dir)) return undefined
-    }
-  }
-}
-// Installed at the version named; where no version is named, being there is enough.
-const installed = () => found() !== undefined && (version === undefined || found() === version)
+const root = dirname(dirname(realpathSync(fileURLToPath(import.meta.url))))
+const above = (dir: string): string[] => (dir === dirname(dir) ? [dir] : [dir, ...above(dirname(dir))])
+/** Where baba may be, nearest first: where BABA_SKILL says, beside the app, among a harness's skills in a project above or the person's. */
+const places = [
+  process.env.BABA_SKILL,
+  join(dirname(root), "baba"),
+  ...[root, process.cwd(), homedir()].flatMap(above).flatMap((dir) => [".claude", ".agents", ".codex"].map((harness) => join(dir, harness, "skills/baba"))),
+  process.env.CLAUDE_CONFIG_DIR && join(process.env.CLAUDE_CONFIG_DIR, "skills/baba"),
+  process.env.CODEX_HOME && join(process.env.CODEX_HOME, "skills/baba"),
+]
+const baba = places.find((place) => place && existsSync(join(place, "scripts/provide.ts")))
 
-if (!installed()) {
-  // Once: a door started again after installing does not install again.
-  const install = process.env.BABAVOSS_INSTALLED ? undefined : Bun.spawnSync([process.execPath, "install"], { cwd: root, stdout: "pipe", stderr: "pipe" })
-
-  if (install?.exitCode !== 0) {
-    const why = install ? install.stderr.toString().trim().split("\n").slice(-4).join("\n") : `babavoss ${named} is still not found after installing`
-
-    console.error(
-      `cannot install what this app depends on; allow bun to reach github.com and the package registry (under a sandbox, in the harness settings), ` +
-        `or run: cd '${root}' && bun install\n${why}`
-    )
-    process.exit(1)
-  }
-  // A process started before the packages were there does not find them once installed: the door starts again.
-  const again = Bun.spawnSync([process.execPath, ...process.argv.slice(1)], {
-    stdio: ["inherit", "inherit", "inherit"],
-    env: { ...process.env, BABAVOSS_INSTALLED: "1" },
-  })
-
-  process.exit(again.exitCode ?? 1)
+if (!baba) {
+  console.error(
+    "this app runs on baba, which is not installed here or is older than 0.21.0. On the person's word, install it with " +
+      "`bunx skills add alanremarc/babavoss -g -y`, or update it with `bunx skills update baba`, then open the app again"
+  )
+  process.exit(1)
 }
 
-const { main } = await import("babavoss/core/bv/door.ts")
-const { default: app } = await import("../src/app.ts")
+const { open } = (await import(join(realpathSync(baba), "scripts/provide.ts"))) as { open(root: string): Promise<void> }
 
-await main(app)
+await open(root)

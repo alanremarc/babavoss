@@ -15,7 +15,7 @@ import {
   type Running,
   type Saved,
   type Update,
-} from "../../packages/babavoss/core/surface/index.ts"
+} from "../../skills/baba/framework/core/surface/index.ts"
 
 type Note = { id: number; title: string; published: boolean; draft: string }
 type Model = { notes: Note[]; actor?: string; error?: string; busy?: boolean }

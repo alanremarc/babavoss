@@ -37,7 +37,7 @@ export type BuildPorts = {
   /** The briefs of the apps in the project, each with its directory. */
   load(): Promise<Entry[]>
   save(dir: string, brief: Brief): Promise<void>
-  /** Makes the app in skills/NAME from the template and the framework, named, with its brief, and links it; answers with the directory. */
+  /** Makes the app in skills/NAME from the template, named, with its brief, and links it; answers with the directory. */
   create(brief: Brief): Promise<string>
 }
 

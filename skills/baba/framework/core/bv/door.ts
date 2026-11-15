@@ -38,7 +38,7 @@ function versionNote(app: AppDefinition, directory: string) {
   } catch {}
 }
 
-export async function main(app: AppDefinition, notes?: (cwd: string) => Record<string, string>) {
+export async function main(app: AppDefinition) {
   const args = process.argv.slice(2)
   const directory = dirname(dirname(realpathSync(process.argv[1]!)))
   const personal = SKILL_FOLDERS.map((folder) => folder.personal()).some((path) => {
@@ -132,17 +132,6 @@ export async function main(app: AppDefinition, notes?: (cwd: string) => Record<s
     apps[app.name]!.command = command
     save(file, apps)
     process.exitCode = await bv(args, app.name, command)
-    if (process.exitCode === 0 && notes) {
-      const file = join(state, "notes.json")
-      const told = load<Record<string, string[]>>(file) ?? {}
-
-      for (const [name, note] of Object.entries(notes(sessionCwd(state)!))) {
-        if (told[name]?.includes(note)) continue
-        console.log(`${name}: ${note}`)
-        told[name] = [...(told[name] ?? []), note]
-      }
-      save(file, told)
-    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = error instanceof SyntaxError ? 2 : 1

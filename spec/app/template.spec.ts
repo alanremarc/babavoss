@@ -1,7 +1,7 @@
-// The template as a new app gets it: copied, with what it depends on installed, its first spec passes. The template's own
-// spec cannot run where it lies, inside the skill, where nothing is installed for it.
+// The template as a new app gets it: copied, it holds no packages and runs on baba's, and its first spec passes. The
+// template's own spec cannot run where it lies, inside the skill.
 import { spawnSync } from "node:child_process"
-import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -14,52 +14,70 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-test("a new app, made from the template with its packages installed, starts with a passing story", () => {
-  const app = mkdtempSync(join(tmpdir(), "new-app-"))
+const made = () => {
+  const app = realpathSync(mkdtempSync(join(tmpdir(), "new-app-")))
 
   dirs.push(app)
   cpSync(join(product, "assets/template"), app, { recursive: true })
-  // Installed as this repository has them: the framework among them, at the version the template names.
-  symlinkSync(fileURLToPath(new URL("../../node_modules", import.meta.url)), join(app, "node_modules"))
 
-  const result = spawnSync(process.execPath, ["test", "spec"], { cwd: app, encoding: "utf8" })
+  return app
+}
+/** A machine with no skills of the person's: baba is found only where BABA_SKILL says. */
+const machine = (app: string, baba?: string): NodeJS.ProcessEnv => {
+  const { BABA_SKILL: _, ...env } = process.env
+  const home = join(app, ".home")
+
+  return { ...env, ...(baba && { BABA_SKILL: baba }), HOME: home, CLAUDE_CONFIG_DIR: "", CODEX_HOME: "", BABAVOSS_HOME: home, BABAVOSS_BIN: home }
+}
+
+test("a new app holds no packages: its door links it to baba's when it first opens, and its first story passes", () => {
+  const app = made()
+  const env = machine(app, product)
+  const door = (...args: string[]) => spawnSync(process.execPath, [join(app, "scripts/open.ts"), "--session", "S", ...args], { cwd: app, encoding: "utf8", env })
+  const opened = door()
+
+  expect(opened.status, opened.stderr).toBe(0)
+  expect(opened.stdout).toContain('tabs.0.facts.greeting: "hello"')
+  expect(realpathSync(join(app, "node_modules/babavoss"))).toBe(realpathSync(product))
+  expect(door("close").status).toBe(0)
+
+  const result = spawnSync(process.execPath, ["test", "spec"], { cwd: app, encoding: "utf8", env })
 
   expect(result.status, result.stderr).toBe(0)
   expect(result.stderr).toContain("5 pass")
 })
 
-test("a door whose packages cannot be installed says so once: what to allow, how to install by hand, and why it failed", () => {
-  const app = realpathSync(mkdtempSync(join(tmpdir(), "new-app-")))
-  const manifest = join(app, "package.json")
-
-  dirs.push(app)
-  cpSync(join(product, "assets/template"), app, { recursive: true })
-  // A release from a host that is not there: nothing is installed, as under a sandbox without network.
-  writeFileSync(manifest, readFileSync(manifest, "utf8").replace(/"babavoss": "[^"]+"/, '"babavoss": "git+http://127.0.0.1:9/babavoss.git#v0.0.0"'))
-
-  const result = spawnSync(process.execPath, [join(app, "scripts/open.ts"), "--session", "S"], {
-    cwd: app,
-    encoding: "utf8",
-    env: { ...process.env, BUN_CONFIG_REGISTRY: "http://127.0.0.1:9/", BABAVOSS_HOME: join(app, ".home"), BABAVOSS_BIN: join(app, ".home") },
-  })
+test("a door that finds no baba says so once: what the app runs on and how to install it", () => {
+  const app = made()
+  const result = spawnSync(process.execPath, [join(app, "scripts/open.ts"), "--session", "S"], { cwd: app, encoding: "utf8", env: machine(app) })
 
   expect(result.status).toBe(1)
   expect(result.stdout).toBe("")
-  expect(result.stderr).toStartWith(
-    `cannot install what this app depends on; allow bun to reach github.com and the package registry (under a sandbox, in the harness settings), or run: cd '${app}' && bun install\n`
-  )
-  expect(result.stderr.match(/cannot install/g)).toHaveLength(1)
+  expect(result.stderr).toStartWith("this app runs on baba, which is not installed here or is older than 0.21.0.")
+  expect(result.stderr).toContain("bunx skills add alanremarc/babavoss -g -y")
+  expect(existsSync(join(app, "node_modules"))).toBe(false)
 })
 
-test("one version for all of it: the framework, the skill, and what the skill, the template and the example name, its tag", () => {
-  const read = (file: string) => JSON.parse(readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")) as { version: string; dependencies: Record<string, string> }
-  const framework = read("../../package.json").version
-  const release = `github:alanremarc/babavoss#v${framework}`
+test("a door refuses an app that holds packages of its own, and says to remove them", () => {
+  const app = made()
 
-  expect(read("../../skills/baba/package.json").version).toBe(framework)
-  expect(read("../../skills/baba/package.json").dependencies.babavoss).toBe(release)
-  expect(read("../../skills/baba/assets/template/package.json").dependencies.babavoss).toBe(release)
-  expect(read("../../examples/payments/package.json").dependencies.babavoss).toBe(release)
+  mkdirSync(join(app, "node_modules"))
+
+  const result = spawnSync(process.execPath, [join(app, "scripts/open.ts"), "--session", "S"], { cwd: app, encoding: "utf8", env: machine(app, product) })
+
+  expect(result.status).toBe(1)
+  expect(result.stderr).toBe(`${join(app, "node_modules")} holds packages of the app's own; an app runs on baba's: remove that directory and open the app again\n`)
+})
+
+test("one version, the skill's, with its section in the changelog; an app names no framework and every door is the template's", () => {
+  const read = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")
+  const version = (JSON.parse(read("../../skills/baba/package.json")) as { version: string }).version
+  const door = read("../../skills/baba/assets/template/scripts/open.ts")
+
+  expect(read("../../skills/baba/CHANGELOG.md")).toContain(`\n## ${version}\n`)
+  for (const app of ["../../skills/baba/assets/template", "../../examples/payments"])
+    expect(JSON.parse(read(`${app}/package.json`)) as object).not.toHaveProperty("dependencies")
+  for (const app of ["../../examples/payments", "../support/notes"]) expect(read(`${app}/scripts/open.ts`)).toBe(door)
 })
 
 test("every app's skill opens the same way and says the same about operating it: the template's words, kept as they are", () => {
