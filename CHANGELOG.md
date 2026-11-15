@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.39.1
+
+- The mark's ground changes at once, as a tab's does. Nothing to adapt.
+
 ## 0.39.0
 
 Harnesses are set up by adapters, and `.baba/baba.config.ts` chooses them.
