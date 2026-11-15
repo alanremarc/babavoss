@@ -85,39 +85,29 @@ type Props = {
   leave?: () => void
 }
 
-/** The command key as the person reads it: ⌘ on a Mac, Ctrl elsewhere. */
-const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl "
-
-/** What a line is, said at its end where it is not the chosen one; the chosen one says what Enter does there instead. */
-const KIND = { tab: "tab", surface: "surface", broken: "surface" } as const
-
-/** A line's end: what kind of thing it is, giving way on the chosen line to what Enter does. */
+/** A line's end: what Enter does on it, the same whether it is the chosen line or not; nothing on one that does not load. */
 function Does({ row }: { row: HomeRow }) {
   const { enter } = doesOf(row)
 
+  if (!enter) return null
+
   return (
-    <span className="shrink-0 pl-3 text-meta whitespace-nowrap">
-      <span className={enter ? "group-data-[selected=true]/command-item:hidden" : undefined}>{KIND[row.kind]}</span>
-      {enter && (
-        <span className="hidden text-foreground group-data-[selected=true]/command-item:inline">
-          {enter} <span className="text-muted-foreground">↵</span>
-        </span>
-      )}
+    <span className="shrink-0 pl-3 text-meta whitespace-nowrap group-data-[selected=true]/command-item:text-foreground">
+      {enter} <span className="text-muted-foreground">↵</span>
     </span>
   )
 }
 
 /**
  * Home's page: the root's title, then one list of what the shell has, each thing once: the open tabs, then the surfaces with
- * none open. A line names the thing; the chosen line and the foot say what Enter does on it, and
- * what Enter with the command key does where that is something else.
+ * none open. A line names the thing and says at its end what Enter does on it. Enter with the
+ * command key opens another tab of an open tab's surface.
  */
 export function Home({ title, notice, surfaces, icons, tabs, back, keys, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
   const [picked, setPicked] = useState("")
   const rows = rowsOf(surfaces, tabs)
   const chosen = rows.find((row) => row.value === picked)
-  const does = chosen ? doesOf(chosen) : {}
   const tabOf = (at: string) => tabs.find((tab) => tab.at === at)
 
   return (
@@ -198,16 +188,6 @@ export function Home({ title, notice, surfaces, icons, tabs, back, keys, disable
         </Command>
       </div>
       <About className="mt-auto max-w-[560px] pt-6">
-        {does.enter && (
-          <span className="whitespace-nowrap">
-            <CommandShortcut className="ml-0 tracking-normal">↵</CommandShortcut> {does.enter}
-          </span>
-        )}
-        {does.other && (
-          <span className="whitespace-nowrap">
-            <CommandShortcut className="ml-0 tracking-normal">{MOD}↵</CommandShortcut> {does.other}
-          </span>
-        )}
         <span className="whitespace-nowrap">
           <CommandShortcut className="ml-0 tracking-normal">{keys}</CommandShortcut> Home
         </span>
