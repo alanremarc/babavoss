@@ -2,11 +2,11 @@
 // and what was noticed;
 // the world outside is held by the test, which settles each command the surface starts. The model is never read.
 import { randomUUID } from "node:crypto"
-import { flatten, changes } from "../present/present.ts"
+import { diff, tell, whole } from "../present/present.ts"
 import { agentActor } from "../session.ts"
 import { run, type Noticed, type Saved } from "./run.ts"
 import type { Surface } from "./surface.ts"
-import { handles, type Args } from "./view.ts"
+import { handles, type Args, type Json } from "./view.ts"
 
 type Pending<C, E> = { command: C; send(event: E): void; end(error?: string): void }
 type Target<C> = C | ((command: C) => boolean)
@@ -68,7 +68,7 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
     await barrier()
   }
   const actor = (identity: string) => {
-    let before: Map<string, string> | undefined
+    let before: { view: Json | undefined } | undefined
     let since = 0
     const sees = (path = "/") => running.read(path, identity)
 
@@ -77,10 +77,10 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
       offered: (path = "/") => handles(sees(path)).map((h) => h.name),
       call: (path: string, handle: string, args: Args = {}) => running.call(path, handle, args, identity),
       told: () => {
-        const now = flatten(sees())
-        const lines = before ? changes(before, now) : [...now].map(([k, v]) => `${k}: ${v}`)
+        const now = sees()
+        const lines = before ? tell(diff(before.view, now)) : whole(now)
 
-        before = now
+        before = { view: now }
 
         return lines
       },

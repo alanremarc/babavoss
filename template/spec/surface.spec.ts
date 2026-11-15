@@ -28,7 +28,7 @@ test("the agent is told what the person decided, and both notice it", async () =
   agent.told()
   expect(agent.noticed()).toEqual([])
   await person.call("/", "accept", {})
-  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- attention.who", "- attention.why"])
+  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- attention"])
   expect(agent.noticed()).toEqual(['The greeting is now "good morning"'])
   expect(person.noticed()).toEqual(['The greeting is now "good morning"'])
 
@@ -36,7 +36,7 @@ test("the agent is told what the person decided, and both notice it", async () =
   agent.told()
   await person.call("/", "decline", {})
   expect(agent.sees()).toMatchObject({ greeting: "good morning" })
-  expect(agent.told()).toEqual(["- proposed", "- attention.who", "- attention.why"])
+  expect(agent.told()).toEqual(["- proposed", "- attention"])
   expect(agent.noticed()).toEqual(['"hi" was declined'])
 })
 

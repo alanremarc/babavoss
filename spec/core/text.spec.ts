@@ -96,7 +96,7 @@ it("1: reads relative facts, quoted table rows and handle declarations; unknown 
 
   expect(response.headers.get("content-type")).toBe("text/plain")
   expect(text).toContain('rows: at\ttext\n"/one"\t"two words"')
-  expect(text).toContain("rows.0.do: bv text /one set id=1 n=number yes=boolean   Set values")
+  expect(text).toContain("do: bv text /one set id=1 n=number yes=boolean   Set values")
   expect(text).toContain("n: 0")
 
   const missing = await request("/missing")
@@ -229,4 +229,19 @@ it("11: tells what was noticed once, with the next answer, by who caused it, but
   await request("/", { handle: "say", args: { text: "again" } }, false)
   await request("/one", { handle: "set", args: { id: 1, n: 7, yes: false } }, false)
   expect(await (await request("/missing")).text()).toBe("nothing at /missing\nnotices:\nagain (by the person)\nchanged by the person:\nn: 0 → 7")
+})
+it("12: a read of / is the present whole, by the word or a program's root.read, and what changes is counted from it", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 3, yes: true } }, false)
+  expect(await (await request("/")).text()).not.toContain("changed")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+  await request("/one", { handle: "set", args: { id: 1, n: 4, yes: true } }, false)
+  await request("/", undefined, false, "agent:S")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+  // A program's read is JSON, which carries no notices: they wait for the next text answer.
+  await request("/", { handle: "say", args: { text: "heard" } }, false)
+  await request("/", undefined, false, "agent:S")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("notices:\nheard (by the person)")
 })
