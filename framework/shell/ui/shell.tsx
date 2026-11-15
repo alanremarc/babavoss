@@ -1,31 +1,34 @@
-// The shell page: the shell's view at / drives the tab strip and home; each tab shows its surface's component.
-// The strip is the page's header: home's "+", then the open tabs newest first. Below it a tab's frame and its content,
-// or home, the palette, filling the rest (home.tsx). A tab the person opens becomes theirs to look at; one the agent
-// opens takes its place beside the "+", marked until looked at, and the person stays where they are. A tab that is broken
-// or needs someone is marked in the strip and on home, from / where the shell gathers who is needed. At the strip's right
-// are the notifications: each notice heard while the page is open is a toast that then goes into their button, and their
-// panel keeps the notices and all activity (notifications.tsx).
+// The shell page: the shell's view at / drives the tab strip and home; each tab, the home of one instance of a surface
+// with its own state, shows its surface's component. The strip is the page's header: home, the babavoss mark, which is
+// also whose move it is (turn.ts); then the open tabs newest first, each with its menu (actions.tsx); and at its right the
+// notifications. Below it a tab's content fills the rest, or home, the palette (home.tsx). A tab the person opens becomes
+// theirs to look at; one the agent opens takes its place beside home, marked until looked at, and the person stays where
+// they are. A tab that is broken, needs someone, offers an ask or holds a notice not yet seen is marked in the strip and
+// on home, from / where the shell gathers who is needed. Each notice heard while the page is open is a toast that then
+// goes into the notifications' button, and their drawer keeps the notices and all activity (notifications.tsx).
 // The URL is the surface path: / home, also where no tab is, /tabs/N/route a tab, /settings the appearance. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). It loads no stylesheet:
 // the root's page does, one, which imports the shell's styles.css, so the shell's styles are compiled once.
-import { Activity, Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
+import { Activity, Component, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { CircleAlertIcon, LocateFixedIcon, SettingsIcon, XIcon } from "lucide-react"
 import type { Handle, View } from "../../core/index.ts"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
 import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
+import { DropdownKit, MenuItems, type MenuItem } from "../../kit/layouts/menu.tsx"
 import { call, changes, read, type Notice, type Turn } from "./client.ts"
-import { Frame, useFrames } from "./frame.tsx"
+import { Actions, TabMenu, useTabCommands } from "./actions.tsx"
+import { noticesIn, type Offered } from "./commands.ts"
 import { Home, HomeTab, useHomeKey, type TabEntry } from "./home.tsx"
 import { backTo, shortcut, type SurfaceEntry } from "./home.ts"
 import type { Drawers } from "./inputs.tsx"
-import { Notifications } from "./notifications.tsx"
+import { NOTICES, Notifications, unseenRows, useFeed } from "./notifications.tsx"
 import { Settings } from "./settings.tsx"
 import { ChangesContext, TabProvider } from "./tab.tsx"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
-import { TurnIndicator } from "./turn.tsx"
+import { endable, endMove, standingOf } from "./turn.ts"
 
 /**
  * Each surface's page module: its component, the default export; the icon the strip and home show; and the
@@ -69,8 +72,14 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   const [at, setAt] = useState(parse)
   const [routes, setRoutes] = useState<Record<string, string>>(() => (at.key.startsWith("/") ? { [at.key]: at.route } : {}))
   const [listeners] = useState(() => new Set<() => void>())
-  // Every tab's frame, and the commands of the one looked at, which home offers first.
-  const frames = useFrames()
+  // The commands of the tab looked at, which home offers first, and each tab's asks, which dot it.
+  const commands = useTabCommands()
+  const [, asksMoved] = useReducer((n: number) => n + 1, 0)
+  // The action of a tab asking its inputs in a modal, and the last refusal of one, by its tab.
+  const [asking, setAsking] = useState<{ at: string; action: Offered }>()
+  const [refused, setRefused] = useState<{ at: string; reason: string }>()
+  // Each tab's reloads: raising one reads its views again.
+  const [reloads, setReloads] = useState<Record<string, number>>({})
   const up = useRef(false)
   const stream = useMemo(
     () => ({
@@ -85,7 +94,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   )
   const rows = root?.tabs ?? []
   const active = at.key === HOME || at.key === "settings" || rows.some((r) => r.at === at.key) ? at.key : HOME
-  // The tab shown before home, which home returns to; its frame stays live while home is shown, for its commands.
+  // The tab shown before home, which home returns to; its actions stay live while home is shown, for its commands.
   const [shown, setShown] = useState<string>()
   const back = backTo(shown, rows.map((r) => r.at))
   const icons = useMemo(() => Object.fromEntries(Object.entries(surfaces).map(([name, s]) => [name, s.icon])), [surfaces])
@@ -99,6 +108,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
     needs: (root?.needs ?? []).filter((need) => need.at === row.at).map(({ who, why }) => ({ who, why })),
     ...(row.broken !== undefined && { broken: row.broken }),
   }))
+  const waits = (at: string) => commands.asks(at) > 0 || noticesIn(at, unseen).length > 0
   // Who hears each notice as it comes: the notifications.
   const [hearers] = useState(() => new Set<(notice: Notice) => void>())
   const notices = useMemo(
@@ -115,6 +125,11 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   const [seen, setSeen] = useState<ReadonlySet<string>>()
   // Whose move it is, as the runtime hears it from the harness's hooks.
   const [turn, setTurn] = useState<Turn>()
+  // The notices, read once: the drawer's, and what dots the tabs until seen.
+  const told = useFeed(NOTICES, stream, true)
+  const unseen = useMemo(() => unseenRows(told.rows, told.unseen), [told.rows, told.unseen])
+
+  useEffect(() => commands.subscribeAsks(asksMoved), [commands])
 
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -240,31 +255,120 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   }, [offered?.key, offered?.route, at.key, at.route])
 
   const away = (at: string) => go(successor(strip, at) ?? HOME)
+  const leaveSettings = () => go(strip[0]?.at ?? HOME)
+  const close = async (row: Row) => {
+    if (!row.close) return
+    await act("/", row.close)
+    if (active === row.at) away(row.at)
+  }
+  const closeOthers = async (row: Row) => {
+    for (const other of strip) if (other.at !== row.at && other.close) await act("/", other.close)
+    if (active !== row.at && active !== HOME) go(row.at)
+  }
+  // An action of a tab, wherever it was chosen: one that asks for inputs opens its modal in the tab, shown first; another
+  // is called at once, and a refusal shows the tab with why.
+  const start = (row: Row, action: Offered) => {
+    if (Object.keys(action.handle.open).length || surfaces[row.surface]?.drawers?.[action.handle.name]) {
+      setAsking({ at: row.at, action })
+      if (active !== row.at) go(row.at)
+
+      return
+    }
+    void call(row.at + (action.path === "/" ? "" : action.path), action.handle.name, action.handle.args).then(
+      (answer) => {
+        if (answer.outcome !== "refused") return setRefused((r) => (r?.at === row.at ? undefined : r))
+        setRefused({ at: row.at, reason: answer.reason })
+        if (active !== row.at) go(row.at)
+      },
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e))
+    )
+  }
+  // The shell's own controls, the same in every tab's menu.
+  const controls = (row: Row): MenuItem[] => [
+    {
+      kind: "action",
+      id: "close",
+      label: "Close tab",
+      note: "its state is dropped",
+      hint: row.close?.description,
+      disabled: !row.close,
+      run: () => void close(row),
+    },
+    {
+      kind: "action",
+      id: "close-others",
+      label: "Close other tabs",
+      disabled: !strip.some((other) => other.at !== row.at && other.close),
+      run: () => void closeOthers(row),
+    },
+    {
+      kind: "action",
+      id: "copy",
+      label: "Copy link",
+      hint: location.origin + urlOf(row.at, routes[row.at]),
+      run: () => void navigator.clipboard?.writeText(location.origin + urlOf(row.at, routes[row.at])),
+    },
+    { kind: "action", id: "reload", label: "Reload", hint: "Read the tab's views again", run: () => setReloads((r) => ({ ...r, [row.at]: (r[row.at] ?? 0) + 1 })) },
+  ]
+
+  // Going where an unseen notice is about sees it.
+  useEffect(() => {
+    if (!active.startsWith("/")) return
+
+    const here = active + ((routes[active] ?? "/") === "/" ? "" : routes[active])
+    const there = unseen.filter((n) => n.at === here && here !== active)
+
+    if (!there.length) return
+    void Promise.all(there.map((n) => call(NOTICES, "looked", { n: n.n }))).then(() => told.load(), () => undefined)
+  }, [active, routes, unseen])
 
   useHomeKey(() => go(shortcut(active, back)))
 
   return (
+    <ChangesContext.Provider value={stream}>
     <div className="flex h-dvh min-h-64 flex-col overflow-hidden text-xs">
       <SurfaceTabs
         active={active}
         onSelect={(key) => go(key)}
-        home={<HomeTab active={active === HOME} onSelect={() => go(HOME)} />}
-        end={
-          <>
-            <TurnIndicator turn={turn} />
-            <Notifications changes={stream} notices={notices} title={root?.title ?? "baba"} go={(at) => go(placeOf(at).key, placeOf(at).route)} />
-          </>
-        }
+        home={<HomeTab active={active === HOME} standing={standingOf(turn)} onSelect={() => go(HOME)} />}
+        end={<Notifications changes={stream} notices={notices} told={told} title={root?.title ?? "baba"} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
         items={[
-          ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go(strip[0]?.at ?? HOME) }] : []),
+          ...(active === "settings"
+            ? [
+                {
+                  id: "settings",
+                  label: "Settings",
+                  icon: <SettingsIcon aria-hidden />,
+                  onClose: leaveSettings,
+                  menu: () => <MenuItems kit={DropdownKit} items={[{ kind: "action", id: "close", label: "Close tab", run: leaveSettings }]} />,
+                },
+              ]
+            : []),
           ...strip.map((row, i) => ({
             id: row.at,
             label: entries[i]!.label,
             icon: entries[i]!.icon,
             unseen: !!seen && !seen.has(row.at) && row.at !== active,
+            waits: waits(row.at),
             needs: entries[i]!.needs,
             broken: entries[i]!.broken,
-            ...(row.close && { onClose: () => void act("/", row.close!).then(() => active === row.at && away(row.at)) }),
+            ...(row.close && { onClose: () => void close(row) }),
+            menu: (shut: () => void) =>
+              row.broken !== undefined || !surfaces[row.surface]?.default ? (
+                <MenuItems kit={DropdownKit} items={controls(row)} />
+              ) : (
+                <TabMenu
+                  address={row.at}
+                  route={routes[row.at] ?? "/"}
+                  title={row.title}
+                  name={row.surface}
+                  start={(action) => start(row, action)}
+                  navigate={(route) => go(row.at, route)}
+                  notices={noticesIn(row.at, unseen)}
+                  controls={controls(row)}
+                  close={shut}
+                />
+              ),
           })),
         ]}
       />
@@ -302,7 +406,6 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
           </AlertAction>
         </Alert>
       )}
-      <ChangesContext.Provider value={stream}>
         <main className="relative flex min-h-0 flex-1 flex-col">
           <TabContent address="settings" hidden={active !== "settings"}>
             <Settings title={root?.title ?? "babavoss"} />
@@ -316,7 +419,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
                 icons={icons}
                 tabs={entries}
                 back={entries.find((e) => e.at === back)}
-                frames={frames}
+                commands={commands}
+                {...(turn && endable(turn) && { end: { drivable: turn.drivable, run: () => endMove(turn.drivable) } })}
                 disabled={pending || !root}
                 loading={!root}
                 launch={(handle) => void open(handle)}
@@ -345,10 +449,21 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
                         route={routes[row.at] ?? "/"}
                         active={active === row.at}
                         navigate={(route) => go(row.at, route)}
+                        reload={reloads[row.at] ?? 0}
                       >
-                        <Frame frames={frames} title={row.title} name={row.surface} drawers={surfaces[row.surface]?.drawers}>
+                        <Actions
+                          commands={commands}
+                          title={row.title}
+                          name={row.surface}
+                          drawers={surfaces[row.surface]?.drawers}
+                          start={(action) => start(row, action)}
+                          {...(asking?.at === row.at && { asking: asking.action })}
+                          answered={() => setAsking(undefined)}
+                          {...(refused?.at === row.at && { refused: refused.reason })}
+                          dismiss={() => setRefused(undefined)}
+                        >
                           <Page />
-                        </Frame>
+                        </Actions>
                       </TabProvider>
                     </TabError>
                   ) : (
@@ -367,8 +482,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
             )
           })}
         </main>
-      </ChangesContext.Provider>
     </div>
+    </ChangesContext.Provider>
   )
 }
 

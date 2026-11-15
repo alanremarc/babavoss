@@ -34,7 +34,7 @@ export type WorkbenchChoice = { label: string; value?: string; options: Workbenc
 export const muted = "text-muted-foreground"
 export const ring = "outline-none focus-visible:ring-2 focus-visible:ring-ring"
 export const iconButton = `grid size-row shrink-0 place-items-center rounded-md ${muted} ${ring} hover:bg-foreground/6 hover:text-foreground disabled:pointer-events-none disabled:opacity-40 aria-pressed:text-foreground aria-expanded:bg-foreground/6`
-/** Every bar of the frame below the menu bar: document strip, tool headers, toolbars. */
+/** Every bar of a page: document strip, tool headers, toolbars. */
 export const bar = "flex h-bar shrink-0 items-center"
 
 const separator = "bg-border outline-none hover:bg-ring/60 focus-visible:bg-ring data-[separator=active]:bg-ring"

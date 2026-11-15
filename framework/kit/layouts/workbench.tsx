@@ -1,7 +1,7 @@
 // The workbench: a util's working layout for professional work, editors, inspectors, anything that navigates many
 // things and works on one at a time, often in a narrow window beside the agent's chat. Three parts, each with one role:
 // - The scope's row, where there are scopes: its menu, named by the open one, to switch scopes or return to the welcome
-//   page. The util's actions are its surface's, in the shell's frame above; the workbench adds no menu bar of its own.
+//   page. The util's actions are its surface's, in its tab's menu; the workbench adds no menu of its own.
 // - Toolbars: each one stack of the util's tools (navigation, details, problems, settings), every tool in exactly one.
 //   A toolbar pins to an edge, at most one per edge, or floats over the content. Collapsed, it is a strip of icons and
 //   a tool opens beside it, against its edge; expanded, its tools stack along it, each resizable and folding to its title

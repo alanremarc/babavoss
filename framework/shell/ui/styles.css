@@ -2,3 +2,17 @@
 @import "../../kit/styles.css";
 
 @source ".";
+
+/* The mark's eyes while the agent works: they look one way, then the other, and back. */
+@keyframes baba-look {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  30% {
+    transform: translateX(-7px);
+  }
+  65% {
+    transform: translateX(7px);
+  }
+}

@@ -2,7 +2,7 @@
 // project and what the agent is given, one row per step, each text verbatim with its size and its difference from the pin;
 // and at the right the scenarios as one-liners, the demo's surfaces and the pin. The scenario and step are the tab's
 // route, /scenarios/NAME/N, so a refresh and the agent's pointing land on them. How a changed text is compared with the
-// pinned one is the page's own: View, in the frame's menus.
+// pinned one is the page's own.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react"
 import { BookOpenTextIcon, PinIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"

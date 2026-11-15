@@ -59,17 +59,18 @@ A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` 
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
 
-## The frame
+## The tab and its menu
 
-The shell draws one menu bar at the top of every tab, under the page's strip, the same for every surface and made from its views alone. A page cannot add to it, hide it or replace it: `ui/index.tsx` returns its content, and optionally `icon` and `drawers`. The person may hide it for every tab, from the palette, settings or ⌘\; then the content fills the tab, everything the bar held is in the palette, and the asks float at the tab's top right, so a page needs no way of its own to reach them.
+A tab is the home of one instance of a surface, with its own state. The page's strip holds home, the babavoss mark, which also shows whether the agent is working, then the tabs, then the notifications. Each tab carries its surface's menu, the same for every surface and made from its views alone: over the tab, or with it focused, its icon gives way to dots that open the menu, as a right click or Shift+F10 does. A page cannot add to it or replace it: `ui/index.tsx` returns its content, which fills the tab under the strip, and optionally `icon` and `drawers`.
 
-- The surface's menu, named by its `title` at `/`: the actions offered at `/`.
-- Where the tab's route is below `/`, a menu for that place, named by its view's `title` or `name`, or its row's: the actions offered there, the asks first, marked as the person's. An ask also stands at the bar's right.
-- Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. A menu of more than 8 places opens on a field that filters it.
-- Help: a search of the actions and places of the whole tree below the tab, read breadth-first from `/` along the `at`s.
-- Every entry is a command of the palette too. Home, the strip's first tab, is the palette: the asks, actions and places of the tab shown before it first, then the surfaces to open, the tabs to switch to and the settings. ⌘K or Ctrl+K goes there from any tab, and back.
+- A search of the actions and places of the whole tree below the tab, read breadth-first from `/` along the `at`s.
+- The surface's actions at `/`, under its `title`.
+- Where the tab's route is below `/`, the actions offered there, under the place's view's `title` or `name`, or its row's.
+- Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. Go of more than 8 places opens on a field that filters it.
+- The shell's own: close the tab, close the others, copy its link, reload its views.
+- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask stands first in its group, dotted; an ask at another place, or a notice they have not seen about one, dots Go and that place. Every entry is a command of the palette too. Home, the strip's first tab, is the palette: the asks, actions and places of the tab shown before it first, then the surfaces to open, the tabs to switch to and the settings. ⌘K or Ctrl+K goes there from any tab, and back.
 
-So the person can do from the bar what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the bar with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
+So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
 
 ```ts
 menu: [{ label: "Move", actions: ["start", "done", "back"] }, { label: "Edit", actions: ["describe", "note"] }],
@@ -77,9 +78,9 @@ menu: [{ label: "Move", actions: ["start", "done", "back"] }, { label: "Edit", a
 
 An action with inputs opens a modal. The shell makes a form of its inputs, one field each, under its description. Where the page module exports a drawer for the action by its name, the modal shows that instead: `export const drawers = { add: AddIssue }`, each a component given `{ handle, path, view, submit, close }`. `submit(args)` makes the call with the inputs and resolves with the reason where it is refused; the modal then shows the reason and stays open, and closes once the call is admitted. `close` gives up. A drawer is drawn outside the tab, so the surface's `ui/styles.css` does not reach it.
 
-What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the bar: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
+What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
 
-Whose move it is is the shell's too: the strip says whether the agent is working or idle, and how many of the person's changes wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
+Whose move it is is the shell's too: the mark at the strip's start moves while the agent works and counts the person's changes that wait for its next turn, and home offers to end their move. A surface makes no busy indicator and no end-of-move button of its own.
 
 ## Looks
 
@@ -87,11 +88,11 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
 
 - Use the kit's components and layouts first: they are already in the design language.
 - Then the tokens, through Tailwind classes; `framework/kit/defaults.css` defines them:
-  - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the frame's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
+  - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the shell's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
   - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px; Tailwind's `text-sm` and up for headings.
   - font: `font-sans`, `font-heading`, `font-mono`.
   - radius: `rounded-sm` to `rounded-4xl`, from the palette's `--radius`.
-  - frame: `h-menubar`, `h-bar` and `h-row`, the heights of the menu bar, a bar below it, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
+  - frame: `h-menubar`, `h-bar` and `h-row`, the heights of a compact header, a bar, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
 - Never hard-code a colour, a font or a size where a token fits.
 
 Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.

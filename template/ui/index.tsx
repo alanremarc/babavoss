@@ -1,6 +1,6 @@
 // The surface's page, shown in its tab: what the surface says, and the person's decision. Anything else the person wants
-// changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's. The shell draws the bar above
-// it from the surface: the title, its actions, the places and Help; so the page is its content alone. `drawers`, where
+// changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's. The shell gives its tab a menu
+// made from the surface: its actions, the places and a search; so the page is its content alone. `drawers`, where
 // exported, ask an action's inputs in the page's own way; without one the shell makes a form of them.
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"
