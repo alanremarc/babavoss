@@ -82,7 +82,7 @@ it("says a tab's change once in the answer to a call there, and still tells at /
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
   // The person acts in the tab; the agent's next call there says its own change, and at / what the person did.
   await request("/tabs/1", { handle: "note", args: { text: "mine" } }, true)
-  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe('n: 2 → 3\nchanged:\ntabs.0.facts.note: "" → "mine"')
+  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe('n: 2 → 3\nchanged by the person:\ntabs.0.facts.note: "" → "mine"')
   // A read of the tab shows it whole, so nothing of it is repeated from /.
   await request("/tabs/1", { handle: "bump", args: { by: 1 } }, true)
   expect(await request("/tabs/1")).not.toContain("changed:")

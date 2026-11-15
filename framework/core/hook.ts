@@ -1,7 +1,8 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
 // baba would, its text and the root's answer, the root started; with each message of the person and after each tool call, what changed in
-// an open root since the session was last answered, as when the person acted on its page. It steers and informs, and
-// blocks nothing: a hook that finds nothing says nothing, and one that fails is silent.
+// an open root since the session was last answered, by who changed it: the person on its page, the surface by itself, or the
+// agent with them; what the agent's own calls alone changed, their answers told it. It steers and informs, and blocks
+// nothing: a hook that finds nothing says nothing, and one that fails is silent.
 import { readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
@@ -54,8 +55,9 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
   } else
     for (const [name, root] of roots) {
       const text = await changed(root, session).catch(() => undefined)
+      const of = name === "baba" ? "the root of .baba/" : `the root ${name}`
 
-      if (text) lines.push(`${name === "baba" ? "The root of .baba/" : `The root ${name}`} changed since this session last read it; the person may have acted on the page:\n${text}`)
+      if (text) lines.push(`What changed in ${of} at / since this session was last answered, by who changed it:\n${text}`)
     }
 
   return lines.length ? lines.join("\n\n") : undefined

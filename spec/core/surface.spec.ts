@@ -114,6 +114,7 @@ describe("a running surface", () => {
     const r = run(notes, memory<Model>())
 
     try {
+      expect(r.cause()).toBeUndefined()
       expect(JSON.stringify(r.read("/"))).not.toContain("secret")
       expect(r.read("/notes/1")).toEqual({ id: 1, title: "One" })
       expect(await r.call("/", "revise", { id: 1, title: " ", published: false }, "agent")).toEqual({ outcome: "refused", reason: "A note needs a title" })
@@ -123,8 +124,11 @@ describe("a running surface", () => {
 
       expect(written).toMatchObject({ outcome: "written", view: { notes: [{ id: 1, title: "Uno" }] } })
       expect([r.busy(), r.jobs()]).toEqual([1, ["agent"]])
+      // Each commit names its cause: the call, then the event its command reported, with the actor that started it.
+      expect(r.cause()).toEqual({ actor: "agent", call: true })
       await settled(r)
       expect(r.model()).toMatchObject({ actor: "agent", busy: false })
+      expect(r.cause()).toEqual({ actor: "agent", call: false })
       expect(await r.call("/", "revise", { id: 1, title: "x", published: false }, "agent")).toMatchObject({ reason: expect.stringContaining("not offered") })
     } finally {
       await r.stop()

@@ -1,9 +1,10 @@
-// The agent's text answers and session memory; JSON clients keep their own presentation.
+// The agent's text answers and session memory, with who changed what since it was last answered; JSON clients keep their own presentation.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
 import { changes, flatten } from "../present/present.ts"
 import { handles, type Args, type Handle, type Json } from "../surface/view.ts"
 import type { Running } from "../surface/run.ts"
+import { isPerson } from "../session.ts"
 
 const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle"
 
@@ -58,10 +59,64 @@ export function textArgs(view: Json | undefined, name: string, input: unknown): 
   return args
 }
 
+/** Who made a change, in the words the agent is told: the person, this session's agent, the surface by itself, another actor. */
+const BY: Record<string, string> = { person: "the person", you: "you", surface: "the surface" }
+
+/** The key of a line of a diff: `+ key: …`, `key: … → …`, `- key`. */
+const keyOf = (line: string) => /^(?:[+-] )?(.*?)(?:: |$)/.exec(line)![1]!
+
+/**
+ * The agent's text session: what it was last told, and since then who changed each fact of /. A change is the person's when
+ * their call made it, the agent's when its own did, through the word or a program, and the surface's when a command's event
+ * did. What only the agent's own calls changed is not told again: their answers told it.
+ */
 export function textSession<M>(running: Running<M>, dir: string, actor: string, command: string) {
   const file = join(dir, "presented", "text.json")
   let before = readJsonFile<Json>(file)
   const root = () => running.read("/", actor)
+  const flat = () => {
+    try {
+      return flatten(root())
+    } catch {
+      return new Map<string, string>()
+    }
+  }
+  let marks = flat()
+  let version = running.version()
+  const by = new Map<string, Set<string>>()
+
+  running.subscribe(() => {
+    if (running.version() === version) return
+    version = running.version()
+
+    const now = flat()
+    const cause = running.cause()
+    const who = !cause ? undefined : !cause.call ? "surface" : cause.actor === actor ? "you" : isPerson(cause.actor) ? "person" : cause.actor
+
+    for (const key of new Set([...now.keys(), ...marks.keys()]))
+      if (now.get(key) === marks.get(key)) continue
+      // A commit of no known cause, as when code is loaded again: what it changed is told without a name.
+      else if (!who) by.delete(key)
+      else by.set(key, (by.get(key) ?? new Set()).add(who))
+    marks = now
+  })
+
+  // Unnamed where the change came before this runtime, or from code loaded again.
+  const whose = (line: string) => by.get(keyOf(line))
+  const others = (line: string) => [...(whose(line) ?? ["unknown"])].some((w) => w !== "you")
+  const grouped = (lines: string[]) => {
+    const groups = new Map<string, string[]>()
+
+    for (const line of lines) {
+      const who = whose(line)
+      const names = who ? ["person", "surface", ...[...who].filter((w) => !BY[w]).sort(), "you"].filter((w) => who.has(w)).map((w) => BY[w] ?? w) : []
+      const head = names.length ? `changed by ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]}:` : "changed:"
+
+      groups.set(head, [...(groups.get(head) ?? []), line])
+    }
+
+    return [...groups].flatMap(([head, group]) => [head, ...group])
+  }
   const diff = (old: Json | undefined, now: Json | undefined) => {
     const lines = changes(flatten(old), flatten(now))
 
@@ -78,12 +133,13 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   const told = (now: Json | undefined) => {
     if (now !== undefined) writeJsonFile(file, now)
     before = now
+    by.clear()
   }
 
   return {
     root,
     diff,
-    changed: () => (before === undefined ? [...textLines(root(), "", new Map(), "/", command).values()] : diff(before, root())),
+    changed: () => (before === undefined ? [...textLines(root(), "", new Map(), "/", command).values()] : diff(before, root()).filter(others)),
     /** `path` is where the answer's lines were read or called: what / says of that same path, in the same words, is not said again. */
     answer(lines: string[], whole = false, shown?: Json, path?: string) {
       const now = root()
@@ -111,7 +167,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
       }
       const extra = whole
         ? []
-        : (before === undefined ? [...textLines(now, "", new Map(), "/", command).values()] : diff(before, now)).filter(
+        : (before === undefined ? [...textLines(now, "", new Map(), "/", command).values()] : diff(before, now).filter(others)).filter(
             (line) =>
               !lines.includes(line) &&
               !lines.includes(line.replace(/^\+ /, "")) &&
@@ -119,9 +175,11 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
               !repeated(line)
           )
 
+      const said = [...new Set(lines), ...(!extra.length ? [] : before === undefined ? ["changed:", ...extra] : grouped(extra))].join("\n")
+
       told(now)
 
-      return [...new Set(lines), ...(extra.length ? ["changed:", ...extra] : [])].join("\n")
+      return said
     },
   }
 }

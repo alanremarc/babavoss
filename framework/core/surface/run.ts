@@ -7,6 +7,8 @@ import type { Call, Surface } from "./surface.ts"
 
 export type Answer = { outcome: "written"; view: View } | { outcome: "refused"; reason: string }
 export type Saved = { model: unknown }
+/** A commit's cause: an actor's call, or an event reported by a command, which carries the actor that started it. */
+export type Cause = { actor: string; call: boolean }
 export type Ports<M> = {
   /** What was kept, or undefined the first time. */
   load(): Saved | undefined
@@ -19,6 +21,8 @@ export interface Running<M> {
   model(): M
   /** How many commits so far; a change stream carries it. */
   version(): number
+  /** Who made the last commit: the actor of a call, or of the command whose event it was; undefined before any. */
+  cause(): Cause | undefined
   /** The view at `path` as an actor sees it; the person by default. */
   read(path: string, actor?: string): View | undefined
   /** An actor's call: refused unless the view at `path` offers the handle with these fixed args and the open args fit. */
@@ -55,6 +59,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
   let runs = 0
   let queued = 0
   let version = 0
+  let cause: Cause | undefined
   let stopped = false
   let failure: string | undefined
   const running = new Map<number, { ctrl: AbortController; session: boolean; actor: string; name: string; done: Promise<void> }>()
@@ -100,10 +105,11 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     return p
   }
   const read = (path: string, actor = "person") => surface.view(model, path, actor)
-  const commit = (next: M) => {
+  const commit = (next: M, by: Cause) => {
     ports.save({ model: next })
     model = next
     version++
+    cause = by
   }
 
   const event = (e: E, actor: string) => {
@@ -119,7 +125,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         return
       }
-      commit(r.model)
+      commit(r.model, { actor, call: false })
     } catch (error) {
       fail(error)
 
@@ -195,6 +201,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
   return {
     model: () => model,
     version: () => version,
+    cause: () => cause,
     failure: () => failure,
     read,
     call: (path, name, args, actor) =>
@@ -230,7 +237,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         try {
           answer = surface.view(r.model, path, actor) ?? view
-          commit(r.model)
+          commit(r.model, { actor, call: true })
         } catch (e) {
           fail(e)
 
