@@ -1,3 +1,4 @@
+// The shell's settings page: the person's appearance, its choices in the content.
 import { useEffect, useState } from "react"
 import { SunIcon, MoonIcon, MonitorIcon } from "lucide-react"
 import { ToggleGroup, ToggleGroupItem } from "../../kit/components/toggle-group"
@@ -27,35 +28,8 @@ export function Settings({ title }: { title: string }) {
     writeAppearance(next)
   }
 
-  const modes = [
-    { id: "light", label: "Light" },
-    { id: "dark", label: "Dark" },
-    { id: "system", label: "System" },
-  ]
-
-  // The same choices in the View menu, the header every layout has.
   return (
-    <Plain
-      label="Settings"
-      viewMenu={[
-        {
-          kind: "choice",
-          id: "mode",
-          label: "Color mode",
-          value: appearance.mode,
-          options: modes,
-          set: (value) => update({ ...appearance, mode: value as Appearance["mode"] }),
-        },
-        {
-          kind: "choice",
-          id: "theme",
-          label: `Theme, ${mode}`,
-          value: appearance.themes[mode],
-          options: themes[mode].map((t) => ({ id: t.id, label: t.label })),
-          set: (value) => update({ ...appearance, themes: { ...appearance.themes, [mode]: value } }),
-        },
-      ]}
-    >
+    <Plain>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-8 sm:py-12">
           <header className="flex flex-col gap-1">

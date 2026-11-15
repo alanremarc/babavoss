@@ -1,8 +1,7 @@
 // The workbench: a util's working layout for professional work, editors, inspectors, anything that navigates many
 // things and works on one at a time, often in a narrow window beside the agent's chat. Three parts, each with one role:
-// - The menu bar: the scope's menu, named by the open one, to switch scopes or return to the welcome page; the util's
-//   own menus; and View, the workbench's, with every tool and Reset layout. Every action of the util and the frame is
-//   in a menu.
+// - The scope's row, where there are scopes: its menu, named by the open one, to switch scopes or return to the welcome
+//   page. The util's actions are its surface's, in the shell's frame above; the workbench adds no menu bar of its own.
 // - Toolbars: each one stack of the util's tools (navigation, details, problems, settings), every tool in exactly one.
 //   A toolbar pins to an edge, at most one per edge, or floats over the content. Collapsed, it is a strip of icons and
 //   a tool opens beside it, against its edge; expanded, its tools stack along it, each resizable and folding to its title
@@ -11,12 +10,12 @@
 //   toolbar's tools, to an edge (joining the toolbar there), or off on its own as a new floating toolbar; a floating
 //   toolbar dragged by its grip moves, pins to an edge or merges into another, and sized from its corner collapses
 //   past a threshold. A right click offers the same, for the tool and the toolbar: detach, move, collapse or expand,
-//   float, pin, merge. A pinned toolbar has no grip; it floats only from that menu.
+//   float, pin, merge, and reset the layout. A pinned toolbar has no grip; it floats only from that menu.
 // - The content: the strip of open documents and the active one's content, which draws its own toolbar and scrolls
 //   itself. Opening adds a document or focuses the open one; only the person closes it.
 // A util with several scopes (projects, repositories) works in one at a time; with none open, the content is the
 // welcome page that lists them, and the tools are still at hand.
-// The frame takes data, not markup: menus, tools, their actions and documents are typed. Only the content, and each
+// The frame takes data, not markup: tools, their actions and documents are typed. Only the content, and each
 // tool's, are free-form, built from the parts so every util reads alike. Sizes are the theme's tokens (defaults.css).
 // The layout and the open documents (per scope) are the person's presentation: kept in this browser, never on the surface.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
@@ -25,7 +24,7 @@ import { ContextMenu as Context } from "radix-ui"
 import { Group, Panel, useDefaultLayout, type PanelImperativeHandle } from "react-resizable-panels"
 import { Popover, PopoverAnchor, PopoverContent } from "../components/popover"
 import { BAND, EXPANDED, STRIP, UNFOLD, edges, moveBar, moveTool, names, ordered, settle, type Bar, type Drop, type Edge, type Float } from "./arrange.ts"
-import { ContextKit, MenuBar, MenuItems, menuContent, type Menu, type MenuItem } from "./menu.tsx"
+import { ContextKit, MenuItems, menuContent, type MenuItem } from "./menu.tsx"
 import {
   bar,
   Dismiss,
@@ -39,7 +38,7 @@ import {
   type WorkbenchAction,
   type WorkbenchIcon,
 } from "./parts.tsx"
-import { scopeMenu, Welcome, type Scopes } from "./welcome.tsx"
+import { ScopeBar, Welcome, type Scopes } from "./welcome.tsx"
 
 /**
  * A tool's filter, the first action of its header: a search button that opens a field across the whole header, closed
@@ -889,34 +888,25 @@ function Floating({
 }
 
 /**
- * The workbench. The util supplies its menus, its tools, the active document's content and its scopes where it has
- * several; the workbench owns the frame: the menu bar with its scope and View menus, the toolbars and how the person
- * arranges them, which documents are open, and the welcome page.
+ * The workbench. The util supplies its tools, the active document's content and its scopes where it has several; the
+ * workbench owns the rest: the scope's row, the toolbars and how the person arranges them, which documents are open,
+ * and the welcome page.
  */
 export function Workbench({
   address,
   util,
   scopes,
-  label,
   tools,
   documents,
   main,
-  menus = [],
-  viewMenu = [],
 }: {
   /** The tab's address and its util's name, from useTab(): what the workbench keeps the person's arrangement under. */
   address: string
   util: string
-  /** The util's name: the menu bar's, where there are no scopes. */
-  label: string
   tools: WorkbenchTool[]
   documents?: WorkbenchDocuments
   /** The active document's content: its own toolbar, if any, above what it scrolls. */
   main: ReactNode
-  /** The util's menus, after the scope's and before View. */
-  menus?: Menu[]
-  /** The util's own entries at the top of the View menu, such as a lens. */
-  viewMenu?: MenuItem[]
   scopes?: Scopes
 }) {
   // The toolbars are the util's: every tab of it opens as the person last arranged it.
@@ -1062,29 +1052,10 @@ export function Workbench({
               },
             ]
           : []),
+        { kind: "separator", id: "reset-edge" },
+        { kind: "action", id: "reset", label: "Reset layout", run: reset },
       ]
     }
-
-  // Showing a tool from the View menu: in an expanded toolbar it is brought into view; collapsed, its popover opens.
-  const show = (id: string) => {
-    const home = bars.find((b) => b.tools.includes(id))
-
-    // From a menu, the popover opens once the menu has closed and handed focus back.
-    if (home && !home.expanded) return void setTimeout(() => setOpen(id), 0)
-    area?.querySelector<HTMLElement>(`[data-tool="${id}"]`)?.scrollIntoView({ block: "nearest" })
-  }
-
-  // View, the workbench's own menu: the util's entries, every tool, and a reset of how the toolbars are arranged.
-  const view: Menu = {
-    id: "view",
-    label: "View",
-    items: [
-      ...(viewMenu.length ? [...viewMenu, { kind: "separator" as const, id: "util-edge" }] : []),
-      ...ordered(tools).map((t): MenuItem => ({ kind: "action", id: `tool-${t.id}`, label: t.label, run: () => show(t.id) })),
-      { kind: "separator", id: "reset-edge" },
-      { kind: "action", id: "reset", label: "Reset layout", run: reset },
-    ],
-  }
 
   const content = (
     <section aria-label="Content" className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -1139,7 +1110,7 @@ export function Workbench({
 
   return (
     <div data-workbench={address} className="flex min-h-0 flex-1 flex-col text-body">
-      <MenuBar label={scopes ? scopes.title : label} menus={[...(scopes ? [scopeMenu(scopes)] : []), ...menus, view]} />
+      {scopes && <ScopeBar scopes={scopes} />}
       <div key={generation} ref={setArea} data-area className={`relative flex min-h-0 flex-1 ${drag ? "cursor-grabbing select-none" : ""}`}>
         <Group
           key={outerIds.join()}

@@ -15,7 +15,8 @@ The running shell takes a surface that was made or removed, and a change to a su
 ```text
 surfaces/NAME/
   src/surface.ts   the surface, the default export: what is true and what can be done, made for the agent first
-  ui/index.tsx     its page, the default export: a component shown in its tab, over the same surface; `icon`, where exported, is the tab's
+  ui/index.tsx     its page, the default export: a component shown in its tab, over the same surface; `icon`, where exported, is the
+                   tab's, and `drawers` ask an action's inputs
   spec/            its rules, as stories
 ```
 
@@ -56,17 +57,29 @@ The agent hears notices as it works, after every tool call; facts reach it with 
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
-The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`; read its code in `framework/` there rather than guessing its interfaces.
+The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
 
 ## The frame
 
-The shell draws one bar above every tab, the same for every surface: the title, the surface's `title` fact at `/` or its name; the page's menus; an Actions menu; and at the right what waits on the person. `ui/index.tsx` returns its content alone, with no bar of its own.
+The shell draws one menu bar at the top of every tab, under the page's strip, the same for every surface and made from its views alone. A page cannot add to it, hide it or replace it: `ui/index.tsx` returns its content, and optionally `icon` and `drawers`.
 
-- The actions are there by themselves: every handle the view offers at the tab's route and at `/`, by its name, its description on hover, and with a prompt for its inputs. An ask stands out at the right of the bar. So the person can do from the frame what the agent can do from the command; name and describe handles for both.
-- The page's own commands, presentation such as a lens, a pane or a fold, are menus: `useMenus([{ id: "view", label: "View", items }])` from the kit. Every entry is in the palette too.
-- ⌘K or Ctrl+K opens the palette over all of it: the tab's asks, actions and menus first, then the surfaces to open and the tabs to switch to.
-- A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes; its menus join the frame's.
-- Whose move it is is the shell's too: the strip says whether the agent is working or idle, and how many of the person's changes wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
+- The surface's menu, named by its `title` at `/`: the actions offered at `/`.
+- Where the tab's route is below `/`, a menu for that place, named by its view's `title` or `name`, or its row's: the actions offered there, the asks first, marked as the person's. An ask also stands at the bar's right.
+- Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. A menu of more than 8 places opens on a field that filters it.
+- Help: a search of the actions and places of the whole tree below the tab, read breadth-first from `/` along the `at`s.
+- Every entry is a command of the palette too, ⌘K or Ctrl+K, with the asks first.
+
+So the person can do from the bar what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the bar with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
+
+```ts
+menu: [{ label: "Move", actions: ["start", "done", "back"] }, { label: "Edit", actions: ["describe", "note"] }],
+```
+
+An action with inputs opens a modal. The shell makes a form of its inputs, one field each, under its description. Where the page module exports a drawer for the action by its name, the modal shows that instead: `export const drawers = { add: AddIssue }`, each a component given `{ handle, path, view, submit, close }`. `submit(args)` makes the call with the inputs and resolves with the reason where it is refused; the modal then shows the reason and stays open, and closes once the call is admitted. `close` gives up. A drawer is drawn outside the tab, so the surface's `ui/styles.css` does not reach it.
+
+What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the bar: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
+
+Whose move it is is the shell's too: the strip says whether the agent is working or idle, and how many of the person's changes wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
 
 ## Looks
 

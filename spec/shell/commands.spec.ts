@@ -1,8 +1,9 @@
-// The frame's commands: which of a view's handles the person is offered as actions, which are asks, how they are named,
-// what a prompt's fields make of their inputs, and every menu entry as a command of the palette.
+// The frame's commands: which of a view's handles the person is offered as actions, which are asks, how they are named
+// and grouped by a view's menu fact; the places a view names and the tree Help searches; what a form's fields make of
+// their inputs, and every menu entry as a command of the palette.
 import { describe, expect, it } from "bun:test"
 import { handle, type View } from "../../framework/core/surface/view.ts"
-import { actionItems, argsOf, commandsOf, joined, named, offered } from "../../framework/shell/ui/commands.ts"
+import { actionItems, argsOf, commandsOf, grouped, indexOf, labelOf, named, offered, parentOf, placesOf, search } from "../../framework/shell/ui/commands.ts"
 import type { Menu } from "../../framework/kit/layouts/menu.tsx"
 
 const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 }, {}, true)
@@ -82,12 +83,68 @@ describe("the frame's menus", () => {
     for (const c of commands.slice(0, 3)) c.run()
     expect(set).toEqual(["fold", "wrap true", "b"])
   })
+})
 
-  it("joins menus of one id that several parts of a page give, in the order given", () => {
-    const own: Menu = { id: "view", label: "View", items: [{ kind: "action", id: "lens", label: "Lens", run: () => {} }] }
-    const all = joined([[{ id: "issues", label: "Issues", items: [] }, own], [menus[0]!]])
+describe("the frame's menus from the surface", () => {
+  const start = handle("start", "Give issue 3 to a lane", { n: 3 }, { lane: "number" })
+  const done = handle("done", "Mark issue 3 done", { n: 3 })
+  const describe_ = handle("describe", "Rewrite what issue 3 is about", { n: 3 }, { about: "string" })
+  const drop = handle("drop", "Remove issue 3", { n: 3 })
+  const issue: View = { at: "/issues/3", title: "Fix it", approve, start, done, describe: describe_, drop }
 
-    expect(all.map((m) => m.id)).toEqual(["issues", "view"])
-    expect(all[1]!.items.map((i) => i.kind)).toEqual(["action", "separator", "action", "check", "separator", "choice", "submenu"])
+  it("lists the asks first and marked, then the groups the menu fact names under their labels, then the rest", () => {
+    const items = grouped(offered("/issues/3", { ...issue, menu: [{ label: "Work", actions: ["done", "start"] }] }), [{ label: "Work", actions: ["done", "start"] }], () => {})
+
+    expect(items.map((i) => [i.kind, "label" in i ? i.label : "", i.kind === "action" && i.mark === true])).toEqual([
+      ["action", "Approve", true],
+      ["separator", "", false],
+      ["label", "Work", false],
+      ["action", "Done", false],
+      ["action", "Start…", false],
+      ["separator", "", false],
+      ["action", "Describe…", false],
+      ["action", "Drop", false],
+    ])
+    expect(commandsOf([{ id: "place", label: "Fix it", items }]).filter((c) => c.ask).map((c) => c.label)).toEqual(["Approve"])
+  })
+
+  it("ignores a menu fact that is not groups of names, and orders by the view alone", () => {
+    expect(grouped(offered("/", { done, drop }), "nonsense", () => {}).map((i) => ("label" in i ? i.label : i.kind))).toEqual(["Done", "Drop"])
+  })
+
+  it("names every place a view gives under at once, by its row's title or name, but the view's own", () => {
+    const view: View = { at: "/", rows: [{ at: "/issues/1", title: "One" }, { at: "/issues/2", name: "two" }, { at: "/issues/1", title: "Again" }], log: { at: "/runs" } }
+
+    expect(placesOf(view, "/")).toEqual([
+      { at: "/issues/1", label: "One" },
+      { at: "/issues/2", label: "two" },
+      { at: "/runs", label: "runs" },
+    ])
+    expect(labelOf("/issues/2", undefined, placesOf(view))).toBe("two")
+    expect(labelOf("/issues/1", { title: "Own" })).toBe("Own")
+    expect([parentOf("/issues/3"), parentOf("/issues"), parentOf("/")]).toEqual(["/issues", "/", undefined])
+  })
+
+  it("reads the tree breadth-first within its caps, and finds places and actions by every word", async () => {
+    const tree: Record<string, View> = {
+      "/": { title: "Queue", add: handle("add", "Add an issue", {}, { title: "string" }), rows: [1, 2, 3].map((n) => ({ at: `/issues/${n}`, title: `Issue ${n}` })) },
+      "/issues/1": { at: "/issues/1", title: "Issue 1", approve, more: { at: "/issues/1/deep", title: "Deep" } },
+      "/issues/2": { at: "/issues/2", title: "Issue 2", done },
+      "/issues/3": { at: "/issues/3", title: "Issue 3", drop },
+    }
+    const reads: string[] = []
+    const read = async (path: string) => (reads.push(path), tree[path])
+    const found = await indexOf(read, { views: 3, depth: 4 })
+
+    expect(reads).toEqual(["/", "/issues/1", "/issues/2"])
+    expect(search(found, "issue 3")[0]).toEqual({ kind: "place", at: "/issues/3", label: "Issue 3" })
+    expect(search(found, "approve").map((f) => (f.kind === "action" ? [f.label, f.where, f.action.ask] : []))).toEqual([["Approve", "Issue 1", true]])
+    expect(search(found, "deep").map((f) => (f.kind === "place" ? f.at : ""))).toEqual(["/issues/1/deep"])
+    expect(search(found, "drop")).toEqual([])
+    expect(search(found, "  ")).toEqual([])
+
+    reads.length = 0
+    await indexOf(read, { views: 10, depth: 0 })
+    expect(reads).toEqual(["/"])
   })
 })

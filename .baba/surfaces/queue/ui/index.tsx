@@ -1,12 +1,13 @@
 // The queue's page: the issues as one-liners in a sidebar on the right, grouped by where they stand, and the selected
 // one in the content, with what it is about, read as markdown. The person approves or drops a draft here; anything else, they tell the agent.
+// `drawers` are how the frame asks the person for an issue to add or draft: a title, and about as markdown in room to write it.
 import { useState } from "react"
 import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCircleIcon } from "lucide-react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "babavoss/kit/index.ts"
-import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+import { Button, DialogFooter, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Input, Textarea } from "babavoss/kit/index.ts"
+import { useLive, useTab, type DrawerProps } from "babavoss/shell/ui/index.tsx"
 
 type Status = "draft" | "backlog" | "lane" | "done"
 type Issue = { at: string; n: number; title: string; status: Status; lane?: number; note?: string }
@@ -14,6 +15,61 @@ type Whole = Issue & { about: string; approve?: Handle; drop?: Handle }
 type Root = { lanes: number; free: number[]; issues: Issue[] }
 
 export const icon = <ListTodoIcon aria-hidden />
+
+/** An issue to add or draft: its title, and what it is about as markdown; the call is the one the frame offered. */
+function IssueDrawer({ handle, submit, close }: DrawerProps) {
+  const [title, setTitle] = useState("")
+  const [about, setAbout] = useState("")
+  const [busy, setBusy] = useState(false)
+  const ready = title.trim() !== "" && about.trim() !== "" && !busy
+  const send = async () => {
+    if (!ready) return
+    setBusy(true)
+    await submit({ title, about }).finally(() => setBusy(false))
+  }
+
+  return (
+    <form
+      className="contents"
+      onSubmit={(event) => {
+        event.preventDefault()
+        void send()
+      }}
+    >
+      <p className="text-muted-foreground">{handle.name === "draft" ? "A draft waits for your approval before it joins the backlog." : "It joins the bottom of the backlog."}</p>
+      <label className="flex flex-col gap-1">
+        <span className="text-meta text-muted-foreground">Title</span>
+        <Input autoFocus placeholder="A short imperative title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-meta text-muted-foreground">About, in markdown</span>
+        <Textarea
+          rows={12}
+          className="min-h-48 font-mono"
+          placeholder="What changes and why"
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              void send()
+            }
+          }}
+        />
+      </label>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={close}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!ready}>
+          {handle.name === "draft" ? "Draft" : "Add"}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+export const drawers = { add: IssueDrawer, draft: IssueDrawer }
 
 const GROUPS: { status: Status; label: string }[] = [
   { status: "lane", label: "In progress" },

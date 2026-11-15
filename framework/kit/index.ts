@@ -2,7 +2,7 @@
 export { Workbench, type WorkbenchTool, type WorkbenchFilter, type WorkbenchDocument, type WorkbenchDocuments } from "./layouts/workbench.tsx"
 export { Plain } from "./layouts/plain.tsx"
 export { Welcome, type Scope, type Scopes } from "./layouts/welcome.tsx"
-export { MenuBar, MenuTriggers, useMenus, MenuHostContext, type Menu, type MenuItem, type MenuHost } from "./layouts/menu.tsx"
+export type { Menu, MenuItem } from "./layouts/menu.tsx"
 export {
   WorkbenchButton,
   WorkbenchToolbar,
@@ -35,6 +35,8 @@ export {
   type WorkbenchNode,
 } from "./layouts/parts.tsx"
 export { Button } from "./components/button"
+export { Input } from "./components/input"
+export { Textarea } from "./components/textarea"
 export { Alert, AlertAction, AlertDescription, AlertTitle } from "./components/alert"
 export { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./components/empty"
 export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./components/dialog"

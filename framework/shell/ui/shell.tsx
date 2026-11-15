@@ -15,6 +15,7 @@ import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { call, changes, read, type Notice, type Turn } from "./client.ts"
 import { Frame, TabCommands, useFrames } from "./frame.tsx"
+import type { Drawers } from "./inputs.tsx"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
 import { Notifications } from "./notifications.tsx"
 import { Settings } from "./settings.tsx"
@@ -24,8 +25,11 @@ import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
 import { TurnIndicator } from "./turn.tsx"
 
-/** Each surface's page module: its component, the default export, and the icon the strip and the launcher show. */
-export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
+/**
+ * Each surface's page module: its component, the default export; the icon the strip and the launcher show; and the
+ * drawers its frame opens for the inputs of the actions they are named for.
+ */
+export type Registry = Record<string, { default: ComponentType; icon?: ReactNode; drawers?: Drawers }>
 /** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
 type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
 /** A tab that is needed, as / gathers it. */
@@ -306,7 +310,7 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
                         active={active === row.at}
                         navigate={(route) => go(row.at, route)}
                       >
-                        <Frame frames={frames} title={row.title} name={row.surface}>
+                        <Frame frames={frames} title={row.title} name={row.surface} drawers={surfaces[row.surface]?.drawers}>
                           <Page />
                         </Frame>
                       </TabProvider>
