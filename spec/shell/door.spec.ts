@@ -27,7 +27,14 @@ const note = action({
   inputs: { text: "string" },
   update: (m: Model, { text }): Update<Model, never> => ({ model: { ...m, note: text }, ...(text && { notices: [`noted ${text}`] }) }),
 })
-const pages = view([bump, note], {
+const grow = action({
+  name: "grow",
+  description: "add six, by a command",
+  subject: {},
+  inputs: {},
+  update: (m: Model): Update<Model, { kind: "grow" }> => ({ model: m, commands: [{ kind: "grow" }] }),
+})
+const pages = view([bump, note, grow], {
   "/": (m) => ({
     title: "Counter",
     n: m.n,
@@ -35,14 +42,18 @@ const pages = view([bump, note], {
     ...(m.n > 5 && { attention: { who: "person", why: "to say whether so many is right" } }),
     bump: bump.bind({}),
     note_: note.bind({}),
+    grow: grow.bind({}),
   }),
 })
-const counter = surface<Model, { kind: "none" }, never>({
+const counter = surface<Model, { kind: "grown" | "none" }, { kind: "grow" }>({
   description: "counts",
   init: () => ({ n: 0, note: "" }),
-  update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m }),
+  update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : msg.kind === "grown" ? { model: { ...m, n: m.n + 6 } } : { model: m }),
   view: pages.view,
-  run: async () => {},
+  run: async (_c, send) => {
+    await new Promise((done) => setTimeout(done, 100))
+    send({ kind: "grown" })
+  },
   failed: () => ({ kind: "none" }),
 })
 const dirs: string[] = []
@@ -89,14 +100,14 @@ it("says a tab's change once in the answer to a call there, and still tells at /
   const { request } = await started()
 
   expect(await request("/?open")).toContain('/ open surface="counter"   open a counter tab')
-  expect(await request("/", { handle: "open", args: { surface: "counter" } })).toContain("tabs.0.facts.n: 0")
-  // The agent's own call: its change is in the answer once, not again under tabs.0.facts.
+  expect(await request("/", { handle: "open", args: { surface: "counter" } })).toContain('\n+ /tabs/1 counter "Counter"\nactions: bump, note')
+  // The agent's own call: its change is in the answer once, not again under the tab's heading.
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
-  // The person acts in the tab; the agent's next call there says its own change, and at / what the person did.
+  // The person acts in the tab; the agent's next call there says its own change and what was heard; what the person
+  // changed at / is told at the next boundary, and the agent's own changes are not, though they were made after.
   await request("/tabs/1", { handle: "note", args: { text: "mine" } }, true)
-  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe(
-    'n: 2 → 3\nnotices:\ncounter /tabs/1: noted mine (by the person)\nchanged by the person:\ntabs.0.facts.note: "" → "mine"'
-  )
+  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe("n: 2 → 3\nnotices:\ncounter /tabs/1: noted mine (by the person)")
+  expect(await request("/_/wait?seconds=0")).toBe('changed by the person:\n/tabs/1 counter "Counter"\nnote: "" → "mine"')
   // A read of the tab shows it whole, so nothing of it is repeated from /.
   await request("/tabs/1", { handle: "bump", args: { by: 1 } }, true)
   expect(await request("/tabs/1")).not.toContain("changed:")
@@ -122,12 +133,10 @@ it("says first at / who a tab needs, tells its notices once as lines by who caus
       "notices:",
       "counter /tabs/1: noted theirs (by the person)",
       "changed by the person:",
-      '+ needs.0.at: "/tabs/1"',
-      '+ needs.0.surface: "counter"',
-      '+ needs.0.who: "person"',
-      '+ needs.0.why: "to say whether so many is right"',
-      "tabs.0.facts.n: 0 → 6",
-      'tabs.0.facts.note: "mine" → "theirs"',
+      "+ need: the person, at /tabs/1 counter, to say whether so many is right",
+      '/tabs/1 counter "Counter"',
+      "n: 0 → 6",
+      'note: "mine" → "theirs"',
     ].join("\n")
   )
   expect((await request("/")).split("\n").slice(0, 3)).toEqual(['title: "baba"', "needs: at\tsurface\twho\twhy", '"/tabs/1"\t"counter"\t"person"\t"to say whether so many is right"'])
@@ -135,4 +144,19 @@ it("says first at / who a tab needs, tells its notices once as lines by who caus
   expect(events).toContain('event: notice\ndata: {"text":"noted mine","at":"/tabs/1","from":"counter","by":"the agent"}')
   expect(events).toContain('event: notice\ndata: {"text":"noted theirs","at":"/tabs/1","from":"counter"}')
   await reader.cancel()
+})
+
+it("ends a wait on who is needed changing, though the surface changed it by itself and said nothing", async () => {
+  const { request } = await started()
+
+  await request("/?open")
+  await request("/", { handle: "open", args: { surface: "counter" } })
+
+  const from = Date.now()
+
+  await request("/tabs/1", { handle: "grow", args: {} })
+  expect(await request("/_/wait?seconds=5")).toBe(
+    ["changed by the surface:", "+ need: the person, at /tabs/1 counter, to say whether so many is right", '/tabs/1 counter "Counter"', "n: 0 → 6"].join("\n")
+  )
+  expect(Date.now() - from).toBeLessThan(4000)
 })

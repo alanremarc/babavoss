@@ -6,7 +6,7 @@ export * from "./surface/index.ts"
 export { baseDir, stateDir, modelPorts } from "./state/state.ts"
 export { readJsonFile, writeJsonFile } from "./state/json-file.ts"
 export { defineRoot, type RootDefinition } from "./root.ts"
-export { flatten, changes } from "./present/present.ts"
+export { diff, tell, whole } from "./present/present.ts"
 export * from "./runtime/index.ts"
 
 export { reach as connect } from "./runtime/reach.ts"

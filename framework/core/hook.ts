@@ -1,10 +1,12 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
-// baba would, its text and the root's answer, the root started; with each message of the person and after each tool call, what changed in
-// an open root since the session was last answered, by who changed it: the person on its page, the surface by itself, or the
-// agent with them, and what was noticed there since, once; what the agent's own calls alone changed or noticed, their answers told it. It steers and informs, and blocks
-// nothing: a hook that finds nothing says nothing, and one that fails is silent. Each hook also tells the open roots whose move
-// it is (turn.ts): a message starts the agent's turn, a tool call is work, a stop ends it, the session's end leaves it unknown;
-// a stop and a session's end add no context and never keep the agent from stopping.
+// baba would, its text and the root's answer, the root started; after each tool call, what was heard in an open root since
+// the agent was last told, one line each: notices, and where the person acted; with each message of the person, that and
+// then what changed at / since the agent was last told it, by who changed it: the person on its page, the surface by itself,
+// or the agent with them. What the agent's own calls alone changed or gave, their answers told it. It steers and informs,
+// and blocks nothing: a hook that finds nothing says nothing, and one that fails is silent.
+// Each hook also tells the open roots whose move it is (turn.ts): a message starts the agent's turn, a tool call is work,
+// a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
+// from stopping.
 import { readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
@@ -49,13 +51,19 @@ async function tellTurn(root: OpenRoot, session: string, event: TurnEvent) {
   })
 }
 
-/** What changed in an open root since the session was last answered; undefined where nothing did, or its runtime is asleep. */
-async function changed(root: OpenRoot, session: string): Promise<string | undefined> {
+/** What each event asks of an open root, and how it is led: after a tool call what was heard alone; with a message, the present's changes too. */
+export const TELLS: Record<string, { ask: string; lead: (of: string) => string }> = {
+  PostToolUse: { ask: "/_/wait?seconds=0&tell=notices", lead: (of) => `Heard in ${of} while you worked:` },
+  UserPromptSubmit: { ask: "/_/wait?seconds=0", lead: (of) => `In ${of}: what was heard, then what changed at / since you were last told it, by who changed it:` },
+}
+
+/** What an open root has to tell at `ask`; undefined where it has nothing, or its runtime is asleep. */
+async function changed(root: OpenRoot, session: string, ask: string): Promise<string | undefined> {
   const endpoint = endpointOf(root)
 
   if (!endpoint) return undefined
 
-  const answer = await fetch(`http://127.0.0.1:${endpoint.port}/_/wait?seconds=0`, {
+  const answer = await fetch(`http://127.0.0.1:${endpoint.port}${ask}`, {
     headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
     signal: AbortSignal.timeout(2000),
   })
@@ -90,12 +98,13 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
     await tell()
   } else if (turn === "ended" || turn === "gone") await tell()
   else {
+    const tells = TELLS[input.hook_event_name ?? ""] ?? TELLS.UserPromptSubmit!
+
     await tell()
     for (const [name, root] of roots()) {
-      const text = await changed(root, session).catch(() => undefined)
-      const of = name === "baba" ? "the root of .baba/" : `the root ${name}`
+      const text = await changed(root, session, tells.ask).catch(() => undefined)
 
-      if (text) lines.push(`What changed in ${of} at / since this session was last answered, by who changed it:\n${text}`)
+      if (text) lines.push(`${tells.lead(name === "baba" ? "the root of .baba/" : `the root ${name}`)}\n${text}`)
     }
   }
 

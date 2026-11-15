@@ -1,39 +1,11 @@
-// The agent's text answers and session memory, with who changed what since it was last answered, and what was noticed since,
-// told once; JSON clients keep their own presentation.
+// The agent's text answers and session memory: what was heard since it was last told, told once with every answer, and the
+// present as it was last told, with who changed what since, told at a boundary; JSON clients keep their own presentation.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
-import { changes, flatten } from "../present/present.ts"
-import { handles, type Args, type Handle, type Json } from "../surface/view.ts"
+import { diff, entries, placeOf, rebase, tell, whole, type Change } from "../present/present.ts"
+import { handles, type Args, type Json } from "../surface/view.ts"
 import type { Cause, Noticed, Running } from "../surface/run.ts"
 import { isPerson } from "../session.ts"
-
-const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle"
-
-/**
- * Relative facts, quoted cells in uniform tables, and each handle as the command that calls it: `path` is where the view was read,
- * which is where its handles are called.
- */
-export function textLines(value: Json | undefined, prefix = "", into = new Map<string, string>(), path = "/", command = "bv root"): Map<string, string> {
-  if (isHandle(value)) {
-    into.set(
-      prefix,
-      `${prefix || value.name}: ${[`${command} ${path} ${value.name}`, ...Object.entries(value.args).map(([k, v]) => `${k}=${JSON.stringify(v)}`), ...Object.entries(value.open).map(([k, v]) => `${k}=${v}`)].join(" ")}   ${value.description}`
-    )
-  } else if (Array.isArray(value) && value.length && value.every((v) => v && typeof v === "object" && !Array.isArray(v) && !isHandle(v))) {
-    const rows = value as Record<string, Json>[]
-    const keys = Object.keys(rows[0]!).filter((k) => !isHandle(rows[0]![k]))
-    const plain = (v: Json | undefined) => v === null || ["string", "number", "boolean"].includes(typeof v)
-
-    if (rows.every((row) => JSON.stringify(Object.keys(row).filter((k) => !isHandle(row[k]))) === JSON.stringify(keys) && keys.every((k) => plain(row[k])))) {
-      into.set(prefix, `${prefix}: ${keys.join("\t")}\n${rows.map((row) => keys.map((k) => JSON.stringify(row[k])).join("\t")).join("\n")}`)
-      for (const [i, row] of rows.entries()) for (const [k, v] of Object.entries(row)) if (isHandle(v)) textLines(v, `${prefix}.${i}.${k}`, into, path, command)
-    } else for (const [i, v] of value.entries()) textLines(v, `${prefix}.${i}`, into, path, command)
-  } else if (value && typeof value === "object" && Object.keys(value).length) {
-    for (const [k, v] of Object.entries(value)) if (v !== undefined) textLines(v, prefix ? `${prefix}.${k}` : k, into, path, command)
-  } else into.set(prefix, `${prefix}: ${flatten(value).get("")}`)
-
-  return into
-}
 
 /** Convert text at the boundary, leaving admission and fixed-argument matching to the surface. */
 export function textArgs(view: Json | undefined, name: string, input: unknown): Args {
@@ -74,36 +46,51 @@ export const noticeLine = (notice: Noticed, who: string) => {
   return `${where && `${where}: `}${notice.text} (by ${BY[who] ?? who})`
 }
 
-/** The key of a line of a diff: `+ key: …`, `key: … → …`, `- key`. */
-const keyOf = (line: string) => /^(?:[+-] )?(.*?)(?:: |$)/.exec(line)![1]!
+/** A view as the agent reads it at `path`: the present whole at /, any other path whole relative to it; handles as commands. */
+export const textView = (view: Json | undefined, path: string, command: string): string[] => whole(view, { command, path })
 
 /**
- * The agent's text session: what it was last told, and since then who changed each fact of /. A change is the person's when
- * their call made it, the agent's when its own did, through the word or a program, and the surface's when a command's event
- * did. What only the agent's own calls changed is not told again: their answers told it. The notices heard since are told
- * with the next answer, once, under `notices:`, but for those of the agent's own calls; they are held in memory alone.
+ * The agent's text session, two records kept apart. What was heard and not yet told: the notices, and that the person acted
+ * in a place, once however often, and not where a notice of theirs already told it; told with every text answer, once. And the present as
+ * the session was last told it, with who changed each fact of / since: told whole at a read of /, and as what changed at a
+ * boundary, the person's message or a wait; a call's answer and a read of any other path leave it, so what the person and
+ * the surfaces change while the agent works waits for the next boundary. A change is the person's when their call made it,
+ * the agent's when its own did, through the word or a program, and the surface's when a command's event did; what only the
+ * agent's own calls changed or gave is never told back, their answers told it. What was heard is held in memory alone.
  */
 export function textSession<M>(running: Running<M>, dir: string, actor: string, command: string) {
   const file = join(dir, "presented", "text.json")
   let before = readJsonFile<Json>(file)
   const root = () => running.read("/", actor)
-  const flat = () => {
+  const read = () => {
     try {
-      return flatten(root())
+      return root()
     } catch {
-      return new Map<string, string>()
+      return undefined
     }
   }
-  let marks = flat()
+  let last = read()
+  let marks = entries(last)
   let version = running.version()
+  // Who changed each fact since the session was last told the present, by the facts' keys by identity, so a row moved keeps its own.
   const by = new Map<string, Set<string>>()
   let heard: string[] = []
-  /** The person's calls that changed / since the agent was last answered. */
+  // The places the person acted in since what was heard was told: each is heard once, and not where their notice was.
+  const acted = new Set<string>()
+  const place = (path: string) => {
+    try {
+      return placeOf(root(), path)
+    } catch {
+      return path
+    }
+  }
+  /** The person's calls that changed / since the present was last told: what waits for the agent's next boundary. */
   let acts = 0
 
   running.notices((notice) => {
     const who = whoOf(notice.cause, actor)!
 
+    if (who === "person" && notice.cause.path !== undefined) acted.add(place(notice.cause.path))
     if (who !== "you") heard.push(noticeLine(notice, who))
   })
 
@@ -111,105 +98,111 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     if (running.version() === version) return
     version = running.version()
 
-    const now = flat()
-    const who = whoOf(running.cause(), actor)
+    const cause = running.cause()
+    const view = read()
+    const now = entries(view)
+    const who = whoOf(cause, actor)
 
     for (const key of new Set([...now.keys(), ...marks.keys()]))
       if (now.get(key) === marks.get(key)) continue
-      // A commit of no known cause, as when code is loaded again: what it changed is told without a name.
-      else if (!who) by.delete(key)
+      // A commit of no known cause, as when code is loaded again, and the agent's own, which its answer told: no one's to tell.
+      else if (!who || who === "you") by.delete(key)
       else by.set(key, (by.get(key) ?? new Set()).add(who))
-    // A call of the person's that changed / waits for the agent's next answer.
+    // A call of the person's that changed / waits for the agent's next boundary.
     if (who === "person" && [...now.keys(), ...marks.keys()].some((key) => now.get(key) !== marks.get(key))) acts += 1
+    // What the agent's own call changed, it knows: the present as told takes it, so only what others change stays to be told.
+    if (who === "you" && before !== undefined) {
+      before = rebase(before, last, view)
+      if (before !== undefined) writeJsonFile(file, before)
+    }
     marks = now
+    last = view
+    // The person's call that gave no notice is still heard, as where they acted: the agent reads there if it matters.
+    const where = who === "person" && cause?.path !== undefined ? place(cause.path) : undefined
+
+    if (where !== undefined && !acted.has(where)) {
+      acted.add(where)
+      heard.push(`the person acted on ${where}`)
+    }
   })
 
-  // Unnamed where the change came before this runtime, or from code loaded again.
-  const whose = (line: string) => by.get(keyOf(line))
-  const others = (line: string) => [...(whose(line) ?? ["unknown"])].some((w) => w !== "you")
-  const grouped = (lines: string[]) => {
-    const groups = new Map<string, string[]>()
+  // Who made a change: everyone who changed a fact it covers. Unnamed where the change came before this runtime, or from code loaded again.
+  const whose = (change: Change) => {
+    const names = new Set<string>()
+    let known = true
 
-    for (const line of lines) {
-      const who = whose(line)
-      const names = who ? ["person", "surface", ...[...who].filter((w) => !BY[w]).sort(), "you"].filter((w) => who.has(w)).map((w) => BY[w] ?? w) : []
-      const head = names.length ? `changed by ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]}:` : "changed:"
+    for (const key of change.keys) {
+      let found = false
 
-      groups.set(head, [...(groups.get(head) ?? []), line])
+      for (const [k, who] of by)
+        if (k === key || k.startsWith(`${key}.`) || k.startsWith(`${key}[`) || k.startsWith(`${key}#`)) {
+          found = true
+          for (const w of who) names.add(w)
+        }
+      if (!found) known = false
     }
 
-    return [...groups].flatMap(([head, group]) => [head, ...group])
+    return known ? names : names.size ? new Set([...names, "unknown"]) : undefined
   }
-  const diff = (old: Json | undefined, now: Json | undefined) => {
-    const lines = changes(flatten(old), flatten(now))
+  const others = (change: Change) => [...(whose(change) ?? ["unknown"])].some((w) => w !== "you")
+  const head = (change: Change) => {
+    const who = whose(change)
+    const order = ["person", "surface", ...[...(who ?? [])].filter((w) => !BY[w] && w !== "unknown").sort(), "you"]
+    const names = who ? order.filter((w) => who.has(w)).map((w) => BY[w] ?? w) : []
 
-    for (const [key, line] of textLines(now, "", new Map(), "/", command)) {
-      if (line.startsWith(`${key}: ${command} `)) {
-        const index = lines.findIndex((v) => v.startsWith(`+ ${key}: `) || v.startsWith(`${key}: `))
-
-        if (index !== -1) lines[index] = `${lines[index]!.startsWith("+ ") ? "+ " : ""}${line}`
-      }
-    }
-
-    return lines
+    return names.length ? `changed by ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]}:` : "changed:"
   }
-  const told = (now: Json | undefined) => {
+  // What changed of / since the session was last told it, that not only the agent's own calls changed; the whole root where it was never told.
+  const since = (now: Json | undefined): Change[] =>
+    before === undefined ? whole(now, { command }).map((line) => ({ line, keys: [], where: "/" })) : diff(before, now, { command }).filter(others)
+  // The present told: what changes is counted from `now`.
+  const seen = (now: Json | undefined) => {
     if (now !== undefined) writeJsonFile(file, now)
     before = now
     by.clear()
-    heard = []
     acts = 0
+  }
+  // What was heard, under `notices:`, and forgotten.
+  const notices = () => {
+    const out = heard.length ? ["notices:", ...heard] : []
+
+    heard = []
+    acted.clear()
+
+    return out
   }
 
   return {
     root,
-    diff,
-    /** How many notices wait to be told. */
+    /** What a call changed at `path`, as its answer says it. */
+    diff: (old: Json | undefined, now: Json | undefined, path: string) => tell(diff(old, now, { command, path })),
+    /** How much was heard and waits to be told. */
     noticed: () => heard.length,
-    /** How many of the person's calls changed / since the agent was last answered: what waits for its next answer. */
+    /** How many of the person's calls changed / since the present was last told: what waits for the agent's next boundary. */
     waiting: () => acts,
-    changed: () => (before === undefined ? [...textLines(root(), "", new Map(), "/", command).values()] : diff(before, root()).filter(others)),
-    /** `path` is where the answer's lines were read or called: what / says of that same path, in the same words, is not said again. */
-    answer(lines: string[], whole = false, shown?: Json, path?: string) {
+    /** What changed at / since the session was last told it, by others than the agent alone. */
+    changed: () => since(root()),
+    /** The session was given / whole, as a program's read of it: what changes is counted from here. */
+    seen: () => seen(root()),
+    /** An answer to a call or a read: its own lines, then what was heard since. The present is left for a boundary. */
+    answer: (lines: string[]) => [...lines, ...notices()].join("\n"),
+    /** What was heard since, alone, as after a tool call. */
+    heard: () => notices().join("\n"),
+    /**
+     * A boundary: what was heard, then what changed at / since the session was last told it, by who; or, `whole`, the lines
+     * are / itself, before what was heard. The present is told from here.
+     */
+    tell(lines: string[] = [], whole = false) {
       const now = root()
-      const flat = flatten(now)
-      // The objects of / that name the answered path under `at`, as key prefixes: a shell's tab, a list's item.
-      const here = path && path !== "/" ? [...flat].filter(([k, v]) => /(^|\.)at$/.test(k) && v === JSON.stringify(path)).map(([k]) => k.slice(0, -2)) : []
-      const parts = (line: string) => {
-        const [, mark = "", key = "", rest = ""] = /^([+-] )?([^:\s]+)(.*)$/.exec(line) ?? []
+      const fresh = before === undefined
+      const changes = whole ? [] : since(now)
+      const said = whole
+        ? [...lines, ...notices()]
+        : [...notices(), ...(fresh && changes.length ? ["changed:", ...changes.map((c) => c.line)] : tell(changes, head))]
 
-        return { mark, key, rest }
-      }
-      const repeated = (line: string) => {
-        const said = parts(line)
-        const prefix = here.find((h) => said.key.startsWith(h))
+      seen(now)
 
-        if (prefix === undefined) return false
-
-        const key = said.key.slice(prefix.length)
-        const same = (k: string) => key === k || key.endsWith(`.${k}`)
-
-        return (
-          lines.some((l) => parts(l).mark === said.mark && parts(l).rest === said.rest && same(parts(l).key)) ||
-          [...flatten(shown)].some(([k, v]) => same(k) && said.mark !== "- " && flat.get(said.key) === v)
-        )
-      }
-      const extra = whole
-        ? []
-        : (before === undefined ? [...textLines(now, "", new Map(), "/", command).values()] : diff(before, now).filter(others)).filter(
-            (line) =>
-              !lines.includes(line) &&
-              !lines.includes(line.replace(/^\+ /, "")) &&
-              ![...flatten(shown)].some(([k, v]) => (line === `+ ${k}: ${v}` || line.startsWith(`${k}: `)) && flat.get(k) === v) &&
-              !repeated(line)
-          )
-
-      const notices = heard.length ? ["notices:", ...heard] : []
-      const said = [...new Set(lines), ...notices, ...(!extra.length ? [] : before === undefined ? ["changed:", ...extra] : grouped(extra))].join("\n")
-
-      told(now)
-
-      return said
+      return said.join("\n")
     },
   }
 }

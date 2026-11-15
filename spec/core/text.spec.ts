@@ -96,7 +96,7 @@ it("1: reads relative facts, quoted table rows and handle declarations; unknown 
 
   expect(response.headers.get("content-type")).toBe("text/plain")
   expect(text).toContain('rows: at\ttext\n"/one"\t"two words"')
-  expect(text).toContain("rows.0.do: bv text /one set id=1 n=number yes=boolean   Set values")
+  expect(text).toContain("do: bv text /one set id=1 n=number yes=boolean   Set values")
   expect(text).toContain("n: 0")
 
   const missing = await request("/missing")
@@ -138,13 +138,15 @@ it("3: converts numbers and booleans, refuses invalid text and ambiguous fixed a
   expect((await request("/two", { handle: "set", args: { ...call.args, id: "2" } })).status).toBe(200)
   expect(await (await request("/one", call)).text()).toBe("nothing changed")
 })
-it("4: reports the person's change once in the agent's next GET", async () => {
+it("4: hears the person's call at once, in one line, and tells what it changed at the next boundary", async () => {
   const { request } = await setup()
 
   await request("/?open")
   await request("/one", { handle: "set", args: { id: 1, n: 3, yes: true } }, false)
-  expect(await (await request("/missing")).text()).toContain("changed by the person:\nn: 0 → 3")
+  expect(await (await request("/missing")).text()).toBe("nothing at /missing\nnotices:\nthe person acted on /one")
   expect(await (await request("/missing")).text()).toBe("nothing at /missing")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person:\nn: 0 → 3\nyes: false → true")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
 })
 it("5: wait listens for a person's call and times out", async () => {
   const { request } = await setup()
@@ -154,7 +156,7 @@ it("5: wait listens for a person's call and times out", async () => {
   const waiting = request("/_/wait?seconds=2")
 
   await request("/one", { handle: "set", args: { id: 1, n: 4, yes: false } }, false)
-  expect(await (await waiting).text()).toContain("changed by the person:\nn: 0 → 4")
+  expect(await (await waiting).text()).toBe("notices:\nthe person acted on /one\nchanged by the person:\nn: 0 → 4")
   expect(await (await request("/_/wait?seconds=0.01")).text()).toBe("nothing changed")
 })
 it("6 and 7: closes, drains and carries the told view into the next runtime", async () => {
@@ -168,17 +170,19 @@ it("6 and 7: closes, drains and carries the told view into the next runtime", as
 
   expect(await (await next.request("/missing")).text()).toBe("nothing at /missing")
 })
-it("7: a session never told receives the whole root, then persists its memory", async () => {
+it("7: a session never told receives the whole root at its first boundary, then persists its memory", async () => {
   const { request, runtime, start } = await setup()
 
-  expect(await (await request("/missing")).text()).toContain("changed:\nn: 0")
+  expect(await (await request("/missing")).text()).toBe("nothing at /missing")
+  expect(await (await request("/_/wait?seconds=0")).text()).toContain("changed:\nn: 0")
   await request("/one", { handle: "set", args: { id: 1, n: 9, yes: true } }, false)
   await runtime.close()
 
   const next = await start()
 
-  expect(await (await next.request("/missing")).text()).toContain("changed:\nn: 0 → 9")
-  expect(await (await next.request("/missing")).text()).toBe("nothing at /missing")
+  // What was heard is held in memory alone; the present told is kept.
+  expect(await (await next.request("/_/wait?seconds=0")).text()).toContain("changed:\nn: 0 → 9")
+  expect(await (await next.request("/_/wait?seconds=0")).text()).toBe("nothing changed")
 })
 it("8: says who changed each fact: the person, the surface by a command's event, or the agent along with them", async () => {
   const { request } = await setup()
@@ -189,7 +193,9 @@ it("8: says who changed each fact: the person, the surface by a command's event,
   await poll(async () => (await request("/", undefined, false)).json()).toMatchObject({ n: 4 })
   await request("/one", { handle: "set", args: { id: 1, n: 4, yes: true } }, false, "agent:S")
   // n was the person's, then the surface's; yes was the agent's alone, through a program, and is not told back to it.
-  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person and the surface:\nn: 0 → 4")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe(
+    "notices:\nthe person acted on /one\nthe person acted on /\nchanged by the person and the surface:\nn: 0 → 4"
+  )
 })
 it("9: what only the agent's own calls changed, through a program, is not told again, and does not end a wait", async () => {
   const { request } = await setup()
@@ -202,17 +208,17 @@ it("9: what only the agent's own calls changed, through a program, is not told a
 
   await request("/one", { handle: "set", args: { id: 1, n: 6, yes: true } }, false, "agent:S")
   await request("/one", { handle: "set", args: { id: 1, n: 6, yes: false } }, false)
-  expect(await (await waiting).text()).toBe("changed by the person:\nyes: true → false")
+  expect(await (await waiting).text()).toBe("notices:\nthe person acted on /one\nchanged by the person:\nyes: true → false")
   // The agent's own change is passed over, not kept: the next answer starts from what is true now.
-  expect(await (await request("/missing")).text()).toBe("nothing at /missing")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
 })
-it("10: where the person changed a fact after the agent did, the person's change is told, with both named", async () => {
+it("10: where the person changed a fact after the agent did, it is told from the agent's value, as the person's", async () => {
   const { request } = await setup()
 
   await request("/?open")
   await request("/one", { handle: "set", args: { id: 1, n: 1, yes: false } }, false, "agent:S")
   await request("/one", { handle: "set", args: { id: 1, n: 2, yes: false } }, false)
-  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person and you:\nn: 0 → 2")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("notices:\nthe person acted on /one\nchanged by the person:\nn: 1 → 2")
 })
 it("11: tells what was noticed once, with the next answer, by who caused it, but not what the agent's own calls gave; a notice ends a wait", async () => {
   const { request } = await setup()
@@ -223,10 +229,59 @@ it("11: tells what was noticed once, with the next answer, by who caused it, but
 
   const waiting = request("/_/wait?seconds=2")
 
+  // A call that gave a notice is told by it alone.
   await request("/", { handle: "say", args: { text: "the person said" } }, false)
   expect(await (await waiting).text()).toBe("notices:\nthe person said (by the person)")
   expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
   await request("/", { handle: "say", args: { text: "again" } }, false)
   await request("/one", { handle: "set", args: { id: 1, n: 7, yes: false } }, false)
-  expect(await (await request("/missing")).text()).toBe("nothing at /missing\nnotices:\nagain (by the person)\nchanged by the person:\nn: 0 → 7")
+  await request("/one", { handle: "set", args: { id: 1, n: 8, yes: false } }, false)
+  // However often the person acted in one place, it is one line; what it changed waits for the boundary.
+  expect(await (await request("/missing")).text()).toBe("nothing at /missing\nnotices:\nagain (by the person)\nthe person acted on /one")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person:\nn: 0 → 8")
+})
+it("12: a read of / is the present whole, by the word or a program's root.read, and what changes is counted from it", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 3, yes: true } }, false)
+
+  const read = await (await request("/")).text()
+
+  // What was heard is told after it, once.
+  expect(read).not.toContain("changed")
+  expect(read).toEndWith("\nnotices:\nthe person acted on /one")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+  await request("/one", { handle: "set", args: { id: 1, n: 4, yes: true } }, false)
+  await request("/", undefined, false, "agent:S")
+  // A program's read is JSON, which carries no notices: they wait for the next text answer.
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("notices:\nthe person acted on /one")
+})
+it("13: during work only what was heard is told: a call's answer, and after a tool call; the present's changes wait for the next boundary", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 1, yes: false } }, false)
+  // The agent's call answers with its own change and what was heard, not with what the person changed at /.
+  expect(await (await request("/one", { handle: "set", args: { n: "1", yes: "true" } })).text()).toBe(
+    "yes: false → true\nnotices:\nthe person acted on /one"
+  )
+  await request("/", { handle: "say", args: { text: "look" } }, false)
+  expect(await (await request("/_/wait?seconds=0&tell=notices")).text()).toBe("notices:\nlook (by the person)")
+  expect(await (await request("/_/wait?seconds=0&tell=notices")).text()).toBe("nothing changed")
+  // At the boundary: the person's change, though heard already; the agent's own, never.
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person:\nn: 0 → 1")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+})
+it("14: a wait ends on what was heard, not on a fact a surface's command changed by itself, which it tells when it ends", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+
+  const from = Date.now()
+  const waiting = request("/_/wait?seconds=0.5")
+
+  await request("/", { handle: "later", args: {} }, false, "agent:S")
+  expect(await (await waiting).text()).toBe("changed by the surface:\nn: 0 → 1")
+  expect(Date.now() - from).toBeGreaterThanOrEqual(450)
 })

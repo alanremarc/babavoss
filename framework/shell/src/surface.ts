@@ -13,7 +13,7 @@
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
-import { action, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
+import { action, handles, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenOf, type Entry, type Seen } from "./activity.ts"
 
 /** `broken`: why the tab's surface could not restore its kept model, which is then kept as it was saved. */
@@ -235,10 +235,10 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
     "/activity/:n": (model, { n }) => activityView(model.activity ?? [], opened(model), Number(n)),
   })
   /**
-   * A tab as the desktop lists it, for the actor: its surface's title and facts at /, the paths whole, and who it needs, which
-   * / gathers and so is not among its facts; or why it is broken.
+   * A tab as the desktop lists it, for the actor: its surface's title, actions and facts at /, the paths whole, and who it
+   * needs, which / gathers and so is not among its facts; or why it is broken.
    */
-  const said = (tab: Tab, actor?: string): { row: { title?: string; facts?: Json; broken?: string }; needs: Attention[] } => {
+  const said = (tab: Tab, actor?: string): { row: { title?: string; actions?: string[]; facts?: Json; broken?: string }; needs: Attention[] } => {
     const seen = shown(tab, "/", actor)
 
     if ("broken" in seen) return { row: { broken: seen.broken }, needs: [] }
@@ -248,7 +248,10 @@ export function shell(surfaces: Record<string, AnySurface>, baba?: string): Surf
 
     if (needs.length) delete rest.attention
 
-    return { row: { ...(typeof title === "string" && { title }), facts: facts(whole(rest, `/tabs/${tab.n}`)) }, needs }
+    // What can be done in the tab, by name: their commands are at the tab's path, so what is possible is known from / alone.
+    const actions = [...new Set(handles(rest).map((h) => h.name))]
+
+    return { row: { ...(typeof title === "string" && { title }), ...(actions.length && { actions }), facts: facts(whole(rest, `/tabs/${tab.n}`)) }, needs }
   }
   /** A call into a tab, or its refusal with why: where its surface cannot show the call's path, or fails on the call itself. */
   const called = (tab: Tab, call: Call, model: ShellModel): Update<ShellModel, ShellCommand> => {

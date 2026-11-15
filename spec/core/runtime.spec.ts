@@ -272,7 +272,7 @@ const listen = async (base: string, token: string) => {
 }
 const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
 
-it("takes changed code in place: the same process, address and token, the state as it was saved, and open pages and a waiting agent told", async () => {
+it("takes changed code in place: the same process, address and token, the state as it was saved, and open pages told, and a waiting agent when its wait ends", async () => {
   const dir = scratch()
   const { runtime, endpoint, base, get, post } = await started(dir)
 
@@ -283,7 +283,8 @@ it("takes changed code in place: the same process, address and token, the state 
   await poll(() => page.heard).toEqual(["change", "turn"])
   await (await get("/?open", { accept: "text/plain" })).text()
 
-  const waiting = get("/_/wait?seconds=20", { accept: "text/plain" }).then((response) => response.text())
+  // Changed code is no notice: it ends no wait, which tells it when it ends.
+  const waiting = get("/_/wait?seconds=1", { accept: "text/plain" }).then((response) => response.text())
   // The code as edited: the same surface, saying one fact more. Its entry runs again in this process, as under bun --hot.
   const edited = defineRoot({
     name: "p",

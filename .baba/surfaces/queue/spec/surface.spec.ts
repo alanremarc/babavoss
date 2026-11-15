@@ -61,7 +61,7 @@ test("what the agent suggests is a draft, which only the person approves into th
   agent.told()
   await person.call("/issues/1", "approve", { n: 1 })
   expect(rows(agent.sees())).toEqual([[1, "backlog", undefined]])
-  expect(agent.told()).toContain('issues.0.status: "draft" → "backlog"')
+  expect(agent.told()).toContain('/issues/1: status "draft" → "backlog"')
   expect(agent.sees()).not.toHaveProperty("attention")
   expect(agent.noticed()).toEqual(["Draft 1, Rename the picker, approved: it joins the backlog"])
 })

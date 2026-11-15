@@ -7,8 +7,11 @@ import type { Call, Notice, Surface } from "./surface.ts"
 
 export type Answer = { outcome: "written"; view: View } | { outcome: "refused"; reason: string }
 export type Saved = { model: unknown }
-/** A commit's cause: an actor's call, or an event reported by a command, which carries the actor that started it. */
-export type Cause = { actor: string; call: boolean }
+/**
+ * A commit's cause: an actor's call, at its path, or an event reported by a command, which carries the actor that started
+ * it. A commit and the notices it gave share one cause.
+ */
+export type Cause = { actor: string; call: boolean; path?: string }
 /** A notice as heard: its text, the path it is about and who says it where given, and the cause of the commit that gave it. */
 export type Noticed = { text: string; at?: string; from?: string; cause: Cause }
 export type Ports<M> = {
@@ -145,6 +148,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
   const event = (e: E, actor: string) => {
     if (stopped) return
 
+    const by: Cause = { actor, call: false }
     let r: ReturnType<typeof surface.update>
 
     try {
@@ -155,13 +159,13 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         return
       }
-      commit(r.model, { actor, call: false })
+      commit(r.model, by)
     } catch (error) {
       fail(error)
 
       return
     }
-    notify(r.notices, { actor, call: false })
+    notify(r.notices, by)
     for (const c of r.commands ?? []) start(c, actor)
     tell()
   }
@@ -255,6 +259,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
         if (typeof admitted === "string") return refused(admitted)
 
         const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now() }
+        const by: Cause = { actor, call: true, path }
         let r: ReturnType<typeof surface.update>
 
         try {
@@ -268,13 +273,13 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         try {
           answer = surface.view(r.model, path, actor) ?? view
-          commit(r.model, { actor, call: true })
+          commit(r.model, by)
         } catch (e) {
           fail(e)
 
           return refused(failure!)
         }
-        notify(r.notices, { actor, call: true })
+        notify(r.notices, by)
         for (const c of r.commands ?? []) start(c, actor)
         tell()
 

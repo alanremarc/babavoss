@@ -148,7 +148,8 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
     expect(started.stdout).toContain('"desk"\t"Keep a greeting the person has agreed to. Use when the greeting is to be changed."')
-    expect(started.stdout).toContain('.babavoss/bin/baba / open surface="desk"')
+    // Two surfaces, one open action: its argument is the table's name column.
+    expect(started.stdout).toContain(".babavoss/bin/baba / open surface=NAME   open a NAME tab")
 
     // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
     const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
@@ -183,12 +184,14 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const opened = hook("UserPromptSubmit").stdout
 
-    expect(opened).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
-    expect(opened).toContain('+ tabs.0.surface: "desk"')
-    expect(opened).toContain('+ tabs.0.facts.how: "Propose a greeting when the person asks for another.')
-    expect(opened).toContain('+ tabs.0.facts.greeting: "hello"')
+    expect(opened).toStartWith(
+      "In the root of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nnotices:\nthe person acted on /\nchanged by the person:\n"
+    )
+    expect(opened).toMatch(/\n\+ \/tabs\/\d+ desk "Greeting"\nactions: propose /)
+    expect(opened).toContain('\nhow: "Propose a greeting when the person asks for another.')
+    expect(opened).toContain('\ngreeting: "hello"')
 
-    const tab = /\+ tabs\.0\.at: "(\/tabs\/\d+)"/.exec(opened)![1]!
+    const tab = /\+ (\/tabs\/\d+) desk/.exec(opened)![1]!
 
     // The tab's own path offers its actions, as the exact commands.
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
@@ -203,9 +206,18 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     // The person proposes there: a call the agent did not make.
     expect((await person(tab, "propose", { text: "good morning" })).status).toBe(200)
 
+    // After a tool call, what was heard alone, one line; what it changed comes with the person's next message.
+    expect(JSON.parse(hook("PostToolUse").stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PostToolUse",
+        additionalContext: `Heard in the root of .baba/ while you worked:\nnotices:\nthe person acted on desk ${tab}`,
+      },
+    })
+
     const told = hook("UserPromptSubmit").stdout
 
-    expect(told).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
+    expect(told).toStartWith("In the root of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
+    expect(told).toContain(`+ need: the person, at ${tab} desk, to accept or decline the proposed greeting`)
     expect(told).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")

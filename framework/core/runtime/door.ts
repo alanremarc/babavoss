@@ -19,7 +19,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Noticed, Running } from "../surface/run.ts"
-import { textArgs, textLines, textSession } from "./text.ts"
+import { textArgs, textSession, textView } from "./text.ts"
+import { NEEDS } from "../present/present.ts"
 import type { Args } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
@@ -249,7 +250,13 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const seconds = Number(url.searchParams.get("seconds") ?? 600)
 
           if (!Number.isFinite(seconds) || seconds < 0) return reply(400, "seconds must be a nonnegative number")
-          if (!text.changed().length && !text.noticed() && said === undefined)
+
+          // `tell=notices`, what was heard alone, as after a tool call; otherwise a boundary: what was heard, then what changed
+          // at /. A wait ends on what was heard, or on who is needed changing: a fact a surface changed by itself waits for the next.
+          const heard = url.searchParams.get("tell") === "notices"
+          const due = () => text.noticed() > 0 || (!heard && text.changed().some((c) => c.keys.some((k) => k === NEEDS || k.startsWith(`${NEEDS}[`))))
+
+          if (!due() && said === undefined)
             await new Promise<void>((done) => {
               const finish = () => {
                 clearTimeout(timer)
@@ -259,7 +266,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
                 done()
               }
               const unsubscribe = running.subscribe(() => {
-                if (text.changed().length || text.noticed()) finish()
+                if (due()) finish()
               })
               const timer = setTimeout(finish, seconds * 1000)
 
@@ -269,15 +276,16 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (res.destroyed) return
 
           // Answered even when nothing is told: what only the agent's own calls changed is passed over, not kept for later.
-          return reply(200, told(text.answer([]) || "nothing changed"))
+          return reply(200, told((heard ? text.heard() : text.tell()) || "nothing changed"))
         }
         if (req.method === "GET") {
           const view = running.read(path, actorText)
           const open = path === "/" && url.searchParams.has("open")
-          const lines = view === undefined ? [`nothing at ${path}`] : [...textLines(view, "", new Map(), path, options.command ?? "bv root").values()]
+          const lines = view === undefined ? [`nothing at ${path}`] : textView(view, path, options.command ?? "bv root")
           const use = open ? [`${options.about?.root} ${options.about?.version}`] : []
 
-          return reply(view === undefined ? 404 : 200, told(text.answer([...use, ...lines], open, view, path)))
+          // A read of / is the present whole, and what changes is counted from it; any other read is its own, and what was heard.
+          return reply(view === undefined ? 404 : 200, told(path === "/" && view !== undefined ? text.tell([...use, ...lines], true) : text.answer(lines)))
         }
         if (req.method === "POST") {
           const call = JSON.parse(await body(req))
@@ -290,9 +298,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const heard = { path, handle: call.handle, args, actor: actorText, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
           for (const stream of streams) stream.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
-          if (answer.outcome === "refused") return reply(409, told(`refused: ${answer.reason}`))
+          if (answer.outcome === "refused") return reply(409, told(text.answer([`refused: ${answer.reason}`])))
 
-          const result = text.answer(text.diff(before, answer.view), false, undefined, path)
+          // What the call changed where it was made, and what was heard; what others changed at / waits for a boundary.
+          const result = text.answer(text.diff(before, answer.view, path))
 
           return reply(200, told(result || "nothing changed"))
         }
@@ -356,6 +365,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     if (req.method === "GET") {
       try {
         const view = running.read(path, actor)
+
+        // A program's read of / gives the agent the present whole, as the word's does.
+        if (path === "/" && actor === actorText && view !== undefined) text.seen()
 
         return view === undefined ? json(res, 404, { error: `nothing at ${path}` }) : json(res, 200, view)
       } catch (error) {
