@@ -67,6 +67,28 @@ test("provision generates the root from the surfaces that are there, from anywhe
   for (const folder of FOLDERS) expect(existsSync(skill(folder, "baba"))).toBe(true)
 })
 
+test("a surface's own stylesheet joins the root's page after the shell's, scoped to its tabs, and one whose braces do not balance is left out", () => {
+  expect(run(["new", "lane-board"]).status).toBe(0)
+  expect(run(["new", "ledger"]).status).toBe(0)
+
+  const styles = () => readFileSync(join(baba, ".root/styles.css"), "utf8")
+
+  expect(styles()).not.toContain("@scope")
+  writeFileSync(join(baba, "surfaces/lane-board/ui/styles.css"), ':scope {\n  --lane-idle: var(--border);\n}\n.lane { content: "}"; }\n')
+  writeFileSync(join(baba, "surfaces/ledger/ui/styles.css"), ".row { color: red; } } body { color: red; }\n")
+  expect(run(["provision"]).status).toBe(0)
+
+  const css = styles()
+
+  expect(css.indexOf('@import "babavoss/shell/ui/styles.css"')).toBeLessThan(css.indexOf("@scope"))
+  expect(css).toContain('@scope ([data-util="lane-board"]) {\n:scope {\n  --lane-idle: var(--border);\n}\n.lane { content: "}"; }\n}\n')
+  expect(css).toContain("surfaces/ledger/ui/styles.css is left out")
+  expect(css).not.toContain("body { color: red; }")
+  for (const name of ["lane-board", "ledger"]) rmSync(join(baba, "surfaces", name), { recursive: true })
+  expect(run(["provision"]).status).toBe(0)
+  expect(styles()).not.toContain("@scope")
+})
+
 test("outside any .baba/, the command says to make one", () => {
   expect(run(["provision"], tmpdir())).toMatchObject({ status: 2, err: expect.stringContaining("baba init") })
   expect(run([])).toMatchObject({ status: 2, err: expect.stringContaining("baba new NAME") })

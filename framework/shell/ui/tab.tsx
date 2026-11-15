@@ -82,7 +82,14 @@ export function TabProvider({ address, util, route, active, navigate, children }
     }
   }, [address, util, route, active, navigate, subscribe, connected])
 
-  return <Context.Provider value={value}>{children}</Context.Provider>
+  // The tab's own element, named by its util: a surface's stylesheet is scoped to it, so it styles its tab alone.
+  return (
+    <Context.Provider value={value}>
+      <div data-util={util} className="flex min-h-0 flex-1 flex-col">
+        {children}
+      </div>
+    </Context.Provider>
+  )
 }
 
 export function useTab(): TabContext {

@@ -29,6 +29,21 @@ The agent does the work through handles. What only the person may decide is an a
 
 The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.ts`; read its code in `framework/` there rather than guessing its interfaces.
 
+## Looks
+
+A page follows the person's palette, light or dark mode, by the shell's theming tokens, so it never needs to know which is chosen.
+
+- Use the kit's components and layouts first: they are already in the design language.
+- Then the tokens, through Tailwind classes; `framework/kit/defaults.css` defines them:
+  - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the frame's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
+  - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px; Tailwind's `text-sm` and up for headings.
+  - font: `font-sans`, `font-heading`, `font-mono`.
+  - radius: `rounded-sm` to `rounded-4xl`, from the palette's `--radius`.
+  - frame: `h-menubar`, `h-bar` and `h-row`, the heights of the menu bar, a bar below it, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
+- Never hard-code a colour, a font or a size where a token fits.
+
+Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The root takes it after the shell's, inside `@scope ([data-util="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` works in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
+
 ## Updating
 
 When an answer says a later babavoss is out, take it with the command it gives, unless the person said not to. Then read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up, adapt the surfaces to what changed, and run their specs. Installing provisions again.
