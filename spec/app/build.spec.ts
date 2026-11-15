@@ -196,7 +196,7 @@ test("the app is made in skills/NAME as real files, with its brief, and installe
   expect(readFileSync(join(app, "SKILL.md"), "utf8")).toContain("name: month-close")
   expect(readFileSync(join(app, "src/app.ts"), "utf8")).toContain('name: "month-close"')
   expect(JSON.parse(readFileSync(join(app, "package.json"), "utf8")).name).toBe("month-close")
-  for (const file of ["SKILL.md", "README.md", "CHANGELOG.md", "package.json", "src/app.ts", "ui/index.html"])
+  for (const file of ["SKILL.md", "README.md", "package.json", "src/app.ts", "ui/index.html"])
     expect(readFileSync(join(app, file), "utf8"), file).not.toMatch(/\bNAME\b|my-app/)
   expect(JSON.parse(readFileSync(join(app, BRIEF_FILE), "utf8"))).toEqual(brief)
   expect(await files.load()).toEqual([{ ...brief, dir: "skills/month-close" }])

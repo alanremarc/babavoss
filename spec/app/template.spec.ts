@@ -69,12 +69,10 @@ test("a door refuses an app that holds packages of its own, and says to remove t
   expect(result.stderr).toBe(`${join(app, "node_modules")} holds packages of the app's own; an app runs on baba's: remove that directory and open the app again\n`)
 })
 
-test("one version, the skill's, with its section in the changelog; an app names no framework and every door is the template's", () => {
+test("an app names no framework, and every door is the template's", () => {
   const read = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")
-  const version = (JSON.parse(read("../../skills/baba/package.json")) as { version: string }).version
   const door = read("../../skills/baba/assets/template/scripts/open.ts")
 
-  expect(read("../../skills/baba/CHANGELOG.md")).toContain(`\n## ${version}\n`)
   for (const app of ["../../skills/baba/assets/template", "../../examples/payments"])
     expect(JSON.parse(read(`${app}/package.json`)) as object).not.toHaveProperty("dependencies")
   for (const app of ["../../examples/payments", "../support/notes"]) expect(read(`${app}/scripts/open.ts`)).toBe(door)

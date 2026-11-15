@@ -1,42 +1,12 @@
 // An app's one entry: serve a session, or register it and pass its request to the standalone client.
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import type { AppDefinition } from "../app.ts"
-import { appVersion, startRuntime } from "../runtime/runtime.ts"
+import { startRuntime } from "../runtime/runtime.ts"
 import { installedIn, SKILL_FOLDERS } from "../skill-folders.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenApp } from "./bv.ts"
-
-/** Whether version `a` comes after `b`, by their numbers; what is not a number counts as 0. */
-const newer = (a: string, b: string) => {
-  const [x, y] = [a, b].map((v) => v.split(".").map((n) => Number.parseInt(n) || 0))
-
-  for (let i = 0; i < 3; i++) if ((x![i] ?? 0) !== (y![i] ?? 0)) return (x![i] ?? 0) > (y![i] ?? 0)
-
-  return false
-}
-
-/**
- * Says once, in a home, that an app opened at a newer version than it last did there, and where its changes are written:
- * an app is updated by replacing its directory, so its door is the first to know and the agent the one to tell the person.
- */
-function versionNote(app: AppDefinition, directory: string) {
-  try {
-    const file = join(process.env.BABAVOSS_HOME!, "versions.json")
-    const seen = load<Record<string, string>>(file) ?? {}
-    const now = appVersion()
-    const was = seen[app.name]
-
-    if (was === now) return
-    if (was && newer(now, was)) {
-      const changelog = join(directory, "CHANGELOG.md")
-
-      console.log(`${app.name} was updated from ${was} to ${now}${existsSync(changelog) ? `; what changed is in ${changelog}: tell the person what matters to them` : ""}`)
-    }
-    save(file, { ...seen, [app.name]: now })
-  } catch {}
-}
 
 export async function main(app: AppDefinition) {
   const args = process.argv.slice(2)
@@ -78,8 +48,6 @@ export async function main(app: AppDefinition) {
     } catch {
       throw new Error("cannot register the app under ~/.babavoss; allow writing the registry (under a sandbox, in the harness settings)")
     }
-
-    versionNote(app, directory)
 
     const bin = process.env.BABAVOSS_BIN ?? (root ? join(process.env.BABAVOSS_HOME, "bin") : dirname(process.execPath))
     const target = join(bin, "bv")

@@ -2,7 +2,7 @@
 import { notesApp } from "../support/notes.ts"
 import { poll } from "../support/poll.ts"
 import { spawnSync } from "node:child_process"
-import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, expect, it } from "bun:test"
@@ -260,21 +260,6 @@ it("opens with the commands and no pointer to a fuller guide: what an agent is p
 
   expect(out).toContain("wait for changes")
   expect(out).not.toContain("help")
-})
-it("says once that an app opened at a newer version than last time, and where its changes are written", () => {
-  const s = setup()
-  const app = join(s.root, "app")
-  const version = (v: string) => writeFileSync(join(app, "package.json"), JSON.stringify({ ...JSON.parse(readFileSync(join(app, "package.json"), "utf8")), version: v }))
-
-  version("0.1.0")
-  expect(s.open().out).not.toContain("was updated")
-  version("0.2.0")
-  writeFileSync(join(app, "CHANGELOG.md"), "# Changelog\n")
-  expect(s.open().out).toContain(`demo was updated from 0.1.0 to 0.2.0; what changed is in ${join(realpathSync(app), "CHANGELOG.md")}`)
-  expect(s.open().out).not.toContain("was updated")
-  // An older version than last time is taken as it is, without a word.
-  version("0.1.5")
-  expect(s.open().out).not.toContain("was updated")
 })
 it("door installs bv", () => {
   const s = setup()
