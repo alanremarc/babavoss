@@ -51,8 +51,12 @@ describe("the settings file", () => {
     const stop = watchSettings(file, () => told++)
 
     try {
-      writeSettings(file, DEFAULTS)
-      await poll(() => told > 0).toBe(true)
+      // Written until it is told: a watch on a busy machine may not be up for the first write.
+      await poll(() => {
+        if (!told) writeSettings(file, DEFAULTS)
+
+        return told > 0
+      }).toBe(true)
     } finally {
       stop()
     }

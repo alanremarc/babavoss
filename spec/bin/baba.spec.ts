@@ -274,7 +274,9 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(started.status).toBe(0)
     expect(started.stdout).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
-    expect(started.stdout).toMatch(/page: http:\/\/127\.0\.0\.1:\d+  a new address: open it in the harness's browser if it has one, and otherwise give it to the person\n/)
+    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.babavoss\/bin\/baba, from the project's directory; /)
+    // Where the command was put is no part of it: the answer names the command.
+    expect(started.stdout).not.toContain("is now a command")
 
     // By hand it is the same runtime, at the same address, wherever in the project it is started from.
     const address = /http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0]
@@ -366,6 +368,17 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(await turn()).toMatchObject({ agent: "idle", waiting: 0 })
     expect(hook("SessionEnd", { reason: "other" })).toMatchObject({ status: 0, stdout: "" })
     expect(await turn()).toMatchObject({ agent: "unknown" })
+
+    // A session resumed or compacted had the words: it is given their reminder, then the present whole.
+    const reminder = readFileSync(join(checkout, "skill/reminder.md"), "utf8").trim()
+
+    for (const source of ["resume", "compact"]) {
+      const again = hook("SessionStart", { source }).stdout
+
+      expect(again).toStartWith(`${reminder}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
+      expect(again).toContain(`${tab} desk "Greeting"`)
+    }
+    expect(hook("SessionStart", { source: "clear" }).stdout).toStartWith(body)
 
     // The agent's own calls, through a program, are not told back to it: the program's answers told it.
     expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)

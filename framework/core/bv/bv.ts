@@ -5,13 +5,15 @@ import { readFileSync, mkdirSync, writeFileSync, renameSync, openSync, closeSync
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
+import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 10
+export const VERSION = 11
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
 export const STALE_HEADER = "babavoss-stale"
+export const CALL_HEADER = "babavoss-call"
 export const ENDPOINT_FILE = "service.json"
 export type OpenRoot = { directory: string; entry: string; state: string; command?: string; page?: string }
 export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".babavoss"), "sessions", session, "open.json")
@@ -236,6 +238,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     }
     let endpoint = await reach()
     let page = `http://127.0.0.1:${endpoint.port}`
+    // One run of the command, one tool call of the agent's: the runtime tells by it whether the hooks speak between calls.
+    const call = randomUUID()
     const refused = (error: unknown) =>
       [error, (error as { cause?: unknown } | undefined)?.cause].some((e) => (e as { code?: string } | undefined)?.code === "ECONNREFUSED")
     const request = async (url: string, method = "GET", body?: string, accept = "text/plain") => {
@@ -243,9 +247,15 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         fetch(`${page}${url}`, {
           method,
           ...(body !== undefined && { body }),
-          headers: { accept, "content-type": "application/json", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: `agent:${session}` },
+          headers: {
+            accept,
+            "content-type": "application/json",
+            [SERVICE_HEADER]: endpoint.token,
+            [ACTOR_HEADER]: `agent:${session}`,
+            [CALL_HEADER]: call,
+          },
         })
-      const until = Date.now() + 15_000
+      const until = Date.now() + 30_000
 
       for (;;) {
         try {
@@ -256,8 +266,11 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
           await response.body?.cancel()
           await sleep(50)
         } catch (error) {
-          // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when its code changes.
-          if (!refused(error) || Date.now() >= until) throw error
+          // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when its
+          // code changes; a read is asked again whatever cut it. A call cut off may have been done.
+          if (method !== "GET" && !refused(error))
+            throw new Error(`the call's outcome is unknown: its runtime ended before answering; read before retrying (${error instanceof Error ? error.message : String(error)})`)
+          if (Date.now() >= until) throw error
         }
         endpoint = await reach()
         page = `http://127.0.0.1:${endpoint.port}`
@@ -267,7 +280,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     const announce = () => {
       if (path === "close") return
       if (root.page !== page) {
-        console.log(`page: ${page}  a new address: open it in the harness's browser if it has one, and otherwise give it to the person`)
+        console.log(`page: ${page}  a new address`)
         root.page = page
         save(file, roots)
       } else if (!path) console.log(`page: ${page}`)
@@ -309,15 +322,12 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     const response = await request(route, method, body)
 
     announce()
-    if (!path)
-      console.log(
-        [
-          `${command} PATH — read; ${command} PATH HANDLE name=value — call (name=@- reads stdin)`,
-          `${command} wait [SECONDS] — wait for the person, then what changed`,
-          `${command} close — close the root`,
-          `${command} -e CODE — run an async program with root`,
-        ].join("\n")
-      )
+    // What the skill does not say: the command's name here, and its words besides a path and a handle.
+    if (!path) {
+      const where = /^[^\s/]+\//.test(command) ? ", from the project's directory" : ""
+
+      console.log(`command: ${command}${where}; ${command} wait [SECONDS] waits for the person, then tells what changed`)
+    }
     if (response.body) for await (const chunk of response.body) process.stdout.write(chunk)
     process.stdout.write("\n")
 

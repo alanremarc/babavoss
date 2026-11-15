@@ -4,8 +4,10 @@
 // A root loaded in place is edited while its runtimes are up. The runtime is woken under bun's hot reload, which runs the
 // entry again in the same process when its code changes: startRuntime then finds the runtime already here and puts the new
 // surface in its place, from the state the old one saved, once nothing is running or after SWAP_WAIT_MS, which cuts what still
-// runs. A wait, a cut and code that does not start are logged and said first in the agent's next answer. The process, its
-// address, its token and its open pages stay. A change in the page's own code is told to the open pages, which load again.
+// runs. What is asked meanwhile is held, holdMs at most, and answered by the new code; a call the old code took no longer
+// as it stopped is given to the new one, since it did nothing. A wait is logged and told to the open pages; a cut and code
+// that does not start are told too, and said first in the agent's next answer. The process, its address, its token and its
+// open pages stay. A change in the page's own code is told to the open pages, which load again.
 // The runtime's own code, the framework's core, is not swapped: when that changed, the runtime here closes and starts again
 // in the same process, at the same address.
 // A hot reload that fails, on code that does not parse or on a file gone for a moment as a checkout leaves it, can leave
@@ -20,7 +22,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, 
 import { dirname, join, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { modelPorts, stateDir } from "../state/state.ts"
-import { run, type Noticed, type Running } from "../surface/run.ts"
+import { run, STOP_MS, type Answer, type Noticed, type Running } from "../surface/run.ts"
 import type { RootDefinition } from "../root.ts"
 import { door } from "./door.ts"
 import { DENIED_EXIT, Denied, lastPort, logFile, ownService } from "./service.ts"
@@ -56,6 +58,8 @@ export const RELOAD_MS = 500
 export const SWAP_WAIT_MS = 30_000
 /** How long an answer waits for hot reload to load a change on disk before the runtime gives way to a new process. */
 export const STALE_MS = 1500
+/** How long a request is held while changed code is loaded: the swap's wait, what it cuts stopping, and a margin. */
+export const holdMs = (swapWaitMs = SWAP_WAIT_MS) => swapWaitMs + STOP_MS + 5000
 
 /** The root's own source and its page, under the root root, above its scripts/open.ts entry. */
 export const sourceDirs = (entry = process.argv[1]!): string[] => {
@@ -144,10 +148,15 @@ const lives = (): Map<string, Live> => {
   return (held[LIVE] ??= new Map())
 }
 
-/** One surface standing for whichever runs now: its subscribers, those who hear its notices and its count of commits go on through a swap. */
+/**
+ * One surface standing for whichever runs now: its subscribers, those who hear its notices and its count of commits go on
+ * through a swap. A call the surface being swapped out refuses because it stopped did nothing: it is made of the next one.
+ */
 function standing<M>(first: Running<M>) {
   let current = first
   let base = 0
+  const retired = new WeakSet<Running<M>>()
+  let next: { promise: Promise<void>; done: () => void } | undefined
   const subscribers = new Set<() => void>()
   const hearers = new Set<(notice: Noticed) => void>()
   const tell = () => {
@@ -160,6 +169,16 @@ function standing<M>(first: Running<M>) {
   let deaf = current.notices(hear)
   const own: Partial<Running<M>> = {
     version: () => base + current.version(),
+    call: async (path, name, args, actor): Promise<Answer> => {
+      const at = current
+      const answer = await at.call(path, name, args, actor)
+
+      if (answer.outcome === "written" || !retired.has(at) || at.failure() !== undefined) return answer
+      // Bounded, for a runtime that closes before the next one is in place.
+      if (current === at && next) await Promise.race([next.promise, sleep(2 * STOP_MS)])
+
+      return current === at ? answer : current.call(path, name, args, actor)
+    },
     subscribe: (fn) => {
       subscribers.add(fn)
 
@@ -175,13 +194,23 @@ function standing<M>(first: Running<M>) {
   return {
     running: new Proxy({} as Running<M>, { get: (_target, key) => Reflect.get(own, key) ?? Reflect.get(current, key) }),
     current: () => current,
-    replace(next: Running<M>) {
+    /** The running surface is being stopped to be replaced: what it refuses as stopped waits for the one in its place. */
+    retire() {
+      let done = () => {}
+      const promise = new Promise<void>((resolve) => (done = resolve))
+
+      retired.add(current)
+      next = { promise, done }
+    },
+    replace(fresh: Running<M>) {
       off()
       deaf()
       base += current.version() + 1
-      current = next
-      off = next.subscribe(tell)
-      deaf = next.notices(hear)
+      current = fresh
+      off = fresh.subscribe(tell)
+      deaf = fresh.notices(hear)
+      next?.done()
+      next = undefined
       tell()
     },
   }
@@ -303,8 +332,6 @@ export async function startRuntime(
   let code = loaded
   let waiting: RootDefinition | undefined
   let swapping: Promise<void> | undefined
-  /** Whether the swap under way waits for running work, which an answer does not wait for: its note says so. */
-  let holding = false
   const bound = options.swapWaitMs ?? SWAP_WAIT_MS
   /** What keeps the code from loading: the running commands by name, and the rest of the work under way as a count. */
   const underWay = () => {
@@ -333,15 +360,16 @@ export async function startRuntime(
               const jobs = `${busy} job${busy === 1 ? "" : "s"}`
 
               waited = true
-              holding = true
               log(`${taking.name}: its code changed; waiting for ${jobs} to finish before loading it, at most ${bound / 1000}s: ${what}`)
-              entrance.note(`${taking.name}: its changed code is not loaded yet; it waits at most ${bound / 1000}s for ${what}`)
+              // The agent's requests are held meanwhile and answered by the new code, so this is the page's alone.
+              entrance.note(`${taking.name}: its changed code is not loaded yet; it waits at most ${bound / 1000}s for ${what}`, false)
             }
             await sleep(RELOAD_MS)
             continue
           }
           if (busy !== 0) cut = underWay()
           waiting = undefined
+          stand.retire()
           await stand.current().stop()
 
           const fresh = started(taking)
@@ -353,7 +381,7 @@ export async function startRuntime(
             await entrance.replace(taking.ui)
             log(`${taking.name}: its code changed and was loaded in place${cut && `, after ${bound / 1000}s, cutting ${cut}`}`)
             if (cut) entrance.note(`${taking.name}: its changed code was loaded after ${bound / 1000}s, cutting what still ran: ${cut}`)
-            else if (waited) entrance.note(`${taking.name}: its changed code was loaded`)
+            else if (waited) entrance.note(`${taking.name}: its changed code was loaded`, false)
           } else {
             // What was saved does not start under the new code: the code before it goes on.
             log(`${taking.name}: its changed code did not start, the code before it goes on: ${failure}`)
@@ -366,7 +394,6 @@ export async function startRuntime(
         }
       } finally {
         swapping = undefined
-        holding = false
       }
     })())
   }
@@ -385,23 +412,32 @@ export async function startRuntime(
     leaving = `${root.name}: ${why}; its runtime started again with the code as it is${cut && `, cutting what still ran: ${cut}`}`
     log(leaving)
     try {
-      writeFileSync(gaveWayFile(dir), leaving)
+      writeFileSync(gaveWayFile(dir), JSON.stringify({ line: leaving, cut: !!cut }))
     } catch {}
 
     return leaving
   }
-  /** Whether what answers is the code on disk: undefined when it is, or once hot reload loads it; else why this runtime gives way. */
+  /**
+   * Whether what answers is the code on disk: undefined when it is, or once hot reload loads it, or once the changed code
+   * loading is loaded, holdMs at most; else why this runtime gives way.
+   */
   const current = async (): Promise<string | undefined> => {
     const until = Date.now() + STALE_MS
     let file: string | undefined
 
     if (leaving) return leaving
-    if (!(await timersFire())) return giveWay("a hot reload of its code failed")
-    while (code && (file = changedFile(code)) !== undefined) {
-      if (Date.now() >= until || !(await timersFire())) return giveWay(`${file} changed and hot reload did not load it`)
-      await pause(50)
+    if (options.successor) {
+      if (!(await timersFire())) return giveWay("a hot reload of its code failed")
+      while (code && (file = changedFile(code)) !== undefined) {
+        if (Date.now() >= until || !(await timersFire())) return giveWay(`${file} changed and hot reload did not load it`)
+        await pause(50)
+      }
     }
-    while (swapping && !holding && Date.now() < until) await pause(20)
+
+    const held = Date.now() + holdMs(bound)
+
+    while (swapping && !leaving && Date.now() < held) await Promise.race([swapping.catch(() => {}), sleep(held - Date.now())])
+    if (swapping && !leaving) entrance.note(`${root.name}: its changed code is still not loaded after ${holdMs(bound) / 1000}s; this answer is from the code before it`)
 
     return leaving
   }
@@ -428,7 +464,7 @@ export async function startRuntime(
     end,
     about,
     command: options.command ?? `bv ${root.name}`,
-    ...(options.successor && { current }),
+    current,
   })
 
   // The address the session last had, so the person's open page finds this instance; any free one where that is taken.
@@ -482,10 +518,15 @@ export async function startRuntime(
       watchers.push(w)
     } catch {}
     try {
-      const told = readFileSync(gaveWayFile(dir), "utf8")
+      const text = readFileSync(gaveWayFile(dir), "utf8")
+      let told = { line: text, cut: true }
 
       rmSync(gaveWayFile(dir), { force: true })
-      entrance.note(told)
+      try {
+        told = JSON.parse(text) as typeof told
+      } catch {}
+      // The agent is told only of what was cut, which it may have to do again; the rest it never sees.
+      entrance.note(told.line, told.cut)
     } catch {}
   }
   for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, end)

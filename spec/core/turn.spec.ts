@@ -1,7 +1,25 @@
 // Whose move it is, from what the hooks tell: a message starts the agent's turn, tool calls are work, a stop ends it, the
-// session's end leaves it unknown, and a working turn unheard for long reads as unknown rather than stuck.
+// session's end leaves it unknown, and a working turn unheard for long reads as unknown rather than stuck; whether the hooks
+// have gone quiet between the agent's calls; and which of baba's words a session's start is given.
 import { expect, test } from "bun:test"
-import { reading, STALE_MS, startTurn, turned, unknownTurn, type Turn, type TurnEvent } from "../../framework/core/runtime/turn.ts"
+import { wordsFor } from "../../framework/core/hook.ts"
+import {
+  answered,
+  hooksHeard,
+  HUSH_MS,
+  hushed,
+  NO_HOOKS_LINE,
+  QUIET_LINE,
+  reading,
+  STALE_MS,
+  startTurn,
+  turned,
+  unheardHooks,
+  unknownTurn,
+  type Hooks,
+  type Turn,
+  type TurnEvent,
+} from "../../framework/core/runtime/turn.ts"
 
 const run = (events: [TurnEvent, number][], from: Turn = unknownTurn(0)) => events.reduce((turn, [event, at]) => turned(turn, event, at), from)
 
@@ -41,4 +59,45 @@ test("a working turn unheard for STALE_MS reads as unknown, unless a call of the
 
 test("no harness can be driven yet, so starting a turn says why it cannot", async () => {
   expect(await startTurn("S", "take them up")).toEqual({ cannot: expect.stringContaining("send the agent a message") })
+})
+
+test("the words a start is given: whole where the agent has not had them, their reminder where it has", () => {
+  expect(wordsFor("startup")).toBe("whole")
+  expect(wordsFor("clear")).toBe("whole")
+  // Codex and Claude Code say the source; where a harness does not, the whole words.
+  expect(wordsFor(undefined)).toBe("whole")
+  expect(wordsFor("compact")).toBe("reminder")
+  expect(wordsFor("resume")).toBe("reminder")
+  expect(wordsFor("fork")).toBe("reminder")
+})
+
+test("the hooks are quiet where a run of the word begins over HUSH_MS after another's last answer with no hook heard since: told once a stretch", () => {
+  const ask = (hooks: Hooks, call: string, at: number) => hushed(hooks, call, at)
+  let hooks = hooksHeard()
+
+  // Each run is followed by its PostToolUse hook: never quiet.
+  hooks = answered(ask(hooks, "a", 0).hooks, "a", 100)
+  hooks = hooksHeard()
+  expect(ask(hooks, "b", 60_000).line).toBeUndefined()
+
+  // One long run, a program or a wait, is one tool call: its own requests never find the hooks quiet.
+  hooks = answered(hooks, "b", 60_000)
+  expect(ask(hooks, "b", 300_000).line).toBeUndefined()
+  // Runs in parallel, or one right after another before its hook is heard, are not silence.
+  expect(ask(hooks, "c", 60_000 + HUSH_MS).line).toBeUndefined()
+
+  // A run long after the last, no hook heard: told once, and the turn takes nothing from calls while it lasts.
+  const quiet = ask(hooks, "c", 60_000 + HUSH_MS + 1)
+
+  expect(quiet.line).toBe(QUIET_LINE)
+  expect(quiet.hooks.told).toBe(true)
+  expect(ask(answered(quiet.hooks, "c", 80_000), "d", 200_000).line).toBeUndefined()
+  // A hook heard ends the stretch: a later silence is told again.
+  expect(ask(answered(hooksHeard(), "e", 0), "f", HUSH_MS + 1).line).toBe(QUIET_LINE)
+
+  // A session that never had hooks, a harness without them, is told so once, and never again.
+  const none = ask(answered(unheardHooks(), "a", 0), "b", HUSH_MS + 1)
+
+  expect(none.line).toBe(NO_HOOKS_LINE)
+  expect(ask(answered(none.hooks, "b", HUSH_MS + 2), "c", 10 * HUSH_MS).line).toBeUndefined()
 })

@@ -233,7 +233,7 @@ test("the fake harness is driven by the story: its stream is what is emitted, an
   ])
 })
 
-test("the plugin the package carries is of its version, has the skill baba's own words, and the framework's hook for each of Claude Code's events", () => {
+test("the plugin the package carries is of its version, has the skill baba's own words and their reminder, and the framework's hook for each of Claude Code's events", () => {
   const read = (path: string) => readFileSync(join(PLUGIN, path), "utf8")
   const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string }
   const hooks = (JSON.parse(read("hooks/hooks.json")) as { hooks: Record<string, { hooks: { type: string; command: string }[] }[]> }).hooks
@@ -242,6 +242,7 @@ test("the plugin the package carries is of its version, has the skill baba's own
   // A release raises the version in package.json by hand; this is raised with it.
   expect(manifest).toMatchObject({ name: "baba", version: VERSION })
   expect(read("SKILL.md")).toBe(readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8"))
+  expect(read("reminder.md")).toBe(readFileSync(new URL("../../skill/reminder.md", import.meta.url), "utf8"))
   expect(Object.keys(hooks)).toEqual([...CLAUDE_EVENTS])
   for (const groups of Object.values(hooks)) expect(groups).toEqual([{ hooks: [{ type: "command", command }] }])
 
@@ -260,7 +261,11 @@ test("the plugin the package carries is of its version, has the skill baba's own
 test("each adapter reads its harness's hook input as the framework's moment, and names what it tells as its harness takes it", () => {
   const input = (event: string, more: Record<string, unknown> = {}) => ({ session_id: "s1", hook_event_name: event, cwd: "/p", ...more })
 
-  expect(claude.hookEvent(input("SessionStart", { source: "compact" }))).toEqual({ session: "s1", event: "SessionStart", moment: "SessionStart", compact: true })
+  expect(claude.hookEvent(input("SessionStart", { source: "compact" }))).toEqual({ session: "s1", event: "SessionStart", moment: "SessionStart", source: "compact" })
+  // A source the framework does not know is none: the start is given the whole words.
+  expect(claude.hookEvent(input("SessionStart", { source: "later" }))).toEqual({ session: "s1", event: "SessionStart", moment: "SessionStart" })
+  expect(codex.hookEvent(input("SessionStart", { source: "resume" }))).toEqual({ session: "s1", event: "SessionStart", moment: "SessionStart", source: "resume" })
+  expect(claude.hookEvent(input("Stop", { source: "resume" }))).toEqual({ session: "s1", event: "Stop", moment: "Stop" })
   expect(claude.hookEvent(input("StopFailure"))).toEqual({ session: "s1", event: "StopFailure", moment: "Stop" })
   expect(claude.hookEvent(input("Notification"))).toBeUndefined()
   expect(claude.hookEvent("not an object")).toBeUndefined()

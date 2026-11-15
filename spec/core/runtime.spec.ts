@@ -371,7 +371,7 @@ describe("changed code while work runs", () => {
     return { dir, lines, opts, read, call, base, token: endpoint.token }
   }
 
-  it("logs once that it waits, tells the agent, and loads once the work ends", async () => {
+  it("logs once that it waits, holds what the agent asks meanwhile, and answers it with the new code once the work ends, saying nothing of it", async () => {
     const { dir, lines, opts, read, call } = await begun()
 
     await read()
@@ -385,19 +385,62 @@ describe("changed code while work runs", () => {
       expect.stringMatching(/^\d{4}-\d\d-\d\dT\S+Z h: its code changed; waiting for 1 job to finish before loading it, at most 30s: hold by agent:S$/),
     ])
 
-    const told = await read()
+    let answered = ""
+    const held = read().then((text) => (answered = text))
 
-    expect(told).toStartWith("h: its changed code is not loaded yet; it waits at most 30s for hold by agent:S\n")
-    expect(told).not.toContain("edited")
-    expect(await read()).not.toContain("not loaded yet")
+    await sleep(RELOAD_MS)
+    expect(answered).toBe("")
     releases.splice(0).forEach((release) => release())
     await again
+    await held
     expect(lines.at(-1)).toMatch(/Z h: its code changed and was loaded in place$/)
+    expect(answered).toContain("edited: true")
+    expect(answered).not.toContain("its changed code")
+  })
 
-    const after = await read()
+  it("gives the new code a call that reached the code before it as that code stopped, which did nothing", async () => {
+    const dir = scratch()
+    const opts = { ...options(dir), log: () => {} }
+    // A session command that takes a while to end once told to, as a watcher closing its files does.
+    const slow = surface<Held, { kind: "released" } | { kind: "failed"; error: string }, { kind: "hold" }>({
+      ...holder,
+      start: () => [{ kind: "hold" }],
+      session: () => true,
+      async run(_c, _send, signal) {
+        await new Promise<void>((done) => signal.addEventListener("abort", () => setTimeout(done, 600)))
+      },
+    })
 
-    expect(after).toStartWith("h: its changed code was loaded\n")
-    expect(after).toContain("edited: true")
+    root(dir)
+
+    const runtime = await startRuntime(defineRoot({ name: "h", ui: join(dir, "ui"), surface: slow }), ["--session", "S"], opts)
+
+    closers.push(() => runtime!.close())
+
+    const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "h")))!
+    // The call is let in before the code changes, and its body arrives while the code before it stops.
+    const answer = new Promise<string>((done) => {
+      const req = httpRequest({ host: "127.0.0.1", port: runtime!.port, path: "/", method: "POST", headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token } }, (res) => {
+        let text = ""
+
+        res.on("data", (chunk) => (text += chunk))
+        res.on("end", () => done(text))
+      })
+
+      req.flushHeaders()
+      setTimeout(() => req.end(JSON.stringify({ handle: "hold", args: {} })), 300)
+    })
+
+    await sleep(100)
+
+    const again = startRuntime(
+      defineRoot({ name: "h", ui: join(dir, "ui"), surface: { ...slow, update: (m) => ({ model: { n: m.n + 10 } }) } }),
+      ["--session", "S"],
+      opts,
+    )
+
+    expect(await answer).toBe("n: 0 → 10")
+    await again
   })
 
   it("tells the open pages what it says of its code, as notices, and a page that connects soon after", async () => {
