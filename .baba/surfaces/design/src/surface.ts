@@ -3,14 +3,14 @@
 // would be given is shown verbatim and measured, with what the person's page showed after each step. They are played again
 // whenever the framework's code, baba's words or the demo change, so what is shown follows the code. The demo's shape is
 // read from its surfaces as they are played. A pin keeps the tellings as a baseline, and each is then shown with its
-// difference from it.
+// difference from it; a scenario that was not there when it was pinned is new. Scenarios are canonical moments, or noise.
 import { watch, type FSWatcher } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { action, surface, view, type Notice, type Update } from "babavoss/core/index.ts"
 import { delta, masked, said, size, sum, together, type Delta, type Size } from "./measure.ts"
 import { play, type Play, type Played } from "./play.ts"
-import { SCENARIOS, type Scenario } from "./scenarios.ts"
+import { GROUPS, SCENARIOS, type Scenario } from "./scenarios.ts"
 import { factsOf, listed, said as factsSaid, shape, type Shape } from "./shape.ts"
 
 /** The tellings as pinned: each scenario's texts, step by step, and when. */
@@ -61,6 +61,10 @@ const unpin = action({
 
 const scenarioOf = (name: string) => SCENARIOS.find((s) => s.name === name)
 const stepSize = (step: Played): Size => sum(step.tellings.map((t) => size(t.text)))
+/** Whether a play has nothing pinned to compare with: there is a pin, and it was taken before the scenario was. */
+const unpinned = (m: Model, play: Play) => m.pin !== undefined && m.pin.texts[play.name] === undefined
+/** A delta in words, or new where the play has nothing pinned. */
+const against = (m: Model, play: Play, d: Delta, texts?: number) => (unpinned(m, play) ? "new" : said(d, texts))
 /** A step's tellings against the pin; none where nothing is pinned. */
 const deltas = (m: Model, play: Play, n: number): Delta[] | undefined => {
   const pinned = m.pin?.texts[play.name]?.[n]
@@ -79,7 +83,7 @@ const playDelta = (m: Model, play: Play) => {
 
   return { delta: together(all), texts: all.filter((d) => d.differs).length }
 }
-const shortWho: Record<Played["who"], string> = { harness: "harness", person: "person", agent: "agent", surface: "surface", root: "root" }
+const shortWho: Record<Played["who"], string> = { harness: "harness", person: "person", agent: "agent", surface: "surface", root: "root", project: "project" }
 
 /** A scenario as / lists it: its size over every step, and how it moved from the pin. */
 const row = (m: Model, scenario: Scenario) => {
@@ -90,10 +94,11 @@ const row = (m: Model, scenario: Scenario) => {
   return {
     at: `/scenarios/${scenario.name}`,
     name: scenario.name,
+    group: GROUPS[scenario.group],
     title: scenario.title,
     steps: scenario.steps.length,
     ...total,
-    ...(moved && { delta: said(moved.delta, moved.texts) }),
+    ...(moved && { delta: against(m, play, moved.delta, moved.texts) }),
     ...(play?.error && { error: play.error }),
   }
 }
@@ -110,7 +115,9 @@ const stepRow = (m: Model, play: Play, n: number) => {
     did: step.did,
     given: step.tellings.length ? step.tellings.map((t) => (t.text ? t.carrier.replace(/ to .*/, "") : `${t.carrier.replace(/ to .*/, "")}: nothing`)).join(" + ") : "nothing",
     ...stepSize(step),
-    ...(moved && { delta: said(moved) }),
+    ...(moved && { delta: against(m, play, moved) }),
+    ...(step.timing && { timing: step.timing }),
+    ...(step.unhooked && { unhooked: true }),
   }
 }
 
@@ -127,12 +134,14 @@ const stepWhole = (m: Model, play: Play, n: number) => {
     n: n + 1,
     who: step.who,
     did: step.did,
+    ...(step.timing && { timing: step.timing }),
+    ...(step.unhooked && { unhooked: "the harness ran no hook for this step" }),
     changed: step.changed.length ? step.changed : "nothing",
     page: pageRow(step, at),
     tellings: step.tellings.map((t, i) => ({
       carrier: t.carrier,
       ...size(t.text),
-      ...(all && { delta: said(all[i]!) }),
+      ...(all && { delta: against(m, play, all[i]!) }),
       text: t.text,
       ...(all?.[i]!.differs && pinned?.[i] !== undefined && { pinned: pinned[i] }),
     })),
@@ -150,10 +159,10 @@ const pageRow = (step: Played, at: string) => {
   }
 }
 
-/** The demo's surfaces as / of /demo lists them: as explored, with the facts the plays saw at / besides, which the surface's own commands bring. */
+/** The demo's surfaces as / of /demo lists them: as explored, with the facts the plays saw at / besides, which the surface's own commands bring; a play that changes the demo's code shows what is not the demo's. */
 const demoView = (m: Model) =>
   m.shape?.map((s) => {
-    const seen = m.plays.flatMap((p) => p.steps.flatMap((step) => (step.page?.tabs ?? []).filter((t) => t.surface === s.name).map((t) => t.view)))
+    const seen = m.plays.filter((p) => !scenarioOf(p.name)?.steps.some((step) => step.kind === "code")).flatMap((p) => p.steps.flatMap((step) => (step.page?.tabs ?? []).filter((t) => t.surface === s.name).map((t) => t.view)))
 
     return {
       ...s,
@@ -183,7 +192,7 @@ function scenarioView(m: Model, name: string) {
     title: scenario.title,
     about: scenario.about,
     ...(play && sum(play.steps.map(stepSize))),
-    ...(moved && { delta: said(moved.delta, moved.texts) }),
+    ...(moved && { delta: against(m, play, moved.delta, moved.texts) }),
     ...(play?.error && { error: play.error }),
     steps: play ? play.steps.map((_, n) => stepRow(m, play, n)) : "not played yet",
   }

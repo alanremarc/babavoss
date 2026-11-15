@@ -3,16 +3,18 @@
 // text the agent would be given comes from the process that gives it in a session: the framework's hook, run as the
 // harness runs it, `baba hook` with the event on standard input; and the word, .babavoss/bin/baba, run as the agent's
 // shell runs it, its output what a tool call shows. The root's runtime is woken by them as in a session, in its own
-// process. The person acts as their page does, by the door, and the build moves as its file is written. Nothing told is
+// process. The person acts as their page does, by the door, and the build moves as its file is written. Where a scenario
+// changes the demo's code, its surfaces are a copy of the demo's, changed there. Each hook is given the input Claude Code
+// gives it, and a harness that no longer runs the hooks gives none. Nothing told is
 // made here: the player only records it, with what changed in the project, read as the person's page reads it, and what
 // that page showed: each open tab's view at /, as the person reads it, and the tab in front.
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Json } from "babavoss/core/index.ts"
-import type { Scenario, Step } from "./scenarios.ts"
+import type { Scenario, Scripted, Step } from "./scenarios.ts"
 
 /** The session the demo runs in, as the harness names it. */
 export const SESSION = "demo"
@@ -23,8 +25,19 @@ export const PROJECT = "<project>"
 
 /** One piece of text the agent is given: what carries it, a hook's event or the answer to a command, and the text, empty where it is given nothing. */
 export type Telling = { carrier: string; text: string }
-/** One step as played: who moved, what they did, what changed in the project as the page sees it, and what the agent was given. */
-export type Played = { who: "harness" | "person" | "agent" | "surface" | "root"; did: string; changed: string[]; tellings: Telling[]; page: Page }
+/**
+ * One step as played: who moved, what they did, what changed in the project as the page sees it, and what the agent was
+ * given. `timing`: why what it was given may differ from play to play; `unhooked`: the harness ran no hook for it.
+ */
+export type Played = {
+  who: "harness" | "person" | "agent" | "surface" | "root" | "project"
+  did: string
+  changed: string[]
+  tellings: Telling[]
+  page: Page
+  timing?: string
+  unhooked?: true
+}
 /** An open tab as the person's page draws it: its path, its surface, and its view at /, the paths in it the tab's own and each handle kept to what a page draws. */
 export type Drawn = { at: string; surface: string; view: Json }
 /**
@@ -39,6 +52,8 @@ const FRAMEWORK = realpathSync(dirname(fileURLToPath(import.meta.resolve("babavo
 const BABA = join(FRAMEWORK, "bin/baba.ts")
 const SURFACES = realpathSync(fileURLToPath(new URL("../demo/surfaces", import.meta.url)))
 const BUILD = "build.txt"
+/** How long a reload is waited for before the step says it was not seen. */
+const RELOAD_MS = 10_000
 
 /** A value as one line of what changed: JSON, cut where long. */
 const short = (v: Json | undefined) => {
@@ -120,12 +135,25 @@ const tabIn = (path: string) => /^\/tabs\/\d+/.exec(path)?.[0]
 export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-design-")))
   const home = join(dir, ".babavoss")
-  const env: Record<string, string> = { ...(process.env as Record<string, string>), BABAVOSS_HOME: home, BABAVOSS_LATEST: "", CLAUDE_CODE_SESSION_ID: SESSION }
+  // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are.
+  const env: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    BABAVOSS_HOME: home,
+    BABAVOSS_LATEST: "",
+    BABAVOSS_SETTINGS: join(dir, "settings.json"),
+    CLAUDE_CODE_SESSION_ID: SESSION,
+  }
 
   for (const key of ["CODEX_THREAD_ID", "BABAVOSS_BIN"]) delete env[key]
   mkdirSync(join(dir, ".baba"), { recursive: true })
   writeFileSync(join(dir, ".baba/package.json"), JSON.stringify({ name: "demo", private: true, type: "module" }))
-  symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
+  if (scenario.steps.some((s) => s.kind === "code")) {
+    // A copy the scenario may change, which finds the framework and the page's packages where the demo's own do.
+    cpSync(SURFACES, join(dir, ".baba/surfaces"), { recursive: true, dereference: true })
+    mkdirSync(join(dir, ".baba/node_modules"))
+    symlinkSync(FRAMEWORK, join(dir, ".baba/node_modules/babavoss"))
+    symlinkSync(join(FRAMEWORK, "node_modules"), join(dir, "node_modules"))
+  } else symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
 
   const own = (text: string) => text.replaceAll(dir, PROJECT).trimEnd()
   const run = async (cmd: string[], stdin?: string) => {
@@ -134,9 +162,14 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 
     return own([out.trimEnd(), err.trimEnd()].filter(Boolean).join("\n"))
   }
-  /** The harness's hook for an event: the context it adds, as the agent is given it. */
-  const hook = async (event: string, extra: Record<string, string> = {}): Promise<Telling> => {
-    const out = await run([process.execPath, BABA, "hook"], JSON.stringify({ session_id: SESSION, hook_event_name: event, ...extra }))
+  /** Whether the harness runs the hooks. */
+  let hooked = true
+  /** The harness's hook for an event, given Claude Code's input for it: the context it adds, as the agent is given it; none where the harness runs no hooks. */
+  const hook = async (event: string, extra: Record<string, Json> = {}): Promise<Telling[]> => {
+    if (!hooked) return []
+
+    const input = { session_id: SESSION, transcript_path: join(home, "transcript.jsonl"), cwd: dir, permission_mode: "default", hook_event_name: event, ...extra }
+    const out = await run([process.execPath, BABA, "hook"], JSON.stringify(input))
     let text = out
 
     if (event === "PostToolUse" && out) {
@@ -145,10 +178,16 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       } catch {}
     }
 
-    return { carrier: `${event} hook`, text }
+    return [{ carrier: `${event} hook`, text }]
   }
-  /** The word, as the agent's shell runs it: what the tool call shows. */
-  const word = async (args: string[]): Promise<Telling> => ({ carrier: `answer to ${[WORD, ...args.map(quoted)].join(" ")}`, text: await run([join(dir, WORD), ...args]) })
+  /** The word, as the agent's shell runs it: what the tool call shows; a program is named by its `-e` alone. */
+  const word = async (args: string[]): Promise<Telling> => ({
+    carrier: `answer to ${args[0] === "-e" ? `${WORD} -e …` : [WORD, ...args.map(quoted)].join(" ")}`,
+    text: await run([join(dir, WORD), ...args]),
+  })
+  /** The PostToolUse hook after a tool call, given the call as Claude Code gives it: a Bash command and what it printed. */
+  const posted = (command: string, answer?: Telling) =>
+    hook("PostToolUse", { tool_name: "Bash", tool_input: { command, description: command }, tool_response: { stdout: answer?.text ?? "", stderr: "", interrupted: false }, tool_use_id: "toolu_demo" })
   const endpoint = () => {
     try {
       return JSON.parse(readFileSync(join(home, "sessions", SESSION, "baba", "service.json"), "utf8")) as { port: number; token: string }
@@ -205,18 +244,36 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
   const steps: Played[] = []
   let before = await look()
 
+  /** The surfaces' descriptions at /, as the page reads them: what a reload of their code is seen by. */
+  const descriptions = async () => JSON.stringify(((await page("/")) as { surfaces?: { name: string; description?: string }[] } | undefined)?.surfaces ?? null)
+  let loaded: string | undefined
   const one = async (step: Step): Promise<Omit<Played, "changed" | "page">> => {
     switch (step.kind) {
       case "start":
-        return { who: "harness", did: `the session ${step.source === "startup" ? "starts" : step.source === "resume" ? "resumes" : "starts again after a compaction"}`, tellings: [await hook("SessionStart", { source: step.source })] }
+        return {
+          who: "harness",
+          did: `the session ${step.source === "startup" ? "starts" : step.source === "resume" ? "resumes" : "starts again after a compaction"}`,
+          tellings: await hook("SessionStart", { source: step.source, ...(step.source !== "compact" && { model: "claude-opus-5-5" }) }),
+        }
       case "say":
-        return { who: "person", did: `says: ${step.text}`, tellings: [await hook("UserPromptSubmit")] }
-      case "read":
-        return { who: "agent", did: `${WORD} ${step.path}`, tellings: [await word([step.path]), await hook("PostToolUse")] }
+        return { who: "person", did: `says: ${step.text}`, tellings: await hook("UserPromptSubmit", { prompt: step.text }) }
+      case "read": {
+        const did = `${WORD} ${step.path}`
+        const answer = await word([step.path])
+
+        return { who: "agent", did, tellings: [answer, ...(await posted(did, answer))] }
+      }
       case "call": {
         const args = [step.path, step.handle, ...argsOf(step.args)]
+        const did = [WORD, ...args.map(quoted)].join(" ")
+        const answer = await word(args)
 
-        return { who: "agent", did: [WORD, ...args.map(quoted)].join(" "), tellings: [await word(args), await hook("PostToolUse")] }
+        return { who: "agent", did, tellings: [answer, ...(await posted(did, answer))] }
+      }
+      case "program": {
+        const answer = await word(["-e", step.code])
+
+        return { who: "agent", did: `${WORD} -e …, a program: ${step.what}`, tellings: [answer, ...(await posted(`${WORD} -e '${step.code}'`, answer))] }
       }
       case "wait":
         waiting = word(["wait", String(step.seconds)])
@@ -229,10 +286,10 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 
         waiting = undefined
 
-        return { who: "agent", did: "the wait ends", tellings: [answer, await hook("PostToolUse")] }
+        return { who: "agent", did: "the wait ends", tellings: [answer, ...(await posted(`${WORD} wait`, answer))] }
       }
       case "tool":
-        return { who: "agent", did: `another tool: ${step.what}`, tellings: [await hook("PostToolUse")] }
+        return { who: "agent", did: `another tool: ${step.what}`, tellings: await posted(step.what) }
       case "act": {
         const answer = (await page(step.path, { handle: step.handle, args: step.args ?? {} })) as { outcome?: string; reason?: string } | undefined
         const args = Object.entries(step.args ?? {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`)
@@ -243,6 +300,64 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
           tellings: [],
         }
       }
+      case "acts": {
+        let refused = 0
+
+        // One after another, as the person clicks them.
+        for (const c of step.calls) if (((await page(c.path, { handle: c.handle, args: c.args ?? {} })) as { outcome?: string } | undefined)?.outcome === "refused") refused++
+
+        return { who: "person", did: `on the page: ${step.what}${refused ? `, ${refused} refused` : ""}`, tellings: [] }
+      }
+      case "look": {
+        const notices = (await page("/activity/notices")) as { entries?: { n: number }[] | string } | undefined
+        const newest = Array.isArray(notices?.entries) ? Math.max(0, ...notices.entries.map((e) => e.n)) : 0
+
+        if (newest) await page("/activity/notices", { handle: step.mark, args: { n: newest } })
+
+        return {
+          who: "person",
+          did: step.mark === "seen" ? "opens their notifications, which marks every notice seen" : "clicks the newest notice's toast, which marks it seen",
+          tellings: [],
+        }
+      }
+      case "go": {
+        const point = ((await page("/")) as { pointed?: { at: string } } | undefined)?.pointed
+
+        front = point && tabIn(point.at)
+
+        return { who: "person", did: `goes where the agent pointed them${point ? `: ${point.at}` : ", but it pointed nowhere"}`, tellings: [] }
+      }
+      case "code": {
+        const file = join(dir, ".baba/surfaces", step.surface, step.file)
+        let text = readFileSync(file, "utf8")
+
+        loaded = await descriptions()
+        for (const [from, to] of step.edits) {
+          if (!text.includes(from)) throw new Error(`${step.surface}/${step.file} has no ${JSON.stringify(from)} to change`)
+          text = text.replace(from, to)
+        }
+        writeFileSync(file, text)
+
+        return { who: "project", did: `the code changes: ${step.what}`, tellings: [] }
+      }
+      case "reloaded": {
+        const until = Date.now() + RELOAD_MS
+
+        while (Date.now() < until && (await descriptions()) === loaded) await sleep(50)
+
+        const seen = (await descriptions()) !== loaded
+
+        return {
+          who: "root",
+          did: seen ? "the root has loaded the changed code" : `the root did not show the changed code within ${RELOAD_MS / 1000}s`,
+          tellings: [],
+          ...(!seen && { timing: "the reload was not seen in time" }),
+        }
+      }
+      case "hooks":
+        hooked = step.on
+
+        return { who: "harness", did: step.on ? "the harness runs the hooks again" : "the harness stops running the hooks", tellings: [] }
       case "build": {
         appendFileSync(join(dir, BUILD), `${step.line}\n`)
 
@@ -258,7 +373,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         return { who: "surface", did: `the build moves by itself: ${step.line}`, tellings: [] }
       }
       case "stop":
-        return { who: "harness", did: "the agent's turn ends", tellings: [await hook("Stop")] }
+        return { who: "harness", did: "the agent's turn ends", tellings: await hook("Stop", { stop_hook_active: false }) }
       case "sleep":
         await run([join(dir, WORD), "close"])
         for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
@@ -268,10 +383,11 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
   }
 
   try {
-    for (const step of scenario.steps) {
+    for (const step of scenario.steps as Scripted[]) {
       if (signal?.aborted) throw new Error("stopped")
 
-      const done = await one(step)
+      const unhooked = !hooked && ["start", "say", "read", "call", "program", "waited", "tool", "stop"].includes(step.kind)
+      const done = { ...(await one(step)), ...(step.timing && { timing: step.timing }), ...(unhooked ? { unhooked: true as const } : {}) }
       const after = await look()
 
       const shown = after.root === undefined ? undefined : shownAfter(step, after.root, after.tabs)

@@ -156,15 +156,16 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
   expect(surfaces.map((s) => s.name)).toEqual(["build", "tasks"])
   expect(tasks.description).toBe((await import("../demo/surfaces/tasks/src/surface.ts")).default.description)
   expect(tasks.views.map((v) => v.path)).toEqual(["/", "/tasks/:n"])
-  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status", "attention"]), actions: [{ name: "add", inputs: ["title"] }] })
+  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status note", "attention"]), actions: [{ name: "add", inputs: ["title"] }] })
   expect(tasks.views[0]!.actions[0]).not.toHaveProperty("notice")
   expect(tasks.views[1]!.actions.map((a) => [a.name, a.ask ?? false, a.notice ?? false])).toEqual([
+    ["annotate", false, false],
     ["done", false, true],
     ["approve", true, true],
     ["reopen", true, true],
   ])
   // What the build's own command brings is in its facts too, as the plays saw it.
-  expect(build).toMatchObject({ description: own.description, itself: ["watch"], views: [{ path: "/", actions: [] }] })
+  expect(build).toMatchObject({ description: own.description, itself: ["watch"], views: [{ path: "/", actions: [{ name: "rerun", inputs: [] }] }] })
   expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why", "attention"]))
 })
 
@@ -194,6 +195,56 @@ test("pinned, every telling is the same as the pin; one that changed shows its d
   await altered.agent.call("/", "unpin", {})
   expect(altered.agent.sees()).not.toHaveProperty("pinned")
   expect((altered.agent.sees() as { scenarios: Row[] }).scenarios.every((r) => r.delta === undefined)).toBe(true)
+})
+
+test("a scenario pinned before it was there is new, and pinning again takes it in", async () => {
+  const texts = Object.fromEntries(plays.filter((p) => p.name !== "quiet").map((p) => [p.name, p.steps.map((s) => s.tellings.map((t) => t.text))]))
+  const { agent, person } = await played({ plays: [], playing: false, pin: { t: 0, texts } })
+  const rows = () => (agent.sees() as { scenarios: Row[] }).scenarios
+
+  expect(rows().find((r) => r.name === "quiet")!.delta).toBe("new")
+  expect((agent.sees("/scenarios/quiet/1") as Step).tellings[0]!.delta).toBe("new")
+  expect(rows().filter((r) => r.name !== "quiet").every((r) => r.delta === "same")).toBe(true)
+  await person.call("/", "pin", {})
+  expect(rows().every((r) => r.delta === "same")).toBe(true)
+})
+
+test("the scenarios are grouped, canonical first, and each noise scenario plays the moves it is about", () => {
+  const groups = SCENARIOS.map((s) => s.group)
+  const steps = (name: string) => plays.find((p) => p.name === name)!.steps
+
+  expect(groups.indexOf("noise")).toBeGreaterThan(0)
+  expect(groups.slice(groups.indexOf("noise")).every((g) => g === "noise")).toBe(true)
+  expect(SCENARIOS.filter((s) => s.group === "noise").map((s) => s.name)).toEqual(["housekeeping", "explained", "elsewhere", "long", "moved", "reload", "quiet"])
+
+  // The person's housekeeping happens on the page and is never a call of the agent's.
+  expect(steps("housekeeping").filter((s) => s.who === "person").map((s) => s.tellings.length)).toEqual(steps("housekeeping").filter((s) => s.who === "person").map((s) => (s.did.startsWith("says") ? 1 : 0)))
+  expect(steps("housekeeping").some((s) => s.page.tabs.some((t) => t.surface === "settings"))).toBe(true)
+  // Twelve tasks are listed, and the approval moves the approved one.
+  const explained = steps("explained").at(-2)!.page.tabs[0]!.view as { tasks: { n: number; status: string }[] }
+
+  expect(explained.tasks).toHaveLength(12)
+  expect(explained.tasks.at(-1)).toMatchObject({ n: 3, status: "done" })
+  // Forty tasks, thirty of them done with a note.
+  const long = (steps("long").at(-1)!.page.tabs[0]!.view as { tasks: { status: string; note?: string }[] }).tasks
+
+  expect([long.length, long.filter((t) => t.status === "done" && t.note).length]).toEqual([40, 30])
+  // The tasks tab is opened again under a new number; the old one is gone.
+  expect(steps("moved").at(-1)!.page.tabs.map((t) => t.at)).toEqual(["/tabs/2"])
+  // The step under the reload is marked as timing-dependent, and the root is seen to load the change.
+  expect(steps("reload").filter((s) => s.timing).length).toBeGreaterThan(0)
+  expect(steps("reload").find((s) => s.who === "root")!.did).toBe("the root has loaded the changed code")
+  // With the hooks stopped, the agent's calls give their answers alone, and the rest nothing.
+  const off = steps("quiet").filter((s) => s.unhooked)
+
+  expect(off.length).toBeGreaterThan(3)
+  expect(off.flatMap((s) => s.tellings.map((t) => t.carrier)).every((c) => c.startsWith("answer to"))).toBe(true)
+  // The break is compacted and resumed as separate steps, each its own SessionStart.
+  expect(steps("break").filter((s) => s.who === "harness" && s.tellings[0]?.carrier === "SessionStart hook").map((s) => s.did)).toEqual([
+    "the session starts",
+    "the session starts again after a compaction",
+    "the session resumes",
+  ])
 })
 
 test("the code changing plays again, and what then tells the agent otherwise is noticed", async () => {

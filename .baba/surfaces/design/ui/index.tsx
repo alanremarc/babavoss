@@ -18,11 +18,11 @@ import { icon as buildIcon } from "../demo/surfaces/build/ui/index.tsx"
 import TasksPage, { type TasksView } from "../demo/surfaces/tasks/ui/view.tsx"
 import { icon as tasksIcon } from "../demo/surfaces/tasks/ui/index.tsx"
 
-type Row = { at: string; name: string; title: string; steps: number; lines?: number; chars?: number; tokens?: number; delta?: string; error?: string }
+type Row = { at: string; name: string; group: string; title: string; steps: number; lines?: number; chars?: number; tokens?: number; delta?: string; error?: string }
 type Root = { scenarios: Row[]; playing?: true; failure?: string; pinned?: string; play?: Handle; pin?: Handle; unpin?: Handle }
 type Demo = { about: string; surfaces: Shape[] | string }
 type Telling = { carrier: string; lines: number; chars: number; tokens: number; delta?: string; text: string; pinned?: string }
-type Step = { at: string; n: number; who: string; did: string; tellings: Telling[]; page: Page }
+type Step = { at: string; n: number; who: string; did: string; timing?: string; unhooked?: string; tellings: Telling[]; page: Page }
 type Timeline = { name: string; title: string; about: string; lines?: number; chars?: number; tokens?: number; delta?: string; error?: string; steps: Step[] }
 type Compare = "text" | "diff" | "side"
 
@@ -71,7 +71,22 @@ function momentOf(step: Step, telling: Telling): { when: string; code?: string; 
 /** What happened at a step with nothing told, in a line. */
 function gapOf(step: Step): ReactNode {
   const acted = /^on the page: (\w+)(.*?) at (\S+?)(, refused: .*)?$/.exec(step.did)
+  const tab = acted && step.page.tabs.find((t) => acted[3]!.startsWith(t.at))
 
+  if (step.unhooked) {
+    const said = /^says: (.*)$/.exec(step.did)?.[1]
+
+    if (said) return <>The person says: «{said}» — no hook runs, so nothing is told</>
+
+    return <>{capital(step.did.replace(/^another tool: /, "the agent's tool call: "))} — no hook runs</>
+  }
+  if (acted && tab?.surface === "settings")
+    return (
+      <>
+        The person changes a setting: <b className="font-medium">{acted[1]}</b>
+        {acted[2]} — the agent is not told yet
+      </>
+    )
   if (acted)
     return (
       <>
@@ -98,12 +113,17 @@ function gapOf(step: Step): ReactNode {
       </>
     )
 
+  if (step.who === "project") return <>{capital(step.did)} on disk — nothing told</>
+  if (step.did.startsWith("the harness")) return <>{capital(step.did)}</>
+
   return <>{capital(step.did)} — nothing told</>
 }
 
 const Delta = ({ delta }: { delta?: string }) =>
   delta === undefined ? null : (
-    <span className={`text-meta tabular-nums whitespace-nowrap ${delta === "same" ? "text-muted-foreground/70" : "text-warning"}`}>{delta === "same" ? "= pin" : delta}</span>
+    <span className={`text-meta tabular-nums whitespace-nowrap ${delta === "same" ? "text-muted-foreground/70" : delta === "new" ? "text-info" : "text-warning"}`}>
+      {delta === "same" ? "= pin" : delta === "new" ? "new: not pinned" : delta}
+    </span>
   )
 
 /** Lines of text, each as it is; wrapped at the block's edge, a wrapped line hangs, or kept whole and scrolled sideways. */
@@ -440,6 +460,11 @@ export default function Design() {
               >
                 <span className={`w-6 shrink-0 pt-2 text-right text-meta tabular-nums ${here ? "text-primary font-medium" : "text-muted-foreground/70"}`}>{step.n}</span>
                 <div className="flex min-w-0 flex-1 flex-col">
+                  {step.timing && (
+                    <Gap>
+                      <span className="text-warning">timing-dependent:</span> {step.timing}
+                    </Gap>
+                  )}
                   {step.tellings.length === 0 && <Gap>{gapOf(step)}</Gap>}
                   {step.tellings.map((telling, i) => {
                     if (!telling.text && telling.carrier === "no wait") return null
@@ -484,8 +509,9 @@ export default function Design() {
           <span>{view?.playing ? "playing…" : "~tokens"}</span>
         </h2>
         <ul className="pt-1 pb-3">
-          {scenarios.map((s) => (
+          {scenarios.map((s, i) => (
             <li key={s.name}>
+              {s.group !== scenarios[i - 1]?.group && <div className="text-muted-foreground/70 px-3 pt-2 pb-0.5 text-badge uppercase">{s.group}</div>}
               <button
                 type="button"
                 onClick={() => navigate(`/scenarios/${s.name}`)}
@@ -494,7 +520,7 @@ export default function Design() {
                 className="hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none"
               >
                 <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                <Delta delta={s.delta === "same" ? undefined : s.delta && s.delta.split(";")[0]} />
+                <Delta delta={s.delta === "same" ? undefined : s.delta === "new" ? "new" : s.delta && s.delta.split(";")[0]} />
                 <span className={`text-meta tabular-nums ${s.error ? "text-destructive" : "text-muted-foreground"}`}>{s.error ? "failed" : (s.tokens?.toLocaleString("en") ?? "–")}</span>
               </button>
             </li>
