@@ -1,5 +1,6 @@
 // The shell page: bundle source on demand; built releases serve files directly. What the page is built from is installed
-// by the root's door before it opens.
+// by the root's door before it opens. A page that does not build leaves the last one that did: it is served until a change
+// builds, through a reload of the root's code too, so a surface's broken page never takes the root's page down.
 import { existsSync, readFileSync, mkdtempSync, readdirSync, statSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import type { IncomingMessage, ServerResponse } from "node:http"
@@ -42,6 +43,29 @@ const built = (dir: string): Awaited<ReturnType<UiHosting>> => ({
   close: async () => {},
 })
 
+/** A page built from source: where, and from what, as the files' times. */
+type Build = { dir: string; stamp: string }
+
+const PAGES = Symbol.for("babavoss.pages")
+/**
+ * The last page that built, by the root's ui directory. Kept on globalThis, which a hot reload leaves as it is, so the
+ * hosting a reload makes serves it while the page does not build; removed when a later one builds, and as the process ends.
+ */
+const lastBuilt = (): Map<string, Build> => {
+  const held = globalThis as { [PAGES]?: Map<string, Build> }
+
+  if (!held[PAGES]) {
+    const pages = new Map<string, Build>()
+
+    held[PAGES] = pages
+    process.once("exit", () => {
+      for (const page of pages.values()) rmSync(page.dir, { recursive: true, force: true })
+    })
+  }
+
+  return held[PAGES]
+}
+
 /** Serve a built release, or rebuild source on the next request after an edit. */
 export function shellUi(dir: string | URL): UiHosting {
   const root = typeof dir === "string" ? resolve(dir) : fileURLToPath(dir)
@@ -49,9 +73,9 @@ export function shellUi(dir: string | URL): UiHosting {
   return async () => {
     if (existsSync(join(root, BUILT, "index.html"))) return built(join(root, BUILT))
 
-    const out = mkdtempSync(join(tmpdir(), "babavoss-ui-"))
-    const hosted = built(out)
-    let stamp = ""
+    const pages = lastBuilt()
+    /** The files' times a build last failed at, and why: not built again until they change. */
+    let failed: { stamp: string; why: string } | undefined
     let pending: Promise<void> | undefined
     const changed = (dir: string): string =>
       readdirSync(dir, { withFileTypes: true })
@@ -67,37 +91,57 @@ export function shellUi(dir: string | URL): UiHosting {
 
       const next = changed(dirname(root)) + changed(frameworkRoot)
 
-      if (next === stamp) return
-      // A fresh process: it sees packages installed after this runtime started.
+      if (pages.get(root)?.stamp === next || failed?.stamp === next) return
+      // A fresh process: it sees packages installed after this runtime started. Built beside the page served, which it
+      // takes the place of only once it built.
       pending = (async () => {
+        const out = mkdtempSync(join(tmpdir(), "babavoss-ui-"))
         const build = Bun.spawn([process.execPath, join(here, "../scripts/build.ts"), root, out], { stdout: "pipe", stderr: "pipe" })
         const [stdout, stderr, code] = await Promise.all([new Response(build.stdout).text(), new Response(build.stderr).text(), build.exited])
 
-        if (code !== 0) throw new Error([stdout, stderr].join("\n").trim())
-        stamp = next
+        if (code !== 0) {
+          rmSync(out, { recursive: true, force: true })
+          failed = { stamp: next, why: [stdout, stderr].join("\n").trim() }
+          if (pages.has(root)) console.error(`the page does not build, and the last one that did is served: ${failed.why}`)
+
+          return
+        }
+
+        const before = pages.get(root)
+
+        failed = undefined
+        pages.set(root, { dir: out, stamp: next })
+        if (before) rmSync(before.dir, { recursive: true, force: true })
       })().finally(() => {
         pending = undefined
       })
       await pending
     }
 
-    return {
-      page: async (path) => {
-        await ready()
+    /** The page served: the last that built, or why there is none. */
+    const hosted = async () => {
+      await ready()
 
-        return hosted.page(path)
-      },
+      const page = pages.get(root)
+
+      if (!page) throw new Error(failed?.why ?? "the page was not built")
+
+      return built(page.dir)
+    }
+
+    return {
+      page: async (path) => (await hosted()).page(path),
       assets(req, res, next) {
-        void ready()
-          .then(() => hosted.assets(req, res, next))
+        void hosted()
+          .then((page) => page.assets(req, res, next))
           .catch((error: unknown) => {
             res.writeHead(500)
             res.end(String(error))
           })
       },
+      // The page built stays for the hosting that takes this one's place, as a reload of the root's code makes.
       close: async () => {
         await pending
-        rmSync(out, { recursive: true, force: true })
       },
     }
   }

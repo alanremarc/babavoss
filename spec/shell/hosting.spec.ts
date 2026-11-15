@@ -150,3 +150,32 @@ it("refuses to build a shell page that imports no stylesheet, and says what to i
 
   expect(buildUi(join(dir, "ui"), join(dir, "out"))).rejects.toThrow("the page has no stylesheet")
 })
+
+it("serves the last page that built while the page does not build, through a reload of the root's code too, and the next that builds", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-broken-")))
+
+  dirs.push(dir)
+  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
+
+  const main = join(dir, "ui/main.tsx")
+  const mended = readFileSync(main, "utf8")
+  const first = await shellUi(join(dir, "ui"))({} as Server)
+  const good = await first.page("/")
+
+  appendFileSync(main, "\nexport const broken = (\n")
+  expect(await first.page("/")).toBe(good!)
+
+  // The root's code loaded again makes a new hosting: it has the page that built, not none.
+  await first.close()
+
+  const reloaded = await shellUi(join(dir, "ui"))({} as Server)
+
+  expect(await reloaded.page("/")).toBe(good!)
+  writeFileSync(main, `${mended}\nconsole.log("mended")\n`)
+
+  const next = await reloaded.page("/")
+
+  expect(next).not.toBe(good!)
+  await reloaded.close()
+}, 30_000)
