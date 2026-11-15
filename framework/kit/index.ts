@@ -2,7 +2,7 @@
 export { Workbench, type WorkbenchTool, type WorkbenchFilter, type WorkbenchDocument, type WorkbenchDocuments } from "./layouts/workbench.tsx"
 export { Plain } from "./layouts/plain.tsx"
 export { Welcome, type Scope, type Scopes } from "./layouts/welcome.tsx"
-export { MenuBar, type Menu, type MenuItem } from "./layouts/menu.tsx"
+export { MenuBar, MenuTriggers, useMenus, MenuHostContext, type Menu, type MenuItem, type MenuHost } from "./layouts/menu.tsx"
 export {
   WorkbenchButton,
   WorkbenchToolbar,

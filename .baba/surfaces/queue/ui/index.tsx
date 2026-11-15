@@ -5,7 +5,7 @@ import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCirc
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Plain } from "babavoss/kit/index.ts"
+import { Button, Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 
 type Status = "draft" | "backlog" | "lane" | "done"
@@ -69,7 +69,7 @@ export default function Queue() {
   }
 
   return (
-    <Plain label="Queue">
+    <>
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col overflow-auto">
           {current && selected?.about !== undefined ? (
@@ -159,6 +159,6 @@ export default function Queue() {
           })}
         </aside>
       </div>
-    </Plain>
+    </>
   )
 }

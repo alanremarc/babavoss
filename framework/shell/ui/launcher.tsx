@@ -23,6 +23,8 @@ type Choices = {
   launch: (surface: SurfaceEntry) => void
   select: (at: string) => void
   settings: () => void
+  /** The open tab's own commands, first; `done` closes the palette. */
+  lead?: (done: () => void) => ReactNode
 }
 
 const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -34,18 +36,21 @@ const about = (key: string): string | undefined => document.querySelector<HTMLMe
 const Glyph = ({ children }: { children: ReactNode }) => <span className="grid size-[22px] shrink-0 place-items-center">{children}</span>
 
 /** The palette: what can be opened, the open tabs to switch to, and settings; typing filters all three. */
-function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, select, settings, search, setSearch, list }: Choices & {
+function Palette({ surfaces, icons, tabs, active, disabled, loading, launch, select, settings, lead, done = () => {}, search, setSearch, list }: Choices & {
   search: string
   setSearch: (search: string) => void
   list?: string
+  done?: () => void
 }) {
   const openable = surfaces
+  const prompt = active.startsWith("/") ? "Run, open or switch to…" : "Open or switch to…"
 
   return (
     <Command loop>
-      <CommandInput autoFocus aria-label="Open or switch to" placeholder="Open or switch to…" value={search} onValueChange={setSearch} />
+      <CommandInput autoFocus aria-label={prompt.slice(0, -1)} placeholder={prompt} value={search} onValueChange={setSearch} />
       <CommandList className={list}>
         <CommandEmpty>{loading ? "Loading…" : "Nothing found."}</CommandEmpty>
+        {lead?.(done)}
         {openable.length > 0 && (
           <CommandGroup heading="Open">
             {openable.map((u) => {
@@ -171,6 +176,7 @@ export function LauncherButton({ launch, select, settings, ...choices }: Choices
           launch={choose(launch)}
           select={choose(select)}
           settings={choose(settings)}
+          done={choose(() => {})}
           search={search}
           setSearch={setSearch}
           list="max-h-[min(24rem,60dvh)]"
