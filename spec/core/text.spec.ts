@@ -5,9 +5,10 @@ import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
 import { defineRoot } from "../../framework/core/root.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
-import { endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { handle } from "../../framework/core/surface/view.ts"
+import { poll } from "../support/poll.ts"
 
 const dirs: string[] = []
 const closes: (() => Promise<void>)[] = []
@@ -23,19 +24,26 @@ const setup = async () => {
       description: "text fixture",
       init: () => ({ n: 0, yes: false }),
       update: (m: { n: number; yes: boolean }, msg) =>
-        msg.kind === "call" ? { model: { n: msg.args.n as number, yes: msg.args.yes as boolean } } : { model: m },
+        msg.kind === "call"
+          ? msg.handle === "later"
+            ? { model: m, commands: [{ kind: "count" }] }
+            : { model: { n: msg.args.n as number, yes: msg.args.yes as boolean } }
+          : msg.kind === "counted"
+            ? { model: { ...m, n: m.n + 1 } }
+            : { model: m },
       view: (m, path) =>
         path === "/" || path === "/one" || path === "/two"
           ? {
               n: m.n,
               yes: m.yes,
+              later: handle("later", "Count one, by a command"),
               rows: [
                 { at: "/one", text: "two words", do: handle("set", "Set values", { id: 1 }, { n: "number", yes: "boolean" }) },
                 ...(path === "/two" ? [{ at: "/two", text: "other", do: handle("set", "Set values", { id: 2 }, { n: "number", yes: "boolean" }) }] : []),
               ],
             }
           : undefined,
-      run: async () => {},
+      run: async (_command: { kind: string }, send: (event: { kind: string }) => void) => send({ kind: "counted" }),
       failed: () => ({ kind: "failed" }),
     },
   })
@@ -59,10 +67,11 @@ const setup = async () => {
     closes.push(() => runtime.close())
 
     const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "text")))!
-    const request = async (path: string, call?: unknown, plain = true) =>
+    // Plain text is the agent's word; JSON is the page, the person's, unless an actor is named, as a program's calls name the agent.
+    const request = async (path: string, call?: unknown, plain = true, actor?: string) =>
       fetch(`http://127.0.0.1:${runtime.port}${path}`, {
         method: call ? "POST" : "GET",
-        headers: { accept: plain ? "text/plain" : "application/json", [SERVICE_HEADER]: endpoint.token },
+        headers: { accept: plain ? "text/plain" : "application/json", [SERVICE_HEADER]: endpoint.token, ...(actor && { [ACTOR_HEADER]: actor }) },
         ...(call ? { body: JSON.stringify(call) } : {}),
       })
 
@@ -131,7 +140,7 @@ it("4: reports the person's change once in the agent's next GET", async () => {
 
   await request("/?open")
   await request("/one", { handle: "set", args: { id: 1, n: 3, yes: true } }, false)
-  expect(await (await request("/missing")).text()).toContain("changed:\nn: 0 → 3")
+  expect(await (await request("/missing")).text()).toContain("changed by the person:\nn: 0 → 3")
   expect(await (await request("/missing")).text()).toBe("nothing at /missing")
 })
 it("5: wait listens for a person's call and times out", async () => {
@@ -142,7 +151,7 @@ it("5: wait listens for a person's call and times out", async () => {
   const waiting = request("/_/wait?seconds=2")
 
   await request("/one", { handle: "set", args: { id: 1, n: 4, yes: false } }, false)
-  expect(await (await waiting).text()).toContain("changed:\nn: 0 → 4")
+  expect(await (await waiting).text()).toContain("changed by the person:\nn: 0 → 4")
   expect(await (await request("/_/wait?seconds=0.01")).text()).toBe("nothing changed")
 })
 it("6 and 7: closes, drains and carries the told view into the next runtime", async () => {
@@ -167,4 +176,38 @@ it("7: a session never told receives the whole root, then persists its memory", 
 
   expect(await (await next.request("/missing")).text()).toContain("changed:\nn: 0 → 9")
   expect(await (await next.request("/missing")).text()).toBe("nothing at /missing")
+})
+it("8: says who changed each fact: the person, the surface by a command's event, or the agent along with them", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 3, yes: false } }, false)
+  await request("/", { handle: "later", args: {} }, false)
+  await poll(async () => (await request("/", undefined, false)).json()).toMatchObject({ n: 4 })
+  await request("/one", { handle: "set", args: { id: 1, n: 4, yes: true } }, false, "agent:S")
+  // n was the person's, then the surface's; yes was the agent's alone, through a program, and is not told back to it.
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person and the surface:\nn: 0 → 4")
+})
+it("9: what only the agent's own calls changed, through a program, is not told again, and does not end a wait", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 5, yes: true } }, false, "agent:S")
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("nothing changed")
+
+  const waiting = request("/_/wait?seconds=2")
+
+  await request("/one", { handle: "set", args: { id: 1, n: 6, yes: true } }, false, "agent:S")
+  await request("/one", { handle: "set", args: { id: 1, n: 6, yes: false } }, false)
+  expect(await (await waiting).text()).toBe("changed by the person:\nyes: true → false")
+  // The agent's own change is passed over, not kept: the next answer starts from what is true now.
+  expect(await (await request("/missing")).text()).toBe("nothing at /missing")
+})
+it("10: where the person changed a fact after the agent did, the person's change is told, with both named", async () => {
+  const { request } = await setup()
+
+  await request("/?open")
+  await request("/one", { handle: "set", args: { id: 1, n: 1, yes: false } }, false, "agent:S")
+  await request("/one", { handle: "set", args: { id: 1, n: 2, yes: false } }, false)
+  expect(await (await request("/_/wait?seconds=0")).text()).toBe("changed by the person and you:\nn: 0 → 2")
 })

@@ -199,7 +199,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
             })
           if (res.destroyed) return
 
-          return reply(200, told(text.changed().length ? text.answer([]) : "nothing changed"))
+          // Answered even when nothing is told: what only the agent's own calls changed is passed over, not kept for later.
+          return reply(200, told(text.answer([]) || "nothing changed"))
         }
         if (req.method === "GET") {
           const view = running.read(path, actorText)

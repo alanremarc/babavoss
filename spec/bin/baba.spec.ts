@@ -140,7 +140,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const opened = hook("UserPromptSubmit").stdout
 
-    expect(opened).toStartWith("The root of .baba/ changed since this session last read it; the person may have acted on the page:\n")
+    expect(opened).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
     expect(opened).toContain('+ tabs.1.util: "desk"')
     expect(opened).toContain('+ tabs.1.facts.how: "Propose a greeting when the person asks for another.')
     expect(opened).toContain('+ tabs.1.facts.greeting: "hello"')
@@ -162,12 +162,16 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const told = hook("UserPromptSubmit").stdout
 
-    expect(told).toStartWith("The root of .baba/ changed since this session last read it; the person may have acted on the page:\n")
+    expect(told).toStartWith("What changed in the root of .baba/ at / since this session was last answered, by who changed it:\nchanged by the person:\n")
     expect(told).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")
     expect(hook("PostToolUse").stdout).toBe("")
     expect(hook("Stop")).toMatchObject({ status: 0, stdout: "" })
+
+    // The agent's own calls, through a program, are not told back to it: the program's answers told it.
+    expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)
+    expect(hook("PostToolUse").stdout).toBe("")
 
     // Fully from the surface: what its code says it is for is what the picker lists, as soon as the code says it; and a
     // surface made by hand is in the root as soon as it is on disk. Nothing is provisioned for either.
