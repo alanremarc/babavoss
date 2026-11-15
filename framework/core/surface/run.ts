@@ -254,7 +254,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         if (typeof admitted === "string") return refused(admitted)
 
-        const call: Call = { kind: "call", path, handle: name, args, actor }
+        const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now() }
         let r: ReturnType<typeof surface.update>
 
         try {
