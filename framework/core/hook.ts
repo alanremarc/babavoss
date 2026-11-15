@@ -6,24 +6,23 @@
 // and blocks nothing: a hook that finds nothing says nothing, and one that fails is silent.
 // Each hook also tells the open roots whose move it is (turn.ts): a message starts the agent's turn, a tool call is work,
 // a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
-// from stopping.
+// from stopping. Nothing here knows a harness: its adapter reads the hook's input as the framework's moment, and prints what
+// is told as the harness takes it (harness/).
 import { readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
+import type { HookEvent } from "./harness/harness.ts"
 import type { TurnEvent } from "./runtime/turn.ts"
 
-/** What a harness gives a hook on standard input; Claude Code's names. */
-export type HookInput = { session_id?: string; hook_event_name?: string; source?: string }
 type Endpoint = { port: number; token: string; dir: string }
 
-/** What each hook's event tells of the turn. An API error ends a turn as a stop does. */
-const TURNS: Record<string, TurnEvent> = { UserPromptSubmit: "started", PostToolUse: "working", Stop: "ended", StopFailure: "ended", SessionEnd: "gone" }
+/** What each moment tells of the turn. */
+const TURNS: Record<string, TurnEvent> = { UserPromptSubmit: "started", PostToolUse: "working", Stop: "ended", SessionEnd: "gone" }
 
-/** What a hook's event tells of the turn: a session that starts or resumes waits for the person; one compacted may be mid-turn, so it says nothing. */
-export const turnOf = (input: HookInput): TurnEvent | undefined =>
-  TURNS[input.hook_event_name ?? ""] ?? (input.hook_event_name === "SessionStart" && input.source !== "compact" ? "ended" : undefined)
+/** What a moment tells of the turn: a session that starts or resumes waits for the person; one compacted may be mid-turn, so it says nothing. */
+export const turnOf = (event: HookEvent): TurnEvent | undefined => TURNS[event.moment] ?? (event.moment === "SessionStart" && !event.compact ? "ended" : undefined)
 
 const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
 const SKILL = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
@@ -73,8 +72,8 @@ async function changed(root: OpenRoot, session: string, ask: string): Promise<st
 }
 
 /** The context a hook adds for the agent, for the roots of `baba`, a .baba/ directory; undefined when there is none to add. */
-export async function hookContext(input: HookInput, baba: string): Promise<string | undefined> {
-  const session = input.session_id
+export async function hookContext(input: HookEvent, baba: string): Promise<string | undefined> {
+  const session = input.session
 
   if (!session || !/^[A-Za-z0-9._-]+$/.test(session)) return undefined
   process.env.BABAVOSS_HOME ??= homeOf(baba)
@@ -87,7 +86,7 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
     if (turn) await Promise.all(roots().map(([, root]) => tellTurn(root, session, turn).catch(() => {})))
   }
 
-  if (input.hook_event_name === "SessionStart") {
+  if (input.moment === "SessionStart") {
     // What invoking the skill baba gives, given unasked: its text, and the shell started, which the skill would have the
     // agent do. The shell's answer is its version, its page's address, the surfaces and the tabs open in this session.
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
@@ -98,7 +97,7 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
     await tell()
   } else if (turn === "ended" || turn === "gone") await tell()
   else {
-    const tells = TELLS[input.hook_event_name ?? ""] ?? TELLS.UserPromptSubmit!
+    const tells = TELLS[input.moment] ?? TELLS.UserPromptSubmit!
 
     await tell()
     for (const [name, root] of roots()) {
@@ -110,7 +109,3 @@ export async function hookContext(input: HookInput, baba: string): Promise<strin
 
   return lines.length ? lines.join("\n\n") : undefined
 }
-
-/** A hook's standard output: plain text is context at a session's start and with a prompt; after a tool call it is named as such. */
-export const hookOutput = (input: HookInput, context: string): string =>
-  input.hook_event_name === "PostToolUse" ? JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: context } }) : context

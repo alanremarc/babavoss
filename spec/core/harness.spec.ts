@@ -1,10 +1,13 @@
 // The harness layer: Claude Code's stream lines, as recorded from a real session and trimmed, read as the framework's
-// events; a session's home given the person's login by a link, and the link taken back; the fake that stories drive.
+// events; a session's home given the person's login by a link, and the link taken back, and the project trusted there;
+// the plugin the package carries for Claude Code; each adapter's hook face; the fake that stories drive.
 import { expect, test } from "bun:test"
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { claudeCode, claudeEvents, cleanEnv, fakeHarness, type HarnessEvent } from "../../framework/core/harness/index.ts"
+import { ADAPTERS, claude, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, codex, fakeHarness, PLUGIN, trust, type HarnessEvent } from "../../framework/core/harness/index.ts"
+import { VERSION } from "../../framework/core/update.ts"
 import type { Json } from "../../framework/core/index.ts"
 
 const SESSION = "11111111-2222-4333-8444-555555555555"
@@ -228,4 +231,62 @@ test("the fake harness is driven by the story: its stream is what is emitted, an
     { kind: "message", text: "hi" },
     { kind: "ended", code: 143, stderr: "" },
   ])
+})
+
+test("the plugin the package carries is of its version, has the skill baba's own words, and the framework's hook for each of Claude Code's events", () => {
+  const read = (path: string) => readFileSync(join(PLUGIN, path), "utf8")
+  const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string }
+  const hooks = (JSON.parse(read("hooks/hooks.json")) as { hooks: Record<string, { hooks: { type: string; command: string }[] }[]> }).hooks
+  const command = 'bun "$(cd -P "${CLAUDE_PLUGIN_ROOT}/../.." && pwd)/bin/baba.ts" hook claude 2>/dev/null || true'
+
+  // A release raises the version in package.json by hand; this is raised with it.
+  expect(manifest).toMatchObject({ name: "baba", version: VERSION })
+  expect(read("SKILL.md")).toBe(readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8"))
+  expect(Object.keys(hooks)).toEqual([...CLAUDE_EVENTS])
+  for (const groups of Object.values(hooks)) expect(groups).toEqual([{ hooks: [{ type: "command", command }] }])
+
+  // Claude Code names the plugin by the link it found it through: the package is found through the link, not beside it.
+  const project = temp()
+
+  mkdirSync(join(project, ".claude/skills"), { recursive: true })
+  symlinkSync(PLUGIN, join(project, ".claude/skills/baba"))
+
+  const found = spawnSync("sh", ["-c", 'cd -P "${CLAUDE_PLUGIN_ROOT}/../.." && pwd'], { encoding: "utf8", env: { ...process.env, CLAUDE_PLUGIN_ROOT: join(project, ".claude/skills/baba") } })
+
+  expect(found.stdout.trim()).toBe(realpathSync(new URL("../..", import.meta.url).pathname))
+  rmSync(project, { recursive: true, force: true })
+})
+
+test("each adapter reads its harness's hook input as the framework's moment, and names what it tells as its harness takes it", () => {
+  const input = (event: string, more: Record<string, unknown> = {}) => ({ session_id: "s1", hook_event_name: event, cwd: "/p", ...more })
+
+  expect(claude.hookEvent(input("SessionStart", { source: "compact" }))).toEqual({ session: "s1", event: "SessionStart", moment: "SessionStart", compact: true })
+  expect(claude.hookEvent(input("StopFailure"))).toEqual({ session: "s1", event: "StopFailure", moment: "Stop" })
+  expect(claude.hookEvent(input("Notification"))).toBeUndefined()
+  expect(claude.hookEvent("not an object")).toBeUndefined()
+  expect(codex.hookEvent(input("Interrupt"))).toEqual({ session: "s1", event: "Interrupt", moment: "Stop" })
+  expect(codex.hookEvent(input("UserPromptSubmit", { prompt: "hi" }))).toEqual({ session: "s1", event: "UserPromptSubmit", moment: "UserPromptSubmit" })
+  expect(codex.hookEvent(input("PreModelRequest"))).toBeUndefined()
+  for (const adapter of ADAPTERS) {
+    const tool = adapter.hookEvent(input("PostToolUse"))!
+
+    expect(adapter.hookOutput(adapter.hookEvent(input("UserPromptSubmit"))!, "told")).toBe("told")
+    expect(JSON.parse(adapter.hookOutput(tool, "told"))).toEqual({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: "told" } })
+    expect(adapter.defaults.events).toEqual([...adapter.events])
+  }
+  expect(codex.run).toBeUndefined()
+})
+
+test("a session's project is trusted in its own home, so the project's plugin loads, and whatever else the home's state holds is kept", () => {
+  const home = temp()
+  const project = temp()
+
+  writeFileSync(join(home, ".claude.json"), JSON.stringify({ theme: "dark", projects: { "/elsewhere": { hasTrustDialogAccepted: false } } }))
+  trust(home, project)
+  expect(JSON.parse(readFileSync(join(home, ".claude.json"), "utf8"))).toEqual({
+    theme: "dark",
+    projects: { "/elsewhere": { hasTrustDialogAccepted: false }, [project]: { hasTrustDialogAccepted: true } },
+  })
+  rmSync(home, { recursive: true, force: true })
+  rmSync(project, { recursive: true, force: true })
 })

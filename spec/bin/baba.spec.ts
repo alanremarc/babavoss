@@ -1,7 +1,8 @@
 // The package's command, as a project uses it: init makes .baba/ and provisions, new makes a surface from the template,
-// provision writes the skill baba and the hook beside .baba/ and generates the root, and the hook makes a session aware.
+// provision makes each harness the configuration enables aware, withdraws from the others and generates the root, and the
+// hook makes a session aware.
 import { spawnSync } from "node:child_process"
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -13,6 +14,7 @@ const checkout = fileURLToPath(new URL("../..", import.meta.url))
 const project = realpathSync(mkdtempSync(join(tmpdir(), "baba-")))
 const baba = join(project, ".baba")
 const FOLDERS = [".claude/skills", ".agents/skills"]
+const LINK = "../../.baba/node_modules/babavoss/plugin/claude"
 const run = (args: string[], cwd = baba) => {
   const result = spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd, encoding: "utf8" })
 
@@ -36,6 +38,10 @@ test("init makes .baba/ as a package that names the framework and provisions whe
   expect(pack.scripts.postinstall).toBe("baba provision")
   expect(existsSync(join(baba, "node_modules/babavoss/package.json"))).toBe(true)
   for (const folder of FOLDERS) expect(readFileSync(skill(folder, "baba"), "utf8")).toBe(readFileSync(join(checkout, "skill/SKILL.md"), "utf8"))
+  // Claude Code's is the package's plugin, linked; nothing is written into the person's settings, and no configuration.
+  expect(readlinkSync(join(project, ".claude/skills/baba"))).toBe(LINK)
+  expect(existsSync(join(project, ".claude/settings.json"))).toBe(false)
+  expect(existsSync(join(baba, "baba.config.ts"))).toBe(false)
   expect(run(["init"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 })
 
@@ -95,26 +101,158 @@ test("outside any .baba/, the command says to make one", () => {
   expect(run([])).toMatchObject({ status: 2, err: expect.stringContaining("baba new NAME") })
 })
 
-test("provision writes the framework's hook into Claude Code's settings for each event, once, and leaves the person's settings and hooks as they are", () => {
+const OURS = 'bun "${CLAUDE_PROJECT_DIR}/.baba/node_modules/babavoss/bin/baba.ts" hook 2>/dev/null || true'
+const config = (text: string) => writeFileSync(join(baba, "baba.config.ts"), `import { config } from "babavoss/core/config.ts"\n\nexport default config(${text})\n`)
+
+test("provision replaces an older skill folder with the link, and takes the framework's hooks out of Claude Code's settings, the person's left as they are", () => {
+  const link = join(project, ".claude/skills/baba")
   const file = join(project, ".claude/settings.json")
-  const ours = { hooks: [{ type: "command", command: 'bun "${CLAUDE_PROJECT_DIR}/.baba/node_modules/babavoss/bin/baba.ts" hook 2>/dev/null || true' }] }
+  const ours = { hooks: [{ type: "command", command: OURS }] }
+  const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
+  const both = { hooks: [{ type: "command", command: "echo also" }, { type: "command", command: OURS }] }
+
+  // As an older release left a project: the skill as a folder, the hooks in the settings among the person's.
+  rmSync(link)
+  mkdirSync(link)
+  writeFileSync(join(link, "SKILL.md"), "---\nname: baba\ndescription: older words\n---\n\nOlder.\n")
+  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs, ours], Stop: [both], SessionEnd: [ours] }, model: "haiku" }))
+  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\n")
+  expect(readlinkSync(link)).toBe(LINK)
+  expect(readFileSync(file, "utf8")).toBe(
+    `${JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs], Stop: [{ hooks: [{ type: "command", command: "echo also" }] }] }, model: "haiku" }, null, 2)}\n`
+  )
+
+  // Once there is nothing of baba's in it, the file is not written again, however it is laid out; an emptied hooks key goes.
+  const kept = '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}'
+
+  writeFileSync(file, kept)
+  expect(run(["provision"]).out).not.toContain(".claude/")
+  expect(readFileSync(file, "utf8")).toBe(kept)
+  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { Stop: [ours] } }))
+  expect(run(["provision"]).status).toBe(0)
+  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ attribution: { commit: "" } })
+
+  // Not JSON: left alone where baba has nothing in it, and an error where it has.
+  writeFileSync(file, "{ not json")
+  expect(run(["provision"]).status).toBe(0)
+  writeFileSync(file, `{ not json ${OURS}`)
+  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not JSON") })
+  rmSync(file)
+
+  // A skill of the person's under the name is not taken.
+  rmSync(link)
+  mkdirSync(link)
+  writeFileSync(join(link, "notes.md"), "mine\n")
+  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not baba's") })
+  rmSync(link, { recursive: true })
+  expect(run(["provision"]).status).toBe(0)
+  expect(lstatSync(link).isSymbolicLink()).toBe(true)
+})
+
+test("provision writes the framework's hook into Codex's project hooks for each of its events, once, among the person's, and opens the network only where asked", () => {
+  const file = join(project, ".codex/hooks.json")
+  const toml = join(project, ".codex/config.toml")
+  const hooks = () => (JSON.parse(readFileSync(file, "utf8")) as { hooks: Record<string, { hooks: { command: string; timeout?: number }[] }[]> }).hooks
   const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
 
-  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
-    hooks: { SessionStart: [ours], UserPromptSubmit: [ours], PostToolUse: [ours], Stop: [ours], StopFailure: [ours], SessionEnd: [ours] },
-  })
-  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs, ours], Stop: [theirs] } }))
+  expect(Object.keys(hooks())).toEqual(["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "Interrupt", "SessionEnd"])
+  for (const [event, groups] of Object.entries(hooks())) {
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.hooks[0]!.command).toEndWith('/.baba/node_modules/babavoss/bin/baba.ts" hook codex 2>/dev/null || true')
+    expect(groups[0]!.hooks[0]!.timeout).toBe(event === "SessionEnd" ? 3 : undefined)
+  }
+  writeFileSync(file, JSON.stringify({ hooks: { Stop: [theirs], PreToolUse: [theirs] } }))
+
+  const provisioned = run(["provision"])
+
+  expect(provisioned.out).toContain("provisioned .codex/hooks.json\n")
+  expect(provisioned.out).toContain("Codex asks you to review these hooks once")
+  expect(run(["provision"]).out).not.toContain(".codex/hooks.json")
+  expect(hooks().Stop).toEqual([theirs, expect.objectContaining({ hooks: [expect.objectContaining({ type: "command" })] })])
+  expect(hooks().PreToolUse).toEqual([theirs])
+  expect(existsSync(toml)).toBe(false)
+
+  // The network, asked for: added where config.toml does not say, left where it does, and taken out again when not asked.
+  writeFileSync(toml, 'model = "o3"\n\n[sandbox_workspace_write]\nwritable_roots = ["/tmp"]\n')
+  config('{ harnesses: { codex: { enable: true, network: true } } }')
+  expect(run(["provision"]).out).toContain(".codex/config.toml: network_access = true added to [sandbox_workspace_write]")
+  expect(readFileSync(toml, "utf8")).toStartWith('model = "o3"\n\n[sandbox_workspace_write]\nnetwork_access = true # babavoss:')
+  expect(run(["provision"]).out).not.toContain("config.toml")
+  config('{ harnesses: { codex: { enable: true } } }')
+  expect(run(["provision"]).out).toContain("provisioned .codex/config.toml")
+  expect(readFileSync(toml, "utf8")).toBe('model = "o3"\n\n[sandbox_workspace_write]\nwritable_roots = ["/tmp"]\n')
+  config('{ harnesses: { codex: { enable: true, network: true } } }')
+  writeFileSync(toml, "[sandbox_workspace_write]\nnetwork_access = false\n")
+  expect(run(["provision"]).out).toContain("already says whether the sandbox has the network: left as it is")
+  expect(readFileSync(toml, "utf8")).toBe("[sandbox_workspace_write]\nnetwork_access = false\n")
+  rmSync(toml)
   expect(run(["provision"]).status).toBe(0)
-  expect(run(["provision"]).status).toBe(0)
-  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
-    attribution: { commit: "" },
-    hooks: { PostToolUse: [theirs, ours], Stop: [theirs, ours], SessionStart: [ours], UserPromptSubmit: [ours], StopFailure: [ours], SessionEnd: [ours] },
-  })
-  writeFileSync(file, "{ not json")
-  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not JSON") })
-  writeFileSync(file, "{}")
-  expect(run(["provision"]).status).toBe(0)
+  expect(readFileSync(toml, "utf8")).toContain("[sandbox_workspace_write] # babavoss")
+  config('{ harnesses: { codex: { enable: true } } }')
+  expect(run(["provision"]).out).toContain("provisioned .codex/config.toml")
+  expect(existsSync(toml)).toBe(false)
+  rmSync(join(baba, "baba.config.ts"))
 })
+
+test("a harness the configuration does not enable is withdrawn, exactly what baba wrote; one that does not load stops provisioning, and changes nothing", () => {
+  const settings = join(project, ".claude/settings.json")
+  const hooks = join(project, ".codex/hooks.json")
+  const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
+  const before = () => ({ link: readlinkSync(join(project, ".claude/skills/baba")), codex: readFileSync(hooks, "utf8"), skill: existsSync(skill(".agents/skills", "baba")) })
+
+  writeFileSync(settings, '{ "model": "haiku" }\n')
+  writeFileSync(hooks, JSON.stringify({ hooks: { Stop: [theirs] } }))
+  expect(run(["provision"]).status).toBe(0)
+
+  const was = before()
+
+  for (const broken of ['{ harnesses: { claude: { enable: "yes" } } }', "{ harnesses: { cursor: { enable: true } } }", '{ harnesses: { claude: { enable: true, events: ["Notification"] } } }', "{ harnesses: { codex: { enable: true, colour: 1 } } }"]) {
+    config(broken)
+    expect(run(["provision"]), broken).toMatchObject({ status: 1, err: expect.stringContaining(".baba/baba.config.ts: ") })
+  }
+  writeFileSync(join(baba, "baba.config.ts"), "export default {\n")
+  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining(".baba/baba.config.ts does not load") })
+  expect(before()).toEqual(was)
+
+  config("{ harnesses: { claude: { enable: false }, codex: { enable: false } } }")
+
+  const withdrawn = run(["provision"])
+
+  expect(withdrawn.out).toContain("withdrew .claude/skills/baba\nwithdrew .agents/skills/baba\nwithdrew .codex/hooks.json\n")
+  expect(existsSync(join(project, ".claude/skills"))).toBe(false)
+  expect(existsSync(join(project, ".agents"))).toBe(false)
+  expect(readFileSync(settings, "utf8")).toBe('{ "model": "haiku" }\n')
+  expect(JSON.parse(readFileSync(hooks, "utf8"))).toEqual({ hooks: { Stop: [theirs] } })
+  expect(run(["provision"]).out).toBe("provisioned .baba/.root\n")
+  rmSync(join(baba, "baba.config.ts"))
+  rmSync(settings)
+  rmSync(hooks)
+  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\nprovisioned .agents/skills/baba\nprovisioned .codex/hooks.json\n")
+})
+
+test("the hook reads the configuration as it runs: an event not listed tells nothing, nor a harness not enabled, nor a configuration that does not load, which the shell's answer says", () => {
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "configured", CODEX_THREAD_ID: "" }
+  const hook = (harness: string[], input: Record<string, unknown>) =>
+    spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook", ...harness], { cwd: project, encoding: "utf8", env, input: JSON.stringify(input) })
+  const start = { session_id: "configured", hook_event_name: "SessionStart", source: "startup" }
+
+  try {
+    config('{ harnesses: { claude: { enable: true, events: ["Stop"] }, codex: { enable: false } } }')
+    expect(hook([], start)).toMatchObject({ status: 0, stdout: "" })
+    expect(hook(["codex"], start)).toMatchObject({ status: 0, stdout: "" })
+    expect(hook(["cursor"], start)).toMatchObject({ status: 0, stdout: "" })
+    writeFileSync(join(baba, "baba.config.ts"), "export default {\n")
+    expect(hook([], start)).toMatchObject({ status: 0, stdout: "" })
+
+    const answer = spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env })
+
+    expect(answer.stdout).toContain(".baba/baba.config.ts does not load")
+    expect(answer.stdout).toContain("The harnesses' hooks say nothing until it loads")
+  } finally {
+    rmSync(join(baba, "baba.config.ts"), { force: true })
+    spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
+  }
+}, 60_000)
 
 test("a session's start gives what the skill baba gives and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)

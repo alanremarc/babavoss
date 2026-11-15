@@ -2,6 +2,37 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.39.4
+
+- A tab under the keyboard's focus has no ring: it reads as one hovered, with its ground and its dots. Nothing to adapt.
+
+## 0.39.3
+
+- A menu keeps room at its left only where it has something to put there, a mark of what waits on the person or a tick; without one its entries start at its edge. The kit's `menuItem` class is now `menuRow`, without the padding. Nothing else to adapt.
+
+## 0.39.2
+
+- A working agent unheard by the hooks for 90 seconds, with no call of its own under way, reads as unknown; it was five minutes. So a turn whose end the hooks missed stops showing as work soon. The mark's eyes settle to rest from wherever they were. Nothing to adapt.
+
+## 0.39.1
+
+- The mark's ground changes at once, as a tab's does. Nothing to adapt.
+
+## 0.39.0
+
+Harnesses are set up by adapters, and `.baba/baba.config.ts` chooses them.
+
+- Breaking: Claude Code is made aware by a project plugin: `.claude/skills/baba` is a link to `node_modules/babavoss/plugin/claude`, which holds the skill and the hook. Provisioning removes babavoss's hooks from `.claude/settings.json` and replaces the old skill folder; reinstall in `.baba/` and commit the link. A folder of your own named `.claude/skills/baba` stops provisioning.
+- Breaking: `baba hook` takes the harness, `baba hook claude` or `baba hook codex`, defaulting to `claude`. `provision()` is async and answers `{ written, withdrawn, said }`. `provisionHooks`, `SKILL_FOLDERS`, `HOOK_EVENTS`, `HookInput` and `hookOutput` are gone from core. `hookContext` takes a `HookEvent`.
+- Codex gets the hook in `.codex/hooks.json`, among your own hooks; Codex asks you to review it once with `/hooks`.
+- Optional `.baba/baba.config.ts`: `config({ harnesses: { claude: { enable, events }, codex: { enable, events, network } } })` from `babavoss/core/config.ts`. `enable: false` withdraws at the next provisioning; `events` is read as the hook runs. A config that does not load stops provisioning and keeps the hooks silent, and `baba start` says so.
+- The Claude run face trusts the session's project, and a worktree's main checkout, in its own home, so the plugin loads in lab runs.
+- The mark has a dim ground while the agent works.
+
+## 0.38.1
+
+- The mark's eyes sit on an invisible sphere, the circle of home's tab: while the agent works the face looks about as one that thinks, down, aside, across, narrowing to focus, each turn eased and in no fixed order, an eye narrowing as it nears the sphere's edge. Frames run only while the eyes turn, and not on a page that is not shown. Nothing to adapt.
+
 ## 0.38.0
 
 - The bar above every tab is gone; a page fills its tab under the strip. Each tab in the strip carries its surface's menu behind dots that replace its icon on hover or focus, and on a right click or Shift+F10. The menu holds a search of the tree's actions and places, the actions at `/` under the surface's `title`, the current place's actions under its name, `Go`, and the shell's Close tab, Close other tabs, Copy link and Reload. `menu` facts, `title` or `name` on rows, and drawers work as before. Nothing to adapt, but check that a page does not assume a bar above it.

@@ -12,8 +12,11 @@ export type Agent = "working" | "idle" | "unknown"
 /** `since` when it became so; `heard` when a hook last spoke while it worked. */
 export type Turn = { agent: Agent; since: number; heard: number }
 
-/** How long a working agent may go unheard before its turn reads as unknown: longer than a tool call commonly runs. */
-export const STALE_MS = 5 * 60_000
+/**
+ * How long a working agent may go unheard before its turn reads as unknown. Short, so a turn whose end the hooks missed
+ * stops reading as work soon; a tool call that runs longer reads as unknown until it ends, and then as work again.
+ */
+export const STALE_MS = 90_000
 
 export const unknownTurn = (now: number): Turn => ({ agent: "unknown", since: now, heard: now })
 

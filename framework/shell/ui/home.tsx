@@ -61,7 +61,7 @@ export function HomeTab({ active, standing, onSelect }: { active: boolean; stand
       title={`Home: open, switch to or run (${keys})\n${standing.said}`}
       tabIndex={active ? 0 : -1}
       data-active={active || undefined}
-      className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:bg-foreground/11 data-[active]:text-foreground"
+      className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:bg-foreground/6 focus-visible:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground not-hover:not-data-[active]:has-[[data-turn=working]]:bg-foreground/3"
       onClick={onSelect}
     >
       <Logo standing={standing} />
