@@ -4,7 +4,7 @@
 // only while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "cn"
-import { between, drawn, eased, EYES, next, REST, within, type Gaze } from "./gaze.ts"
+import { between, drawn, eased, EYES, next, REST, SLEEP, within, type Gaze } from "./gaze.ts"
 import type { Standing } from "./turn.ts"
 
 const place = (eyes: (SVGEllipseElement | null)[], gaze: Gaze) =>
@@ -23,12 +23,18 @@ const place = (eyes: (SVGEllipseElement | null)[], gaze: Gaze) =>
 /**
  * Moves the eyes while `looking`: one move after another in no fixed order, each an eased turn and then a rest. Frames
  * are asked for only during a turn; a rest is a timer; a page not shown waits. Stopping eases the eyes back to rest.
+ * `asleep` shuts them, and keeps them shut, whatever else.
  */
-function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean) {
+function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean, asleep: boolean) {
   const at = useRef<Gaze>(REST)
 
   useEffect(() => {
-    if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    if (typeof window === "undefined") return
+
+    const home = asleep ? SLEEP : REST
+
+    // Where motion is reduced the eyes are put where they belong, with no turn.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return void place(eyes.current, (at.current = home))
 
     let frame = 0
     let timer = 0
@@ -65,23 +71,23 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
       go(0)
     }
 
-    if (looking) timer = window.setTimeout(move, 300)
+    if (looking && !asleep) timer = window.setTimeout(move, 300)
     // Wherever a turn was cut, the eyes settle from there: nothing jumps.
-    else if (at.current !== REST) turn(REST, 900, () => (at.current = REST))
+    else if (at.current !== home) turn(home, asleep ? 700 : 900, () => (at.current = home))
 
     return () => {
       stopped = true
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [eyes, looking])
+  }, [eyes, looking, asleep])
 }
 
-/** The eyes alone, in the current colour; `looking` has them look about. */
-export function Eyes({ looking = false, className }: { looking?: boolean; className?: string }) {
+/** The eyes alone, in the current colour; `looking` has them look about, `asleep` shuts them. */
+export function Eyes({ looking = false, asleep = false, className }: { looking?: boolean; asleep?: boolean; className?: string }) {
   const eyes = useRef<(SVGEllipseElement | null)[]>([])
 
-  useGaze(eyes, looking)
+  useGaze(eyes, looking, asleep)
 
   return (
     <svg viewBox="0 0 100 100" aria-hidden className={cn("overflow-visible", className)}>
@@ -97,13 +103,14 @@ export function Eyes({ looking = false, className }: { looking?: boolean; classN
 }
 
 /** The mark with the agent's standing on it; `animate` false keeps it still, the work shown by its tint alone. */
-export function Logo({ standing, animate = true }: { standing: Standing; animate?: boolean }) {
-  const working = standing.state === "working"
+export function Logo({ standing, animate = true, asleep = false }: { standing: Standing; animate?: boolean; asleep?: boolean }) {
+  // A page that lost its runtime knows nothing of the turn: the mark sleeps until it is back.
+  const working = standing.state === "working" && !asleep
 
   return (
-    <span data-turn={standing.state} data-animate={animate || undefined} className="relative grid size-[22px] place-items-center">
-      <Eyes looking={working && animate} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
-      {standing.state === "waiting" && (
+    <span data-turn={asleep ? "asleep" : standing.state} data-animate={animate || undefined} className="relative grid size-[22px] place-items-center">
+      <Eyes looking={working && animate} asleep={asleep} className={cn("size-5", working && (animate ? "motion-reduce:text-primary" : "text-primary"))} />
+      {standing.state === "waiting" && !asleep && (
         <span
           aria-hidden
           className="absolute -top-1 -right-1.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-muted-foreground px-0.5 text-badge leading-none font-medium text-background tabular-nums ring-2 ring-sidebar"

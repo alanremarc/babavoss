@@ -1,6 +1,6 @@
 // The mark's eyes on their sphere: at rest the brand's circles, squashed towards the edge as they turn, and never the same move twice running.
 import { expect, test } from "bun:test"
-import { between, drawn, eased, EYES, MOVES, next, REST, SPHERE } from "../../framework/shell/ui/gaze.ts"
+import { between, drawn, eased, EYES, MOVES, next, REST, SLEEP, SPHERE } from "../../framework/shell/ui/gaze.ts"
 
 test("at rest each eye is the brand's circle, where the brand has it", () => {
   for (const eye of EYES) {
@@ -49,6 +49,18 @@ test("a turn eases in and out, and the next move is never the one just made", ()
   expect(eased(1)).toBe(1)
   expect(eased(0.5)).toBeCloseTo(0.5, 6)
   expect(eased(0.1)).toBeLessThan(0.1)
-  expect(between(REST, { yaw: 1, pitch: 1, size: 2 }, 0.5)).toEqual({ yaw: 0.5, pitch: 0.5, size: 1.5 })
+  expect(between(REST, { yaw: 1, pitch: 1, size: 2 }, 0.5)).toEqual({ yaw: 0.5, pitch: 0.5, size: 1.5, open: 1 })
   for (const move of MOVES) for (let i = 0; i < 20; i++) expect(next(move.name, () => i / 20).name).not.toBe(move.name)
+})
+
+test("asleep the eyes are shut where they rest: as wide as ever, and thin", () => {
+  for (const eye of EYES) {
+    const d = drawn(eye, SLEEP)
+
+    expect(d.cx).toBeCloseTo(eye.x, 6)
+    expect(d.cy).toBeCloseTo(SPHERE.y, 6)
+    expect(d.rx).toBeCloseTo(eye.r, 6)
+    expect(d.ry).toBeLessThan(eye.r / 5)
+    expect(Math.abs(d.turn) % 180).toBeCloseTo(0, 6)
+  }
 })

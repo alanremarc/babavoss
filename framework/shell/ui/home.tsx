@@ -8,7 +8,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "cn"
 import type { Handle } from "../../core/index.ts"
-import { BoxIcon, SendIcon } from "lucide-react"
+import { BoxIcon, LoaderCircleIcon, SendIcon } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../../kit/components/command"
 import { Logo } from "./mark.tsx"
 import type { Standing as TurnStanding } from "./turn.ts"
@@ -34,15 +34,19 @@ export function HomeTab({
   standing,
   animate,
   keys,
+  lost = false,
   onSelect,
 }: {
   active: boolean
   standing: TurnStanding
   animate: boolean
   keys: string
+  /** The page lost its runtime and is finding it again: the mark sleeps, and says so in a bubble under it. */
+  lost?: boolean
   onSelect: () => void
 }) {
   return (
+    <span className="relative grid shrink-0">
     <button
       type="button"
       role="tab"
@@ -56,8 +60,18 @@ export function HomeTab({
       className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:bg-foreground/6 focus-visible:text-foreground data-[active]:bg-foreground/11 data-[active]:text-foreground not-hover:not-data-[active]:has-[[data-turn=working]]:bg-foreground/3"
       onClick={onSelect}
     >
-      <Logo standing={standing} animate={animate} />
+      <Logo standing={standing} animate={animate} asleep={lost} />
     </button>
+      {lost && (
+        <span
+          role="status"
+          className="pointer-events-none absolute top-full left-0 z-50 mt-2.5 flex h-6 animate-in items-center gap-1.5 rounded-full rounded-tl-[3px] bg-popover pr-2.5 pl-2 text-meta whitespace-nowrap text-muted-foreground shadow-md ring-1 ring-foreground/10 duration-200 fade-in-0 zoom-in-95 before:absolute before:-top-[4px] before:left-2.5 before:size-2 before:rotate-45 before:border-t before:border-l before:border-foreground/10 before:bg-popover motion-reduce:animate-none"
+        >
+          <LoaderCircleIcon aria-hidden className="size-3 animate-spin [animation-duration:1.4s]" />
+          Reconnecting
+        </span>
+      )}
+    </span>
   )
 }
 

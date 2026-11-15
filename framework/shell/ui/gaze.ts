@@ -2,8 +2,8 @@
 // turns the sphere, and each eye is drawn where its patch lands, squashed towards the sphere's edge as a patch on a ball is.
 // Pure: the poses a thinking face goes through, the easing between them, and the ellipse an eye is at a gaze.
 
-/** Where the face looks, in radians, right and down positive; and how wide the eyes are, 1 at rest. */
-export type Gaze = { yaw: number; pitch: number; size: number }
+/** Where the face looks, in radians, right and down positive; how wide the eyes are, 1 at rest; and how open, 1 unless said, 0 shut. */
+export type Gaze = { yaw: number; pitch: number; size: number; open?: number }
 /** An eye at rest, in the mark's 100 by 100 box: its centre's x, the centre's y being the sphere's, and its radius. */
 export type Eye = { x: number; r: number }
 /** An eye as drawn: an ellipse whose `rx` lies along the line from the sphere's centre, turned by `turn` degrees. */
@@ -16,6 +16,8 @@ export const EYES: Eye[] = [
   { x: 71.5, r: 12.728 },
 ]
 export const REST: Gaze = { yaw: 0, pitch: 0, size: 1 }
+/** Asleep: the eyes nearly shut, two level lines where they rest. */
+export const SLEEP: Gaze = { yaw: 0, pitch: 0, size: 1, open: 0.14 }
 
 /** The eye at `gaze`: at rest exactly the brand's circle, and narrower along the radius the further it turns from the front. */
 export function drawn(eye: Eye, gaze: Gaze): Drawn {
@@ -32,7 +34,8 @@ export function drawn(eye: Eye, gaze: Gaze): Drawn {
     cx: SPHERE.x + x * SPHERE.radius,
     cy: SPHERE.y + y * SPHERE.radius,
     rx: (r * z) / front,
-    ry: r,
+    // A lid closes an eye from above and below: across the radius, which at the front is up and down.
+    ry: r * (gaze.open ?? 1),
     turn: Math.hypot(x, y) < 1e-6 ? 0 : (Math.atan2(y, x) * 180) / Math.PI,
   }
 }
@@ -43,6 +46,7 @@ export const between = (a: Gaze, b: Gaze, t: number): Gaze => ({
   yaw: a.yaw + (b.yaw - a.yaw) * t,
   pitch: a.pitch + (b.pitch - a.pitch) * t,
   size: a.size + (b.size - a.size) * t,
+  open: (a.open ?? 1) + ((b.open ?? 1) - (a.open ?? 1)) * t,
 })
 
 /** One move of a thinking face: the gazes it passes through, how long each turn takes and how long it rests at its end, in ms. */

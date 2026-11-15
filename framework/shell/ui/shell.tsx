@@ -77,6 +77,16 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
   const [root, setRoot] = useState<RootView>()
   const [error, setError] = useState("")
   const [connected, setConnected] = useState(false)
+  // Lost: a page that had its runtime and has been without it for more than a moment. A page still loading is not.
+  const [lost, setLost] = useState(false)
+
+  useEffect(() => {
+    if (connected || !root) return setLost(false)
+
+    const timer = setTimeout(() => setLost(true), 700)
+
+    return () => clearTimeout(timer)
+  }, [connected, !root])
   const [pending, setPending] = useState(false)
   const [at, setAt] = useState(parse)
   const [routes, setRoutes] = useState<Record<string, string>>(() => (at.key.startsWith("/") ? { [at.key]: at.route } : {}))
@@ -362,7 +372,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
       <SurfaceTabs
         active={active}
         onSelect={(key) => go(key)}
-        home={<HomeTab active={active === HOME} standing={standingOf(turn)} animate={settings.logo.animate} keys={homeKeys} onSelect={() => go(HOME)} />}
+        home={<HomeTab active={active === HOME} standing={standingOf(turn)} animate={settings.logo.animate} keys={homeKeys} lost={lost} onSelect={() => go(HOME)} />}
         end={<Notifications changes={stream} notices={notices} told={told} title={root?.title ?? "baba"} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
         items={[
           ...strip.map((row, i) => ({
@@ -393,11 +403,6 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
           })),
         ]}
       />
-      {!connected && (
-        <p className="border-b px-4 py-1 text-muted-foreground" role="status">
-          {root ? "Reconnecting…" : "Connecting…"}
-        </p>
-      )}
       {error && (
         <Alert variant="destructive" className="mx-3 my-2 w-auto">
           <CircleAlertIcon />

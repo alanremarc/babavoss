@@ -198,8 +198,13 @@ function Tab({
           )}
         >
           {icon}
-          {mark && <span aria-hidden data-mark={mark} className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
         </span>
+        {/* The mark stands still over whichever is shown, the icon or the caret. */}
+        {mark && (
+          <span aria-hidden className="pointer-events-none absolute top-[3px] left-[3px] size-[22px]">
+            <span data-mark={mark} className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />
+          </span>
+        )}
       </button>
       {menu && (
         <MenuDropdown
@@ -225,7 +230,6 @@ function Tab({
               aria-label={`Menu for ${label}`}
             >
               <ChevronDownIcon aria-hidden className={cn("transition-[rotate] duration-200 ease-[cubic-bezier(.3,1.6,.4,1)] motion-reduce:transition-none", open && "rotate-180")} />
-              {mark && <span aria-hidden className={cn("absolute top-0 right-0 rounded-full ring-2 ring-sidebar", MARK[mark])} />}
             </button>
           }
         >
