@@ -45,14 +45,18 @@ export function reading(turn: Turn, now: number, busy = false): Turn {
  * finds them so. `ever`: a hook was heard in this session; `told`: the agent was told of this stretch of silence, which the
  * next hook heard ends; `last`: the run answered last since a hook was heard, and when.
  */
-export type Hooks = { ever: boolean; told: boolean; last?: { call: string; at: number } }
+export type Hooks = { ever: boolean; told: boolean; last?: { call: string; at: number }; harness?: string }
 export const HUSH_MS = 10_000
 export const QUIET_LINE = "baba: this session's hooks are not being heard; what changes is told only when you read it. Start a new session to get them back."
 export const NO_HOOKS_LINE = "baba: no hook of this session's harness is heard; what changes is told only when you read it."
 
 export const unheardHooks = (): Hooks => ({ ever: false, told: false })
 /** A hook was heard: the silence, if any, has ended. */
-export const hooksHeard = (): Hooks => ({ ever: true, told: false })
+export const hooksHeard = (harness?: string): Hooks => ({ ever: true, told: false, ...(harness && { harness }) })
+/** The header a hook names its harness in, by its adapter's name, with what it tells of the turn; `harness` in Hooks is the one last heard. */
+export const HARNESS_HEADER = "babavoss-harness"
+/** A harness's name as a hook may say it: an adapter's, short and plain. */
+export const harnessOf = (said: unknown): string | undefined => (typeof said === "string" && /^[a-z][a-z0-9-]{0,31}$/.test(said) ? said : undefined)
 /** A run of the word was answered at `now`. */
 export const answered = (hooks: Hooks, call: string, now: number): Hooks => ({ ...hooks, last: { call, at: now } })
 

@@ -515,6 +515,7 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
                   mark: markOf({ needs: entry.needs, broken: entry.broken, unseen: !!seen && !seen.has(entry.at) && entry.at !== active, waits: waits(entry.at) }),
                 }))}
                 keys={homeKeys}
+                harness={turn?.harness}
                 disabled={pending || !root}
                 loading={!root}
                 launch={(handle) => void open(handle)}

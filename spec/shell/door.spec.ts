@@ -2,13 +2,14 @@
 // the person did there is still told at / on the agent's next request; who a tab needs is said first, and its notices once,
 // to the agent as lines and to the page as events; what was heard and not yet told is told once, though the runtime
 // started again in between.
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
 import { action, defineRoot, detail, surface, view, type Update } from "../../framework/core/index.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { HARNESS_HEADER } from "../../framework/core/runtime/turn.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
 
@@ -318,6 +319,35 @@ it("tells nothing of the page's own bookkeeping: the notices the person saw, a q
   expect(await waiting()).toBe(0)
   // The page still reads what its own action did.
   expect(JSON.parse(await request("/tabs/1", undefined, true))).toMatchObject({ marked: [1] })
+})
+
+it("knows the session's harness from the hook that tells it of the turn, keeps it where a later hook does not say, and takes no name that is not one", async () => {
+  const { runtime, endpoint, dir } = await started()
+  const tell = (harness?: string) =>
+    fetch(`http://127.0.0.1:${runtime.port}/_/turn`, {
+      method: "POST",
+      headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, ...(harness !== undefined && { [HARNESS_HEADER]: harness }) },
+      body: "working",
+    })
+  const harness = async () => {
+    const ctrl = new AbortController()
+    const stream = await fetch(`http://127.0.0.1:${runtime.port}/`, { headers: { accept: "text/event-stream", [SERVICE_HEADER]: endpoint.token }, signal: ctrl.signal })
+    const reader = stream.body!.getReader()
+    let text = ""
+
+    while (!/event: turn\ndata: .*\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value)
+    ctrl.abort()
+
+    return (JSON.parse(/event: turn\ndata: (.*)\n/.exec(text)![1]!) as { harness?: string }).harness
+  }
+
+  expect(await harness()).toBeUndefined()
+  await tell("codex")
+  expect(await harness()).toBe("codex")
+  await tell()
+  await tell("Not A Name!")
+  expect(await harness()).toBe("codex")
+  expect(JSON.parse(readFileSync(join(dir, "sessions", "S", "tabs", "hooks.json"), "utf8"))).toMatchObject({ ever: true, harness: "codex" })
 })
 
 it("tells one event in one line: a notice stands for what its call changed, unless a later call with none changed it too; what waits on the agent always", async () => {
