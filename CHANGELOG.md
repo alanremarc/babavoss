@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.29.0
+
+- The framework's hook is now also provisioned for `Stop`, `StopFailure` and `SessionEnd`. It tells the session's runtime whose move it is, adds no context at those events and never blocks stopping. Installing in `.baba/` provisions it again.
+- The shell's strip shows whose move it is: the agent working, idle, or unknown. When the agent is idle it shows how many of the person's changes wait for its next message, with a button that copies a message to send. A surface should drop any busy indicator or end-of-move button of its own.
+- The door has `POST /_/turn` and a `turn` event on the page's stream; a page that counts stream events now receives `turn` after `change` when it connects. Nothing about the turn is in the present.
+
 ## 0.28.0
 
 - The shell keeps the session's activity: every notice, every call into a tab that gave none (as its handle and arguments), and every tab opened, closed or shown. The agent reads it at `/activity`, named at `/` by `activity: { at: "/activity" }`, and is never told it. The person sees it in a panel at the strip's right. A surface that wants a meaningful line there instead of the mechanical one gives a notice.

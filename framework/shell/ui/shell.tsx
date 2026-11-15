@@ -15,7 +15,7 @@ import { Button } from "../../kit/components/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../kit/components/empty"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
 import { ActivityButton } from "./activity.tsx"
-import { call, changes, read, type Notice } from "./client.ts"
+import { call, changes, read, type Notice, type Turn } from "./client.ts"
 import { Frame, TabCommands, useFrames } from "./frame.tsx"
 import { Launcher, LauncherButton, type TabEntry, type SurfaceEntry } from "./launcher.tsx"
 import { Settings } from "./settings.tsx"
@@ -23,6 +23,7 @@ import { ChangesContext, TabProvider } from "./tab.tsx"
 import { arrival, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
 import { newestFirst, successor } from "./strip.ts"
 import { SurfaceTabs, TabContent, type TabNeed } from "./tabs.tsx"
+import { TurnIndicator } from "./turn.tsx"
 
 /** Each surface's page module: its component, the default export, and the icon the strip and the launcher show. */
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode }>
@@ -96,6 +97,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
   const heard = useRef<(notice: Notice) => void>(() => {})
   // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
   const [seen, setSeen] = useState<ReadonlySet<string>>()
+  // Whose move it is, as the runtime hears it from the harness's hooks.
+  const [turn, setTurn] = useState<Turn>()
 
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -112,7 +115,8 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         up.current = connected
         setConnected(connected)
       },
-      (notice) => heard.current(notice)
+      (notice) => heard.current(notice),
+      setTurn
     )
   }, [listeners])
 
@@ -333,7 +337,12 @@ export function Shell({ surfaces }: { surfaces: Registry }) {
         active={active}
         onSelect={(key) => go(key)}
         home={<LauncherButton {...choices} />}
-        end={<ActivityButton changes={stream} go={(at) => go(placeOf(at).key, placeOf(at).route)} />}
+        end={
+          <>
+            <TurnIndicator turn={turn} />
+            <ActivityButton changes={stream} go={(at) => go(placeOf(at).key, placeOf(at).route)} />
+          </>
+        }
         items={[
           ...(active === "settings" ? [{ id: "settings", label: "Settings", icon: <SettingsIcon aria-hidden />, onClose: () => go(strip[0]?.at ?? "new") }] : []),
           ...strip.map((row, i) => ({
