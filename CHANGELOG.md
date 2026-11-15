@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.53.1
+
+- This repository's Design Document surface opens on a scenario picker, and a scenario is two screens of one frame over a strip of its steps: the person's page after the chosen step, and what the agent was given at it. The scenario and the step are the tab's route, `/design/scenarios/NAME/N`. Each scenario's row at `/design` carries `about` as detail. The package is unchanged. Nothing to adapt.
+
 ## 0.53.0
 
 - The shell's page exports the parts of it that only show: `ActivityButton` and `ActivityLevels` (notifications.tsx), `RefusedAlert` and `PointedAlert` (connection.tsx), `TabBroken`, `TabFailed` and `TabNoPage` (tabs.tsx), `RefusedLine` (actions.tsx). `TabMenu` takes an optional door, and a tab's own controls are one function, `controlsOf` in commands.ts. The mark takes an optional named move, `MOVES` in gaze.ts, and repeats it. The shell looks and behaves as before. Nothing to adapt.
