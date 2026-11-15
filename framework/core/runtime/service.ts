@@ -14,6 +14,10 @@ export type Endpoint = Identity & { port: number }
 export const SERVICE_HEADER = "babavoss-service"
 /** The request header naming the actor; the person when absent. */
 export const ACTOR_HEADER = "babavoss-actor"
+/** The request header of a client's probe for whether the service is up: answered at once, as the code stands. */
+export const PROBE_HEADER = "babavoss-probe"
+/** The response header of a service that gave way to a new one without doing what it was asked: ask again. */
+export const STALE_HEADER = "babavoss-stale"
 export const STARTUP_MS = 10_000
 export const REQUEST_MS = 30_000
 
@@ -115,12 +119,12 @@ export async function findService(dir: string, signal?: AbortSignal): Promise<En
     if (endpoint.dir !== dir || typeof endpoint.token !== "string" || !Number.isInteger(endpoint.port) || endpoint.port < 1) return
 
     const response = await fetch(`http://127.0.0.1:${endpoint.port}/`, {
-      headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token },
+      headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token, [PROBE_HEADER]: "1" },
       signal: AbortSignal.any([AbortSignal.timeout(300), ...(signal ? [signal] : [])]),
     })
 
     await response.body?.cancel()
-    if (response.headers.get(SERVICE_HEADER) === endpoint.token) return endpoint
+    if (response.headers.get(SERVICE_HEADER) === endpoint.token && !response.headers.has(STALE_HEADER)) return endpoint
   } catch (error) {
     if (failedWith(error, "EPERM")) throw new Denied(LOOPBACK_REFUSED)
   }
@@ -166,12 +170,30 @@ const deniedReason = (dir: string): string => {
   }
 }
 
+const logSize = (dir: string) => {
+  try {
+    return statSync(logFile(dir)).size
+  } catch {
+    return 0
+  }
+}
+/** What a runtime that did not start logged after `offset`, as bun says why code does not load: the file and the error, its last lines. */
+const saidSince = (dir: string, offset: number): string => {
+  try {
+    return readFileSync(logFile(dir)).subarray(offset).toString("utf8").trim().split("\n").slice(-20).join("\n")
+  } catch {
+    return ""
+  }
+}
+
 /** A client of a session's service: finds it or wakes it with `entry`, then requests. */
 export function serviceClient(dir: string, session: string, entry: string | URL, env?: NodeJS.ProcessEnv) {
   const ready = async (signal?: AbortSignal): Promise<Endpoint> => {
     const bounded = AbortSignal.any([AbortSignal.timeout(STARTUP_MS), ...(signal ? [signal] : [])])
     let child: ChildProcess | undefined
     let nextLaunch = 0
+    let logged = 0
+    let erred = false
 
     try {
       while (!bounded.aborted) {
@@ -180,8 +202,16 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
         if (endpoint) return endpoint
         if (child?.exitCode === DENIED_EXIT) throw new Denied(deniedReason(dir) || "the environment refuses what its runtime requires")
         if (child && !child.pid) throw new Denied("the environment refuses starting its runtime as a process of its own")
-        if (child && (child.signalCode !== null || (child.exitCode !== null && child.exitCode !== 0))) throw new Error("the runtime failed to start")
+        if (child && (child.signalCode !== null || (child.exitCode !== null && child.exitCode !== 0)))
+          throw new Error(`the runtime failed to start${saidSince(dir, logged).replace(/^(?=.)/, ": ")}`)
+        // Under hot reload a process whose code does not load stays, waiting for a change: once it said why, it is ended.
+        if (child && child.exitCode === null && erred) {
+          child.kill()
+          throw new Error(`the runtime failed to start: ${saidSince(dir, logged)}`)
+        }
+        erred = !!child && /^error: /m.test(saidSince(dir, logged))
         if ((!child || child.exitCode !== null) && Date.now() >= nextLaunch) {
+          logged = logSize(dir)
           child = wakeService(dir, entry, session, env)
           nextLaunch = Date.now() + 250
         }
@@ -203,9 +233,10 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
 
       while (!signal.aborted) {
         const endpoint = await ready(signal)
+        let response: Response
 
         try {
-          return await fetch(`http://127.0.0.1:${endpoint.port}${path}`, {
+          response = await fetch(`http://127.0.0.1:${endpoint.port}${path}`, {
             method: init.method ?? "GET",
             body: init.body,
             signal,
@@ -225,6 +256,10 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
           }
           throw new Error(`Request outcome is uncertain; read state before retrying. ${error instanceof Error ? error.message : String(error)}`)
         }
+        if (!response.headers.has(STALE_HEADER)) return response
+        // It gave way to a new one, having done nothing: asked again, of that one.
+        await response.body?.cancel()
+        await sleep(50, undefined, { signal })
       }
       throw signal.reason
     },

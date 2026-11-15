@@ -1,7 +1,7 @@
 // The package's command, as a project uses it: init makes .baba/ and provisions, new makes a surface from the template,
 // provision writes the skill baba and the hook beside .baba/ and generates the root, and the hook makes a session aware.
 import { spawnSync } from "node:child_process"
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -177,6 +177,14 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain("Keep the house greeting.")
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/by-hand"), { recursive: true })
     await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"by-hand"')
+
+    // surfaces/ made anew, as a checkout may leave it: the root follows the new one, and its next answer is of the code there.
+    cpSync(join(baba, "surfaces"), join(baba, "surfaces.new"), { recursive: true })
+    rmSync(join(baba, "surfaces"), { recursive: true })
+    renameSync(join(baba, "surfaces.new"), join(baba, "surfaces"))
+    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"by-hand"')
+    cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/after-checkout"), { recursive: true })
+    await poll(() => call("/tabs/1").stdout, { timeout: 20_000 }).toContain('"after-checkout"')
   } finally {
     command("start", "close")
   }

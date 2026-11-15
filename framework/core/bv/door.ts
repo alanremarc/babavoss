@@ -2,6 +2,7 @@
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
+import { spawn } from "node:child_process"
 import type { RootDefinition } from "../root.ts"
 import { startRuntime } from "../runtime/runtime.ts"
 import { findBaba } from "../provision.ts"
@@ -21,8 +22,16 @@ export async function main(root: RootDefinition) {
   process.env.BABAVOSS_HOME ??= join(project ?? homedir(), ".babavoss")
 
   if (args[0] === "--serve") {
+    // Woken under hot reload: a runtime that gives way wakes its successor as it was woken itself, logging where it logs.
+    const successor = () =>
+      spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+        cwd: process.cwd(),
+        detached: true,
+        stdio: ["ignore", "ignore", "inherit"],
+      }).unref()
+
     // Another process serves this session already. Under hot reload a process with nothing to do would stay, so it ends here.
-    if (!(await startRuntime(root, ["--session", args[1]!], { command: args[2] ?? `bv ${root.name}` }))) process.exit(0)
+    if (!(await startRuntime(root, ["--session", args[1]!], { command: args[2] ?? `bv ${root.name}`, successor }))) process.exit(0)
 
     return
   }

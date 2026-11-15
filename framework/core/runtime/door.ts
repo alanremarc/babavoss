@@ -6,7 +6,8 @@
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view.
 // Only this machine's clients: loopback host, own origin, the service token on everything but the page, as a header or
-// as the cookie the page response sets, named after the port.
+// as the cookie the page response sets, named after the port. A runtime that gives way answers 503 with STALE_HEADER, having
+// done nothing, and ends: its clients ask again, of the one in its place. A client's probe for whether it is up never waits.
 import { existsSync, readFileSync } from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { extname, join, normalize } from "node:path"
@@ -14,7 +15,7 @@ import { fileURLToPath } from "node:url"
 import type { Running } from "../surface/run.ts"
 import { textArgs, textLines, textSession } from "./text.ts"
 import type { Args } from "../surface/view.ts"
-import { ACTOR_HEADER, SERVICE_HEADER, type Identity } from "./service.ts"
+import { ACTOR_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
 export type UiHosting = (
@@ -34,6 +35,8 @@ export type DoorOptions = {
   /** Called on every request, so an idle timer can be reset. */
   touched?: () => void
   end?: () => void
+  /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
+  current?: () => Promise<string | undefined>
   /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session. */
   about?: Record<string, string>
 }
@@ -162,6 +165,14 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     const url = new URL(req.url ?? "/", "http://127.0.0.1")
     const path = url.pathname
     const html = req.method === "GET" && wants(req, "text/html") && !wants(req, "application/json")
+    const why = req.headers[PROBE_HEADER] === undefined && (!path.startsWith("/_/") || path === "/_/wait") ? await options.current?.() : undefined
+
+    if (why !== undefined) {
+      res.writeHead(503, { "content-type": "text/plain", [STALE_HEADER]: "1" })
+      res.once("finish", () => options.end?.())
+
+      return res.end(why)
+    }
 
     if (wants(req, "text/plain")) {
       const reply = (status: number, value: string) => {

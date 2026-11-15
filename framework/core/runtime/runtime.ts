@@ -5,19 +5,25 @@
 // entry again in the same process when its code changes: startRuntime then finds the runtime already here and puts the new
 // surface in its place, from the state the old one saved, once nothing is running or after SWAP_WAIT_MS, which cuts what still
 // runs. A wait, a cut and code that does not start are logged and said first in the agent's next answer. The process, its
-// address, its token and its open pages stay. Code that does not load leaves the old surface running. A change in the page's
-// own code is told to the open pages, which load again. The runtime's own code, the framework's core, is not swapped: when
-// that changed, the runtime here closes and starts again in the same process, at the same address. Each line it logs begins
-// with its time. Where the environment refuses it a lock or loopback, it logs why as its last line and ends with DENIED_EXIT,
-// for the waker to say the root does not run here.
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync, watch, type FSWatcher } from "node:fs"
+// address, its token and its open pages stay. A change in the page's own code is told to the open pages, which load again.
+// The runtime's own code, the framework's core, is not swapped: when that changed, the runtime here closes and starts again
+// in the same process, at the same address.
+// A hot reload that fails, on code that does not parse or on a file gone for a moment as a checkout leaves it, can leave
+// bun's process with timers that never fire again, and no longer watching the file it missed. So a runtime under hot
+// reload holds what each file of its code was when loaded, and gives way, without answering, when its timers are dead or
+// when a file changed since and was not loaded within STALE_MS: it closes and wakes a new process in its place, at its
+// address, which loads the code as it is or fails saying why, and is told what was cut. It looks before each answer, and
+// whenever its log is written, as bun writes there that a reload failed.
+// Each line it logs begins with its time. Where the environment refuses it a lock or loopback, it logs why as its last
+// line and ends with DENIED_EXIT, for the waker to say the root does not run here.
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { modelPorts, stateDir } from "../state/state.ts"
 import { run, type Running } from "../surface/run.ts"
 import type { RootDefinition } from "../root.ts"
 import { door } from "./door.ts"
-import { DENIED_EXIT, Denied, lastPort, ownService } from "./service.ts"
+import { DENIED_EXIT, Denied, lastPort, logFile, ownService } from "./service.ts"
 
 export type RuntimeOptions = {
   command?: string
@@ -34,6 +40,11 @@ export type RuntimeOptions = {
   swapWaitMs?: number
   /** How the process ends, with its exit code; for specs. */
   exit?: (code?: number) => void
+  /**
+   * The process runs under bun's hot reload, as its entry woke it: it holds its code as loaded, gives way when that is no
+   * longer the code on disk, and wakes its successor by calling this.
+   */
+  successor?: () => void
 }
 export const IDLE_MS = 30 * 60_000
 export const CLOSE_MS = 8000
@@ -41,6 +52,8 @@ export const CLOSE_MS = 8000
 export const RELOAD_MS = 500
 /** How long changed code waits for what runs to end before it cuts it and is loaded. */
 export const SWAP_WAIT_MS = 30_000
+/** How long an answer waits for hot reload to load a change on disk before the runtime gives way to a new process. */
+export const STALE_MS = 1500
 
 /** The root's own source and its page, under the root root, above its scripts/open.ts entry. */
 export const sourceDirs = (entry = process.argv[1]!): string[] => {
@@ -49,8 +62,69 @@ export const sourceDirs = (entry = process.argv[1]!): string[] => {
   return [join(root, "src"), join(root, "ui")].filter((dir) => existsSync(dir)).map((dir) => realpathSync(dir))
 }
 
+/** What each file of the process's code was when it was loaded: its time and size, and a hash of its content; a gone file is empty. */
+type Code = Map<string, { stamp: string; hash: string }>
+
+const stampOf = (file: string) => {
+  try {
+    const stat = statSync(file)
+
+    return `${stat.mtimeMs}:${stat.size}`
+  } catch {
+    return ""
+  }
+}
+const hashOf = (file: string) => {
+  try {
+    return String(Bun.hash(readFileSync(file)))
+  } catch {
+    return ""
+  }
+}
+/** The process's code as loaded now: its entry and every module it imported, which hot reload gathers again each time. */
+const loadedCode = (entry: string): Code =>
+  new Map(
+    [resolve(entry), ...Object.keys(require.cache)].filter((file) => file.startsWith("/")).map((file) => [file, { stamp: stampOf(file), hash: hashOf(file) }]),
+  )
+/** The first file whose content is not what was loaded, or undefined. A file only touched is taken as it is. */
+const changedFile = (code: Code): string | undefined => {
+  for (const [file, loaded] of code) {
+    const stamp = stampOf(file)
+
+    if (stamp === loaded.stamp) continue
+    if (hashOf(file) !== loaded.hash) return file
+    loaded.stamp = stamp
+  }
+}
+
+/** Waits `ms` by the clock, yielding to the event loop between short sleeps of the thread; never by a timer, which may be dead. */
+const pause = (ms: number) =>
+  new Promise<void>((done) => {
+    const until = Date.now() + ms
+    const tick = () => {
+      if (Date.now() >= until) return done()
+      Bun.sleepSync(Math.min(5, until - Date.now()))
+      setImmediate(tick)
+    }
+
+    setImmediate(tick)
+  })
+/** Whether the process's timers fire: after a failed hot reload, bun's may never fire again. */
+const timersFire = async () => {
+  let fired = false
+  const timer = setTimeout(() => (fired = true), 0)
+  const until = Date.now() + 200
+
+  while (!fired && Date.now() < until) await pause(1)
+  clearTimeout(timer)
+
+  return fired
+}
+/** What a runtime that gave way tells the one in its place, said first in the agent's next answer. */
+const gaveWayFile = (dir: string) => join(dir, "gave-way")
+
 /** A runtime of this process: what a reload of the code finds here, and hands its new root to. `stamp` is the framework code it runs. */
-type Live = { port: number; stamp?: number; close(): Promise<void>; swap(root: RootDefinition): Promise<void> }
+type Live = { port: number; stamp?: number; close(): Promise<void>; swap(root: RootDefinition, code?: Code): Promise<void> }
 
 /** When the framework's core, the code a runtime is made of, last changed: the latest of its files' times. */
 const coreStamp = (dir = dirname(import.meta.dir)): number =>
@@ -143,9 +217,10 @@ export async function startRuntime(
   // own code changed, the runtime here is that code no longer: it closes, and this one starts in its place.
   const stamp = options.stamp ?? coreStamp()
   const here = lives().get(dir)
+  const loaded = options.successor && loadedCode(options.entry ?? process.argv[1]!)
 
   if (here && here.stamp === stamp) {
-    await here.swap(root)
+    await here.swap(root, loaded)
 
     return here
   }
@@ -189,7 +264,18 @@ export async function startRuntime(
       // Closed in time: whoever asked decides what comes next, not this timer.
       clearTimeout(forced)
     })())
-  const end = () => void close().then(() => exit())
+  // A runtime that gave way lets go of the session within CLOSE_MS, by the clock, and wakes its successor, so the open pages
+  // find one at their address.
+  let leaving: string | undefined
+  let ending: Promise<void> | undefined
+  const end = () =>
+    void (ending ??= (async () => {
+      if (!leaving) return close().then(() => exit())
+      await Promise.race([close(), pause(CLOSE_MS)])
+      owner.release()
+      options.successor?.()
+      exit()
+    })())
   // A change in a file the page may be made of: the door builds the page again and tells the open ones if it differs.
   let reload: ReturnType<typeof setTimeout> | undefined
   const changed = (file: string) => {
@@ -200,8 +286,11 @@ export async function startRuntime(
   // The code loaded again: the newest root takes the place of the running one once that has nothing under way, or once it has
   // waited SWAP_WAIT_MS, counted from the first change waiting, and cut what still runs. A wait is logged and told once.
   let latest = root
+  let code = loaded
   let waiting: RootDefinition | undefined
   let swapping: Promise<void> | undefined
+  /** Whether the swap under way waits for running work, which an answer does not wait for: its note says so. */
+  let holding = false
   const bound = options.swapWaitMs ?? SWAP_WAIT_MS
   /** What keeps the code from loading: the running commands by name, and the rest of the work under way as a count. */
   const underWay = () => {
@@ -210,8 +299,9 @@ export async function startRuntime(
 
     return [...named, ...(rest > 0 ? [`${rest} more under way`] : [])].join(", ")
   }
-  const swap = (to: RootDefinition) => {
+  const swap = (to: RootDefinition, next?: Code) => {
     waiting = to
+    code = next ?? code
 
     return (swapping ??= (async () => {
       let since = Date.now()
@@ -229,6 +319,7 @@ export async function startRuntime(
               const jobs = `${busy} job${busy === 1 ? "" : "s"}`
 
               waited = true
+              holding = true
               log(`${taking.name}: its code changed; waiting for ${jobs} to finish before loading it, at most ${bound / 1000}s: ${what}`)
               entrance.note(`${taking.name}: its changed code is not loaded yet; it waits at most ${bound / 1000}s for ${what}`)
             }
@@ -262,6 +353,7 @@ export async function startRuntime(
         }
       } finally {
         swapping = undefined
+        holding = false
       }
     })())
   }
@@ -273,8 +365,43 @@ export async function startRuntime(
     }, options.idleMs ?? IDLE_MS)
     idle.unref()
   }
+  /** Gives way to a new process: logged, and told to the one in its place with what it cut. */
+  const giveWay = (why: string) => {
+    const cut = underWay()
+
+    leaving = `${root.name}: ${why}; its runtime started again with the code as it is${cut && `, cutting what still ran: ${cut}`}`
+    log(leaving)
+    try {
+      writeFileSync(gaveWayFile(dir), leaving)
+    } catch {}
+
+    return leaving
+  }
+  /** Whether what answers is the code on disk: undefined when it is, or once hot reload loads it; else why this runtime gives way. */
+  const current = async (): Promise<string | undefined> => {
+    const until = Date.now() + STALE_MS
+    let file: string | undefined
+
+    if (leaving) return leaving
+    if (!(await timersFire())) return giveWay("a hot reload of its code failed")
+    while (code && (file = changedFile(code)) !== undefined) {
+      if (Date.now() >= until || !(await timersFire())) return giveWay(`${file} changed and hot reload did not load it`)
+      await pause(50)
+    }
+    while (swapping && !holding && Date.now() < until) await pause(20)
+
+    return leaving
+  }
   const about = { root: root.name, version: rootVersion(options.entry), session }
-  const entrance = door(running, { identity: owner.identity, ui: root.ui, touched: touch, end, about, command: options.command ?? `bv ${root.name}` })
+  const entrance = door(running, {
+    identity: owner.identity,
+    ui: root.ui,
+    touched: touch,
+    end,
+    about,
+    command: options.command ?? `bv ${root.name}`,
+    ...(options.successor && { current }),
+  })
 
   // The address the session last had, so the person's open page finds this instance; any free one where that is taken.
   const preferred = options.port ?? lastPort(dir) ?? 0
@@ -310,6 +437,28 @@ export async function startRuntime(
     } catch (error) {
       log(`not watching ${where}: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+  if (options.successor) {
+    let looking = false
+
+    // Bun says where the runtime logs that a reload failed: a look then, with no request to wait for.
+    try {
+      const w = watch(logFile(dir), async () => {
+        if (looking || leaving || closing) return
+        looking = true
+        if (await current()) end()
+        looking = false
+      })
+
+      w.unref()
+      watchers.push(w)
+    } catch {}
+    try {
+      const told = readFileSync(gaveWayFile(dir), "utf8")
+
+      rmSync(gaveWayFile(dir), { force: true })
+      entrance.note(told)
+    } catch {}
   }
   for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, end)
 
