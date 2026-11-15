@@ -1,0 +1,254 @@
+// The player: one scenario played on the demo project through the framework's own code, with no agent and no harness. The
+// demo is made in a directory of its own, a project with a .baba/ whose surfaces are this surface's demo/surfaces. Every
+// text the agent would be given comes from the process that gives it in a session: the framework's hook, run as the
+// harness runs it, `baba hook` with the event on standard input; and the word, .babavoss/bin/baba, run as the agent's
+// shell runs it, its output what a tool call shows. The root's runtime is woken by them as in a session, in its own
+// process. The person acts as their page does, by the door, and the build moves as its file is written. Nothing told is
+// made here: the player only records it, with what changed in the project, read as the person's page reads it.
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { setTimeout as sleep } from "node:timers/promises"
+import type { Json } from "babavoss/core/index.ts"
+import type { Scenario, Step } from "./scenarios.ts"
+
+/** The session the demo runs in, as the harness names it. */
+export const SESSION = "demo"
+/** The word in the demo project, as the root names it to the agent. */
+export const WORD = ".babavoss/bin/baba"
+/** What stands for the demo's own directory in what is recorded: it differs on every play and means nothing. */
+export const PROJECT = "<project>"
+
+/** One piece of text the agent is given: what carries it, a hook's event or the answer to a command, and the text, empty where it is given nothing. */
+export type Telling = { carrier: string; text: string }
+/** One step as played: who moved, what they did, what changed in the project as the page sees it, and what the agent was given. */
+export type Played = { who: "harness" | "person" | "agent" | "surface" | "root"; did: string; changed: string[]; tellings: Telling[] }
+export type Play = { name: string; steps: Played[]; error?: string }
+
+const FRAMEWORK = realpathSync(dirname(fileURLToPath(import.meta.resolve("babavoss/package.json"))))
+const BABA = join(FRAMEWORK, "bin/baba.ts")
+const SURFACES = realpathSync(fileURLToPath(new URL("../demo/surfaces", import.meta.url)))
+const BUILD = "build.txt"
+
+/** A value as one line of what changed: JSON, cut where long. */
+const short = (v: Json | undefined) => {
+  const s = v === undefined ? "–" : JSON.stringify(v)
+
+  return s.length > 80 ? `${s.slice(0, 79)}…` : s
+}
+/** A row's name in its list: its path where it has one, else its number or name; its index where it has none. */
+const named = (v: Json, i: number) => {
+  const row = v && typeof v === "object" && !Array.isArray(v) ? v : {}
+  const id = [row.at, row.n, row.name].find((x) => typeof x === "string" || typeof x === "number")
+
+  return id === undefined ? String(i) : String(id)
+}
+/** A view's scalars by their place, handles left out: what the page shows, to compare before and after. A row is placed by its identity. */
+function flat(value: Json | undefined, at = "", out = new Map<string, Json>()): Map<string, Json> {
+  if (value && typeof value === "object" && !Array.isArray(value) && value.kind === "handle") return out
+  if (Array.isArray(value) && value.every((v) => v === null || typeof v !== "object")) out.set(at, value)
+  else if (Array.isArray(value)) value.forEach((v, i) => flat(v, `${at}[${named(v, i)}]`, out))
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) if (!(k === "at" && at.endsWith("]"))) flat(v, at ? `${at}.${k}` : k, out)
+  } else if (value !== undefined) out.set(at, value)
+
+  return out
+}
+/** A place as read: within its innermost row, by that row's list and path. */
+const said = (key: string) => key.replace(/^.*?(\w+)\[([^\]]*)\](?!.*\[)/, "$1 $2")
+/** What differs between two reads of /: a line per fact changed, and a row added or gone as one line. */
+export function changes(before: Json | undefined, after: Json | undefined): string[] {
+  const a = flat(before)
+  const b = flat(after)
+  const lines: string[] = []
+  const rowOf = (k: string) => k.slice(0, k.lastIndexOf("]") + 1)
+  const has = (of: Map<string, Json>, row: string) => [...of.keys()].some((k) => k === row || k.startsWith(`${row}.`) || k.startsWith(`${row}[`))
+  const told = new Set<string>()
+  const field = (k: string, row: string) => k.slice(row.length + 1)
+
+  for (const [k, v] of b) {
+    const row = rowOf(k)
+
+    if (row && !has(a, row)) {
+      if (told.has(row)) continue
+      told.add(row)
+      lines.push(`+ ${said(row)}: ${[...b].filter(([x]) => rowOf(x) === row).map(([x, v]) => `${field(x, row)} ${short(v)}`).join(", ")}`)
+    } else if (!a.has(k)) {
+      if (!(Array.isArray(v) && !v.length && has(a, k))) lines.push(`+ ${said(k)}: ${short(v)}`)
+    } else if (JSON.stringify(a.get(k)) !== JSON.stringify(v)) lines.push(`${said(k)}: ${short(a.get(k))} → ${short(v)}`)
+  }
+  for (const k of a.keys()) {
+    const row = rowOf(k)
+
+    if (row && !has(b, row)) {
+      if (!told.has(row)) lines.push(`- ${said(row)}`)
+      told.add(row)
+    } else if (!b.has(k) && !has(b, k)) lines.push(`- ${said(k)}`)
+  }
+
+  return lines
+}
+
+/** A shell argument as the agent would type it. */
+const quoted = (s: string) => (/^[\w./=:@-]+$/.test(s) ? s : `'${s.replaceAll("'", "'\\''")}'`)
+const argsOf = (args: Record<string, string> = {}) => Object.entries(args).map(([k, v]) => `${k}=${v}`)
+
+/** Plays `scenario` on a demo project of its own, made and removed here; aborted, it stops after the step under way. */
+export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-design-")))
+  const home = join(dir, ".babavoss")
+  const env: Record<string, string> = { ...(process.env as Record<string, string>), BABAVOSS_HOME: home, BABAVOSS_LATEST: "", CLAUDE_CODE_SESSION_ID: SESSION }
+
+  for (const key of ["CODEX_THREAD_ID", "BABAVOSS_BIN"]) delete env[key]
+  mkdirSync(join(dir, ".baba"), { recursive: true })
+  writeFileSync(join(dir, ".baba/package.json"), JSON.stringify({ name: "demo", private: true, type: "module" }))
+  symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
+
+  const own = (text: string) => text.replaceAll(dir, PROJECT).trimEnd()
+  const run = async (cmd: string[], stdin?: string) => {
+    const child = Bun.spawn(cmd, { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe" })
+    const [out, err] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+
+    return own([out.trimEnd(), err.trimEnd()].filter(Boolean).join("\n"))
+  }
+  /** The harness's hook for an event: the context it adds, as the agent is given it. */
+  const hook = async (event: string, extra: Record<string, string> = {}): Promise<Telling> => {
+    const out = await run([process.execPath, BABA, "hook"], JSON.stringify({ session_id: SESSION, hook_event_name: event, ...extra }))
+    let text = out
+
+    if (event === "PostToolUse" && out) {
+      try {
+        text = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext
+      } catch {}
+    }
+
+    return { carrier: `${event} hook`, text }
+  }
+  /** The word, as the agent's shell runs it: what the tool call shows. */
+  const word = async (args: string[]): Promise<Telling> => ({ carrier: `answer to ${[WORD, ...args.map(quoted)].join(" ")}`, text: await run([join(dir, WORD), ...args]) })
+  const endpoint = () => {
+    try {
+      return JSON.parse(readFileSync(join(home, "sessions", SESSION, "baba", "service.json"), "utf8")) as { port: number; token: string }
+    } catch {
+      return undefined
+    }
+  }
+  /** The door as the person's page uses it; undefined where the root is asleep, which a look does not wake. */
+  const page = async (path: string, call?: { handle: string; args: Json }): Promise<Json | undefined> => {
+    const at = endpoint()
+
+    if (!at) return undefined
+    try {
+      const response = await fetch(`http://127.0.0.1:${at.port}${path}`, {
+        method: call ? "POST" : "GET",
+        headers: { accept: "application/json", "babavoss-service": at.token, "babavoss-actor": "person", "content-type": "application/json" },
+        ...(call && { body: JSON.stringify(call) }),
+        signal: AbortSignal.timeout(5000),
+      })
+
+      return (await response.json()) as Json
+    } catch {
+      return undefined
+    }
+  }
+  /** The project as the page has it: / and what /activity added since the last look. */
+  let seen = 0
+  const look = async () => {
+    const root = await page("/")
+    const activity = (await page("/activity")) as { entries?: { n: number; who: string; surface: string; at: string | null; what: string }[] | string } | undefined
+    const fresh = Array.isArray(activity?.entries) ? activity.entries.filter((e) => e.n > seen).reverse() : []
+
+    seen = Math.max(seen, ...fresh.map((e) => e.n))
+
+    return { root, activity: fresh.map((e) => `activity: ${e.who} · ${e.surface} ${e.at ?? ""} · ${e.what}`) }
+  }
+  const tabOf = (root: Json | undefined, surface: string) =>
+    ((root as { tabs?: { at: string; surface: string }[] } | undefined)?.tabs ?? []).find((t) => t.surface === surface)?.at
+  let waiting: Promise<Telling> | undefined
+  const steps: Played[] = []
+  let before = await look()
+
+  const one = async (step: Step): Promise<Omit<Played, "changed">> => {
+    switch (step.kind) {
+      case "start":
+        return { who: "harness", did: `the session ${step.source === "startup" ? "starts" : step.source === "resume" ? "resumes" : "starts again after a compaction"}`, tellings: [await hook("SessionStart", { source: step.source })] }
+      case "say":
+        return { who: "person", did: `says: ${step.text}`, tellings: [await hook("UserPromptSubmit")] }
+      case "read":
+        return { who: "agent", did: `${WORD} ${step.path}`, tellings: [await word([step.path]), await hook("PostToolUse")] }
+      case "call": {
+        const args = [step.path, step.handle, ...argsOf(step.args)]
+
+        return { who: "agent", did: [WORD, ...args.map(quoted)].join(" "), tellings: [await word(args), await hook("PostToolUse")] }
+      }
+      case "wait":
+        waiting = word(["wait", String(step.seconds)])
+        // The wait is under way at the door before anyone moves, as when the agent waits for the person.
+        await sleep(400)
+
+        return { who: "agent", did: `${WORD} wait ${step.seconds}, and waits`, tellings: [] }
+      case "waited": {
+        const answer = await (waiting ?? Promise.resolve({ carrier: "no wait", text: "" }))
+
+        waiting = undefined
+
+        return { who: "agent", did: "the wait ends", tellings: [answer, await hook("PostToolUse")] }
+      }
+      case "tool":
+        return { who: "agent", did: `another tool: ${step.what}`, tellings: [await hook("PostToolUse")] }
+      case "act": {
+        const answer = (await page(step.path, { handle: step.handle, args: step.args ?? {} })) as { outcome?: string; reason?: string } | undefined
+        const args = Object.entries(step.args ?? {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+
+        return {
+          who: "person",
+          did: `on the page: ${step.handle}${args.length ? ` ${args.join(" ")}` : ""} at ${step.path}${answer?.outcome === "refused" ? `, refused: ${answer.reason}` : ""}`,
+          tellings: [],
+        }
+      }
+      case "build": {
+        appendFileSync(join(dir, BUILD), `${step.line}\n`)
+
+        // Moved once the page shows it: the build's command reads the file every few milliseconds.
+        const at = tabOf(before.root, "build")
+        const status = step.line.split(":")[0]
+
+        for (let i = 0; at && i < 100; i++) {
+          if (((await page(at)) as { status?: string } | undefined)?.status === status) break
+          await sleep(20)
+        }
+
+        return { who: "surface", did: `the build moves by itself: ${step.line}`, tellings: [] }
+      }
+      case "stop":
+        return { who: "harness", did: "the agent's turn ends", tellings: [await hook("Stop")] }
+      case "sleep":
+        await run([join(dir, WORD), "close"])
+        for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
+
+        return { who: "root", did: "the root goes to sleep, as when nothing called it for a while", tellings: [] }
+    }
+  }
+
+  try {
+    for (const step of scenario.steps) {
+      if (signal?.aborted) throw new Error("stopped")
+
+      const done = await one(step)
+      const after = await look()
+
+      steps.push({ ...done, changed: [...after.activity, ...(after.root === undefined ? [] : changes(before.root, after.root))] })
+      if (after.root !== undefined) before = after
+    }
+
+    return { name: scenario.name, steps }
+  } catch (error) {
+    return { name: scenario.name, steps, error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    await waiting?.catch(() => {})
+    if (endpoint()) await run([join(dir, WORD), "close"]).catch(() => "")
+    for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
