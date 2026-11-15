@@ -28,7 +28,7 @@ export type Shown = "notices" | "all" | "needs"
 export type Need = { at: string; surface: string; who: "person" | "agent"; why: string }
 /** What was new as the log opened: the entries the person had not seen, and the newest entry then, after which all is new. */
 export type Opened = { fresh: ReadonlySet<number>; newest: number }
-type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number }
+export type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number }
 export type Group = { label: string; rows: Row[] }
 type Stream<T = void> = { subscribe: (fn: (value: T) => void) => () => void }
 
@@ -131,11 +131,12 @@ export const whoBy = (by: string | undefined): Who => (by === undefined ? "perso
 export const entryOf = (rows: Row[], notice: Notice): Row | undefined =>
   rows.find((r) => r.what === notice.text && (notice.from === undefined || r.surface === notice.from) && (notice.at === undefined || r.at === notice.at))
 
-/** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking. */
-export function useFeed(path: string, changes: Stream, live: boolean) {
-  const [rows, setRows] = useState<Row[]>([])
-  const [earlier, setEarlier] = useState<string>()
-  const [unseen, setUnseen] = useState(0)
+/** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking; `served` what the page was served there, so it is not read at first. */
+export function useFeed(path: string, changes: Stream, live: boolean, served?: Page) {
+  const [rows, setRows] = useState<Row[]>(() => (Array.isArray(served?.entries) ? served.entries : []))
+  const [earlier, setEarlier] = useState<string | undefined>(served?.earlier?.at)
+  const [unseen, setUnseen] = useState(served?.unseen ?? 0)
+  const fresh = useRef(served !== undefined)
   const older = useRef<Row[]>([])
   const load = useCallback(async () => {
     const page = await read<Page>(path).catch(() => undefined)
@@ -166,7 +167,8 @@ export function useFeed(path: string, changes: Stream, live: boolean) {
 
     let timer: ReturnType<typeof setTimeout> | undefined
 
-    void load()
+    if (!fresh.current) void load()
+    fresh.current = false
 
     const off = changes.subscribe(() => {
       timer ??= setTimeout(() => {

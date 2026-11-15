@@ -9,6 +9,7 @@ import { dirname, join } from "node:path"
 import { main } from "../../core/bv/door.ts"
 import { defineRoot } from "../../core/root.ts"
 import { findBaba, generateRoot, SURFACES_DIR } from "../../core/provision.ts"
+import { bootPaths } from "../src/boot.ts"
 import { shellUi } from "../src/hosting.ts"
 import { loadSurfaces, type Loaders } from "../src/loading.ts"
 import { shell } from "../src/surface.ts"
@@ -59,4 +60,4 @@ if (baba) follow(baba)
 else held.babavossSurfaces?.close()
 
 // Where there is no .baba/, the page is the shell's own, with no surface to hold.
-await main(defineRoot({ name: "baba", ui: shellUi(generated ?? new URL("../ui/", import.meta.url)), surface: shell(surfaces, baba, broken) }))
+await main(defineRoot({ name: "baba", ui: shellUi(generated ?? new URL("../ui/", import.meta.url)), surface: shell(surfaces, baba, broken), boot: bootPaths }))

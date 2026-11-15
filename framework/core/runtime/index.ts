@@ -1,5 +1,6 @@
 export { startRuntime, sessionArg, sourceDirs, IDLE_MS, RELOAD_MS, type RuntimeOptions } from "./runtime.ts"
 export { reach, type Reach } from "./reach.ts"
+export { BOOT_ID, island, type Boot } from "./boot.ts"
 export { door, admitted, type Door, type DoorOptions, type Ui, type UiHosting } from "./door.ts"
 export {
   findService,

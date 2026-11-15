@@ -423,6 +423,7 @@ export async function startRuntime(
   const entrance = door(running, {
     identity: owner.identity,
     ui: root.ui,
+    ...(root.boot && { boot: root.boot }),
     touched: touch,
     end,
     about,
