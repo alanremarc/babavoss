@@ -6,6 +6,7 @@ import { diff, entries, placeOf, rebase, tell, whole, type Change } from "../pre
 import { handles, type Args, type Json } from "../surface/view.ts"
 import type { Cause, Noticed, Running } from "../surface/run.ts"
 import { isPerson } from "../session.ts"
+import { heardRecord } from "./heard.ts"
 
 /** Convert text at the boundary, leaving admission and fixed-argument matching to the surface. */
 export function textArgs(view: Json | undefined, name: string, input: unknown): Args {
@@ -56,7 +57,8 @@ export const textView = (view: Json | undefined, path: string, command: string):
  * boundary, the person's message or a wait; a call's answer and a read of any other path leave it, so what the person and
  * the surfaces change while the agent works waits for the next boundary. A change is the person's when their call made it,
  * the agent's when its own did, through the word or a program, and the surface's when a command's event did; what only the
- * agent's own calls changed or gave is never told back, their answers told it. What was heard is held in memory alone.
+ * agent's own calls changed or gave is never told back, their answers told it. What was heard is kept on disk until it is
+ * told (heard.ts), so a runtime that starts again tells it, once.
  */
 export function textSession<M>(running: Running<M>, dir: string, actor: string, command: string) {
   const file = join(dir, "presented", "text.json")
@@ -74,9 +76,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   let version = running.version()
   // Who changed each fact since the session was last told the present, by the facts' keys by identity, so a row moved keeps its own.
   const by = new Map<string, Set<string>>()
-  let heard: string[] = []
-  // The places the person acted in since what was heard was told: each is heard once, and not where their notice was.
-  const acted = new Set<string>()
+  // What was heard since it was last told; the places the person acted in, each heard once, and not where their notice was.
+  const heard = heardRecord(dir)
   const place = (path: string) => {
     try {
       return placeOf(root(), path)
@@ -90,8 +91,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   running.notices((notice) => {
     const who = whoOf(notice.cause, actor)!
 
-    if (who === "person" && notice.cause.path !== undefined) acted.add(place(notice.cause.path))
-    if (who !== "you") heard.push(noticeLine(notice, who))
+    if (who === "person" && notice.cause.path !== undefined) heard.acted(place(notice.cause.path), false)
+    if (who !== "you") heard.notice(noticeLine(notice, who))
   })
 
   running.subscribe(() => {
@@ -118,12 +119,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     marks = now
     last = view
     // The person's call that gave no notice is still heard, as where they acted: the agent reads there if it matters.
-    const where = who === "person" && cause?.path !== undefined ? place(cause.path) : undefined
-
-    if (where !== undefined && !acted.has(where)) {
-      acted.add(where)
-      heard.push(`the person acted on ${where}`)
-    }
+    if (who === "person" && cause?.path !== undefined) heard.acted(place(cause.path), true)
   })
 
   // Who made a change: everyone who changed a fact it covers. Unnamed where the change came before this runtime, or from code loaded again.
@@ -164,12 +160,9 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   }
   // What was heard, under `notices:`, and forgotten.
   const notices = () => {
-    const out = heard.length ? ["notices:", ...heard] : []
+    const out = heard.take()
 
-    heard = []
-    acted.clear()
-
-    return out
+    return out.length ? ["notices:", ...out] : []
   }
 
   return {
@@ -177,7 +170,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     /** What a call changed at `path`, as its answer says it. */
     diff: (old: Json | undefined, now: Json | undefined, path: string) => tell(diff(old, now, { command, path })),
     /** How much was heard and waits to be told. */
-    noticed: () => heard.length,
+    noticed: () => heard.size(),
     /** How many of the person's calls changed / since the present was last told: what waits for the agent's next boundary. */
     waiting: () => acts,
     /** What changed at / since the session was last told it, by others than the agent alone. */

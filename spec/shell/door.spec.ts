@@ -1,6 +1,7 @@
 // The shell through the runtime's door, as the agent's text: what changes in a tab is said once in an answer, and what
 // the person did there is still told at / on the agent's next request; who a tab needs is said first, and its notices once,
-// to the agent as lines and to the page as events.
+// to the agent as lines and to the page as events; what was heard and not yet told is told once, though the runtime
+// started again in between.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -64,10 +65,9 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-const started = async () => {
-  const dir = mkdtempSync(join(tmpdir(), "shell-door-"))
-
-  dirs.push(dir)
+/** The shell's runtime for session S, in a new directory or, to start again where one ran, in `dir`. */
+const started = async (dir = mkdtempSync(join(tmpdir(), "shell-door-"))) => {
+  if (!dirs.includes(dir)) dirs.push(dir)
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1" }))
 
   const root = defineRoot({ name: "tabs", ui: dir, surface: shell({ counter }, dir) })
@@ -93,7 +93,7 @@ const started = async () => {
       })
     ).text()
 
-  return { runtime, endpoint, request }
+  return { runtime, endpoint, request, dir }
 }
 
 it("says a tab's change once in the answer to a call there, and still tells at / what the person did in the tab", async () => {
@@ -159,4 +159,37 @@ it("ends a wait on who is needed changing, though the surface changed it by itse
     ["changed by the surface:", "+ need: the person, at /tabs/1 counter, to say whether so many is right", '/tabs/1 counter "Counter"', "n: 0 → 6"].join("\n")
   )
   expect(Date.now() - from).toBeLessThan(4000)
+})
+
+it("tells a notice heard before the runtime started again in the agent's next answer after, once", async () => {
+  const first = await started()
+
+  await first.request("/?open")
+  await first.request("/", { handle: "open", args: { surface: "counter" } })
+  await first.request("/tabs/1", { handle: "note", args: { text: "before" } }, true)
+  // The runtime sleeps, or gives way to changed code, before the agent is told.
+  await first.runtime.close()
+
+  const { request } = await started(first.dir)
+
+  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe("n: 0 → 1\nnotices:\ncounter /tabs/1: noted before (by the person)")
+  expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toBe("n: 1 → 2")
+  // The agent's own notice is not told back to it, before a restart or after.
+  await request("/tabs/1", { handle: "note", args: { text: "mine" } })
+  expect(await request("/_/wait?seconds=0&tell=notices")).toBe("nothing changed")
+})
+
+it("tells more than twenty notices waiting as the newest twenty, after one line that counts the older and says where to read them", async () => {
+  const { request } = await started()
+
+  await request("/?open")
+  await request("/", { handle: "open", args: { surface: "counter" } })
+  for (let i = 1; i <= 25; i++) await request("/tabs/1", { handle: "note", args: { text: `n${i}` } }, true)
+
+  const told = (await request("/_/wait?seconds=0&tell=notices")).split("\n")
+
+  expect(told.slice(0, 3)).toEqual(["notices:", "5 earlier notices; read /activity/notices", "counter /tabs/1: noted n6 (by the person)"])
+  expect(told).toHaveLength(22)
+  expect(told.at(-1)).toBe("counter /tabs/1: noted n25 (by the person)")
+  expect(await request("/_/wait?seconds=0&tell=notices")).toBe("nothing changed")
 })
