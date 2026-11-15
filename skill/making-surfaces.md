@@ -27,7 +27,7 @@ Everything an agent learns of a surface, it learns from the surface. There is no
 
 The agent does the work through handles. What only the person may decide is an ask, offered to them alone on the page. The page shows what the surface says and offers the person their decisions; anything else they want changed, they tell the agent.
 
-The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…` and `babavoss/shell/…`, and read its code in `framework/` there rather than guessing its interfaces.
+The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.ts`; read its code in `framework/` there rather than guessing its interfaces.
 
 ## Updating
 

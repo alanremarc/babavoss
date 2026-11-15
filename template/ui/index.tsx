@@ -2,7 +2,8 @@
 // changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's.
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"
-import { Button, Plain, useLive, useTab } from "babavoss/shell/ui/index.ts"
+import { Button, Plain } from "babavoss/kit/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.ts"
 
 type Root = { greeting: string; proposed?: string; accept?: Handle; decline?: Handle }
 
