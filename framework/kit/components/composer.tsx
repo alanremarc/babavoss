@@ -96,13 +96,13 @@ function Composer({
               }}
             >
               <span className="truncate font-mono">{c.label}</span>
-              <span className="truncate text-[0.6875rem] leading-4 text-muted-foreground">{c.description}</span>
+              <span className="truncate text-meta text-muted-foreground">{c.description}</span>
             </li>
           ))}
         </ul>
       )}
       {refused && (
-        <p role="alert" className="px-1 text-[0.6875rem] leading-4 text-destructive">
+        <p role="alert" className="px-1 text-meta text-destructive">
           {refused}
         </p>
       )}
@@ -148,7 +148,7 @@ function Composer({
           }}
         />
         <InputGroupAddon align="block-end">
-          {footer !== undefined && <span className="flex min-w-0 items-center gap-1 truncate text-[0.6875rem] leading-4 text-muted-foreground">{footer}</span>}
+          {footer !== undefined && <span className="flex min-w-0 items-center gap-1 truncate text-meta text-muted-foreground">{footer}</span>}
           {stop && (
             <InputGroupButton type="button" variant="ghost" aria-label="Stop" title="Stop the agent" className="ms-auto" onClick={stop}>
               <SquareIcon />

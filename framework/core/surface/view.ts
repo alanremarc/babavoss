@@ -4,10 +4,14 @@ export type Args = Record<string, Json>
 export type Schema = Record<string, "string" | "number" | "boolean">
 export type View = { [key: string]: Json | undefined }
 
-/** `kind: "handle"` is reserved in views. Fixed args and open inputs are data, never more offered handles. */
-export type Handle = { kind: "handle"; name: string; args: Args; open: Schema; description: string }
+/**
+ * `kind: "handle"` is reserved in views. Fixed args and open inputs are data, never more offered handles. `ask` marks an
+ * action that is the person's alone, in the view the person reads; the agent is never offered one.
+ */
+export type Handle = { kind: "handle"; name: string; args: Args; open: Schema; description: string; ask?: true }
 
-export const handle = (name: string, description: string, args: Args = {}, open: Schema = {}): Handle => ({ kind: "handle", name, args, open, description })
+export const handle = (name: string, description: string, args: Args = {}, open: Schema = {}, ask = false): Handle =>
+  ask ? { kind: "handle", name, args, open, description, ask: true } : { kind: "handle", name, args, open, description }
 
 /** Every offered handle, in traversal order; a handle is a terminal value. */
 export function handles(value: Json | undefined): Handle[] {

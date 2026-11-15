@@ -157,7 +157,7 @@ function ThreadSteps({
 /** Where a turn ended: what it took and cost, quiet at the far end under what it ends; the rest in `title`. */
 function ThreadEnd({ title, children }: { title?: string; children?: React.ReactNode }) {
   return (
-    <div data-slot="thread-end" title={title} className="flex h-4 justify-end text-[0.6875rem] leading-4 text-muted-foreground/70 tabular-nums">
+    <div data-slot="thread-end" title={title} className="flex h-4 justify-end text-meta text-muted-foreground/70 tabular-nums">
       {children}
     </div>
   )
@@ -172,7 +172,7 @@ function ThreadEvent({ icon, title, children }: { icon?: React.ReactNode; title?
     <div
       data-slot="thread-event"
       title={title}
-      className="flex min-w-0 items-center justify-center gap-1.5 text-[0.6875rem] leading-4 text-muted-foreground [&_svg]:size-3 [&_svg]:shrink-0"
+      className="flex min-w-0 items-center justify-center gap-1.5 text-meta text-muted-foreground [&_svg]:size-3 [&_svg]:shrink-0"
     >
       {icon}
       <span className="min-w-0 truncate">{children}</span>

@@ -17,6 +17,6 @@
     "noUncheckedIndexedAccess": true,
     "jsx": "react-jsx"
   },
-  "include": ["bin", "framework", "spec"],
+  "include": ["bin", "framework", "spec", ".baba/surfaces"],
   "exclude": ["**/node_modules/**"]
 }

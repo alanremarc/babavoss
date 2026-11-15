@@ -1,6 +1,7 @@
 // A surface tested at its boundary. A story's actors see views, call the handles those views offer, are told what changed
 // and what was noticed;
-// the world outside is held by the test, which settles each command the surface starts. The model is never read.
+// the world outside is held by the test, which settles each command the surface starts, or holds it open, sends its events
+// one at a time and ends it. The model is never read.
 import { randomUUID } from "node:crypto"
 import { diff, tell, whole } from "../present/present.ts"
 import { agentActor } from "../session.ts"
@@ -94,13 +95,16 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
       },
     }
   }
-  const finish = async (target: Target<C> | undefined, event?: E, error?: string) => {
+  const find = (target: Target<C> | undefined) => {
     const matches =
       target === undefined ? pending : pending.filter((p) => (typeof target === "function" ? (target as (c: C) => boolean)(p.command) : p.command === target))
 
     if (matches.length !== 1) throw new Error(`Expected one pending command, found ${matches.length}`)
 
-    const entry = matches[0]!
+    return matches[0]!
+  }
+  const finish = async (target: Target<C> | undefined, event?: E, error?: string) => {
+    const entry = find(target)
 
     if (event !== undefined) entry.send(event)
     entry.end(error)
@@ -119,11 +123,20 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
   function fail(command: Target<C> | string, error?: string) {
     return error === undefined ? finish(undefined, undefined, command as string) : finish(command as Target<C>, undefined, error)
   }
+  /** One event from a command that goes on running: the effect is held open, for the actors to see and be told, until it ends. */
+  function send(event: E): Promise<void>
+  function send(command: Target<C>, event: E): Promise<void>
+  async function send(command: Target<C> | E, event?: E) {
+    find(event === undefined ? undefined : (command as Target<C>)).send(event ?? (command as E))
+    await barrier()
+  }
+  /** The end of a command held open, with no event of its own. */
+  const end = (command?: Target<C>) => finish(command)
 
   return {
     agent: actor(agentActor({ id: randomUUID() })),
     person: actor("person"),
-    world: { commands: () => pending.map((p) => p.command), settle, fail, idle },
+    world: { commands: () => pending.map((p) => p.command), settle, fail, send, end, idle },
     restart: async () => {
       await running.stop()
       running = start()

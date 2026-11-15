@@ -5,14 +5,13 @@ import { handle, type View } from "../../framework/core/surface/view.ts"
 import { actionItems, argsOf, commandsOf, joined, named, offered } from "../../framework/shell/ui/commands.ts"
 import type { Menu } from "../../framework/kit/layouts/menu.tsx"
 
-const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 })
+const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 }, {}, true)
 const note = handle("note", "Say where issue 3 stands", { n: 3 }, { text: "string" })
 const person: View = { n: 3, title: "Draft", approve, note_: note, more: [{ note }] }
-const agent: View = { n: 3, title: "Draft", note_: note }
 
 describe("the frame's actions", () => {
-  it("offers every handle of the view once, in the view's order, and knows an ask by the agent not being offered it", () => {
-    const actions = offered("/issues/3", person, agent)
+  it("offers every handle of the view once, in the view's order, and knows an ask by its mark", () => {
+    const actions = offered("/issues/3", person)
 
     expect(actions.map((a) => [a.handle.name, a.ask])).toEqual([
       ["approve", true],
@@ -21,14 +20,14 @@ describe("the frame's actions", () => {
     expect(actions.every((a) => a.path === "/issues/3")).toBe(true)
   })
 
-  it("calls nothing an ask without the agent's view, and offers nothing where there is no view", () => {
-    expect(offered("/", person).some((a) => a.ask)).toBe(false)
+  it("calls nothing an ask that is not marked one, and offers nothing where there is no view", () => {
+    expect(offered("/", { note_: note }).some((a) => a.ask)).toBe(false)
     expect(offered("/", undefined)).toEqual([])
   })
 
   it("names an action by its name, asks first, with … where it asks for input; by its description where names repeat", () => {
     const ran: string[] = []
-    const items = actionItems(offered("/issues/3", { note_: note, approve }, agent), (a) => ran.push(a.handle.name))
+    const items = actionItems(offered("/issues/3", { note_: note, approve }), (a) => ran.push(a.handle.name))
 
     expect(items.map((i) => [i.label, i.ask])).toEqual([
       ["Approve", true],
