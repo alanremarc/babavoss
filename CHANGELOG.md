@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.36.0
+
+- The strip is the page's header, at the top: home's `+`, the tabs newest first, and at its right whose move it is and the notifications. Below it stand a tab's frame and its content. The notifications panel opens downward and toasts come in under the bell. A surface whose page assumed a strip at the bottom should check its layout.
+- The `+` is home, the first tab, at `/`. It is the palette filling the page: the asks, actions and menus of the tab shown before it, the surfaces to open, the open tabs and the settings. ⌘K or Ctrl+K goes home from any tab, and back; Escape returns. A surface that does not load is listed there as broken, with its error, and cannot be opened. The popover launcher is gone.
+- `Toasts` in the kit takes `from: "top" | "bottom"`, the edge the stack stands at. Nothing else to adapt; what the agent reads is unchanged.
+
 ## 0.35.0
 
 - What was heard and not yet told to the agent is kept on disk, so a root that sleeps, reloads or starts again still tells each notice once; more than 20 waiting are told as the newest 20 after `N earlier notices; read /activity/notices`. Nothing to adapt.
