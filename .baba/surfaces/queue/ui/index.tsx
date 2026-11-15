@@ -1,31 +1,38 @@
-// The queue's page: the issues as one-liners in a sidebar on the right, grouped by where they stand, and the selected
-// one in the content, with what it is about, read as markdown. The person approves or drops a draft here; anything else, they tell the agent.
-// `drawers` are how the frame asks the person for an issue to add or draft: a title, and about as markdown in room to write it.
-import { useState } from "react"
-import { CircleCheckIcon, CircleDashedIcon, CircleIcon, ListTodoIcon, LoaderCircleIcon } from "lucide-react"
-import Markdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+// The queue's page: the session's work in two views, switched at the top of the sidebar. The list has the issues as
+// one-liners in the sidebar on the right, grouped by where they stand, and the selected one in the content; the map has the
+// issues as a plane of narratives in the content, and the selected one, or the narratives, in the sidebar. Both show an
+// issue with the one Detail. Which view and what is selected is the tab's route, so a refresh and the agent's pointing land
+// on it: /issues/N and /narratives/ID in the list, the same below /map in the map. The person approves or drops a draft
+// here; anything else, they tell the agent. `drawers` ask for an issue to add or draft: a title, about as markdown, and
+// where there is room for them, what it came out of and its narrative.
+import { useEffect, useState } from "react"
+import { ListTodoIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button, DialogFooter, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Input, Textarea } from "babavoss/kit/index.ts"
 import { useLive, useTab, type DrawerProps } from "babavoss/shell/ui/index.tsx"
-
-type Status = "draft" | "backlog" | "lane" | "done"
-type Issue = { at: string; n: number; title: string; status: Status; lane?: number; note?: string }
-type Whole = Issue & { about: string; updates?: { t?: number; text: string }[]; approve?: Handle; drop?: Handle }
-type Root = { lanes: number; free: number[]; issues: Issue[] }
+import { Detail } from "./detail.tsx"
+import { Narratives, Plane, type Node } from "./map.tsx"
+import { Label, Lane, Line, Mark, Switch, hue, type Lens, type Root, type Status, type Told, type Whole } from "./parts.tsx"
 
 export const icon = <ListTodoIcon aria-hidden />
 
-/** An issue to add or draft: its title, and what it is about as markdown; the call is the one the frame offered. */
-function IssueDrawer({ handle, submit, close }: DrawerProps) {
+const FIELD = "border-input dark:bg-input/30 h-8 w-full rounded-md border bg-transparent px-2.5 text-body outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3"
+
+/** An issue to add or draft: its title, what it is about as markdown, and for add_from and draft_from its parents and narrative. */
+function IssueDrawer({ handle, view, submit, close }: DrawerProps) {
   const [title, setTitle] = useState("")
   const [about, setAbout] = useState("")
+  const [from, setFrom] = useState("")
+  const [narrative, setNarrative] = useState("")
   const [busy, setBusy] = useState(false)
+  const branch = "from" in handle.open
+  const drafting = handle.name.startsWith("draft")
+  const narratives = ((view as Partial<Root> | undefined)?.narratives ?? []) as Root["narratives"]
   const ready = title.trim() !== "" && about.trim() !== "" && !busy
   const send = async () => {
     if (!ready) return
     setBusy(true)
-    await submit({ title, about }).finally(() => setBusy(false))
+    await submit(branch ? { title, about, from, narrative } : { title, about }).finally(() => setBusy(false))
   }
 
   return (
@@ -36,11 +43,30 @@ function IssueDrawer({ handle, submit, close }: DrawerProps) {
         void send()
       }}
     >
-      <p className="text-muted-foreground">{handle.name === "draft" ? "A draft waits for your approval before it joins the backlog." : "It joins the bottom of the backlog."}</p>
+      <p className="text-muted-foreground">{drafting ? "A draft waits for your approval before it joins the backlog." : "It joins the bottom of the backlog."}</p>
       <label className="flex flex-col gap-1">
         <span className="text-meta text-muted-foreground">Title</span>
         <Input autoFocus placeholder="A short imperative title" value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
+      {branch && (
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-meta text-muted-foreground">Came out of</span>
+            <Input placeholder="Issue numbers, as 31, 33" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-meta text-muted-foreground">Narrative</span>
+            <select className={FIELD} value={narrative} onChange={(e) => setNarrative(e.target.value)}>
+              <option value="">Its first parent's</option>
+              {narratives.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <label className="flex flex-col gap-1">
         <span className="text-meta text-muted-foreground">About, in markdown</span>
         <Textarea
@@ -62,14 +88,14 @@ function IssueDrawer({ handle, submit, close }: DrawerProps) {
           Cancel
         </Button>
         <Button type="submit" disabled={!ready}>
-          {handle.name === "draft" ? "Draft" : "Add"}
+          {drafting ? "Draft" : "Add"}
         </Button>
       </DialogFooter>
     </form>
   )
 }
 
-export const drawers = { add: IssueDrawer, draft: IssueDrawer }
+export const drawers = { add: IssueDrawer, add_from: IssueDrawer, draft: IssueDrawer, draft_from: IssueDrawer }
 
 const GROUPS: { status: Status; label: string }[] = [
   { status: "lane", label: "In progress" },
@@ -77,160 +103,176 @@ const GROUPS: { status: Status; label: string }[] = [
   { status: "draft", label: "Drafts" },
   { status: "done", label: "Done" },
 ]
-/** Reading type for an issue's markdown: a measure of about 68 characters, loose leading, quiet headings and lists. */
-const PROSE = [
-  "max-w-[68ch] text-large leading-relaxed text-foreground/85",
-  "[&>*:first-child]:mt-0 [&_p]:my-3 [&_strong]:font-medium [&_strong]:text-foreground",
-  "[&_h1]:mt-6 [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-medium [&_h1]:text-foreground",
-  "[&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:text-sm [&_h2]:font-medium [&_h2]:text-foreground",
-  "[&_h3]:mt-5 [&_h3]:mb-1 [&_h3]:text-body [&_h3]:font-medium [&_h3]:text-muted-foreground",
-  "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_li]:pl-1 [&_li::marker]:text-muted-foreground",
-  "[&_code]:rounded-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-[0.9em]",
-  "[&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
-  "[&_table]:my-3 [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:border-collapse [&_table]:text-body",
-  "[&_th]:border-b [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-medium [&_th]:text-muted-foreground [&_th:first-child]:pl-0",
-  "[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top [&_td:first-child]:pl-0 [&_tr:last-child_td]:border-b-0",
-  "[&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-5",
-].join(" ")
-const NAMES: Record<Status, string> = { lane: "In progress", backlog: "Backlog", draft: "Draft", done: "Done" }
 
-/** When an update was posted, as the hour and minute of the day. */
-const clock = (t?: number) => (t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "")
+/** Every narrative's view, kept current: its about, and how many passes each of its issues had, which / does not list. */
+function useNarratives(root: Root | undefined) {
+  const { live } = useTab()
+  const [told, setTold] = useState<Record<string, Told>>({})
+  const ats = (root?.narratives ?? []).map((x) => x.at).join(" ")
 
-function Mark({ status }: { status: Status }) {
-  const size = "size-3.5 shrink-0"
+  useEffect(() => {
+    const stops = ats
+      .split(" ")
+      .filter(Boolean)
+      .map((at) => live<Told>(at, (view) => setTold((previous) => ({ ...previous, [view.id]: view }))))
 
-  if (status === "lane") return <LoaderCircleIcon className={`${size} text-primary animate-spin [animation-duration:2.5s]`} aria-hidden />
-  if (status === "done") return <CircleCheckIcon className={`${size} text-muted-foreground`} aria-hidden />
-  if (status === "draft") return <CircleDashedIcon className={`${size} text-muted-foreground`} aria-hidden />
+    return () => stops.forEach((stop) => stop())
+  }, [live, ats])
 
-  return <CircleIcon className={size} aria-hidden />
+  return told
 }
 
-const Lane = ({ lane }: { lane: number }) => (
-  <span className="bg-primary text-primary-foreground inline-flex h-4 shrink-0 items-center rounded-sm px-1 text-badge font-medium tabular-nums">L{lane}</span>
-)
+/** The issues as the list's sidebar has them: grouped by where they stand, the lanes first with how many are busy. */
+function Stack({ root, picked, colorOf, go }: { root: Root; picked?: number; colorOf: (id: string) => string; go: (route: string) => void }) {
+  const busy = root.lanes - root.free.length
+
+  return (
+    <div className="py-2">
+      {GROUPS.map(({ status, label }) => {
+        const rows = root.issues.filter((issue) => issue.status === status)
+
+        if (!rows.length && status !== "lane") return null
+
+        return (
+          <section key={status} aria-label={label} className="pb-2">
+            <h2 className="text-muted-foreground flex h-6 items-center justify-between px-3 text-meta font-medium">
+              {label}
+              {status === "lane" ? (
+                <span className="flex items-center gap-0.5" aria-label={`${busy} of ${root.lanes} lanes busy`}>
+                  {Array.from({ length: root.lanes }, (_, i) => (
+                    <span key={i} className={`h-1.5 w-3 rounded-full ${root.free.includes(i + 1) ? "bg-border" : "bg-primary"}`} />
+                  ))}
+                </span>
+              ) : (
+                <span className="tabular-nums">{rows.length}</span>
+              )}
+            </h2>
+            {!rows.length && <p className="text-muted-foreground/70 px-3 text-body">All lanes idle</p>}
+            <ul>
+              {rows.map((issue) => (
+                <li key={issue.n}>
+                  <button
+                    type="button"
+                    onClick={() => go(`/issues/${issue.n}`)}
+                    aria-current={issue.n === picked}
+                    title={issue.title}
+                    className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
+                  >
+                    <Mark status={issue.status} />
+                    <span className="min-w-0 flex-1 truncate">{issue.title}</span>
+                    {issue.lane && <Lane lane={issue.lane} />}
+                    <span className="size-1.5 shrink-0 rounded-full" style={{ background: colorOf(issue.narrative) }} title={issue.narrative} />
+                    <span className="text-muted-foreground/70 w-6 text-right text-meta tabular-nums">#{issue.n}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+/** A narrative in the list's content: what it is about and its issues. */
+function Narrative({ told, color, go }: { told: Told; color: string; go: (route: string) => void }) {
+  return (
+    <article className="flex max-w-3xl flex-col gap-4 p-6">
+      <div className="text-muted-foreground flex items-center gap-2 text-body">
+        <span className="size-2 rounded-full" style={{ background: color }} />
+        Narrative
+      </div>
+      <h1 className="text-lg leading-snug font-medium">{told.title}</h1>
+      {told.about && <p className="text-large text-foreground/85">{told.about}</p>}
+      <section className="flex flex-col gap-1 border-t pt-4">
+        <Label>Issues · {told.issues.length}</Label>
+        <ul className="-mx-1.5 max-w-xl">
+          {told.issues.map((row) => (
+            <Line key={row.n} to={row} color={color} onPick={() => go(`/issues/${row.n}`)} />
+          ))}
+        </ul>
+      </section>
+    </article>
+  )
+}
 
 export default function Queue() {
-  const { view, error } = useLive<Root>("/")
-  // The selected issue is the tab's route, /issues/N, so it is in the address and survives a refresh.
+  const { view: root, error } = useLive<Root>("/")
   const { call, route, navigate } = useTab()
-  const picked = Number(/^\/issues\/(\d+)$/.exec(route)?.[1])
+  const told = useNarratives(root)
+  const lens: Lens = route === "/map" || route.startsWith("/map/") ? "map" : "list"
+  const place = lens === "map" ? route.slice("/map".length) || "/" : route
+  const named = Number(/^\/issues\/(\d+)$/.exec(place)?.[1]) || undefined
+  const focus = /^\/narratives\/([^/]+)$/.exec(place)?.[1]
+  const issues = root?.issues ?? []
+  // The list always shows an issue: the one in the route, else the first; the map shows one only where the route names it.
+  const picked = issues.find((issue) => issue.n === named)?.n ?? (lens === "list" && !focus ? issues[0]?.n : undefined)
+  const { view: whole } = useLive<Whole>(picked ? `/issues/${picked}` : "/")
   const [refused, setRefused] = useState("")
-  const issues = view?.issues ?? []
-  const current = issues.find((issue) => issue.n === picked) ?? issues[0]
-  const { view: selected } = useLive<Whole>(current ? `/issues/${current.n}` : "/")
-  const busy = (view?.lanes ?? 0) - (view?.free.length ?? 0)
+  const go = (to: string) => navigate(lens === "map" ? `/map${to === "/" ? "" : to}` : to)
+  const switchTo = (next: Lens) => navigate(next === "map" ? `/map${place === "/" ? "" : place}` : place)
+  const index = new Map((root?.narratives ?? []).map((x, i) => [x.id, i]))
+  const colorOf = (id: string) => hue(index.get(id) ?? 0)
+  const byN = new Map(issues.map((issue) => [issue.n, issue]))
+  const nodes: Node[] = issues.map((issue) => ({ ...issue, iterations: told[issue.narrative]?.issues.find((row) => row.n === issue.n)?.iterations ?? 0 }))
   const decide = async (handle: Handle) => {
-    const answer = await call(`/issues/${current?.n}`, handle.name, handle.args)
+    const answer = await call(`/issues/${picked}`, handle.name, handle.args)
 
     setRefused(answer.outcome === "refused" ? answer.reason : "")
   }
+  const shown = picked !== undefined && whole?.n === picked && whole.about !== undefined ? whole : undefined
+  const detail = (roomy: boolean) =>
+    shown && (
+      <Detail
+        whole={shown}
+        color={colorOf(shown.narrative.id)}
+        colorOf={(n) => colorOf(byN.get(n)?.narrative ?? "")}
+        laneOf={(n) => byN.get(n)?.lane}
+        go={go}
+        decide={(handle) => void decide(handle)}
+        refused={refused || error}
+        roomy={roomy}
+      />
+    )
+  const empty = (
+    <Empty>
+      <EmptyHeader>
+        <EmptyTitle>No issues</EmptyTitle>
+        <EmptyDescription>Tell the agent what to do next.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  )
 
-  return (
-    <>
+  if (lens === "map")
+    return (
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-w-0 flex-1 flex-col overflow-auto">
-          {current && selected?.about !== undefined ? (
-            <article className="flex max-w-3xl flex-col gap-4 p-6">
-              <div className="text-muted-foreground flex items-center gap-2 text-body">
-                <Mark status={selected.status} />
-                <span>{NAMES[selected.status]}</span>
-                {selected.lane && <Lane lane={selected.lane} />}
-                <span className="tabular-nums">#{selected.n}</span>
-              </div>
-              <h1 className="text-lg leading-snug font-medium text-balance">{selected.title}</h1>
-              <div className={PROSE}>
-                <Markdown remarkPlugins={[remarkGfm]}>{selected.about}</Markdown>
-              </div>
-              {selected.note && (
-                <p className="border-primary/50 border-l-2 pl-3 text-sm">
-                  <span className="text-muted-foreground">Now: </span>
-                  {selected.note}
-                </p>
-              )}
-              {!!selected.updates?.length && (
-                <section aria-label="Updates" className="flex flex-col gap-2 border-t pt-4">
-                  <h2 className="text-muted-foreground text-meta font-medium">Updates from the lane</h2>
-                  <ol className="flex flex-col gap-2">
-                    {[...selected.updates].reverse().map((update, i) => (
-                      <li key={selected.updates!.length - i} className="flex gap-3 text-body">
-                        <time className="text-muted-foreground/70 w-10 shrink-0 tabular-nums">{clock(update.t)}</time>
-                        <span className="min-w-0 flex-1 whitespace-pre-wrap">{update.text}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
-              {selected.status === "draft" && (
-                <div className="flex gap-2 pt-1">
-                  {selected.approve && <Button onClick={() => void decide(selected.approve!)}>Approve</Button>}
-                  {selected.drop && (
-                    <Button variant="ghost" onClick={() => void decide(selected.drop!)}>
-                      Drop
-                    </Button>
-                  )}
-                </div>
-              )}
-              {(refused || error) && (
-                <p role="alert" className="text-destructive text-sm">
-                  {refused || error}
-                </p>
-              )}
-            </article>
-          ) : (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>No issues</EmptyTitle>
-                <EmptyDescription>Tell the agent what to do next.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          )}
-        </main>
-        <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l py-2" aria-label="Issues">
-          {GROUPS.map(({ status, label }) => {
-            const rows = issues.filter((issue) => issue.status === status)
-
-            if (!rows.length && status !== "lane") return null
-
-            return (
-              <section key={status} aria-label={label} className="pb-2">
-                <h2 className="text-muted-foreground flex h-6 items-center justify-between px-3 text-meta font-medium">
-                  {label}
-                  {status === "lane" ? (
-                    <span className="flex items-center gap-0.5" aria-label={`${busy} of ${view?.lanes ?? 0} lanes busy`}>
-                      {Array.from({ length: view?.lanes ?? 0 }, (_, i) => (
-                        <span key={i} className={`h-1.5 w-3 rounded-full ${view?.free.includes(i + 1) ? "bg-border" : "bg-primary"}`} />
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="tabular-nums">{rows.length}</span>
-                  )}
-                </h2>
-                {!rows.length && <p className="text-muted-foreground/70 px-3 text-body">All lanes idle</p>}
-                <ul>
-                  {rows.map((issue) => (
-                    <li key={issue.n}>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/issues/${issue.n}`)}
-                        aria-current={issue.n === current?.n}
-                        title={issue.title}
-                        className={`hover:bg-muted aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground flex h-7 w-full items-center gap-2 px-3 text-left text-body outline-none ${status === "done" || status === "draft" ? "text-muted-foreground" : ""}`}
-                      >
-                        <Mark status={issue.status} />
-                        <span className="min-w-0 flex-1 truncate">{issue.title}</span>
-                        {issue.lane && <Lane lane={issue.lane} />}
-                        <span className="text-muted-foreground/70 text-meta tabular-nums">#{issue.n}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )
-          })}
+        {issues.length ? (
+          <Plane stories={root!.narratives} nodes={nodes} picked={picked} focus={focus} origin="This session's work" colorOf={colorOf} go={go} />
+        ) : (
+          <main className="flex min-w-0 flex-1 flex-col">{empty}</main>
+        )}
+        <aside className="bg-muted/30 flex w-96 shrink-0 flex-col overflow-auto border-l" aria-label={shown ? `Issue ${shown.n}` : "Narratives"}>
+          <Switch lens={lens} onLens={switchTo}>
+            {place !== "/" && (
+              <Button variant="ghost" size="xs" className="min-w-0" onClick={() => go(shown && !focus ? `/narratives/${shown.narrative.id}` : "/")}>
+                <span className="truncate">← {shown ? shown.narrative.title : "All narratives"}</span>
+              </Button>
+            )}
+          </Switch>
+          {detail(false) ?? (root && <Narratives root={root} told={told} focus={focus && told[focus] ? focus : undefined} colorOf={colorOf} go={go} />)}
         </aside>
       </div>
-    </>
+    )
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+        {focus && told[focus] ? <Narrative told={told[focus]!} color={colorOf(focus)} go={go} /> : (detail(true) ?? (!issues.length && empty))}
+      </main>
+      <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label="Issues">
+        <Switch lens={lens} onLens={switchTo} />
+        {root && <Stack root={root} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
+      </aside>
+    </div>
   )
 }

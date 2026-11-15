@@ -149,7 +149,7 @@ describe("the tab's menu", () => {
   const controls: MenuItem[] = [{ kind: "action", id: "close", label: "Close tab", run: () => {} }]
   const parts = { start: () => {}, navigate: () => {}, controls }
 
-  it("holds the surface's actions under its title, the place's under its name, its asks first and dotted, Go, then the shell's", () => {
+  it("holds the surface's actions with no title, the tab having it, the place's under its name, its asks first and dotted, Go, then the shell's", () => {
     const items = tabMenu({
       ...parts,
       surface: { label: "Queue", actions: at("/", { add }) },
@@ -162,7 +162,7 @@ describe("the tab's menu", () => {
       dots: new Set(["/issues/3/runs"]),
     })
 
-    expect(shape(items)).toEqual(["# Queue", "Add…", "---", "# Draft •", "Approve •", "---", "Done", "---", "> Go • [issues, Queue, ---, Runs •]", "---", "Close tab"])
+    expect(shape(items)).toEqual(["Add…", "---", "# Draft •", "Approve •", "---", "Done", "---", "> Go • [issues, Queue, ---, Runs •]", "---", "Close tab"])
   })
 
   it("leaves out what is empty, and gives Go a field to filter where it lists more than a few places", () => {
