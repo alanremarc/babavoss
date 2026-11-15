@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.48.0
+
+- What the agent is told is cut to what it needs. A quiet action, `action({ quiet: true })`, or an update returning `quiet: true`, is the page's own bookkeeping, told to the agent in no way and kept out of the activity; the shell's seen and looked and every settings change are quiet. A change no one made, as changed code or a restored state makes, is not told. A notice stands for the changes of the update that gave it; a need of the agent's is told all the same. A tab the agent neither read nor called in this turn or the last, and that does not need it, is one line at a boundary.
+- `detail(value)` from `babavoss/core/index.ts` marks a fact or a row as detail: read whole at the tab's path and by the page, counted in one line in the present at `/`. Mark finished rows and counters with it.
+- Breaking for specs that match tellings: a tab opened is one line, `+ PATH "TITLE", actions: a, b; read PATH`; an action offered or withdrawn reads `+ action NAME` and `- action NAME`, also in a story's `told()`; a reorder reads `PATH moved up` and never `order now …`. A path names one fact of the view above it, as `/queue/issues`.
+
 ## 0.47.0
 
 - Kit: `DropdownMenu` and its parts, `Badge`, `Marker`, an inline line or labelled separator in a conversation, and `ResizablePanelGroup`, `ResizablePanel` and `ResizableHandle`, from shadcn, in the type scale. `ThreadStep` takes `onOpenChange` and `ThreadSteps` takes `initial`, so a page can keep the open step in its route. The kit's class merger keeps a type-scale size, `text-meta` and the others, beside a text colour; it used to drop it, so some small labels in messages, the composer and the shell were the wrong size. Nothing to adapt.

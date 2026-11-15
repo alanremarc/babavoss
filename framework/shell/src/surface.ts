@@ -20,7 +20,7 @@
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
-import { action, handles, isPerson, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
+import { action, handles, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
 import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen } from "./activity.ts"
 
@@ -313,6 +313,7 @@ export function shell(
   // The person's marks of what they have seen of the notices: asks, so offered to them alone, at /activity/notices.
   const seen = action({
     name: "seen",
+    quiet: true,
     description: "the person saw every notice up to n, as on opening their notifications",
     subject: {},
     inputs: { n: "number" },
@@ -321,6 +322,7 @@ export function shell(
   })
   const looked = action({
     name: "looked",
+    quiet: true,
     description: "the person looked at notice n alone, as by clicking its toast or opening its tab's channel",
     subject: {},
     inputs: { n: "number" },
@@ -395,6 +397,7 @@ export function shell(
           model: { ...model, tabs: model.tabs.map((t) => (t.n === tab.n ? { ...t, model: result.model } : t)) },
           commands: (result.commands ?? []).map((command) => ({ n: tab.n, surface: tab.surface, command })),
           ...(result.notices?.length && { notices: result.notices.map((notice) => noticed(tab, notice)) }),
+          ...(result.quiet && { quiet: true as const }),
         }
   /** A message's next model and what it gives, before its activity is kept. */
   const step = (model: ShellModel, message: Call | ShellEvent): Update<ShellModel, ShellCommand> => {
@@ -472,7 +475,8 @@ export function shell(
     update(model, message) {
       const result = step(model, message)
 
-      if ("refused" in result) return result
+      // A quiet commit is the page's own bookkeeping, no activity: as what waits for the agent, it is no one's doing.
+      if ("refused" in result || result.quiet) return result
 
       const log = model.activity ?? []
       const numbered: Call | ShellEvent =
@@ -506,8 +510,10 @@ export function shell(
         const rows = model.tabs.map((tab) => said(tab, actor))
         const needs: Need[] = rows.flatMap(({ needs }, i) => needs.map((need) => ({ at: addressOf(model.tabs[i]!), surface: model.tabs[i]!.surface, ...need })))
         const { title, ...rest } = home
+        const root = { title, ...(needs.length && { needs }), ...rest, tabs: (home.tabs as View[]).map((row, i) => ({ ...row, ...rows[i]!.row })) }
 
-        return { title, ...(needs.length && { needs }), ...rest, tabs: (home.tabs as View[]).map((row, i) => ({ ...row, ...rows[i]!.row })) }
+        // A tab's detail stays marked only in the agent's present, which counts it; the person reads it as it is.
+        return actor !== undefined && isPerson(actor) ? revealed(root) : root
       }
 
       const tab = tabAt(model, at)
@@ -516,7 +522,8 @@ export function shell(
 
       const seen = shown(tab, at.path, actor)
 
-      return "broken" in seen ? { at: `${addressOf(tab)}${at.path === "/" ? "" : at.path}`, broken: seen.broken } : whole(seen.ok, addressOf(tab))
+      // At its own path a tab is read whole, its detail as ordinary values.
+      return "broken" in seen ? { at: `${addressOf(tab)}${at.path === "/" ? "" : at.path}`, broken: seen.broken } : revealed(whole(seen.ok, addressOf(tab)))
     },
     run: (c, send, signal) => held.get(c.surface)!.run(c.command, (event: { kind: string }) => send({ kind: "tab", n: c.n, event, t: Date.now() }), signal),
     failed: (c, error) => ({ kind: "tab", n: c.n, event: held.get(c.surface)!.failed(c.command, error), t: Date.now() }),

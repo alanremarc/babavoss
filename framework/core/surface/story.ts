@@ -7,7 +7,7 @@ import { diff, tell, whole } from "../present/present.ts"
 import { agentActor } from "../session.ts"
 import { run, type Noticed, type Saved } from "./run.ts"
 import type { Surface } from "./surface.ts"
-import { handles, type Args, type Json } from "./view.ts"
+import { handles, revealed, type Args, type Json } from "./view.ts"
 
 type Pending<C, E> = { command: C; send(event: E): void; end(error?: string): void }
 type Target<C> = C | ((command: C) => boolean)
@@ -71,7 +71,8 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
   const actor = (identity: string) => {
     let before: { view: Json | undefined } | undefined
     let since = 0
-    const sees = (path = "/") => running.read(path, identity)
+    // An actor reads the surface at its own paths, where detail is an ordinary value, as a tab's reader does.
+    const sees = (path = "/") => revealed(running.read(path, identity))
 
     return {
       sees,

@@ -13,6 +13,26 @@ export type Handle = { kind: "handle"; name: string; args: Args; open: Schema; d
 export const handle = (name: string, description: string, args: Args = {}, open: Schema = {}, ask = false): Handle =>
   ask ? { kind: "handle", name, args, open, description, ask: true } : { kind: "handle", name, args, open, description }
 
+/**
+ * `kind: "detail"` is reserved in views too: a fact or a row that is detail. It is told where it stands, at its own path
+ * and to the person as an ordinary value, but kept out of the present at / and its changes there, which count it instead.
+ */
+export type Detail = { kind: "detail"; value: Json }
+
+/** A fact or a row marked as detail: the agent reads it at its tab's path, and the present at / says only how much there is. */
+export const detail = (value: Json): Detail => ({ kind: "detail", value })
+export const isDetail = (value: Json | undefined): value is Detail =>
+  !!value && typeof value === "object" && !Array.isArray(value) && value.kind === "detail" && Object.hasOwn(value, "value")
+
+/** A view with its detail as ordinary values, as every reader but the present at / sees it. */
+export function revealed<V extends Json | undefined>(value: V): V {
+  if (isDetail(value)) return revealed(value.value) as V
+  if (Array.isArray(value)) return value.map((v) => revealed(v)) as V
+  if (!value || typeof value !== "object" || value.kind === "handle") return value
+
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, revealed(v)])) as V
+}
+
 /** Every offered handle, in traversal order; a handle is a terminal value. */
 export function handles(value: Json | undefined): Handle[] {
   if (!value || typeof value !== "object") return []
