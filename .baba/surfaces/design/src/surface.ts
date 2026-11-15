@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url"
 import { action, surface, view, type Notice, type Update } from "babavoss/core/index.ts"
 import { delta, masked, said, size, sum, together, type Delta, type Size } from "./measure.ts"
 import { play, type Play, type Played } from "./play.ts"
-import { GROUPS, SCENARIOS, type Scenario } from "./scenarios.ts"
+import { GROUPS, SCENARIOS, slow, type Scenario } from "./scenarios.ts"
 import { factsOf, listed, said as factsSaid, shape, type Shape } from "./shape.ts"
 
 /** The tellings as pinned: each scenario's texts, step by step, and when. */
@@ -20,7 +20,8 @@ export type Pin = { t: number; texts: Record<string, string[][]> }
  * play did not end; `shape`: the demo's surfaces as the last play read them.
  */
 export type Model = { plays: Play[]; playing: boolean; again?: boolean; pin?: Pin; failure?: string; shape?: Shape[] }
-export type Event = { kind: "changed" } | { kind: "played"; plays: Play[]; shape?: Shape[] } | { kind: "unplayed"; error: string } | { kind: "none" }
+/** `played`: some scenarios played, the rest kept as they were; `partial`, the play goes on with those that take real time. */
+export type Event = { kind: "changed" } | { kind: "played"; plays: Play[]; shape?: Shape[]; partial?: true } | { kind: "unplayed"; error: string } | { kind: "none" }
 export type Command = { kind: "watch" } | { kind: "play" }
 type Result = Update<Model, Command>
 
@@ -243,7 +244,8 @@ function noticed(before: Play[], after: Play[]): Notice[] {
   if (!before.length) return []
 
   const texts = (p: Play | undefined) => masked(JSON.stringify(p?.steps.map((s) => s.tellings.map((t) => t.text)) ?? []))
-  const moved = after.filter((p) => texts(p) !== texts(before.find((b) => b.name === p.name)))
+  // A scenario played for the first time has nothing to have changed from.
+  const moved = after.filter((p) => before.some((b) => b.name === p.name) && texts(p) !== texts(before.find((b) => b.name === p.name)))
 
   return moved.length ? [`Played again: what ${moved.map((p) => p.name).join(", ")} ${moved.length === 1 ? "tells" : "tell"} the agent changed`] : []
 }
@@ -254,8 +256,12 @@ function update(m: Model, event: Event): Result {
   if (event.kind !== "played") return { model: m }
 
   const { failure: _failure, ...kept } = m
-  const next = { ...kept, plays: event.plays, playing: false, again: false, ...(event.shape && { shape: event.shape }) }
+  const plays = SCENARIOS.flatMap((s) => event.plays.find((p) => p.name === s.name) ?? m.plays.find((p) => p.name === s.name) ?? [])
   const notices = noticed(m.plays, event.plays)
+
+  if (event.partial) return { model: { ...kept, plays, ...(event.shape && { shape: event.shape }) }, notices }
+
+  const next = { ...kept, plays, playing: false, again: false, ...(event.shape && { shape: event.shape }) }
 
   return m.again ? { ...playing(next), notices } : { model: next, notices }
 }
@@ -293,9 +299,12 @@ export default surface<Model, Event, Command>({
   view: pages.view,
   async run(command, send, signal) {
     if (command.kind === "watch") return watching(() => send({ kind: "changed" }), signal)
-    const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.map((s) => play(s, signal))), shape()])
+    // Those that take real time are played beside the rest, and told once the rest are, so the page fills at once.
+    const later = Promise.all(SCENARIOS.filter(slow).map((s) => play(s, signal)))
+    const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.filter((s) => !slow(s)).map((s) => play(s, signal))), shape()])
 
-    send({ kind: "played", plays, shape: demo })
+    send({ kind: "played", plays, shape: demo, ...(SCENARIOS.some(slow) && { partial: true as const }) })
+    if (SCENARIOS.some(slow)) send({ kind: "played", plays: await later })
   },
   failed: (command, error) => (command.kind === "play" ? { kind: "unplayed", error } : { kind: "none" }),
 })

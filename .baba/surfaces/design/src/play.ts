@@ -354,6 +354,10 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
           ...(!seen && { timing: "the reload was not seen in time" }),
         }
       }
+      case "pause":
+        await sleep(step.seconds * 1000)
+
+        return { who: "root", did: `${step.seconds} seconds pass with no call, as while the agent thinks`, tellings: [] }
       case "hooks":
         hooked = step.on
 
