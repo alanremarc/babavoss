@@ -1,14 +1,12 @@
-// What the build util does outside its model: reads the briefs kept in the project's apps, writes one back, and makes an
-// app from the template. A project's own apps live in skills/NAME and are installed in that project by links to them from
-// the harness's skill folders. An app holds no framework and names none: it runs on this skill's.
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+// What the build util does outside its model: finds the project's apps, and makes one from the template. A project's own
+// apps live in skills/NAME and are installed in that project by links to them from the harness's skill folders. An app
+// holds no framework and names none: it runs on this skill's.
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { SKILL_FOLDERS } from "babavoss/core/skill-folders.ts"
-import { discoverApps } from "./apps.ts"
-import type { Brief, BuildPorts, Entry } from "./surface.ts"
+import type { BuildPorts, Made } from "./surface.ts"
 
-export const BRIEF_FILE = "brief.json"
 /** Where a project's own apps live. */
 export const APPS_DIR = "skills"
 /** The skill folders the harnesses read in a project: each holds a link to an app made here, which installs it there. */
@@ -20,60 +18,37 @@ const NAMED = ["SKILL.md", "README.md", "package.json", "src/app.ts", "ui/index.
 const carried = fileURLToPath(new URL("../../../", import.meta.url))
 
 /** Whether anything stands at the path, a link that leads nowhere included. */
-const stands = (path: string) => {
-  try {
-    lstatSync(path)
-
-    return true
-  } catch {
-    return false
-  }
-}
-const write = (file: string, brief: Brief) => {
-  const temporary = `${file}.tmp`
-
-  writeFileSync(temporary, `${JSON.stringify(brief, null, 2)}\n`)
-  renameSync(temporary, file)
-}
+const stands = (path: string) => lstatSync(path, { throwIfNoEntry: false }) !== undefined
 
 export function buildPorts(project: string, template: string = join(carried, "assets/template")): BuildPorts {
-  // One write at a time for a file, in the order asked, so a later brief is never overwritten by an earlier one.
-  const writes = new Map<string, Promise<void>>()
-
   return {
     project,
+    // An app is a skill with a door; a skill without one is a skill of some other kind.
     async load() {
-      return discoverApps(project).flatMap((app): Entry[] => {
-        const file = join(app.path, BRIEF_FILE)
+      const dir = join(project, APPS_DIR)
+      const names = existsSync(dir) ? readdirSync(dir).sort() : []
 
-        if (!existsSync(file)) return []
+      return names.flatMap((name): Made[] => {
+        const skill = join(dir, name, "SKILL.md")
 
-        return [{ ...(JSON.parse(readFileSync(file, "utf8")) as Brief), dir: app.dir }]
+        if (!existsSync(skill) || !existsSync(join(dir, name, "scripts/open.ts"))) return []
+
+        const description = /^description:\s*(.+)$/m.exec(readFileSync(skill, "utf8"))?.[1]
+
+        return [{ name, dir: join(APPS_DIR, name), ...(description && { description }) }]
       })
     },
-    save(dir, brief) {
-      const file = join(project, dir, BRIEF_FILE)
-      const next = (writes.get(file) ?? Promise.resolve()).catch(() => {}).then(() => write(file, brief))
-
-      writes.set(file, next)
-
-      return next
-    },
-    async create(brief) {
-      const dir = join(project, APPS_DIR, brief.name)
-      const links = HARNESS_SKILLS.map((folder) => join(project, folder, brief.name))
+    async create(name) {
+      const dir = join(project, APPS_DIR, name)
+      const links = HARNESS_SKILLS.map((folder) => join(project, folder, name))
       const taken = [dir, ...links].find(stands)
 
       if (taken) throw new Error(`${relative(project, taken)} exists already: name the app otherwise, or remove what is there`)
       mkdirSync(dir, { recursive: true })
       try {
         cpSync(template, dir, { recursive: true })
-        for (const name of NAMED) {
-          const file = join(dir, name)
-
-          if (existsSync(file)) writeFileSync(file, PLACEHOLDERS.reduce((text, word) => text.replaceAll(word, brief.name), readFileSync(file, "utf8")))
-        }
-        write(join(dir, BRIEF_FILE), brief)
+        for (const file of NAMED.map((named) => join(dir, named)))
+          if (existsSync(file)) writeFileSync(file, PLACEHOLDERS.reduce((text, word) => text.replaceAll(word, name), readFileSync(file, "utf8")))
         for (const link of links) {
           mkdirSync(dirname(link), { recursive: true })
           symlinkSync(relative(dirname(link), dir), link)

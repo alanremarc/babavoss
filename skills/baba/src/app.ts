@@ -1,7 +1,6 @@
 // The authoring app, baba: a shell of utils for authoring apps on babavoss. The core, harness-free.
 import { defineApp } from "babavoss/core/index.ts"
 import { shell, shellUi } from "babavoss/shell/index.ts"
-import { promptware } from "./utils/promptware/index.ts"
 import { build } from "./utils/build/index.ts"
 
 // The project is the session's directory. The surface runs in the session's runtime, and the framework starts that in the
@@ -14,5 +13,5 @@ const identity = { name: "baba", version: (await import("../package.json")).defa
 export default defineApp({
   ...identity,
   ui: shellUi(new URL("../ui/", import.meta.url)),
-  surface: shell({ title: "baba", utils: [build({ project }), promptware({ project })] }),
+  surface: shell({ title: "baba", utils: [build({ project })] }),
 })
