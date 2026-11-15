@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.22.1
+
+- A running root no longer goes on serving old code after a hot reload fails or misses a change, as a checkout, a delete-and-recreate or briefly broken code can cause: its runtime notices before it answers, or when bun logs the failure, and gives way to a fresh one at the same address, which says so and what it cut.
+- When a surface's code does not load, the answer now says why and in which file, instead of a message about the sandbox. While the code is broken the root is down; the next call after it is fixed wakes it.
+- The root follows `surfaces/` again after that directory is replaced or made late.
+
 ## 0.22.0
 
 - The UI kit left the shell and has its own name, `babavoss/kit`. In a surface's `ui/index.tsx`, components (`Button`, `Alert`, `Empty…`, `Dialog…`, `Popover…`, `Tooltip…`, `ToggleGroup…`, `Command…`, `Trace…`, `CodeBlock…`, `Thread…`, `Composer`, `Message…`, `Bubble…`, `MessageScroller…`, `InputGroup…`), layouts (`Plain`, `Workbench`, `Welcome`, `MenuBar`) and the workbench parts (`Workbench*`, `Dismiss`, `useNarrow` and their types) now import from `babavoss/kit/index.ts` instead of `babavoss/shell/ui/index.ts`.
