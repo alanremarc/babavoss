@@ -299,6 +299,32 @@ test("the hook reads the configuration as it runs: an event not listed tells not
   }
 }, 60_000)
 
+test("provision and start say in one line where an organisation's managed settings keep Claude Code from running baba's hook; a harness not enabled is not read for", () => {
+  const managed = mkdtempSync(join(tmpdir(), "managed-"))
+  const env = { ...process.env, BABAVOSS_MANAGED: managed, CLAUDE_CODE_SESSION_ID: "managed", CODEX_THREAD_ID: "" }
+  const baba_ = (args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: baba, encoding: "utf8", env })
+  const line = `baba: Claude Code's managed settings (${join(managed, "managed-settings.json")}) disable every hook (disableAllHooks), baba's among them;`
+
+  try {
+    expect(baba_(["provision"]).stdout).not.toContain("managed settings")
+    writeFileSync(join(managed, "managed-settings.json"), JSON.stringify({ disableAllHooks: true }))
+    expect(baba_(["provision"]).stdout).toContain(line)
+
+    const started = baba_(["start"])
+
+    expect(started.status, started.stderr).toBe(0)
+    expect(started.stderr.split("\n").filter((l) => l.startsWith("baba: "))).toEqual([expect.stringContaining(line)])
+    expect(started.stdout).toContain("page: ")
+    config("{ harnesses: { claude: { enable: false } } }")
+    expect(baba_(["start"]).stderr).not.toContain("managed settings")
+  } finally {
+    rmSync(join(baba, "baba.config.ts"), { force: true })
+    baba_(["provision"])
+    baba_(["start", "close"])
+    rmSync(managed, { recursive: true, force: true })
+  }
+}, 60_000)
+
 test("a session's start gives what the skill baba gives and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)
 
@@ -417,7 +443,8 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(hook("SessionEnd", { reason: "other" })).toMatchObject({ status: 0, stdout: "" })
     expect(await turn()).toMatchObject({ agent: "unknown" })
 
-    // A session resumed or compacted had the words: it is given their reminder, then the present whole.
+    // A session resumed or compacted had the words: it is given their reminder, then the present whole; once a boundary, so
+    // a compaction at once after a resume is given nothing again, and one after a message is given them.
     const reminder = readFileSync(join(checkout, "skill/reminder.md"), "utf8").trim()
 
     for (const source of ["resume", "compact"]) {
@@ -425,6 +452,8 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
       expect(again).toStartWith(`${reminder}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
       expect(again).toContain(`${tab} "Greeting" (tab `)
+      expect(hook("SessionStart", { source: "compact" })).toMatchObject({ status: 0, stdout: "" })
+      hook("UserPromptSubmit")
     }
     expect(hook("SessionStart", { source: "clear" }).stdout).toStartWith(body)
 

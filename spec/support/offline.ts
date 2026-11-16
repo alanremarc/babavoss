@@ -6,3 +6,5 @@ import { join } from "node:path"
 
 process.env.BABAVOSS_LATEST ??= ""
 process.env.BABAVOSS_SETTINGS ??= join(mkdtempSync(join(tmpdir(), "babavoss-settings-")), "settings.json")
+// Nor does any read the machine's managed settings of a harness: Claude Code's are read from a folder of the specs' own.
+process.env.BABAVOSS_MANAGED ??= mkdtempSync(join(tmpdir(), "babavoss-managed-"))

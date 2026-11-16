@@ -102,6 +102,18 @@ async function hook(args: string[]) {
   } catch {}
 }
 
+/** What keeps each harness the configuration enables from running baba's hook here, a line each; nothing where that cannot be read. */
+async function blockedLines(): Promise<string[]> {
+  try {
+    const baba = findBaba(process.cwd())
+    const config = baba ? await loadConfig(baba) : {}
+
+    return ADAPTERS.flatMap((adapter) => (sectionOf(config, adapter).enable ? (adapter.blocked?.() ?? []) : []))
+  } catch {
+    return []
+  }
+}
+
 /** The session a root's door is to work in: the harness's where there is one, else the one started by hand. */
 const session = () => (process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID ? [] : ["--session", BY_HAND])
 
@@ -110,8 +122,10 @@ try {
 
   if (command === "init") init(args)
   else if (command === "new") await create(args)
-  else if (command === "start")
+  else if (command === "start") {
+    for (const line of await blockedLines()) console.error(line)
     process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...(args.includes("--session") ? [] : session()), ...args], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
+  }
   else if (command === "provision" && !args.length) report(await provision(found()))
   else if (command === "hook" && args.length <= 1) await hook(args)
   else throw new Refusal(USAGE)
