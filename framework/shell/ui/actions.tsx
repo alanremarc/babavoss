@@ -1,13 +1,13 @@
 // What the shell makes of a tab's actions, from its surface's views alone, the same for every surface; the page returns
-// its content alone and draws none of it. The tab's menu, behind the dots that stand in its icon's place in the strip:
-// a search of the actions and places of the whole tree below the tab; the surface's actions at /, under its title; where
-// the tab is below /, the place's, under its name; Go, the places and the way back up; then the shell's own controls.
-// What waits on the person is dotted, and so is every step of the way to it. Around the tab's content: the line that says
-// why an action was refused, and the modal an action with inputs opens, the page's drawer for it or a form of its inputs.
-// While the tab is shown, its asks dot it in the strip.
-import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
+// its content alone and draws none of it. The tab's menu, which its drawer holds at its head: a search of the actions and
+// places of the whole tree below the tab; the surface's actions at /; where the tab is below /, the place's, under its
+// name; Go, the places and the way back up; then the shell's own controls. What waits on the person is dotted, and so is
+// every step of the way to it; the first ask is what the drawer's foot points to. Around the tab's content: the line that
+// says why an action was refused, and the modal an action with inputs opens, the page's drawer for it or a form of its
+// inputs. While the tab is shown, its asks mark it on the rail.
+import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react"
 import { XIcon } from "lucide-react"
-import { DropdownKit, SearchMenu, type MenuItem } from "../../kit/layouts/menu.tsx"
+import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import type { Args, View } from "../../core/surface/view.ts"
 import {
   aboveOf,
@@ -25,7 +25,7 @@ import {
   type Offered,
 } from "./commands.ts"
 import { Inputs, type Drawers } from "./inputs.tsx"
-import { ChangesContext, doorOf, useCached, useTab, useTabCache, type Door } from "./tab.tsx"
+import { ChangesContext, doorOf, useCached, useLive, useTab, useTabCache, type Door } from "./tab.tsx"
 
 /** How many asks each tab offers where it was last seen, by its address, which dot it in the strip until it closes. */
 export type TabAsks = { count: (at: string) => number; set: (at: string, count: number) => void; subscribe: (fn: () => void) => () => void }
@@ -135,8 +135,11 @@ function useModel({
   return { asks: [...atRoot, ...atHere].filter((a) => a.ask).length, items, found, ready: !!root }
 }
 
-/** The tab's menu, as the dropdown in the strip shows it while it is open: its views are read as it opens, through `door` where given. */
-export function TabMenu({
+/** A tab's menu as its drawer holds it: its entries, what its search finds, and the first ask it offers, by its label and place. */
+export type TabMenuModel = { items: MenuItem[]; find: (query: string) => MenuItem[]; ask?: { label: string; at: string }; ready: boolean }
+
+/** The tab's menu, read from its views through `door` where given, else the tab's at its address, while `on`. */
+export function useTabMenu({
   door: given,
   address,
   route,
@@ -146,7 +149,6 @@ export function TabMenu({
   navigate,
   notices,
   controls,
-  close,
 }: {
   /** Where its views are read from: the tab's, at its address, unless another is given, as a sample's. */
   door?: Door
@@ -158,23 +160,25 @@ export function TabMenu({
   navigate: (route: string) => void
   notices: string[]
   controls: MenuItem[]
-  close: () => void
-}) {
+}): TabMenuModel {
   const changes = useContext(ChangesContext)
   const door = useMemo(() => given ?? doorOf(address, changes), [given, address, changes])
   const model = useModel({ door, route, title, name, start, navigate, menu: { notices, controls } })
-  const find = (query: string) => foundItems(search(model.found ?? [], query), navigate, start)
+  const ask = (model.found ?? []).find((f) => f.kind === "action" && f.action.ask)
 
-  return (
-    <SearchMenu
-      placeholder="Search actions and places"
-      items={model.ready ? model.items : controls}
-      find={find}
-      kit={DropdownKit}
-      close={close}
-      {...(!model.ready && { empty: "Reading…" })}
-    />
-  )
+  return {
+    items: model.ready ? model.items : controls,
+    find: (query) => foundItems(search(model.found ?? [], query), navigate, start),
+    ...(ask?.kind === "action" && { ask: { label: ask.label, at: ask.action.path } }),
+    ready: model.ready,
+  }
+}
+
+/** The modal of an action with inputs, in its tab: the view where it is offered read live for the surface's drawer. */
+function Asked(props: Omit<ComponentProps<typeof Inputs>, "view">) {
+  const { view } = useLive(props.action.path)
+
+  return <Inputs {...props} view={view} />
 }
 
 /** The line over a tab's content that says why the action last started from its menu was refused. */
@@ -238,7 +242,7 @@ export function Actions({
       {asking && (
         // The modal waits on its view alone: the tab's content stays as it is.
         <Suspense fallback={null}>
-          <Inputs
+          <Asked
             key={`${asking.path} ${asking.handle.name} ${JSON.stringify(asking.handle.args)}`}
             action={asking}
             drawer={drawers[asking.handle.name]}

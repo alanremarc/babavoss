@@ -1,0 +1,135 @@
+// A drawer's thread: a tab's entries read from the shell's activity, and home's, the shell's own; the three kinds of entry,
+// calls in a row by one author folded; the words of their lines; where a click on one goes; what is pinned at the foot,
+// and what of the person's waits for the agent; the notices opening a drawer sees; and a closed tab's entries gone with it.
+import { describe, expect, it } from "bun:test"
+import { action, story, surface, view, type Update } from "../../framework/core/index.ts"
+import { shell } from "../../framework/shell/src/surface.ts"
+import {
+  agoOf,
+  callsLine,
+  entriesIn,
+  freshIn,
+  itemsOf,
+  kindOf,
+  pinnedOf,
+  placeIn,
+  shellEntries,
+  tabIn,
+  tabLine,
+  waitingRows,
+  type Row,
+} from "../../framework/shell/ui/thread.ts"
+
+const row = (n: number, more: Partial<Row>): Row => ({ n, when: "2026-11-16T12:00:00Z", who: "agent", surface: "queue", at: "/queue", what: "x", ...more })
+const ROWS: Row[] = [
+  row(9, { kind: "notice", tab: "/queue", at: "/queue/issues/4", what: "Issue 4 is done" }),
+  row(8, { kind: "call", tab: "/queue", what: "done n=4" }),
+  row(7, { kind: "call", tab: "/queue", what: "note n=4" }),
+  row(6, { kind: "call", tab: "/queue", who: "person", what: "approve n=7" }),
+  row(5, { kind: "call", tab: "/queue", what: "start n=5" }),
+  row(4, { kind: "notice", tab: "/tabs/3", surface: "lab", at: "/tabs/3", who: "surface", what: "The run ended" }),
+  row(3, { kind: "call", surface: "lab", at: "/tabs/3", what: "opened" }),
+  row(2, { kind: "call", who: "person", at: "/queue", what: "opened" }),
+  row(1, { kind: "call", surface: "notes", at: null, what: "closed" }),
+]
+
+describe("a thread", () => {
+  it("is a tab's entries and the shell's lines about it; home's is the shell's own", () => {
+    expect(entriesIn(ROWS, "/queue").map((r) => r.n)).toEqual([9, 8, 7, 6, 5, 2])
+    expect(entriesIn(ROWS, "/tabs/3").map((r) => r.n)).toEqual([4, 3])
+    expect(shellEntries(ROWS).map((r) => r.n)).toEqual([3, 2, 1])
+  })
+
+  it("knows the three kinds of entry: a notice, a call that said nothing, and the shell's own line about a tab", () => {
+    expect(ROWS.map(kindOf)).toEqual(["notice", "call", "call", "call", "call", "notice", "tab", "tab", "tab"])
+    // A call made on the shell itself, at its /, is a call.
+    expect(kindOf(row(1, { kind: "call", surface: "baba", at: "/", what: "bump" }))).toBe("call")
+    // A notice as /activity/notices gives it, with no kind, is a notice.
+    expect(kindOf(row(1, { tab: "/queue" }))).toBe("notice")
+  })
+
+  it("folds calls in a row by one author into one line, and says how many", () => {
+    const items = itemsOf(entriesIn(ROWS, "/queue"))
+
+    expect(items.map((i) => (i.kind === "calls" ? `${i.who} ${i.rows.map((r) => r.n).join(",")}` : `${i.kind} ${i.row.n}`))).toEqual([
+      "notice 9",
+      "agent 8,7",
+      "person 6",
+      "agent 5",
+      "tab 2",
+    ])
+    expect(items.flatMap((i) => (i.kind === "calls" ? [callsLine(i, "Queue")] : []))).toEqual(["Agent made 2 calls", "You made 1 call", "Agent made 1 call"])
+  })
+
+  it("says a tab entry by who did it, and on home names its surface", () => {
+    expect(tabLine(ROWS[7]!)).toBe("Opened by you")
+    expect(tabLine(ROWS[6]!, true)).toBe("Lab opened by the agent")
+    expect(tabLine(row(1, { what: "shown to the person" }))).toBe("Shown to you by the agent")
+    expect(tabLine(ROWS[8]!, true)).toBe("Notes closed by the agent")
+  })
+
+  it("goes where an entry happened, within its tab, and knows the tab a notice heard is in", () => {
+    expect(placeIn(ROWS[0]!, "/queue")).toBe("/issues/4")
+    expect(placeIn(ROWS[1]!, "/queue")).toBe("/")
+    expect(placeIn(ROWS[8]!, "/queue")).toBeUndefined()
+    expect([tabIn("/tabs/2/issues/12"), tabIn("/queue/issues/12"), tabIn("/activity"), tabIn(undefined)]).toEqual(["/tabs/2", "/queue", undefined, undefined])
+  })
+
+  it("says how long ago as now, minutes and hours, then the clock time", () => {
+    const now = new Date(2026, 10, 16, 12, 0, 0)
+
+    expect([agoOf(new Date(2026, 10, 16, 11, 59, 30), now), agoOf(new Date(2026, 10, 16, 11, 45), now), agoOf(new Date(2026, 10, 16, 9, 0), now)]).toEqual(["now", "15m", "3h"])
+  })
+})
+
+describe("what a thread's foot pins", () => {
+  it("is the one thing that explains the tab's mark, the strongest first, with its one action", () => {
+    const needs = [
+      { who: "agent" as const, why: "to rerun the build" },
+      { who: "person" as const, why: "to approve or drop 1 draft" },
+    ]
+
+    expect(pinnedOf({ broken: "it fails", needs })).toEqual({ tone: "broken", text: "This tab is broken", detail: "it fails", does: { label: "Reload" } })
+    expect(pinnedOf({ needs, ask: { label: "Approve", at: "/issues/4" } })).toEqual({ tone: "person", text: "Approve or drop 1 draft", does: { label: "Go there", at: "/issues/4" } })
+    expect(pinnedOf({ ask: { label: "Approve…", at: "/issues/7" } })).toEqual({ tone: "person", text: "Approve waits for you", does: { label: "Go there", at: "/issues/7" } })
+    expect(pinnedOf({ needs: [needs[0]!] })).toEqual({ tone: "agent", text: "Waits for the agent: rerun the build" })
+    expect(pinnedOf({})).toBeUndefined()
+  })
+
+  it("on home, is what of the person's waits for the agent's next turn: their latest calls, as many as wait", () => {
+    expect(waitingRows(ROWS, 2).map((r) => r.n)).toEqual([6, 2])
+    expect(waitingRows(ROWS, 0)).toEqual([])
+  })
+})
+
+describe("opening a drawer", () => {
+  it("sees the notices new in its tab, and on home those in no tab, never a call", () => {
+    const fresh = [9, 8, 4]
+
+    expect(freshIn(entriesIn(ROWS, "/queue"), fresh)).toEqual([9])
+    expect(freshIn(entriesIn(ROWS, "/tabs/3"), fresh)).toEqual([4])
+    expect(freshIn(shellEntries(ROWS), fresh)).toEqual([])
+  })
+
+  it("marks them seen quietly, by the person's asks, which tell the agent nothing and keep no entry", async () => {
+    const ring = action({ name: "ring", description: "ring", subject: {}, inputs: {}, update: (m: { n: number }): Update<{ n: number }, never> => ({ model: m, notices: ["Rang"] }) })
+    const pages = view([ring], { "/": () => ({ title: "Bell", ring: ring.bind({}) }) })
+    const bell = surface<{ n: number }, never, never>({ description: "a bell", init: () => ({ n: 0 }), update: (m, msg) => pages.update(m, msg as never), view: pages.view, run: async () => {}, failed: () => undefined as never })
+    const { agent, person } = story(shell({ bell }))
+
+    await agent.call("/", "open", { surface: "bell" })
+    await agent.call("/bell", "ring")
+    agent.told()
+    agent.noticed()
+
+    const notices = person.sees("/activity/notices")!
+    const mine = freshIn(entriesIn((agent.sees("/activity")!.entries as Row[]) ?? [], "/bell"), notices.fresh as number[])
+
+    expect(mine).toHaveLength(1)
+    for (const n of mine) expect(await person.call("/activity/notices", "looked", { n })).toMatchObject({ outcome: "written" })
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 0 })
+    expect(agent.told()).toEqual([])
+    expect(agent.noticed()).toEqual([])
+    expect(agent.sees("/activity")).toMatchObject({ kept: 2 })
+  })
+})

@@ -16,7 +16,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import type { Json } from "babavoss/core/index.ts"
 import { endDeaf, type Endpoint } from "babavoss/core/runtime/service.ts"
 import { HOME, placeOf, pointedSince, type Pointed } from "babavoss/shell/ui/pointing.ts"
-import { newestFirst, successor } from "babavoss/shell/ui/strip.ts"
+import { newestFirst, successor } from "babavoss/shell/ui/rail.ts"
 import type { Scenario, Scripted, Step } from "./scenarios.ts"
 
 /** The session the demo runs in, as the harness names it. */

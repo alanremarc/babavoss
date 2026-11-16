@@ -1,68 +1,75 @@
-// What home offers, worked out without a page: home is to the shell what a page is to its surface, so what it offers is
-// what the shell has at /: which surfaces can be opened and which do not load, the open tabs to switch to, and the tab
-// home returns to; its list, each thing once with what Enter does on it; and where home's shortcut goes. A surface's own actions and places are its tab's menu, never home's.
-import type { Handle } from "../../core/index.ts"
-import { HOME } from "./pointing.ts"
+// What home offers, worked out without a page: home is to the shell what a tab is to its surface, so what it offers is
+// what the shell has at /. Its menu is drawn as a tab's is, from the shell's own view at /: its actions, and the open
+// tabs as its places, nothing written by hand. Its desktop is an icon a surface, with how many tabs of it are open and
+// the strongest mark among them, a click going to its newest tab or opening one; a surface that does not load is shown,
+// and cannot be opened.
+import type { ReactNode } from "react"
+import type { Handle, View } from "../../core/index.ts"
+import type { MenuItem } from "../../kit/layouts/menu.tsx"
+import { offered, tabMenu, type Offered } from "./commands.ts"
+import { MARK, type Mark } from "./rail.ts"
 
 /** A surface as / lists it: one that loads, with what it is for and how to open it; or one whose code does not load, with why. */
 export type SurfaceEntry = { name: string; description?: string; open?: Handle; broken?: string }
-/** A surface as home offers it: openable by its handle, or broken, saying why, and not openable. */
-export type SurfaceChoice = { name: string; description: string; open: Handle } | { name: string; broken: string }
-
-/** Each surface as a choice: one that does not load, or offers no open, is broken and cannot be opened. */
-export function choices(surfaces: readonly SurfaceEntry[]): SurfaceChoice[] {
-  return surfaces.map(({ name, description, open, broken }) =>
-    broken === undefined && open ? { name, description: description ?? "", open } : { name, broken: broken ?? `the ${name} surface offers no open` }
-  )
-}
-
-/** The tab home returns to: the one shown before it, while it is still open; else none. */
-export function backTo(previous: string | undefined, open: readonly string[]): string | undefined {
-  return previous !== undefined && open.includes(previous) ? previous : undefined
-}
-
-/** Where home's shortcut goes: to home from anywhere else, and from home back to the tab shown before, if any. */
-export function shortcut(active: string, back: string | undefined): string {
-  return active !== HOME ? HOME : (back ?? HOME)
-}
-
-/** An open tab as home needs it to list it: where it is, its surface and what it is called. */
-export type TabChoice = { at: string; surface: string; label: string }
 
 /**
- * A line of home's list. Each thing stands once: an open tab, which Enter goes to, with its surface's open where another
- * may be opened; a surface with no tab open, which Enter opens; or one that does not load.
+ * What a home is given to draw itself, the desktop or a project's own `.baba/home.tsx`: the project's title, and what the
+ * shell says where there are no surfaces or no .baba/; its surfaces, each with a way to open a tab of it, none where it
+ * does not load, saying why; the open tabs, newest first, each with its mark and a way to go there; and the foot that says
+ * whose page this is.
  */
-export type HomeRow =
-  | { kind: "tab"; value: string; at: string; surface: string; label: string; another?: Handle }
-  | { kind: "surface"; value: string; name: string; description: string; open: Handle }
-  | { kind: "broken"; value: string; name: string; broken: string }
-
-/** Home's list, in the order it is read: the open tabs, newest first as given; then the surfaces with no tab open. */
-export function rowsOf(surfaces: readonly SurfaceEntry[], tabs: readonly TabChoice[]): HomeRow[] {
-  const offered = choices(surfaces)
-  const openOf = (name: string) => {
-    const choice = offered.find((u) => u.name === name)
-
-    return choice && "open" in choice ? choice.open : undefined
-  }
-
-  return [
-    ...tabs.map((tab): HomeRow => {
-      const another = openOf(tab.surface)
-
-      return { kind: "tab", value: `tab ${tab.at}`, at: tab.at, surface: tab.surface, label: tab.label, ...(another && { another }) }
-    }),
-    ...offered
-      .filter((u) => !tabs.some((tab) => tab.surface === u.name))
-      .map((u): HomeRow => ("broken" in u ? { kind: "broken", value: `surface ${u.name}`, ...u } : { kind: "surface", value: `surface ${u.name}`, ...u })),
-  ]
+export type HomeProps = {
+  title: string
+  notice?: string
+  surfaces: { name: string; label: string; description: string; icon?: ReactNode; broken?: string; open?: () => void }[]
+  tabs: { at: string; surface: string; label: string; icon?: ReactNode; mark?: Mark; go: () => void }[]
+  foot: ReactNode
 }
 
-/** What Enter does on a line, and what Enter with the command key does where it does something else; nothing on one that does not load. */
-export function doesOf(row: HomeRow): { enter?: string; other?: string } {
-  if (row.kind === "tab") return { enter: "Go to tab", ...(row.another && { other: "Open another tab" }) }
-  if (row.kind === "surface") return { enter: "Open in new tab" }
+/** A surface on the desktop: its open tabs, newest first, and the strongest mark among them. */
+export type Icon<S, T> = { surface: S; tabs: T[]; mark?: Mark }
 
-  return {}
+const STRONGEST = Object.keys(MARK) as Mark[]
+
+/** The desktop's icons, the surfaces in the order given, each with its open tabs, newest first as given, and their strongest mark. */
+export function iconsOf<S extends { name: string }, T extends { surface: string; mark?: Mark }>(surfaces: readonly S[], tabs: readonly T[]): Icon<S, T>[] {
+  return surfaces.map((surface) => {
+    const mine = tabs.filter((t) => t.surface === surface.name)
+    const mark = STRONGEST.find((m) => mine.some((t) => t.mark === m))
+
+    return { surface, tabs: mine, ...(mark && { mark }) }
+  })
+}
+
+/** What an icon says under its name: Open, or how many tabs; nothing where none is open. */
+export const openOf = (tabs: number): string | undefined => (tabs === 0 ? undefined : tabs === 1 ? "Open" : `${tabs} tabs`)
+
+/** An open tab as home's menu lists it: where it is, what it is called, and its mark. */
+export type TabChoice = { at: string; label: string; mark?: Mark }
+
+/**
+ * Home's menu, as a tab's is drawn: the shell's actions at /, in its view's order and grouping; then Go, the open tabs as
+ * its places, each dotted where it waits on the person. It has no controls of its own: home is never closed or reloaded.
+ */
+export function homeMenu({
+  view,
+  title,
+  tabs,
+  start,
+  navigate,
+}: {
+  view: View | undefined
+  title: string
+  tabs: readonly TabChoice[]
+  start: (action: Offered) => void
+  navigate: (at: string) => void
+}): MenuItem[] {
+  return tabMenu({
+    surface: { label: title, actions: offered("/", view), menu: view?.menu },
+    go: tabs.map((t) => ({ at: t.at, label: t.label })),
+    dots: new Set(tabs.filter((t) => t.mark === "person").map((t) => t.at)),
+    start,
+    navigate,
+    controls: [],
+  })
 }
