@@ -15,11 +15,8 @@ import type { Gaze } from "babavoss/shell/ui/gaze.ts"
  */
 export type Sphere = { camera: number; radius: number; eye: number; apart: number; turned: number; reach: number }
 
-/**
- * The sphere that rests closest to the shell's mark, found by search: the left eye near the middle and as large, the right
- * one where it is now. An exact sphere cannot rest quite as the mark does: its right eye is narrower and taller.
- */
-export const SPHERE: Sphere = { camera: 1.2, radius: 48, eye: 0.112, apart: 0.152, turned: 0.137, reach: 0.5 }
+/** The sphere as the person set it on the guide's sliders: a camera three and a half radii away, the eyes near the size of the shell's mark. */
+export const SPHERE: Sphere = { camera: 3.5, radius: 56.5, eye: 0.24, apart: 0.3, turned: 0.215, reach: 1.19 }
 
 type V = [number, number, number]
 
