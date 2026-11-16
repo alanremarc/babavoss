@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.59.0
+
+- A caller may name a call: the request header `babavoss-call-id`, `CALL_ID_HEADER`, which `serviceClient` can send. The name is on the call, `Call.id`, and the shell's activity keeps it on the entry, given as `id` at `/activity`, so whoever made a call can tell its entry from another's made at the same moment. Nothing to adapt.
+- `Harness.release` is said as it is: it leaves the transcripts to whoever made the home.
+- In this repository the lab reads a run cleared at its start as cleared, with nothing to close; tells its own act from the person's click by the call's name, not by time; and answers its timeline empty when no run is shown. Two specs that failed on a busy machine wait for what they test.
+
 ## 0.58.1
 
 - This repository's Design Document plays dependably: a play always ends, played or failed with its reason; a full play takes 3 seconds where it took 13, a scenario's pause passing on a clock the demo reads; a play removes its directory and its demo runtime on every way out, and the next one sweeps what a killed one left; the strip tells a hook that ran and said nothing, `0 tok`, from no hook, `—`; and the preview puts in front the tab the shell's page would, home until the person moves. The package is unchanged. Nothing to adapt.
