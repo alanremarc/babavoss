@@ -8,6 +8,7 @@ import { standingOf, type Standing } from "babavoss/shell/ui/turn.ts"
 import { WorkbenchSegments } from "babavoss/kit/index.ts"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
+import { sphere } from "./sphere.tsx"
 
 /** Each standing of the mark, as the strip gives it to home's tab. */
 const STANDINGS: { label: string; standing: Standing; animate?: false; lost?: string }[] = [
@@ -80,4 +81,4 @@ function Moves() {
   )
 }
 
-export const mark: Record<EntryOf<"mark">, ComponentType> = { states: States_, moves: Moves }
+export const mark: Record<EntryOf<"mark">, ComponentType> = { states: States_, moves: Moves, sphere }

@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.59.2
+
+- This repository's Design Guide tries the mark as an exact sphere at `/guide/mark/sphere`: two round patches of one size seen by a close camera, each drawn as the true outline of its edge and cut by the sphere's horizon, beside the shell's mark, with the camera's distance, the sphere's and the eyes' size, their spacing and the resting turn on sliders. The shell's mark is unchanged. Nothing to adapt.
+
 ## 0.59.1
 
 - The mark's lens is one smooth curve: an eye that turns away from the middle shrinks all the way to nothing at the sphere's edge as it narrows. It used to stop at a least size a third of the way round and go on narrowing, a sliver of fixed height. At rest the eyes are as they were. Nothing to adapt.
