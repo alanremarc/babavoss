@@ -330,6 +330,11 @@ function Connection() {
           <PointedAlert label="Queue" route="/issues/7" go={() => {}} dismiss={() => {}} />
         </Overlay>
       </State>
+      <State label="pointed to a long path: it wraps beside the buttons, never under them" wide className="relative block h-28 overflow-hidden p-0">
+        <Overlay>
+          <PointedAlert label="Queue" route="/narratives/release-hardening/issues/128/iterations/3/decisions/the-second-pass-on-the-lane-layout" go={() => {}} dismiss={() => {}} />
+        </Overlay>
+      </State>
     </States>
   )
 }

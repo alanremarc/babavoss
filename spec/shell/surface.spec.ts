@@ -129,6 +129,10 @@ describe("the shell surface", () => {
     expect(story(shell({}, BABA)).agent.sees("/")).toEqual({ title: "baba", empty: EMPTY, surfaces: own, tabs: [], activity: { at: "/activity" } })
     expect(EMPTY).toContain("bun run baba new NAME")
     expect(story(shell({})).agent.sees("/")).toEqual({ title: "baba", missing: MISSING, surfaces: own, tabs: [], activity: { at: "/activity" } })
+    // The root is named by its title, the configuration's or the project directory's, to the agent and the person alike.
+    const titled = story(shell({}, BABA, {}, undefined, "Billing desk"))
+
+    expect([titled.agent.sees("/")!.title, titled.person.sees("/")!.title]).toEqual(["Billing desk", "Billing desk"])
   })
 
   it("restores its tabs with their surfaces' models and starts their commands again", async () => {

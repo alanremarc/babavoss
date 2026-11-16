@@ -143,14 +143,16 @@ export const attentionOf = (value: Json | undefined): Attention[] =>
 
 /**
  * The shell over `surfaces`, by name. `baba` is the .baba/ they are from; where there is none, the desktop says so.
- * `broken` names the surfaces of that .baba/ whose code did not load, with why (loading.ts).
+ * `broken` names the surfaces of that .baba/ whose code did not load, with why (loading.ts). `title` names the root at /,
+ * from the configuration (titleOf in ../../core/config.ts).
  * A session's state kept from before is read as it was: its picker tab is dropped, and a tab's `util` is its surface.
  */
 export function shell(
   surfaces: Record<string, AnySurface>,
   baba?: string,
   broken: Record<string, string> = {},
-  own: Record<string, AnySurface> = OWN
+  own: Record<string, AnySurface> = OWN,
+  title = "baba"
 ): Surface<ShellModel, ShellEvent, ShellCommand> {
   const held = new Map([...Object.entries(surfaces).filter(([name]) => !(name in own) && !PATHS.includes(name)), ...Object.entries(own)])
   const unloaded = new Map(Object.entries(broken).filter(([name]) => !held.has(name)))
@@ -362,7 +364,7 @@ export function shell(
   })
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
-      title: "baba",
+      title,
       ...(baba === undefined ? { missing: MISSING } : ![...held.keys()].some((name) => !(name in own)) && !unloaded.size && { empty: EMPTY }),
       surfaces: [
         ...[...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
