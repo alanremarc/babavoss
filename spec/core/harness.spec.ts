@@ -6,7 +6,28 @@ import { spawnSync } from "node:child_process"
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ADAPTERS, blocked, claude, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, codex, fakeHarness, managedAt, PLUGIN, PLUGIN_ID, trust, type HarnessEvent } from "../../framework/core/harness/index.ts"
+import {
+  ADAPTERS,
+  blocked,
+  claude,
+  claudeArgs,
+  CLAUDE_EVENTS,
+  claudeCode,
+  claudeEvents,
+  cleanEnv,
+  codex,
+  codexArgs,
+  codexCli,
+  codexEvents,
+  codexInjected,
+  codexTurn,
+  fakeHarness,
+  managedAt,
+  PLUGIN,
+  PLUGIN_ID,
+  trust,
+  type HarnessEvent,
+} from "../../framework/core/harness/index.ts"
 import { VERSION } from "../../framework/core/update.ts"
 import type { Json } from "../../framework/core/index.ts"
 
@@ -73,12 +94,13 @@ const RECORDED: Json[] = [
   { type: "result", subtype: "error_max_budget_usd", is_error: true, duration_ms: 10, num_turns: 1, total_cost_usd: 0.5, usage: {} },
 ]
 
-test("Claude Code's stream reads as the framework's events: hooks' injections, messages, calls with the word told apart, turns", () => {
+test("Claude Code's stream reads as the framework's events: hooks' injections and hooks that added nothing, messages, calls with the word told apart, turns", () => {
   const events = RECORDED.flatMap(claudeEvents)
   const request = { id: "msg_011Ch4xQ", context: 23_758 }
 
   expect(events).toEqual<HarnessEvent[]>([
     { kind: "injected", event: "SessionStart", text: "This project has surfaces." },
+    { kind: "hook", event: "UserPromptSubmit" },
     {
       kind: "started",
       session: SESSION,
@@ -235,12 +257,14 @@ test("the fake harness is driven by the story: its stream is what is emitted, an
 
 test("the plugin the package carries is of its version, has the skill baba's own words and their reminder, and the framework's hook for each of Claude Code's events", () => {
   const read = (path: string) => readFileSync(join(PLUGIN, path), "utf8")
-  const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string }
+  const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string; skills: string[] }
   const hooks = (JSON.parse(read("hooks/hooks.json")) as { hooks: Record<string, { hooks: { type: string; command: string }[] }[]> }).hooks
   const command = 'bun "$(cd -P "${CLAUDE_PLUGIN_ROOT}/../.." && pwd)/bin/baba.ts" hook claude 2>/dev/null || true'
 
   // A release raises the version in package.json by hand; this is raised with it.
   expect(manifest).toMatchObject({ name: "baba", version: VERSION })
+  // Its SKILL.md is the skill folder's, loaded as a skill of its own: loaded as a plugin by --plugin-dir, it is not a second skill.
+  expect(manifest.skills).toEqual([])
   expect(read("SKILL.md")).toBe(readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8"))
   expect(read("reminder.md")).toBe(readFileSync(new URL("../../skill/reminder.md", import.meta.url), "utf8"))
   expect(Object.keys(hooks)).toEqual([...CLAUDE_EVENTS])
@@ -279,7 +303,20 @@ test("each adapter reads its harness's hook input as the framework's moment, and
     expect(JSON.parse(adapter.hookOutput(tool, "told"))).toEqual({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: "told" } })
     expect(adapter.defaults.events).toEqual([...adapter.events])
   }
-  expect(codex.run).toBeUndefined()
+  expect(codex.run).toBeDefined()
+})
+
+test("a run of Claude Code loads the project's plugin for the session, so its hooks run however the folder is trusted", () => {
+  const args = claudeArgs({ project: "/runs/r1/project", home: "/runs/r1/home", session: SESSION, model: "haiku", budget: 0.25 })
+  const flag = (name: string) => args[args.indexOf(name) + 1]
+
+  expect(args.slice(0, 2)).toEqual(["claude", "-p"])
+  // A plugin in .claude/skills runs its hooks only in a folder trusted in the home, which -p does not count; --plugin-dir is not asked that.
+  expect(flag("--plugin-dir")).toBe("/runs/r1/project/.claude/skills/baba")
+  // Each hook's run is in the stream, so a run whose hooks never ran says so.
+  expect(args).toContain("--include-hook-events")
+  expect([flag("--session-id"), flag("--model"), flag("--max-budget-usd"), flag("--setting-sources")]).toEqual([SESSION, "haiku", "0.25", "project,local"])
+  expect(args).not.toContain("--bare")
 })
 
 test("a session's project is trusted in its own home, so the project's plugin loads, and whatever else the home's state holds is kept", () => {
@@ -368,4 +405,85 @@ test.if(process.platform === "darwin")("on macOS the MDM profile comes first: a 
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test("a run of Codex trusts the project and its hooks for that invocation alone, a process a turn, the later ones resuming the thread", () => {
+  const first = codexArgs({ project: "/runs/r1/project", model: "gpt-6-luna" })
+  const later = codexArgs({ project: "/runs/r1/project", model: "gpt-6-luna" }, "01a1e475")
+
+  expect(first.slice(0, 2)).toEqual(["codex", "exec"])
+  // Project hooks load only in a trusted project, and run only once reviewed: both are given here, never asked of the person.
+  for (const args of [first, later]) for (const flag of ["--json", "--trust", "--dangerously-bypass-hook-trust"]) expect(args).toContain(flag)
+  expect(first[first.indexOf("-C") + 1]).toBe("/runs/r1/project")
+  expect(later.slice(0, 4)).toEqual(["codex", "exec", "resume", "01a1e475"])
+  expect(later).not.toContain("-C")
+  expect(first.at(-1)).toBe("-")
+})
+
+test("Codex's stream reads as the framework's events, and what its hooks added is read from its session file by where it stands", () => {
+  const stream: Json[] = [
+    { type: "thread.started", thread_id: "01a1e475" },
+    { type: "item.completed", item: { id: "item_0", type: "error", message: "`--dangerously-bypass-hook-trust` is enabled." } },
+    { type: "item.started", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc '.babavoss/bin/baba /'", status: "in_progress" } },
+    { type: "item.completed", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc true", aggregated_output: "no", exit_code: 1 } },
+    { type: "item.completed", item: { id: "item_3", type: "agent_message", text: "done" } },
+  ]
+
+  expect(codexEvents({ type: "item.started", item: { id: "i", type: "command_execution", command: "/bin/zsh -lc true" } })).toMatchObject([{ input: "true" }])
+  expect(stream.flatMap(codexEvents)).toEqual<HarnessEvent[]>([
+    { kind: "call", id: "item_2", tool: "shell", input: ".babavoss/bin/baba /", word: true },
+    { kind: "result", id: "item_2", text: "no", error: true },
+    { kind: "reply", text: "done" },
+  ])
+  expect(codexTurn({ type: "turn.completed", usage: { input_tokens: 41_691, cached_input_tokens: 32_000, cache_write_input_tokens: 0, output_tokens: 108 } }, 900, 1)).toEqual({
+    kind: "turn",
+    ok: true,
+    text: "",
+    tokens: { input: 9691, cache_write: 0, cache_read: 32_000, output: 108 },
+    total: 0,
+    ms: 900,
+    calls: 1,
+  })
+  expect(codexTurn({ type: "turn.failed", error: { message: "usage limit" } }, 5, 0)).toMatchObject({ kind: "turn", ok: false, text: "usage limit" })
+
+  const developer = (text: string) => ({ type: "response_item", payload: { type: "message", role: "developer", content: [{ type: "input_text", text }] } })
+  const file: Json[] = [
+    developer("You are Codex."),
+    { type: "turn_context", payload: {} },
+    developer("This project has surfaces."),
+    { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Hi" }] } },
+    developer("What changed: tabs.1"),
+    { type: "response_item", payload: { type: "custom_tool_call_output", output: [] } },
+    developer("The person approved n=1"),
+    { type: "event_msg", payload: { type: "task_complete" } },
+    developer("Codex's own, between turns"),
+  ]
+
+  expect(codexInjected(file)).toEqual<HarnessEvent[]>([
+    { kind: "injected", event: "SessionStart", text: "This project has surfaces." },
+    { kind: "injected", event: "UserPromptSubmit", text: "What changed: tabs.1" },
+    { kind: "injected", event: "PostToolUse", text: "The person approved n=1" },
+  ])
+})
+
+test("a Codex session's home reaches the person's login file by a link, never a copy; release takes it back and keeps the transcripts", () => {
+  const own = temp()
+  const home = temp()
+
+  mkdirSync(join(own, ".codex"), { recursive: true })
+  writeFileSync(join(own, ".codex/auth.json"), "{}")
+
+  const harness = codexCli(own)
+
+  expect(harness.home(home)).toBe("the person's Codex login file, linked")
+  expect(lstatSync(join(home, ".codex/auth.json")).isSymbolicLink()).toBe(true)
+  mkdirSync(join(home, ".codex/sessions"), { recursive: true })
+  writeFileSync(join(home, ".codex/state_5.sqlite"), "")
+  harness.release(home)
+  expect(existsSync(join(own, ".codex/auth.json"))).toBe(true)
+  expect(existsSync(join(home, ".codex/state_5.sqlite"))).toBe(false)
+  expect(lstatSync(join(home, ".codex/auth.json"), { throwIfNoEntry: false })).toBeUndefined()
+  expect(existsSync(join(home, ".codex/sessions"))).toBe(true)
+  rmSync(own, { recursive: true, force: true })
+  rmSync(home, { recursive: true, force: true })
 })

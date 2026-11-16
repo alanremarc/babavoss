@@ -21,6 +21,8 @@ export type Root = {
   page?: string
   ended?: string
   turns?: number
+  /** The hooks heard by their event; a line where none was, which says so once a turn has ended. */
+  hooks?: string[] | string
   tokens?: Tokens
   cost?: number
   runs?: { count: number }
