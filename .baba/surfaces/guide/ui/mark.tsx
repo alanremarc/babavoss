@@ -1,7 +1,7 @@
-// The mark's specimens: home's tab in each standing, at the strip's size and enlarged so its motion can be judged, side
+// The mark's specimens: home's tab in each standing, at the rail's size and enlarged so its motion can be judged, side
 // by side and live; and its moves, one at a time or one after another as while the agent works.
 import { useState, type ComponentType } from "react"
-import { HomeTab } from "babavoss/shell/ui/home.tsx"
+import { RailEntry } from "babavoss/shell/ui/rail.tsx"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
 import { MOVES } from "babavoss/shell/ui/gaze.ts"
 import { standingOf, type Standing } from "babavoss/shell/ui/turn.ts"
@@ -10,7 +10,7 @@ import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 import { sphere } from "./sphere.tsx"
 
-/** Each standing of the mark, as the strip gives it to home's tab. */
+/** Each standing of the mark, as the rail gives it to home's tab. */
 const STANDINGS: { label: string; standing: Standing; animate?: false; lost?: string }[] = [
   { label: "still", standing: standingOf({ agent: "idle", waiting: 0 }) },
   { label: "working", standing: standingOf({ agent: "working", waiting: 0 }) },
@@ -21,10 +21,19 @@ const STANDINGS: { label: string; standing: Standing; animate?: false; lost?: st
 /** How much bigger the enlarged mark is than the strip's. */
 const LARGE = 5
 
-/** Home's tab as the strip has it, on the strip's ground; `zoom` enlarges the whole of it, crisp, as it is drawn. */
+/** Home's tab as a rail along the top has it, on the rail's ground; `zoom` enlarges the whole of it, crisp, as it is drawn. */
 const Tab = ({ standing, animate = true, lost, zoom = 1 }: { standing: Standing; animate?: boolean; lost?: string; zoom?: number }) => (
   <div className="grid place-items-center rounded-md bg-sidebar p-1" style={{ zoom }}>
-    <HomeTab active={false} standing={standing} animate={animate} keys="⌘P" {...(lost && { lost })} onSelect={() => {}} />
+    <RailEntry
+      item={{ id: "home", label: "Home", icon: <Logo standing={standing} animate={animate} lost={!!lost} />, why: [lost ?? standing.said] }}
+      home
+      column={false}
+      side="top"
+      active={false}
+      open={false}
+      select={() => {}}
+      toggle={() => {}}
+    />
   </div>
 )
 

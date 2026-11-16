@@ -211,7 +211,7 @@ describe("the person's settings in the page", () => {
   it("are given in its head as it is served, before what reads them, and no markup in them can close the script", () => {
     const file = scratch()
 
-    writeSettings(file, { ...DEFAULTS, appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: { hue: 200, tint: 40, vivid: 60 } } } })
+    writeSettings(file, { ...DEFAULTS, appearance: { ...DEFAULTS.appearance, mode: "dark", same: false, themes: { light: "neutral", dark: { hue: 200, tint: 40, vivid: 60 } } } })
 
     const html = withSettings("<html><head><script>paint()</script></head></html>", file)
 
@@ -236,8 +236,8 @@ describe("the person's settings in the page", () => {
 
     expect(given(withSettings("<head></head>", file))).not.toHaveProperty("appearance")
     expect(migrated(cookie, file)).toBe(true)
-    expect(readSettings(file).appearance).toEqual({ mode: "light", same: false, themes: { light: "clay", dark: "neutral" } })
-    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", same: false, themes: { light: "clay", dark: "neutral" } } })
+    expect(readSettings(file).appearance).toEqual({ ...DEFAULTS.appearance, mode: "light", same: false, themes: { light: "clay", dark: "neutral" } })
+    writeSettings(file, { ...readSettings(file), appearance: { ...DEFAULTS.appearance, mode: "dark", same: false, themes: { light: "clay", dark: "neutral" } } })
     expect(migrated(cookie, file)).toBe(false)
     expect(readSettings(file).appearance.mode).toBe("dark")
   })
