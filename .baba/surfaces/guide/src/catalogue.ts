@@ -25,7 +25,7 @@ export const GROUPS = [
         entries: [
           { id: "states", title: "States", files: [`${SHELL}/mark.tsx`, `${SHELL}/turn.ts`], states: ["still", "working", "working, animation off", "waiting", "lost"] },
           { id: "moves", title: "Moves", files: [`${SHELL}/gaze.ts`], states: ["any", ...MOVES.map((m) => m.name)] },
-          { id: "sphere", title: "Exact sphere, tried", files: [".baba/surfaces/guide/src/sphere.ts", `${SHELL}/gaze.ts`], states: ["still", "any", ...MOVES.map((m) => m.name)] },
+          { id: "sphere", title: "Sphere", files: [`${SHELL}/gaze.ts`], states: ["still", "any", ...MOVES.map((m) => m.name), "following the pointer"] },
         ],
       },
     ],

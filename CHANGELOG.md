@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.60.0
+
+- The mark is drawn exactly: its eyes are two round patches of one size on a sphere, seen by a camera three and a half of its radii away, and each is the true outline of its edge as that camera sees it. Near the middle an eye is large; towards the limb it is smaller and, faster, narrower; over the camera's horizon it is cut by the sphere's own outline, and behind it is gone. The ellipse squashed by one rule and shrunk by a lens is gone.
+- Breaking, for code that drew the mark itself: `framework/shell/ui/gaze.ts` no longer has `drawn`, `EYES`, `Eye`, `Drawn`, `TURNED` or the old `SPHERE`. It has `SPHERE`, a `Sphere` of `camera`, `radius`, `eye`, `apart` and `turned`; `SIDES`; `outline(side, gaze, sphere?)`, an eye as an SVG path; `edgeOf`, its points and whether it is cut; `centreOf` and `seen`. `Logo` and `Eyes` are as they were. The moves turn the head a fifth further. Nothing to adapt in a project that only uses the shell.
+- This repository's Design Guide tunes the sphere at `/guide/mark/sphere`: its numbers on sliders beside the shell's mark, through each move, and following the pointer.
+
 ## 0.59.4
 
 - The exact sphere tried in this repository's Design Guide starts from the numbers the person chose. Nothing to adapt.
