@@ -2,9 +2,12 @@
 // form a graph without cycles on narratives, each keeps the reasoning of its passes, and the work is the session's, which
 // every tab shares. The work is kept in memory here, the store's own, and its commands are run for real: a tab is idle once
 // what the store told it has landed, though it follows the store while it is open.
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
-import { store, type Store } from "../src/store.ts"
+import { FILE, store, type Store } from "../src/store.ts"
 import type { Work } from "../src/work.ts"
 import { queue } from "../src/surface.ts"
 
@@ -210,4 +213,26 @@ test("a new tab says it is reading until it hears the session's work, so its pag
   const kept: Work = { issues: [], narratives: [], next: 1, clock: 0 }
 
   expect(story(queue(store()), { model: { work: kept } }).person.sees()).not.toHaveProperty("reading")
+})
+
+test("removing the session's file begins its work again, in every tab that is open", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "queue-"))
+  const file = join(dir, FILE)
+  const work = store(() => file)
+  const first = await tab(work)
+  const second = await tab(work)
+
+  try {
+    await first.agent.call("/", "add", { title: "One", about: "Why" })
+    rmSync(file)
+    // The file's watcher hears it removed when the system tells it, which is no set time.
+    for (let waited = 0; rows(second.person.sees()).length && waited < 3000; waited += 20) await new Promise((done) => setTimeout(done, 20))
+    await first.world.idle()
+    expect(rows(first.person.sees())).toEqual([])
+    expect(rows(second.person.sees())).toEqual([])
+    await second.agent.call("/", "add", { title: "Again", about: "Why" })
+    expect(second.agent.sees()).toMatchObject({ issues: [{ n: 1, title: "Again" }] })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
