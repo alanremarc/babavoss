@@ -2,6 +2,14 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.63.0
+
+- An agent run non-interactively through an adapter gets baba's hooks. Claude Code's run loads the project's plugin by `--plugin-dir`: a plugin in `.claude/skills` runs its hooks only in a folder trusted in the home, and a `-p` run does not count as trust, so the skill loaded and no hook ran. The plugin's manifest says `"skills": []`, so its `SKILL.md` stays one skill.
+- Codex's adapter has a run face: `codex exec`, a process a turn, the later ones resuming the thread, with `--trust` and `--dangerously-bypass-hook-trust` for that run alone, the person's login linked into the run's home and never copied. What a hook added is read from Codex's session file, whose format is not documented.
+- A run's stream carries `hook` for a hook that ran and added nothing.
+- In this repository a lab run lists the hooks it heard, and says "no hook heard" on its timeline and its page when there were none. The lab still starts Claude Code only.
+- Nothing to adapt in a project's surfaces.
+
 ## 0.62.0
 
 - `baba init`, `provision` and `start` say in one line when Claude Code's managed settings keep baba's plugin or its hook from running, naming the settings file and what to do: `strictPluginOnlyCustomization`, a `strictKnownMarketplaces` without `{ "source": "skills-dir" }`, `blockedMarketplaces` naming it, `enabledPlugins` turning `baba@skills-dir` off, `disableAllHooks`, or `allowManagedHooksOnly`. Settings given from the claude.ai console and the Windows registry are not read. An adapter may say the same of its harness by an optional `blocked()`.
