@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.58.0
+
+- A call's value may be a file: `name=@PATH`, where PATH begins `/`, `./`, `../` or `~/`, is read from that file, and refused where there is none; it used to be sent as that text. `name=@-` reads standard input as before, and is how text that looks like such a path is given. Other text that begins with `@` is sent as written. The client is version 13 and replaces installed copies.
+- In a story, `world.idle()` no longer waits for a session command, which never ends, only for work that does: a spec that waited by a timer for a surface with a store can call `idle()`.
+- In this repository the queue shows a tab just opened as reading, not as empty; begins again when the session's `work.json` is removed; and groups its archive by narrative, newest first, saying so when nothing is done. Nothing to adapt.
+
 ## 0.57.0
 
 - The root's title is the project's: an optional `title` in `.baba/baba.config.ts`, else the name of the project's directory, where it was the word "baba". It is home's heading, the page's title and the `title` the agent is told at `/`. The root reads it as it starts. A spec that matched `title: "baba"` must match the directory's name, or the project sets `title`.
