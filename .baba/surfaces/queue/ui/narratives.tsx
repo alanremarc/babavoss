@@ -9,7 +9,7 @@ import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react"
 import { Button, WorkbenchEmpty, WorkbenchPage, WorkbenchSegments, WorkbenchSpacer, WorkbenchToolbar } from "babavoss/kit/index.ts"
 import { useLive } from "babavoss/shell/ui/index.tsx"
 import { branches, fold } from "../src/outline.ts"
-import { Mark, type Elsewhere, type Listed, type Outline, type Placed, type Root } from "./parts.tsx"
+import { Mark, across, type Listed, type Outline, type Placed, type Root } from "./parts.tsx"
 
 /** Room under a page's last row for the toolbar that floats at its foot. */
 const Foot = () => <div aria-hidden className="h-12 shrink-0" />
@@ -107,8 +107,8 @@ type RowProps = {
 /** One issue on the outline's grid: its number; the rules of its depth, its chevron, mark, title, note and links; where it stands. */
 function OutlineRow({ place, color, folded, branch, lit, titleOf, toggle, open, here, there }: RowProps) {
   const done = place.status === "done"
-  const elsewhere = (lead: string, by: Elsewhere | undefined) =>
-    Object.entries(by ?? {}).map(([id, ns]) => <Refs key={`${lead}${id}`} lead={lead} ns={ns} title={titleOf(id)} pick={(n) => there(id, n)} />)
+  const elsewhere = (lead: string, lines: string[] | undefined) =>
+    across(lines).map(([id, ns]) => <Refs key={`${lead}${id}`} lead={lead} ns={ns} title={titleOf(id)} pick={(n) => there(id, n)} />)
   const links: ReactNode[] = [
     ...(place.also?.length ? [<Refs key="also" lead="also from" ns={place.also} pick={here} />] : []),
     ...elsewhere("from", place.from),
@@ -121,7 +121,7 @@ function OutlineRow({ place, color, folded, branch, lit, titleOf, toggle, open, 
       onClick={open}
       className={`col-span-3 grid cursor-default grid-cols-subgrid items-start rounded-md px-2 transition-colors duration-700 ${lit ? "bg-accent" : "hover:bg-muted"}`}
     >
-      <span className="text-muted-foreground/70 py-1.5 text-meta leading-5 tabular-nums">#{place.n}</span>
+      <span className="text-muted-foreground/70 py-1 text-meta leading-5 tabular-nums">#{place.n}</span>
       <div className="flex min-w-0 items-stretch">
         {Array.from({ length: place.depth }, (_, i) => (
           <span key={i} aria-hidden className="relative w-4 shrink-0 @max-md:w-3">
@@ -133,7 +133,7 @@ function OutlineRow({ place, color, folded, branch, lit, titleOf, toggle, open, 
             type="button"
             aria-expanded={folded === undefined}
             aria-label={folded === undefined ? `Fold what came out of #${place.n}` : `Unfold what came out of #${place.n}`}
-            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-ring mt-1.5 grid size-5 shrink-0 place-items-center rounded-sm outline-none focus-visible:ring-2"
+            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-ring mt-1 grid size-5 shrink-0 place-items-center rounded-sm outline-none focus-visible:ring-2"
             onClick={(event) => {
               event.stopPropagation()
               toggle()
@@ -144,7 +144,7 @@ function OutlineRow({ place, color, folded, branch, lit, titleOf, toggle, open, 
         ) : (
           <span aria-hidden className="w-5 shrink-0" />
         )}
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pl-1">
+        <div className="flex min-w-0 flex-1 flex-col py-1 pl-1">
           <div className="flex min-w-0 items-start gap-2">
             <span className="flex h-5 shrink-0 items-center">
               <Mark status={place.status} color={color} />
@@ -165,7 +165,7 @@ function OutlineRow({ place, color, folded, branch, lit, titleOf, toggle, open, 
           {links.length > 0 && <p className="text-muted-foreground flex flex-wrap gap-x-3 pl-[1.375rem] text-meta">{links}</p>}
         </div>
       </div>
-      <span className="py-1.5 pl-3 text-meta leading-5 whitespace-nowrap @max-md:hidden">
+      <span className="py-1 pl-3 text-meta leading-5 whitespace-nowrap @max-md:hidden">
         <Stands issue={place} />
       </span>
     </li>
@@ -234,15 +234,17 @@ export function Narrative({
         <span className="truncate">Narratives</span>
       </Button>
       <WorkbenchSpacer />
-      <WorkbenchSegments
-        label="Show"
-        options={[
-          { id: "all", label: "All" },
-          { id: "open", label: "Open only" },
-        ]}
-        value={only ? "open" : "all"}
-        set={(value) => go(`/narratives/${id}${value === "open" ? "/open" : ""}`)}
-      />
+      <div className="[&_[role=radio]]:whitespace-nowrap">
+        <WorkbenchSegments
+          label="Show"
+          options={[
+            { id: "all", label: "All" },
+            { id: "open", label: "Open only" },
+          ]}
+          value={only ? "open" : "all"}
+          set={(value) => go(`/narratives/${id}${value === "open" ? "/open" : ""}`)}
+        />
+      </div>
     </WorkbenchToolbar>
   )
 

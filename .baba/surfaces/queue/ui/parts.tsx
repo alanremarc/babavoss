@@ -9,10 +9,16 @@ export type Row = { at: string; n: number; title: string; status: Status; lane?:
 export type Story = { at: string; id: string; title: string; issues: number; open: number }
 /** `reading`: a new tab has not heard the session's work yet. */
 export type Root = { lanes: number; free: number[]; narratives: Story[]; issues: Row[]; reading?: true }
-/** Issues on other narratives, by narrative. */
-export type Elsewhere = Record<string, number[]>
-/** An issue in its place in a narrative's outline. */
-export type Placed = Omit<Row, "narrative" | "from"> & { depth: number; also?: number[]; from?: Elsewhere; to?: Elsewhere }
+/** An issue in its place in a narrative's outline; `from` and `to` a line per other narrative, as "leftovers: 50, 51". */
+export type Placed = Omit<Row, "narrative" | "from"> & { depth: number; also?: number[]; from?: string[]; to?: string[] }
+
+/** The lines of `from` or `to` as each narrative's id with its issues. */
+export const across = (lines: string[] = []): [string, number[]][] =>
+  lines.map((line) => {
+    const [id = "", ns = ""] = line.split(": ")
+
+    return [id, ns.split(", ").map(Number)]
+  })
 /** The narratives as listed, those with open issues first. */
 export type Listed = { narratives: (Story & { about: string })[] }
 /** A narrative with its outline: every issue, or with `only`, the open ones and the path to them. */

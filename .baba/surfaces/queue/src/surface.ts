@@ -9,7 +9,7 @@
 import { action, admit, detail, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
 import { sessionDir } from "babavoss/core/state/session-dir.ts"
 import { adopt, isLegacy } from "./migrate.ts"
-import { openOnly, outline, type Place } from "./outline.ts"
+import { openOnly, outline, type Elsewhere, type Place } from "./outline.ts"
 import { fileIn, store as kept, type Store } from "./store.ts"
 import { DEFAULT, empty, find, isWork, parents, reaches, union, withDefault, type Issue, type Narrative, type Status, type Work } from "./work.ts"
 
@@ -261,22 +261,26 @@ function counted(w: Work, x: Narrative) {
 
   return { at: `/narratives/${x.id}`, id: x.id, title: x.title, about: x.about, issues: mine.length, open: mine.filter(open).length }
 }
+/** Issues on other narratives as a table's cell has them, a line per narrative: ["leftovers: 50, 51"]. */
+const across = (by: Elsewhere) => Object.entries(by).map(([id, ns]) => `${id}: ${ns.join(", ")}`)
 /** An issue in its place in a narrative's outline: how deep it stands, and what else it came out of and led to. */
 const placed = ({ issue, depth, also, from, to }: Place) => {
-  const { narrative: _narrative, from: _from, ...line } = row(issue)
+  const { at, n, narrative: _narrative, from: _from, ...line } = row(issue)
 
   return {
-    ...line,
+    at,
+    n,
     depth,
+    ...line,
     ...(also.length && { also }),
-    ...(Object.keys(from).length && { from }),
-    ...(Object.keys(to).length && { to }),
+    ...(Object.keys(from).length && { from: across(from) }),
+    ...(Object.keys(to).length && { to: across(to) }),
   }
 }
 const READS =
   "Its outline, its issues read top to bottom: depth 0 for an issue that came out of none here, else it stands under the nearest " +
   "issue above it one less deep, the first here it came out of; also, the others here it came out of; from and to, what it came out " +
-  "of and led to on other narratives, by narrative."
+  "of and led to on other narratives, a line per narrative."
 /** A narrative whole: its outline, every issue or, when `only`, those open and the path to them. */
 function narrative(w: Work, id: string | undefined, only: boolean) {
   const x = w.narratives.find((x) => x.id === id)
@@ -288,7 +292,7 @@ function narrative(w: Work, id: string | undefined, only: boolean) {
   return {
     ...counted(w, x),
     reads: READS,
-    ...(only ? { only: "open", all: `/narratives/${x.id}` } : { open_only: `/narratives/${x.id}/open` }),
+    ...(only ? { only: "open", all: { at: `/narratives/${x.id}` } } : { open_only: { at: `/narratives/${x.id}/open` } }),
     outline: (only ? openOnly(all) : all).map(placed),
   }
 }

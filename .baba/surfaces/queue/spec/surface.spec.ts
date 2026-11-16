@@ -196,7 +196,7 @@ test("the map is gone: a path into it says where the narratives are", async () =
 })
 
 /** A narrative's outline as the agent reads it: each issue's number, depth and links, without its status and title. */
-type Placed = { n: number; depth: number; also?: number[]; from?: Record<string, number[]>; to?: Record<string, number[]> }
+type Placed = { n: number; depth: number; also?: number[]; from?: string[]; to?: string[] }
 const outlined = (sees: unknown) => (sees as { outline: Placed[] }).outline.map(({ n, depth, also, from, to }) => ({ n, depth, ...(also && { also }), ...(from && { from }), ...(to && { to }) }))
 
 /** Work on two narratives: on shell, 1 with 2 and 4 out of it, 3 out of 2, 5 out of 2 and 4; on told, 6, and 7 out of 6 and 3. */
@@ -221,7 +221,7 @@ test("a narrative's issues are an outline: its roots in the order added, and und
   const { agent } = await branching()
 
   await agent.call("/", "add_from", { title: "Another strip", about: "Why", from: "", narrative: "shell" })
-  expect(agent.sees("/narratives/shell")).toMatchObject({ title: "The shell", about: "What the root offers", issues: 6, open: 6, open_only: "/narratives/shell/open" })
+  expect(agent.sees("/narratives/shell")).toMatchObject({ title: "The shell", about: "What the root offers", issues: 6, open: 6, open_only: { at: "/narratives/shell/open" } })
   expect(outlined(agent.sees("/narratives/shell")).map(({ n, depth }) => [n, depth])).toEqual([
     [1, 0],
     [2, 1],
@@ -244,11 +244,11 @@ test("links across narratives are said on the issues they touch, by narrative, a
 
   expect(outlined(agent.sees("/narratives/told"))).toEqual([
     { n: 6, depth: 0 },
-    { n: 7, depth: 1, from: { shell: [3] } },
+    { n: 7, depth: 1, from: ["shell: 3"] },
   ])
-  expect(outlined(agent.sees("/narratives/shell")).find((place) => place.n === 3)).toEqual({ n: 3, depth: 2, to: { told: [7] } })
+  expect(outlined(agent.sees("/narratives/shell")).find((place) => place.n === 3)).toEqual({ n: 3, depth: 2, to: ["told: 7"] })
   await agent.call("/issues/6", "move", { n: 6, narrative: "shell" })
-  expect(outlined(agent.sees("/narratives/told"))).toEqual([{ n: 7, depth: 0, from: { shell: [6, 3] } }])
+  expect(outlined(agent.sees("/narratives/told"))).toEqual([{ n: 7, depth: 0, from: ["shell: 6, 3"] }])
 })
 
 test("open only keeps the open issues and the path to each, and says where the whole outline is", async () => {
@@ -259,7 +259,7 @@ test("open only keeps the open issues and the path to each, and says where the w
     await agent.call(`/issues/${n}`, "done", { n })
   }
   expect(agent.sees("/narratives/shell")).toMatchObject({ issues: 5, open: 1 })
-  expect(agent.sees("/narratives/shell/open")).toMatchObject({ only: "open", all: "/narratives/shell" })
+  expect(agent.sees("/narratives/shell/open")).toMatchObject({ only: "open", all: { at: "/narratives/shell" } })
   expect(outlined(agent.sees("/narratives/shell/open")).map(({ n, depth }) => [n, depth])).toEqual([
     [1, 0],
     [2, 1],
