@@ -7,7 +7,8 @@
 // under `at`, and its notices, are given whole, below the tab's address, on the way out, a notice with its surface's name.
 // What stood at a path that is gone is said where it is asked for: which tab closed, by whom, and where its surface is
 // now. A tab whose surface says `attention` at / is needed: who, and why, gathered first at
-// / as `needs`, so who is needed is read before every tab. Every commit is kept as activity, who did what where, read on
+// / as `needs`, so who is needed is read before every tab. To the person, each tab at / says how many asks it offers anywhere
+// in its tree, as far as LOOK reaches, which dots a tab that is not shown. Every commit is kept as activity, who did what where, read on
 // demand at /activity and named at / by one fact that never changes (activity.ts); what the person has seen of its
 // notices is marked by asks at /activity/notices, which are no activity and change nothing at /. What
 // a surface throws breaks only what it was asked for: a tab it cannot restore or show at / is listed as broken, with why
@@ -61,6 +62,8 @@ export type Need = { at: string; surface: string } & Attention
 
 /** The shell's own paths: a surface cannot be named for them, or /NAME would stand on them. */
 export const PATHS = ["tabs", "activity"]
+/** How far the shell looks below a tab for its asks: views read in all, and places deep from its /. */
+export const LOOK = { views: 60, depth: 4 }
 /** How many closed tabs are remembered, so a path into one says where its surface went. */
 const REMEMBERED = 20
 
@@ -105,6 +108,20 @@ export function whole<V extends Json | undefined>(value: V, address: string): V 
   return Object.fromEntries(
     Object.entries(value).map(([k, v]) => [k, k === "at" && typeof v === "string" && v.startsWith("/") ? address + (v === "/" ? "" : v) : whole(v, address)])
   ) as V
+}
+
+/** The places a view names under `at`, but its own: the paths a walk of a tab's tree goes on to. */
+function placesIn(value: Json | undefined, self: string, out = new Set<string>()): Set<string> {
+  if (!value || typeof value !== "object" || isHandle(value)) return out
+  if (Array.isArray(value)) {
+    for (const v of value) placesIn(v, self, out)
+
+    return out
+  }
+  if (typeof value.at === "string" && value.at.startsWith("/") && value.at !== self) out.add(value.at)
+  for (const v of Object.values(value)) placesIn(v, self, out)
+
+  return out
 }
 
 /** A view's facts: what it says, without the handles it offers. */
@@ -372,6 +389,35 @@ export function shell(
 
     return { row: { ...(typeof title === "string" && { title }), ...(actions.length && { actions }), facts: facts(whole(rest, addressOf(tab))) }, needs }
   }
+  /**
+   * How many asks a tab offers the actor anywhere in its tree, each once: breadth-first from / along the places its views
+   * name, as far as LOOK reaches; a path its surface fails on offers none.
+   */
+  const asksIn = (tab: Tab, actor: string): number => {
+    const known = new Set(["/"])
+    const asks = new Set<string>()
+    let level = ["/"]
+    let left = LOOK.views
+
+    for (let depth = 0; level.length && left > 0 && depth <= LOOK.depth; depth++) {
+      const batch = level.slice(0, left)
+
+      left -= batch.length
+      level = []
+      for (const path of batch) {
+        const view = attempt(tab, (s) => s.view(tab.model, path, actor))?.ok
+
+        for (const h of handles(view)) if (h.ask) asks.add(`${h.name} ${JSON.stringify(h.args)}`)
+        for (const place of placesIn(view, path)) {
+          if (known.has(place)) continue
+          known.add(place)
+          level.push(place)
+        }
+      }
+    }
+
+    return asks.size
+  }
   /** A call into a tab, or its refusal with why: where its surface cannot show the call's path, or fails on the call itself. */
   const called = (tab: Tab, call: Call, model: ShellModel): Update<ShellModel, ShellCommand> => {
     const seen = shown(tab, call.path, call.actor)
@@ -507,13 +553,19 @@ export function shell(
         }
         if (!home || path !== "/") return home
 
+        const person = actor !== undefined && isPerson(actor)
         const rows = model.tabs.map((tab) => said(tab, actor))
         const needs: Need[] = rows.flatMap(({ needs }, i) => needs.map((need) => ({ at: addressOf(model.tabs[i]!), surface: model.tabs[i]!.surface, ...need })))
         const { title, ...rest } = home
-        const root = { title, ...(needs.length && { needs }), ...rest, tabs: (home.tabs as View[]).map((row, i) => ({ ...row, ...rows[i]!.row })) }
+        const tabs = (home.tabs as View[]).map((row, i) => {
+          const asks = person && rows[i]!.row.broken === undefined ? asksIn(model.tabs[i]!, actor) : 0
+
+          return { ...row, ...rows[i]!.row, ...(asks && { asks }) }
+        })
+        const root = { title, ...(needs.length && { needs }), ...rest, tabs }
 
         // A tab's detail stays marked only in the agent's present, which counts it; the person reads it as it is.
-        return actor !== undefined && isPerson(actor) ? revealed(root) : root
+        return person ? revealed(root) : root
       }
 
       const tab = tabAt(model, at)
