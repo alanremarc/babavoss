@@ -423,7 +423,11 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
     const was = drawer
 
     setDrawer(undefined)
-    if (was !== undefined) requestAnimationFrame(() => document.getElementById(tabId(was))?.focus())
+    // Unless what was chosen opened a modal, which keeps the focus.
+    if (was !== undefined)
+      requestAnimationFrame(() => {
+        if (!document.querySelector('[role="dialog"][data-state="open"]')) document.getElementById(tabId(was))?.focus()
+      })
   }
   // The rail has shown the entry where a gesture asked for it already: this opens or closes its drawer.
   const toggle = (key: string) => (drawer === key ? closeDrawer() : openDrawer(key))

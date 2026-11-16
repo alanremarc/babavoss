@@ -1,6 +1,6 @@
 // The scenarios, one table: each a script of steps played on the demo project, in order. A step is one move by one party:
 // the harness starting or stopping the session, or no longer running its hooks; the person speaking, acting on the page or
-// looking at their notifications; the agent reading, calling, waiting, running a program or using another tool through its
+// opening a tab's drawer; the agent reading, calling, waiting, running a program or using another tool through its
 // harness; the build moving by itself; the demo's code changing under the root; the root going to sleep. The canonical
 // scenarios are the ordinary moments of a session; the noise scenarios each show one kind of telling the agent does not
 // need, measured on today's code, so a change to what is told shows there. Nothing told is written here.
@@ -29,7 +29,7 @@ export type Step =
   | { kind: "stop" }
   /** The root goes to sleep, as when nothing called it for a while; the next command wakes it. */
   | { kind: "sleep" }
-  /** The person opens their notifications, which marks every notice seen, or clicks the newest notice's toast: the page's `seen` or `looked`. */
+  /** The person marks every notice seen, or opens the drawer of the newest notice's tab, which marks it seen: the page's `seen` or `looked`. */
   | { kind: "look"; mark: "seen" | "looked" }
   /** The person's page goes where the agent last pointed it, as when the person follows the offer. */
   | { kind: "go" }
@@ -177,7 +177,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "The person looks at the activity",
       about:
-        "While the agent works, the person opens their notifications and clicks a toast, follows where the agent pointed them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
+        "While the agent works, the person opens a tab's drawer and marks what is new seen, follows where the agent pointed them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Add the release tasks and watch the build." },

@@ -27,7 +27,7 @@ import {
 import { Inputs, type Drawers } from "./inputs.tsx"
 import { ChangesContext, doorOf, useCached, useLive, useTab, useTabCache, type Door } from "./tab.tsx"
 
-/** How many asks each tab offers where it was last seen, by its address, which dot it in the strip until it closes. */
+/** How many asks each tab offers where it was last seen, by its address, which mark it on the rail until it closes. */
 export type TabAsks = { count: (at: string) => number; set: (at: string, count: number) => void; subscribe: (fn: () => void) => () => void }
 
 export function useTabAsks(): TabAsks {

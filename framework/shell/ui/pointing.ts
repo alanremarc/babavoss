@@ -43,7 +43,7 @@ export function arrival(person: { typing: boolean; acted: number }, now: number)
 
 /**
  * Whether the person is writing in an element: a field or an editable region that holds text, or an embedded page, whose
- * keys the page cannot see. An empty field that only has focus, such as home's search, holds nothing to lose.
+ * keys the page cannot see. An empty field that only has focus, such as a drawer's search, holds nothing to lose.
  */
 export function typingIn(element: Element | null): boolean {
   if (!element) return false

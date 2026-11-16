@@ -340,9 +340,10 @@ function Title({ label, engaged }: { label: string; engaged: boolean }) {
   }, [distance, engaged])
 
   return (
-    <span ref={viewport} data-slot="tab-label" className={cn("block min-w-0 overflow-clip pl-1 whitespace-nowrap", distance > 1 && "mask-r-from-[calc(100%-24px)]")}>
+    <span ref={viewport} data-slot="tab-label" className={cn("block min-w-0 overflow-clip pl-[3px] whitespace-nowrap", distance > 1 && "mask-r-from-[calc(100%-24px)]")}>
       <span ref={moving} className="flex w-max">
-        <span ref={content} className="block pr-6">
+        {/* The gap before the copy that follows is part of the text while it slides, so it comes round evenly. */}
+        <span ref={content} className={cn("block", distance > 1 && "pr-6")}>
           {label}
         </span>
         <span aria-hidden="true" className={cn("pr-6", distance > 1 ? "block" : "hidden")}>

@@ -310,7 +310,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
   /**
    * Where the person's page stands, as the shell's page keeps it in its URL (shell.tsx): home until the person moves. The
    * person's call at a tab is made in it; opened from home, a tab is gone to; closed while in front, the page goes to the
-   * next in the strip, or home. The agent's `show` is gone to, where its tab is open, as when the person is not busy, but
+   * next older tab, or home. The agent's `show` is gone to, where its tab is open, as when the person is not busy, but
    * not one made before the page first looked. A tab in front that closes otherwise leaves home in front, unless the URL's
    * number names a tab that now stands at its surface's name.
    */
@@ -420,7 +420,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
 
         return {
           who: "person",
-          did: step.mark === "seen" ? "opens their notifications, which marks every notice seen" : "clicks the newest notice's toast, which marks it seen",
+          did: step.mark === "seen" ? "marks every notice seen" : "opens the drawer of the newest notice's tab, which marks it seen",
           tellings: [],
         }
       }

@@ -1,6 +1,6 @@
 // The shell's page, the default export: the whole page, not a component in a tab as a surface's is, holding each
 // surface's component in its tabs, and the project's own home where it draws one, given what HomeProps names. And what a surface's page uses to reach its tab: its context, live views, and the door;
-// the shell's services, used by convention: a toast, another tab or place, the appearance; and the shape of a drawer, what
+// the shell's services, used by convention: a passing word beside the tab, another tab or place, the appearance; and the shape of a drawer, what
 // a page exports as `drawers` to ask an action's inputs in its own way.
 export { Shell as default, type Registry } from "./shell.tsx"
 export type { HomeProps } from "./home.ts"

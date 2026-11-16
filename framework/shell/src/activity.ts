@@ -1,5 +1,5 @@
 // The activity of a session: who did what across the tabs, kept by the shell with its state and read on demand at
-// /activity. An entry is a notice, in the words its surface chose, and marked so: the person's notifications are these;
+// /activity. An entry is a notice, in the words its surface chose, and marked so: what the person reads in a tab's drawer;
 // or, for a call that committed and gave none, one mechanical line, the handle and its arguments, so nothing done goes
 // unrecorded; or the shell's own opening, closing and pointing. A command's event gives entries only by its notices: what
 // a surface does on its own is told where it chose to tell it. /activity/notices is the notices alone. Time is the
@@ -21,7 +21,7 @@ export type Who = "person" | "agent" | "surface"
 export type Entry = { n: number; when: number; who: Who; surface: string; at: string; what: string; notice?: true; own?: true; id?: string }
 /** An entry before it is numbered. */
 export type Line = Omit<Entry, "n">
-/** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by their toast. */
+/** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by opening a tab's drawer. */
 export type Seen = { upto: number; looked: number[] }
 
 /** The tabs an entry can be in: the address the open tab numbered n stands at. */
@@ -176,14 +176,14 @@ export function seenFrom(kept: unknown, entries: Entry[]): Seen {
   return { upto, looked: x.looked.filter((n): n is number => typeof n === "number" && n > upto) }
 }
 
-/** The mark after the person saw every notice up to `n`, as on opening their notifications. */
+/** The mark after the person saw every notice up to `n`. */
 export function seeUpto(seen: Seen, n: number): Seen {
   const upto = Math.max(seen.upto, n)
 
   return { upto, looked: seen.looked.filter((m) => m > upto) }
 }
 
-/** The mark after the person looked at notice `n` alone, as by clicking its toast. */
+/** The mark after the person looked at notice `n` alone, as by opening the drawer of the tab it is in. */
 export const lookAt = (seen: Seen, n: number): Seen => (n <= seen.upto || seen.looked.includes(n) ? seen : { ...seen, looked: [...seen.looked, n] })
 
 /** The notices `who` has not seen, by number, oldest first: newer than the mark, not looked at one by one, and caused by someone else. */
