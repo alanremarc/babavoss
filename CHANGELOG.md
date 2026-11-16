@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.58.1
+
+- This repository's Design Document plays dependably: a play always ends, played or failed with its reason; a full play takes 3 seconds where it took 13, a scenario's pause passing on a clock the demo reads; a play removes its directory and its demo runtime on every way out, and the next one sweeps what a killed one left; the strip tells a hook that ran and said nothing, `0 tok`, from no hook, `—`; and the preview puts in front the tab the shell's page would, home until the person moves. The package is unchanged. Nothing to adapt.
+
 ## 0.58.0
 
 - A call's value may be a file: `name=@PATH`, where PATH begins `/`, `./`, `../` or `~/`, is read from that file, and refused where there is none; it used to be sent as that text. `name=@-` reads standard input as before, and is how text that looks like such a path is given. Other text that begins with `@` is sent as written. The client is version 13 and replaces installed copies.
