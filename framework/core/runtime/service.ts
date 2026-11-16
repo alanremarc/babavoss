@@ -23,6 +23,8 @@ export const PROBE_HEADER = "babavoss-probe"
 export const STALE_HEADER = "babavoss-stale"
 /** The request header naming one run of the word, one tool call of the agent's: what tells calls apart for the hooks' silence. */
 export const CALL_HEADER = "babavoss-call"
+/** The request header a client names a call it makes by, which the call carries: a program acting as the person finds its own by it. */
+export const CALL_ID_HEADER = "babavoss-call-id"
 export const STARTUP_MS = 10_000
 export const REQUEST_MS = 30_000
 /**
@@ -241,7 +243,8 @@ export function wakeService(dir: string, entry: string | URL, session: string, e
   }
 }
 
-export type Request = { method?: string; actor?: string; body?: string; accept?: string; signal?: AbortSignal }
+/** A request of the service; `id` names a call, as CALL_ID_HEADER carries it. */
+export type Request = { method?: string; actor?: string; id?: string; body?: string; accept?: string; signal?: AbortSignal }
 
 /** Why a runtime the environment refused gave up: the last line it logged, without the time it begins with. */
 const deniedReason = (dir: string): string => {
@@ -359,6 +362,7 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
               "content-type": "application/json",
               [SERVICE_HEADER]: endpoint.token,
               ...(init.actor && { [ACTOR_HEADER]: init.actor }),
+              ...(init.id && { [CALL_ID_HEADER]: init.id }),
             },
           })
         } catch (error) {

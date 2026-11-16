@@ -52,7 +52,10 @@ export interface Harness {
   name: string
   /** Makes `home` a home the harness can run in, its login reached from the person's by a link and never a copy; answers with how. */
   home(home: string): string
-  /** Takes back from `home` what `home` linked there, and what the harness kept there of the session and the account; its transcripts stay. */
+  /**
+   * Takes back from `home` what `home` linked there, and what the harness kept there of the session and the account. Its
+   * transcripts it leaves to whoever made the home: they go only with the home, where that is deleted.
+   */
   release(home: string): void
   start(options: Start): Session
 }

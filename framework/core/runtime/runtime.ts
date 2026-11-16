@@ -253,15 +253,15 @@ function standing<M>(first: Running<M>) {
   let deaf = current.notices(hear)
   const own: Partial<Running<M>> = {
     version: () => base + current.version(),
-    call: async (path, name, args, actor): Promise<Answer> => {
+    call: async (path, name, args, actor, id): Promise<Answer> => {
       const at = current
-      const answer = await at.call(path, name, args, actor)
+      const answer = await at.call(path, name, args, actor, id)
 
       if (answer.outcome === "written" || !retired.has(at) || at.failure() !== undefined) return answer
       // Bounded, for a runtime that closes before the next one is in place.
       if (current === at && next) await Promise.race([next.promise, sleep(2 * STOP_MS)])
 
-      return current === at ? answer : current.call(path, name, args, actor)
+      return current === at ? answer : current.call(path, name, args, actor, id)
     },
     subscribe: (fn) => {
       subscribers.add(fn)

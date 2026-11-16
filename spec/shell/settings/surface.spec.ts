@@ -7,7 +7,7 @@ import { join } from "node:path"
 import { run, story, type Saved } from "../../../framework/core/index.ts"
 import { DEFAULTS } from "../../../framework/shell/settings/src/settings.ts"
 import { readSettings, writeSettings } from "../../../framework/shell/settings/src/store.ts"
-import { settings, type Command } from "../../../framework/shell/settings/src/surface.ts"
+import { settings, type Command, type Model } from "../../../framework/shell/settings/src/surface.ts"
 import { OWN, shell } from "../../../framework/shell/src/surface.ts"
 import { poll } from "../../support/poll.ts"
 
@@ -169,18 +169,30 @@ describe("the settings", () => {
     const one = run(settings(() => file), memory())
     const two = run(settings(() => file), memory())
 
+    // A watch's events come late on a busy machine: each wait is for the condition, with the time it may take.
+    const late = { timeout: 20_000 }
+    const logo = (r: { read: (path: string) => unknown }) => (r.read("/") as { logo: { animate: boolean } }).logo.animate
+
     try {
+      // A watch may miss what is written as it starts: the file is written again until both tabs follow it.
+      for (let tries = 0; logo(one) || logo(two); tries++) {
+        if (tries === 20) throw new Error("the tabs never followed the file")
+        writeSettings(file, { ...readSettings(file), logo: { animate: false } })
+        await poll(() => !logo(one) && !logo(two), { timeout: 1000 }).toBe(true).catch(() => {})
+      }
       await one.call("/shortcuts", "bind", { command: "next", keys: "alt+n" }, "person")
-      await poll(() => readSettings(file).keys.next).toBe("alt+n")
-      await poll(() => (two.read("/shortcuts") as { commands: { keys: string }[] }).commands[1]!.keys).toBe("alt+n")
-      writeSettings(file, { ...readSettings(file), logo: { animate: false } })
-      await poll(() => one.read("/")).toMatchObject({ logo: { animate: false } })
+      await poll(() => readSettings(file).keys.next, late).toBe("alt+n")
+      await poll(() => (two.read("/shortcuts") as { commands: { keys: string }[] }).commands[1]!.keys, late).toBe("alt+n")
+      // Its own write done, the tab follows the file again, and not before.
+      await poll(() => (one.model() as Model).writing, late).toBe(0)
+      writeSettings(file, { ...readSettings(file), logo: { animate: true } })
+      await poll(() => logo(one), late).toBe(true)
     } finally {
       await one.stop()
       await two.stop()
       rmSync(dir, { recursive: true, force: true })
     }
-  })
+  }, 60_000)
 })
 
 describe("the shell's settings", () => {

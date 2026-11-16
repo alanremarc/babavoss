@@ -32,8 +32,11 @@ export interface Running<M> {
   read(path: string, actor?: string): View | undefined
   /** What a read or a call of a path with nothing at it is answered with: the surface's word for it, else that nothing is there. */
   absent(path: string): string
-  /** An actor's call: refused unless the view at `path` offers the handle with these fixed args and the open args fit. */
-  call(path: string, name: string, args: Args, actor: string): Promise<Answer>
+  /**
+   * An actor's call: refused unless the view at `path` offers the handle with these fixed args and the open args fit. `id`
+   * is the caller's own name for it, which the call carries.
+   */
+  call(path: string, name: string, args: Args, actor: string, id?: string): Promise<Answer>
   /** Told after every change of the model, every command started or ended, and once on failure. */
   subscribe(fn: () => void): () => void
   /** Told of each notice a commit gives, before its subscribers are told of the commit; nothing keeps them. */
@@ -250,7 +253,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
     failure: () => failure,
     read,
     absent,
-    call: (path, name, args, actor) =>
+    call: (path, name, args, actor, id) =>
       enqueue((): Answer => {
         if (stopped) return refused(failure ?? "surface stopped")
 
@@ -269,7 +272,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
 
         if (typeof admitted === "string") return refused(admitted)
 
-        const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now() }
+        const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now(), ...(id && { id }) }
         let r: ReturnType<typeof surface.update>
 
         try {

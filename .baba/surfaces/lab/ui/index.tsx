@@ -152,7 +152,13 @@ export default function Lab() {
   const empty = root.run === undefined && !pending
   // With no run there is no page under test: the welcome takes the whole width.
   const shown: Side = empty || (narrow && side === "split") ? "thread" : side
-  const hasPage = !!root.page && status !== "closed"
+  const gone =
+    status === "closed"
+      ? "The run is closed, and its page with it."
+      : status === "cleared"
+        ? "The run was cleared when the lab started, and its page with it."
+        : undefined
+  const hasPage = !!root.page && !gone
   const conversation =
     route === "/runs" ? (
       <RunsPanel runs={kept?.runs ?? []} act={act} back={() => navigate("/")} />
@@ -190,9 +196,9 @@ export default function Lab() {
       {shown === "thread" ? (
         conversation
       ) : shown === "page" ? (
-        <UnderTest page={hasPage ? root.page : undefined} closed={status === "closed"} side={shown} show={show} narrow={narrow} />
+        <UnderTest page={hasPage ? root.page : undefined} gone={gone} side={shown} show={show} narrow={narrow} />
       ) : (
-        <Split thread={conversation} page={<UnderTest page={hasPage ? root.page : undefined} closed={status === "closed"} side={shown} show={show} narrow={narrow} />} />
+        <Split thread={conversation} page={<UnderTest page={hasPage ? root.page : undefined} gone={gone} side={shown} show={show} narrow={narrow} />} />
       )}
     </div>
   )
@@ -313,6 +319,7 @@ const TONE: Record<Status, "default" | "secondary" | "destructive" | "outline"> 
   ended: "destructive",
   closing: "secondary",
   closed: "outline",
+  cleared: "outline",
 }
 
 /** The run's identity and state in one line, and at the right what can be done to it now. */
@@ -596,7 +603,7 @@ function StartFrom({ open, setOpen, model, start }: { open: boolean; setOpen: (o
 }
 
 /** The page under test, live, under a slim bar of its own: its address, reload, open in a tab, and which side is shown. */
-function UnderTest({ page, closed, side, show, narrow }: { page?: string; closed: boolean; side: Side; show: (side: Side) => void; narrow: boolean }) {
+function UnderTest({ page, gone, side, show, narrow }: { page?: string; gone?: string; side: Side; show: (side: Side) => void; narrow: boolean }) {
   const [loads, setLoads] = useState(0)
 
   return (
@@ -635,7 +642,7 @@ function UnderTest({ page, closed, side, show, narrow }: { page?: string; closed
       ) : (
         <div className="grid flex-1 place-items-center p-6 text-center text-muted-foreground">
           <p className="max-w-64">
-            {closed ? "The run is closed, and its page with it." : "The root under test starts with the run; its page shows here, for you to act on as the person."}
+            {gone ?? "The root under test starts with the run; its page shows here, for you to act on as the person."}
           </p>
         </div>
       )}

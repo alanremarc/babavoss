@@ -126,6 +126,14 @@ describe("the activity log", () => {
     ])
   })
 
+  it("keeps on each line of a call the name its caller gave it, where it gave one", () => {
+    const named = { ...call("/tabs/2", "approve", { n: 12 }, "person"), id: "lab:act-3" }
+
+    expect(linesOf(held, named, T, ["Approved #12", "Queue empty"]).map((l) => l.id)).toEqual(["lab:act-3", "lab:act-3"])
+    expect(linesOf(held, named, T)).toEqual([{ when: T, who: "person", surface: "queue", at: "/tabs/2", what: "approve n=12", id: "lab:act-3" }])
+    expect(linesOf(held, call("/tabs/2", "approve", { n: 12 }, "person"), T)[0]).not.toHaveProperty("id")
+  })
+
   it("gives no line for the person marking what they have seen", () => {
     expect(linesOf(held, call("/activity/notices", "seen", { n: 4 }, "person"), T)).toEqual([])
   })
