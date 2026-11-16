@@ -1,14 +1,14 @@
 // The settings: a surface that comes with the shell, beside the project's, which holds the person's settings of the
-// shell's page, the appearance, the shortcuts and the mark, each a fact with the action that changes it. They are the
+// shell's page, the appearance with where the rail of tabs stands, the shortcuts and the mark, each a fact with the action that changes it. They are the
 // person's, not a tab's nor a session's: its state is their file (store.ts), which every settings tab, in any session,
 // watches and follows; the model is what the file said last, with what this tab changed and is writing. A change is
 // written by a command, and a read while one is being written waits for it, so the tab never shows an older value back.
 // The shell's page applies what they say. Nothing is noticed but a write that failed, and every change is quiet: the page's
 // own, of no event in the agent's work, so it is told to the agent in no way; the agent reads the tab when asked to change one.
 import { action, surface, view, type Update } from "../../../core/index.ts"
-import { bindings, clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
+import { clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
 import { bounded, isPreset } from "../../../kit/theme.ts"
-import { choiceIn, isMode, MODES, nameOf, numbersOf, settingsOf, THEMES, type Choice, type Mode, type Settings } from "./settings.ts"
+import { DRAWERS, ENDS, isMode, MODES, numbersOf, settingsOf, SIDES, THEMES, viewOf, type Choice, type Mode, type Rail, type Settings } from "./settings.ts"
 import { readSettings, settingsFile, watchSettings, writeSettings } from "./store.ts"
 
 /** `writing`: this tab's writes not yet done; `unsaved`: why the last one failed. */
@@ -103,6 +103,24 @@ const animate = action({
   inputs: { on: "boolean" },
   update: (m: Model, { on }): Update<Model, Command> => changed(m, { ...m.settings, logo: { animate: on } }),
 })
+const rail = action({
+  name: "rail",
+  quiet: true,
+  description: `where the rail of tabs stands: side ${SIDES.join(", ")}; from ${ENDS.join(" or ")}, the end the mark is at on a rail at the left or right; drawer ${DRAWERS.join(" or ")}, where a tab's drawer opens under a rail along the top or bottom. Give all three, the ones not changed as they are`,
+  subject: {},
+  inputs: { side: "string", from: "string", drawer: "string" },
+  update(m: Model, { side, from, drawer }): Update<Model, Command> {
+    const one = <T extends string>(options: readonly T[], value: string): value is T => options.includes(value as T)
+
+    if (!one(SIDES, side)) return { refused: `side is ${SIDES.join(", ")}, not ${side}` }
+    if (!one(ENDS, from)) return { refused: `from is ${ENDS.join(" or ")}, not ${from}` }
+    if (!one(DRAWERS, drawer)) return { refused: `drawer is ${DRAWERS.join(" or ")}, not ${drawer}` }
+
+    const placed: Rail = { side, from, drawer }
+
+    return changed(m, { ...m.settings, appearance: { ...m.settings.appearance, rail: placed } })
+  },
+})
 const bind = action({
   name: "bind",
   quiet: true,
@@ -144,20 +162,25 @@ const reset = action({
   },
 })
 
-const pages = view([mode, theme, dynamic, same, animate, bind, reset], {
-  "/": (m) => ({
-    title: "Settings",
-    how: "The person's own settings of the shell's page, the same in every session and project. Change one when they ask.",
-    appearance: appearanceView(m.settings),
-    shortcuts: { at: "/shortcuts", ...bindings(m.settings.keys) },
-    logo: { animate: m.settings.logo.animate },
-    ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
-    mode: mode.bind({}),
-    theme: theme.bind({}),
-    dynamic: dynamic.bind({}),
-    same: same.bind({}),
-    animate: animate.bind({}),
-  }),
+const pages = view([mode, theme, dynamic, same, rail, animate, bind, reset], {
+  "/": (m) => {
+    const told = viewOf(m.settings)
+
+    return {
+      title: "Settings",
+      how: "The person's own settings of the shell's page, the same in every session and project. Change one when they ask.",
+      appearance: told.appearance,
+      shortcuts: { at: "/shortcuts", ...told.shortcuts },
+      logo: told.logo,
+      ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
+      mode: mode.bind({}),
+      theme: theme.bind({}),
+      dynamic: dynamic.bind({}),
+      same: same.bind({}),
+      rail: rail.bind({}),
+      animate: animate.bind({}),
+    }
+  },
   "/shortcuts": (m) => ({
     title: "Shortcuts",
     commands: (Object.keys(COMMANDS) as CommandId[]).map((command) => ({
@@ -171,19 +194,10 @@ const pages = view([mode, theme, dynamic, same, animate, bind, reset], {
   }),
 })
 
-/** The appearance as it is told: the mode, and one theme for both or one each, a preset's id or dynamic with its numbers. */
-function appearanceView({ appearance }: Settings) {
-  const told = (choice: Choice) => (typeof choice === "string" ? choice : { theme: nameOf(choice), ...choice })
-
-  return appearance.same
-    ? { mode: appearance.mode, same: true, theme: told(choiceIn(appearance, "light")) }
-    : { mode: appearance.mode, same: false, light: told(appearance.themes.light), dark: told(appearance.themes.dark) }
-}
-
 /** The settings surface over the person's file, which `file` names when it runs: theirs by default. */
 export function settings(file: () => string = () => settingsFile()) {
   return surface<Model, Event, Command>({
-    description: "The person's settings of the shell's page: appearance, shortcuts, and whether the mark moves while the agent works. Use when the person asks to change one.",
+    description: "The person's settings of the shell's page: appearance, where the tabs stand, shortcuts, and whether the mark moves while the agent works. Use when the person asks to change one.",
     init: () => ({ settings: settingsOf(undefined), writing: 0 }),
     // What a tab kept is only a first look: the file is read again as it starts.
     restore: (saved) => ({ settings: settingsOf((saved as { settings?: unknown } | undefined)?.settings), writing: 0 }),

@@ -1,4 +1,4 @@
-// Whose move it is, as the logo at the strip's start shows it, once for every surface: still while the agent is idle or
+// Whose move it is, as the mark on the rail shows it, once for every surface: still while the agent is idle or
 // it is not known, the harness having said nothing; moving while it works; and, while it does not, a count of what the
 // person did on the page that it has not been told, which waits for their next message. What the indicator said is the
 // logo's label.

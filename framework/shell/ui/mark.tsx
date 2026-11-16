@@ -1,4 +1,4 @@
-// The babavoss mark, the two eyes of the brand, as the strip's first tab, home; and the agent's standing in it: at rest,
+// The babavoss mark, the two eyes of the brand, as home's tab, the rail's first; and the agent's standing in it: at rest,
 // looking about like a face that thinks while the agent works, a tint instead where motion is reduced or the person turned
 // the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the
 // activity. The eyes are patches on a sphere seen by a close camera, gaze.ts; here they are moved, a frame at a time and

@@ -1,7 +1,7 @@
 // What the shell's specimens are drawn from: a queue-like surface's views, as a tab's menu reads them, and a session's
-// activity, as the drawer lists it. Sample data only; every list and dot made of it is the shell's own code's.
+// activity, as a drawer's thread reads it. Sample data only; every list and dot made of it is the shell's own code's.
 import { handle, type View } from "babavoss/core/surface/view.ts"
-import type { Need, Row, TabInfo } from "babavoss/shell/ui/channels.ts"
+import type { Row } from "babavoss/shell/ui/thread.ts"
 import { liveCache } from "babavoss/shell/ui/live.ts"
 import type { Door } from "babavoss/shell/ui/tab.tsx"
 
@@ -64,34 +64,32 @@ export function sampleDoor(views: Record<string, View> = VIEWS): Door {
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d+Z$/, "Z")
 
-/** The open tabs, as the strip shows them. */
-export const TABS: TabInfo[] = [
-  { at: "/queue", surface: "queue", label: "Queue" },
-  { at: "/tabs/3", surface: "lab", label: "Lab" },
-  { at: "/design", surface: "design", label: "Design" },
-]
-/** What the tabs need of the person. */
-export const NEEDS: Need[] = [{ at: "/queue", surface: "queue", who: "person", why: "to approve or drop 1 draft" }]
-/** A session's activity, newest first: notices, calls, the shell's own, and a closed tab's. */
+/**
+ * A session's activity, newest first: in the queue's tab, notices by the agent, the surface and the person, calls in a
+ * row by the agent, and the shell's line that it was opened; the shell's own lines, about tabs opened and closed.
+ */
 export const ROWS: Row[] = [
-  { n: 12, when: ago(1), who: "agent", kind: "notice", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: "Issue 4, Show the present, is done" },
-  { n: 11, when: ago(2), who: "person", kind: "call", surface: "queue", at: "/queue/issues/7", tab: "/queue", what: "approve n=7" },
-  { n: 10, when: ago(4), who: "surface", kind: "notice", surface: "lab", at: "/tabs/3", tab: "/tabs/3", what: "The run ended: 2 turns, 41s, $0.08" },
-  { n: 9, when: ago(6), who: "person", kind: "call", surface: "design", at: "/design/scenarios/start/2", tab: "/design", what: "pin" },
-  { n: 8, when: ago(30), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: 'note n=4 text="specs pass, merging"' },
+  { n: 14, when: ago(1), who: "agent", kind: "notice", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: "Issue 4, Show the present, is done" },
+  { n: 13, when: ago(2), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: 'note n=4 text="specs pass, merging"' },
+  { n: 12, when: ago(2), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: "done n=4" },
+  { n: 11, when: ago(3), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/5", tab: "/queue", what: "start n=5 lane=2" },
+  { n: 10, when: ago(5), who: "person", kind: "notice", surface: "queue", at: "/queue/issues/7", tab: "/queue", what: "Draft 7 approved: it joins the backlog" },
+  { n: 9, when: ago(8), who: "surface", kind: "notice", surface: "queue", at: "/queue", tab: "/queue", what: "Lane 2 is free again" },
   {
-    n: 7,
-    when: ago(50),
+    n: 8,
+    when: ago(40),
     who: "agent",
     kind: "notice",
     surface: "queue",
     at: "/queue/issues/4",
     tab: "/queue",
-    what: "Issue 4 begins iteration 2: rewrite the strip so the dots stand on the icon and the menu hangs from the same spot whenever it opens",
+    what: "Issue 4 begins iteration 2: the dots stand on the icon, and the drawer opens where the rail is",
   },
-  { n: 6, when: ago(200), who: "agent", kind: "notice", surface: "design", at: "/design", tab: "/design", what: "The tellings are pinned as the baseline" },
-  { n: 5, when: ago(60 * 26), who: "agent", kind: "call", surface: "lab", at: "/", what: "Opened Lab" },
-  { n: 4, when: ago(60 * 27), who: "surface", kind: "notice", surface: "lab", at: null, tab: "/tabs/2", title: "Lab", what: "Run 2 ended" },
+  { n: 7, when: ago(41), who: "person", kind: "call", surface: "queue", at: "/queue", what: "shown to the person" },
+  { n: 6, when: ago(45), who: "person", kind: "call", surface: "queue", at: "/queue", what: "opened" },
+  { n: 5, when: ago(50), who: "agent", kind: "call", surface: "lab", at: null, what: "closed" },
+  { n: 4, when: ago(80), who: "agent", kind: "call", surface: "lab", at: null, what: "opened" },
+  { n: 3, when: ago(90), who: "agent", kind: "call", surface: "design", at: "/design", what: "opened" },
 ]
-/** The notices the person has not seen, by number. */
-export const FRESH = [12, 10]
+/** The notices the person had not seen as the drawer opened, by number. */
+export const FRESH = [14, 9]

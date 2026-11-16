@@ -31,6 +31,9 @@ export const named = (name: string): string => {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
+/** A description as an entry's label reads it: as written, its first letter a capital. */
+const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
 /**
  * Offered actions as entries of a menu: each by its name, or by its description where several share
  * one, the same handle bound to different subjects; with "…" where it asks for input first. Asks first.
@@ -43,7 +46,7 @@ export function actionItems(actions: Offered[], run: (action: Offered) => void):
   return [...actions.filter((a) => a.ask), ...actions.filter((a) => !a.ask)].map((a) => ({
     id: `${a.path} ${key(a.handle)}`,
     name: a.handle.name,
-    label: ((count.get(a.handle.name) ?? 0) > 1 ? a.handle.description : named(a.handle.name)) + (Object.keys(a.handle.open).length ? "…" : ""),
+    label: ((count.get(a.handle.name) ?? 0) > 1 ? capital(a.handle.description) : named(a.handle.name)) + (Object.keys(a.handle.open).length ? "…" : ""),
     hint: a.handle.description,
     ask: a.ask,
     run: () => run(a),
