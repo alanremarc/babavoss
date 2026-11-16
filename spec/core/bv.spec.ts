@@ -7,7 +7,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
 import type { Subprocess } from "bun"
-import { ACTOR_HEADER, CALL_HEADER, DEAF_MS, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
+import { ACTOR_HEADER, CALL_HEADER, DEAF_MS, ENDPOINT_FILE, ownRun, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
 import {
   ACTOR_HEADER as actorHeader,
   CALL_HEADER as callHeader,
@@ -15,6 +15,7 @@ import {
   SERVICE_HEADER as serviceHeader,
   endpointFile,
 } from "../../framework/core/runtime/service.ts"
+import { HUSH_MS, QUIET_LINE } from "../../framework/core/runtime/turn.ts"
 
 const client = resolve("framework/core/bv/bv.ts")
 const roots: string[] = []
@@ -187,6 +188,29 @@ it("wait is released by a person's call", async () => {
   expect(await new Response(waiting.stdout).text()).toContain("person")
   expect(await waiting.exited).toBe(0)
 })
+it("finds the hooks quiet only where the session's own agent went unheard: a run by --session from another session, or none, is not its", async () => {
+  const s = setup()
+
+  s.open()
+
+  const e = s.endpoint()
+  const hook = () => fetch(`http://127.0.0.1:${e.port}/_/turn`, { method: "POST", headers: { accept: "text/plain", [SERVICE_HEADER]: e.token }, body: "working" })
+  const by = (session: string) => spawnSync(process.execPath, [client, "--session", "S", "/notes"], { env: { ...s.env, CLAUDE_CODE_SESSION_ID: session }, encoding: "utf8" }).stdout
+
+  // A run is the agent's own where its harness's session is the one it runs in, as the environment says.
+  expect(ownRun("S", { CLAUDE_CODE_SESSION_ID: "S" })).toBe(true)
+  expect(ownRun("S", { CODEX_THREAD_ID: "S" })).toBe(true)
+  expect(ownRun("S", { CLAUDE_CODE_SESSION_ID: "another" })).toBe(false)
+  expect(ownRun("S", {})).toBe(false)
+  // The agent's run, its hook heard after it; then a lane's worker posts in the session's name from its own session, and a
+  // script from none; the agent's next run, long after, follows only its own hook.
+  expect(s.run(["/notes"]).out).not.toContain(QUIET_LINE)
+  await hook()
+  expect(by("another")).not.toContain(QUIET_LINE)
+  expect(by("")).not.toContain(QUIET_LINE)
+  await Bun.sleep(HUSH_MS + 500)
+  expect(s.run(["/notes"]).out).not.toContain(QUIET_LINE)
+}, 30_000)
 it("close then call, at once, wakes the runtime at the address the session had, so nothing is announced", async () => {
   const s = setup()
 

@@ -5,11 +5,11 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, expect, it } from "bun:test"
+import { afterEach, expect, it, setSystemTime } from "bun:test"
 import { action, defineRoot, detail, surface, view, type Update } from "../../framework/core/index.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
-import { ACTOR_HEADER, CALL_ID_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
-import { HARNESS_HEADER } from "../../framework/core/runtime/turn.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { HARNESS_HEADER, HUSH_MS, QUIET_LINE } from "../../framework/core/runtime/turn.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
 
@@ -501,4 +501,35 @@ it("tells nothing of what no one did: where it pointed, cleared as the root star
 
   expect(await request("/_/wait?seconds=0")).toBe("nothing changed")
   expect(await request("/")).not.toContain("pointed")
+})
+
+it("finds the hooks quiet by the runs that carry a call, the agent's own, and never by a request that carries none, as a run in its name from elsewhere", async () => {
+  const { runtime, endpoint, turn } = await started()
+  const run = async (call?: string) =>
+    (
+      await fetch(`http://127.0.0.1:${runtime.port}/`, {
+        headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: "agent:S", ...(call && { [CALL_HEADER]: call }) },
+      })
+    ).text()
+  const later = (ms: number) => setSystemTime(new Date(Date.now() + ms))
+
+  try {
+    await run("a")
+    await turn("working")
+    // Others run in the session's name: as they carried a call, the agent's next run after a pause found the hooks quiet.
+    await run("x")
+    later(HUSH_MS + 1)
+    expect(await run("b")).toStartWith(QUIET_LINE)
+    await turn("working")
+    // Without one they count for nothing: the agent's next run follows its own hook.
+    await run()
+    later(HUSH_MS + 1)
+    expect(await run()).not.toContain(QUIET_LINE)
+    expect(await run("c")).not.toContain(QUIET_LINE)
+    // And its own silence still counts: its run long after its last, with no hook between.
+    later(HUSH_MS + 1)
+    expect(await run("d")).toStartWith(QUIET_LINE)
+  } finally {
+    setSystemTime()
+  }
 })

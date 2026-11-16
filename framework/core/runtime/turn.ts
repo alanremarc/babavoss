@@ -42,7 +42,8 @@ export function reading(turn: Turn, now: number, busy = false): Turn {
  * The hooks' silence, as the agent's word finds it. Each run of the word is one tool call of the agent's, and a harness's
  * hooks speak after each tool call; so a run that begins more than HUSH_MS after another run's last answer, with no hook
  * heard since, finds them quiet. One tool call that runs long, a wait or a program of many calls, is one run, and never
- * finds them so. `ever`: a hook was heard in this session; `told`: the agent was told of this stretch of silence, which the
+ * finds them so. Only the session's own agent's runs carry a call: one in its name from elsewhere, another session's agent
+ * by --session or a script, carries none and counts for nothing (bv.ts). `ever`: a hook was heard in this session; `told`: the agent was told of this stretch of silence, which the
  * next hook heard ends; `last`: the run answered last since a hook was heard, and when.
  */
 export type Hooks = { ever: boolean; told: boolean; last?: { call: string; at: number }; harness?: string }

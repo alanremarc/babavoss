@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 13
+export const VERSION = 14
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -52,6 +52,9 @@ export function sessionArgs(args: string[]) {
 
   return session
 }
+
+/** Whether a run in `session`'s name is its agent's own: run from that session of its harness, as its environment says. */
+export const ownRun = (session: string, env: NodeJS.ProcessEnv = process.env) => env.CLAUDE_CODE_SESSION_ID === session || env.CODEX_THREAD_ID === session
 
 /** A call's value that names a file: @ and a path, absolute, relative or from home. Text that begins so is given with @-. */
 const FILE_ARG = /^@(\/|\.\.?\/|~\/)/
@@ -320,7 +323,9 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     let endpoint = await reach()
     let page = `http://127.0.0.1:${endpoint.port}`
     // One run of the command, one tool call of the agent's: the runtime tells by it whether the hooks speak between calls.
-    const call = randomUUID()
+    // Only a run from the session's own harness session is one: another session's agent naming it by --session, or a
+    // script with none, runs in its name but is no call of its agent's, so it carries none.
+    const call = ownRun(session) ? randomUUID() : undefined
     const request = async (url: string, method = "GET", body?: string, accept = "text/plain") => {
       const send = () =>
         fetch(`${page}${url}`, {
@@ -331,7 +336,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
             "content-type": "application/json",
             [SERVICE_HEADER]: endpoint.token,
             [ACTOR_HEADER]: `agent:${session}`,
-            [CALL_HEADER]: call,
+            ...(call && { [CALL_HEADER]: call }),
           },
         })
       const until = Date.now() + 30_000
