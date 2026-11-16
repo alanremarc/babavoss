@@ -1,8 +1,9 @@
 // Where the session's work is kept: one file in the session's directory, work.json, written whole or not at all, which every
 // queue tab of the session opens and follows. The runtime is one process, so its tabs share the work in memory and each
 // change is applied there, saved, and told to every tab that follows; a change to the file from outside, as a runtime that
-// started again writes it, is read and told too. A tab that brings work kept from before has it merged in, losing nothing.
-// Where there is no file to keep it in, as in a story, the work is kept in memory alone.
+// started again writes it, is read and told too, and the file removed begins the work again. A tab that brings work kept
+// from before has it merged in, losing nothing. Where there is no file to keep it in, as in a story, the work is kept in
+// memory alone.
 import { watch, type FSWatcher } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import { readJsonFile, writeJsonFile } from "babavoss/core/index.ts"
@@ -47,7 +48,10 @@ export function store(where: () => string | undefined = () => undefined): Store 
     if (at.file) writeJsonFile(at.file, work)
     held = { file: at.file, work, text: JSON.stringify(work, null, 2) }
   }
-  /** The file changed from outside: read it again, and tell it where it differs from what was written here. */
+  /**
+   * The file changed from outside: read it again, and tell it where it differs from what was written here. A file removed
+   * is work begun again, empty, as a session's work with no file is.
+   */
   const reread = () => {
     const file = held?.file
 
@@ -56,7 +60,13 @@ export function store(where: () => string | undefined = () => undefined): Store 
       const kept = readJsonFile<unknown>(file)
       const text = kept === undefined ? undefined : JSON.stringify(kept, null, 2)
 
-      if (!isWork(kept) || text === held!.text) return
+      if (text === held!.text) return
+      if (kept === undefined) {
+        held = { file, work: empty() }
+
+        return tell()
+      }
+      if (!isWork(kept)) return
       held = { file, work: kept, text }
       tell()
     } catch {
