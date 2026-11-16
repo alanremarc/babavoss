@@ -2,6 +2,11 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.64.0
+
+- Home tells the person when the session's hooks are not heard, never heard or heard and gone quiet: a bubble beside the mark, kept in home's thread, a dot on the mark, and a line pinned in home's drawer that says what to do. The dot and the line clear when a hook is heard again. It begins when the runtime tells the agent its one line of the silence, never from a timer of the page's.
+- The runtime's turn carries `unheard: { ever, since }` while that lasts, and the session's `hooks.json` keeps `since`. What the agent is told is unchanged. Nothing to adapt.
+
 ## 0.63.0
 
 - An agent run non-interactively through an adapter gets baba's hooks. Claude Code's run loads the project's plugin by `--plugin-dir`: a plugin in `.claude/skills` runs its hooks only in a folder trusted in the home, and a `-p` run does not count as trust, so the skill loaded and no hook ran. The plugin's manifest says `"skills": []`, so its `SKILL.md` stays one skill.
