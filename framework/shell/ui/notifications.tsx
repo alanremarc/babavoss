@@ -20,7 +20,7 @@ import { ArrowUpRightIcon, ChevronLeftIcon, CircleDotIcon, LogsIcon } from "luci
 import { Sheet, SheetContent, SheetTitle } from "../../kit/components/sheet"
 import { Toasts, type ToastItem } from "../../kit/components/toast"
 import { BY, ChannelIcon, ChannelItem, Heading, HistoryLine, keepFocus, MARK, Mark, moveIn, NextTurn } from "./activity.tsx"
-import { arrived, channelOf, channelsOf, groupsOf, levelKey, needLine, placeIn, SHELL, tabIn, type Channel, type Need, type Row, type TabInfo, type Who } from "./channels.ts"
+import { arrived, channelOf, channelsOf, distinct, groupsOf, levelKey, nameOf, needLine, placeIn, SHELL, tabIn, type Channel, type Need, type Row, type TabInfo, type Who } from "./channels.ts"
 import { call, read, type Notice } from "./client.ts"
 
 /** What the activity lists: the notices, or all activity. */
@@ -196,13 +196,8 @@ export function Notifications({
   const feed = shown === "all" ? all : told
   const rows = inView(feed.rows, shown)
   const fresh = new Set(told.fresh)
-  // The title each tab had while the page saw it open, which names its channel once it is closed.
-  const titles = useRef<Record<string, string>>({})
-
-  for (const t of tabs) titles.current[t.at] = t.label
-
-  const channels = channelsOf(rows, tabs, needs, fresh, title, titles.current)
-  const channel = entered && (channels.find((c) => c.key === entered.key) ?? emptyChannel(entered.key, tabs, told.rows, title, titles.current))
+  const channels = channelsOf(rows, tabs, needs, fresh, title)
+  const channel = entered && (channels.find((c) => c.key === entered.key) ?? emptyChannel(entered.key, tabs, told.rows, title, channels))
   const next = waitingRows(all.rows, waiting)
   const newest = Math.max(told.rows[0]?.n ?? 0, all.rows[0]?.n ?? 0)
 
@@ -515,12 +510,17 @@ export function ActivityLevels({
   )
 }
 
-/** A channel the list no longer has, as when the lens leaves it empty: its name from its tab or its notices, with no rows. */
-function emptyChannel(key: string, tabs: TabInfo[], rows: Row[], shell: string, titles: Record<string, string>): Channel {
+/**
+ * A channel the list no longer has, as when the lens leaves it empty: named from its tab or its notices, apart from the
+ * `others` listed, with no rows.
+ */
+function emptyChannel(key: string, tabs: TabInfo[], rows: Row[], shell: string, others: Channel[]): Channel {
   const tab = tabs.find((t) => t.at === key)
-  const surface = key === SHELL ? undefined : (tab?.surface ?? rows.find((r) => channelOf(r) === key)?.surface)
+  const mine = rows.filter((r) => channelOf(r) === key)
+  const surface = key === SHELL ? undefined : (tab?.surface ?? mine[0]?.surface)
+  const channel: Channel = { key, name: nameOf(key, tab, mine, surface, shell), ...(surface && { surface }), closed: key !== SHELL && !tab, rows: [], unseen: 0 }
 
-  return { key, name: key === SHELL ? shell : (tab?.label ?? titles[key] ?? surface ?? key), ...(surface && { surface }), closed: key !== SHELL && !tab, rows: [], unseen: 0 }
+  return distinct([...others, channel]).at(-1)!
 }
 
 /** The second level's header: back, with a dot where another channel heard something meanwhile; the channel; and the way to its tab. */

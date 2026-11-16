@@ -7,7 +7,8 @@
 // under `at`, and its notices, are given whole, below the tab's address, on the way out, a notice with its surface's name.
 // What stood at a path that is gone is said where it is asked for: which tab closed, by whom, and where its surface is
 // now. A tab whose surface says `attention` at / is needed: who, and why, gathered first at
-// / as `needs`, so who is needed is read before every tab. Every commit is kept as activity, who did what where, read on
+// / as `needs`, so who is needed is read before every tab. To the person, each tab at / says how many asks it offers anywhere
+// in its tree, as far as LOOK reaches, which dots a tab that is not shown. Every commit is kept as activity, who did what where, read on
 // demand at /activity and named at / by one fact that never changes (activity.ts); what the person has seen of its
 // notices is marked by asks at /activity/notices, which are no activity and change nothing at /. What
 // a surface throws breaks only what it was asked for: a tab it cannot restore or show at / is listed as broken, with why
@@ -22,15 +23,18 @@
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
 import { action, handles, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
-import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen } from "./activity.ts"
+import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen, type Tabs } from "./activity.ts"
 
 /**
  * `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved.
  * `named`: the tab holds its surface's name, so /NAME addresses it.
  */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string; named?: true }
-/** A tab closed, by whom, and whether it held its surface's name: what a path into it is answered with. */
-export type Closed = { n: number; surface: string; by: "person" | "agent"; named?: true }
+/**
+ * A tab closed, by whom, whether it held its surface's name, and the title it had: what a path into it is answered with,
+ * and what names its channel in the activity.
+ */
+export type Closed = { n: number; surface: string; by: "person" | "agent"; named?: true; title?: string }
 /** Where the agent last pointed the person, and how many times it has: the page goes there when the count moves. */
 export type Pointed = { at: string; n: number }
 /**
@@ -61,6 +65,8 @@ export type Need = { at: string; surface: string } & Attention
 
 /** The shell's own paths: a surface cannot be named for them, or /NAME would stand on them. */
 export const PATHS = ["tabs", "activity"]
+/** How far the shell looks below a tab for its asks: views read in all, and places deep from its /. */
+export const LOOK = { views: 60, depth: 4 }
 /** How many closed tabs are remembered, so a path into one says where its surface went. */
 const REMEMBERED = 20
 
@@ -107,6 +113,20 @@ export function whole<V extends Json | undefined>(value: V, address: string): V 
   ) as V
 }
 
+/** The places a view names under `at`, but its own: the paths a walk of a tab's tree goes on to. */
+function placesIn(value: Json | undefined, self: string, out = new Set<string>()): Set<string> {
+  if (!value || typeof value !== "object" || isHandle(value)) return out
+  if (Array.isArray(value)) {
+    for (const v of value) placesIn(v, self, out)
+
+    return out
+  }
+  if (typeof value.at === "string" && value.at.startsWith("/") && value.at !== self) out.add(value.at)
+  for (const v of Object.values(value)) placesIn(v, self, out)
+
+  return out
+}
+
 /** A view's facts: what it says, without the handles it offers. */
 function facts(value: Json | undefined): Json | undefined {
   if (Array.isArray(value)) return value.map((v) => facts(v) ?? null)
@@ -123,14 +143,16 @@ export const attentionOf = (value: Json | undefined): Attention[] =>
 
 /**
  * The shell over `surfaces`, by name. `baba` is the .baba/ they are from; where there is none, the desktop says so.
- * `broken` names the surfaces of that .baba/ whose code did not load, with why (loading.ts).
+ * `broken` names the surfaces of that .baba/ whose code did not load, with why (loading.ts). `title` names the root at /,
+ * from the configuration (titleOf in ../../core/config.ts).
  * A session's state kept from before is read as it was: its picker tab is dropped, and a tab's `util` is its surface.
  */
 export function shell(
   surfaces: Record<string, AnySurface>,
   baba?: string,
   broken: Record<string, string> = {},
-  own: Record<string, AnySurface> = OWN
+  own: Record<string, AnySurface> = OWN,
+  title = "baba"
 ): Surface<ShellModel, ShellEvent, ShellCommand> {
   const held = new Map([...Object.entries(surfaces).filter(([name]) => !(name in own) && !PATHS.includes(name)), ...Object.entries(own)])
   const unloaded = new Map(Object.entries(broken).filter(([name]) => !held.has(name)))
@@ -177,7 +199,9 @@ export function shell(
     update(model: ShellModel, { n }, call): Update<ShellModel, ShellCommand> {
       const tab = model.tabs.find((t) => t.n === n)
       const by = isPerson(call.actor) ? ("person" as const) : ("agent" as const)
-      const closed = tab ? [...(model.closed ?? []), { n, surface: tab.surface, by, ...(tab.named && { named: true as const }) }] : model.closed
+      const title = tab && attempt(tab, (s) => s.view(tab.model, "/")?.title)?.ok
+      const was: Closed | undefined = tab && { n, surface: tab.surface, by, ...(tab.named && { named: true as const }), ...(typeof title === "string" && { title }) }
+      const closed = was ? [...(model.closed ?? []), was] : model.closed
 
       return { model: { ...model, tabs: model.tabs.filter((t) => t.n !== n), ...(closed && { closed: closed.slice(-REMEMBERED) }) } }
     },
@@ -329,15 +353,18 @@ export function shell(
     ask: true,
     update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({ model: { ...model, seen: lookAt(model.seen ?? { upto: 0, looked: [] }, n) } }),
   })
-  /** The address of the open tab numbered n, which activity says an entry's place by; undefined where it is closed. */
-  const opened = (model: ShellModel) => (n: number) => {
-    const tab = model.tabs.find((t) => t.n === n)
+  /** The tabs activity says an entry's place by: the address of the open tab numbered n, and the title a closed one had. */
+  const opened = (model: ShellModel): Tabs => ({
+    at: (n) => {
+      const tab = model.tabs.find((t) => t.n === n)
 
-    return tab && addressOf(tab)
-  }
+      return tab && addressOf(tab)
+    },
+    title: (n) => model.closed?.findLast((c) => c.n === n)?.title,
+  })
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
-      title: "baba",
+      title,
       ...(baba === undefined ? { missing: MISSING } : ![...held.keys()].some((name) => !(name in own)) && !unloaded.size && { empty: EMPTY }),
       surfaces: [
         ...[...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
@@ -371,6 +398,35 @@ export function shell(
     const actions = [...new Set(handles(rest).map((h) => h.name))]
 
     return { row: { ...(typeof title === "string" && { title }), ...(actions.length && { actions }), facts: facts(whole(rest, addressOf(tab))) }, needs }
+  }
+  /**
+   * How many asks a tab offers the actor anywhere in its tree, each once: breadth-first from / along the places its views
+   * name, as far as LOOK reaches; a path its surface fails on offers none.
+   */
+  const asksIn = (tab: Tab, actor: string): number => {
+    const known = new Set(["/"])
+    const asks = new Set<string>()
+    let level = ["/"]
+    let left = LOOK.views
+
+    for (let depth = 0; level.length && left > 0 && depth <= LOOK.depth; depth++) {
+      const batch = level.slice(0, left)
+
+      left -= batch.length
+      level = []
+      for (const path of batch) {
+        const view = attempt(tab, (s) => s.view(tab.model, path, actor))?.ok
+
+        for (const h of handles(view)) if (h.ask) asks.add(`${h.name} ${JSON.stringify(h.args)}`)
+        for (const place of placesIn(view, path)) {
+          if (known.has(place)) continue
+          known.add(place)
+          level.push(place)
+        }
+      }
+    }
+
+    return asks.size
   }
   /** A call into a tab, or its refusal with why: where its surface cannot show the call's path, or fails on the call itself. */
   const called = (tab: Tab, call: Call, model: ShellModel): Update<ShellModel, ShellCommand> => {
@@ -458,7 +514,12 @@ export function shell(
         next: kept.next,
         activity,
         seen: seenFrom((saved as { seen?: unknown }).seen, activity),
-        ...(Array.isArray(closed) && { closed: closed.filter(isClosed).slice(-REMEMBERED) }),
+        ...(Array.isArray(closed) && {
+        closed: closed
+          .filter(isClosed)
+          .slice(-REMEMBERED)
+          .map(({ title, ...c }) => ({ ...c, ...(typeof title === "string" && { title }) })),
+      }),
         tabs: tabs.map((t) => (t.named || named.has(t.surface) || !named.add(t.surface) ? t : { ...t, named: true as const })),
       }
     },
@@ -507,13 +568,19 @@ export function shell(
         }
         if (!home || path !== "/") return home
 
+        const person = actor !== undefined && isPerson(actor)
         const rows = model.tabs.map((tab) => said(tab, actor))
         const needs: Need[] = rows.flatMap(({ needs }, i) => needs.map((need) => ({ at: addressOf(model.tabs[i]!), surface: model.tabs[i]!.surface, ...need })))
         const { title, ...rest } = home
-        const root = { title, ...(needs.length && { needs }), ...rest, tabs: (home.tabs as View[]).map((row, i) => ({ ...row, ...rows[i]!.row })) }
+        const tabs = (home.tabs as View[]).map((row, i) => {
+          const asks = person && rows[i]!.row.broken === undefined ? asksIn(model.tabs[i]!, actor) : 0
+
+          return { ...row, ...rows[i]!.row, ...(asks && { asks }) }
+        })
+        const root = { title, ...(needs.length && { needs }), ...rest, tabs }
 
         // A tab's detail stays marked only in the agent's present, which counts it; the person reads it as it is.
-        return actor !== undefined && isPerson(actor) ? revealed(root) : root
+        return person ? revealed(root) : root
       }
 
       const tab = tabAt(model, at)

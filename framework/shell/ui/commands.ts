@@ -114,6 +114,16 @@ export function labelOf(path: string, view: View | undefined, listed: Place[] = 
 /** The path above one within a tab, `/` at the top; none above `/`. */
 export const parentOf = (path: string): string | undefined => (path === "/" ? undefined : path.replace(/\/[^/]*$/, "") || "/")
 
+/**
+ * The place above `route` the tab's menu reads, for its way back up: only one a view `known` names, so a parent path with
+ * no view, which the door answers with not found, is never asked for; none at `/` or just below it.
+ */
+export function aboveOf(route: string, known: readonly (View | undefined)[]): string | undefined {
+  const up = parentOf(route)
+
+  return up !== undefined && up !== "/" && known.some((view) => placesOf(view).some((p) => p.at === up)) ? up : undefined
+}
+
 /** What an input form's fields hold, as the action's arguments: each open input of its type, or undefined while one is not. */
 export function argsOf(open: Schema, fields: Record<string, string | boolean | undefined>): Args | undefined {
   const args: Args = {}

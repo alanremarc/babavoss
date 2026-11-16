@@ -7,6 +7,7 @@
 import { readFileSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs"
 import { dirname, join } from "node:path"
 import { main } from "../../core/bv/door.ts"
+import { loadConfig, titleOf } from "../../core/config.ts"
 import { defineRoot } from "../../core/root.ts"
 import { findBaba, generateRoot, SURFACES_DIR } from "../../core/provision.ts"
 import { bootPaths } from "../src/boot.ts"
@@ -64,5 +65,10 @@ const follow = (baba: string) => {
 if (baba) follow(baba)
 else held.babavossSurfaces?.close()
 
-// Where there is no .baba/, the page is the shell's own, with no surface to hold.
-await main(defineRoot({ name: "baba", ui: shellUi(generated ?? new URL("../ui/", import.meta.url)), surface: shell(surfaces, baba, broken), boot: bootPaths }))
+// The root's title is the configuration's, or the project directory's name; a configuration that does not load names it
+// so too, and the hook says what is wrong with it. Where there is no .baba/, the page is the shell's own, with no surface to hold.
+const title = baba ? titleOf(await loadConfig(baba).catch(() => ({})), baba) : undefined
+
+await main(
+  defineRoot({ name: "baba", ui: shellUi(generated ?? new URL("../ui/", import.meta.url)), surface: shell(surfaces, baba, broken, undefined, title), boot: bootPaths })
+)
