@@ -370,7 +370,7 @@ export function managedPolicy(at = managedAt()): { from: string; policy: O } | u
     const drops = join(at.dir, "managed-settings.d")
     const files = [
       join(at.dir, "managed-settings.json"),
-      ...(existsSync(drops) ? readdirSync(drops).filter((name) => name.endsWith(".json") && !name.startsWith(".")).sort().map((name) => join(drops, name)) : []),
+      ...(existsSync(drops) ? readdirSync(drops).filter((name) => name.endsWith(".json") && !name.startsWith(".")) : []).sort().map((name) => join(drops, name)),
     ]
     const read = files.flatMap((file) => {
       const policy = existsSync(file) ? readObject(readFileSync(file, "utf8")) : undefined
@@ -386,7 +386,9 @@ export function managedPolicy(at = managedAt()): { from: string; policy: O } | u
 
   if (!first) return undefined
 
-  return first.policy.managedSourcesBehavior === "merge" ? { from: sources.map((s) => s.from).join(" and "), policy: sources.reduce<O>((all, s) => merged(all, s.policy), {}) } : first
+  if (first.policy.managedSourcesBehavior !== "merge") return first
+
+  return { from: sources.map((s) => s.from).join(" and "), policy: sources.reduce<O>((all, s) => merged(all, s.policy), {}) }
 }
 
 const SURFACES = ["skills", "agents", "hooks", "mcp"]
