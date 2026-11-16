@@ -69,6 +69,7 @@ export type Command =
   | { kind: "harness"; n: number; model: string; from: string }
   | { kind: "say"; n: number; session: string; text: string }
   | { kind: "interrupt"; n: number; session: string }
+  /** `id`: the act's entry, which names its call in the root under test's activity, so what came of it is told from the person's. */
   | { kind: "act"; n: number; id: string; project: string; home: string; session: string; at: string; handle?: string; args?: Json }
   | { kind: "follow"; n: number; project: string; session: string }
   | { kind: "close"; n: number; session?: string; dir?: string; project?: string; home?: string }
@@ -629,16 +630,16 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
         if (!handle) return send({ kind: "acted", n: c.n, t: Date.now(), id: c.id, said: await place.look(project, home, session, at) })
 
         const f = followers.get(session)
+        const named = `lab:${c.id}`
         const acting = async () => {
-          // What the person did before is heard first; what came of the act is its own, not the person's on the page.
+          // What the person did before is heard first; what came of the act, by the name its call carried, is its own, not the person's.
           const before = f ? await hear(f, project, session) : []
 
           if (before.length) send({ kind: "heard", n: c.n, entries: before })
 
-          const said = await place.act(project, home, session, at, handle, c.args ?? {})
+          const said = await place.act(project, home, session, named, at, handle, c.args ?? {})
           const after = f ? await hear(f, project, session) : []
-          const tab = /^\/tabs\/\d+/.exec(at)?.[0]
-          const mine = (e: Heard) => said.ok && e.who === "person" && (!tab || e.at === tab || e.at.startsWith(`${tab}/`))
+          const mine = (e: Heard) => e.id === named
           const others = after.filter((e) => !mine(e))
 
           if (others.length) send({ kind: "heard", n: c.n, entries: others })

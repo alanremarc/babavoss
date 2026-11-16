@@ -14,14 +14,17 @@ export type Checkout = { from: string; commit: string; dirty: string[] }
 export type Made = { dir: string; project: string; home: string; checkout: Checkout; ms: number; page?: string }
 /** An answer of the root under test: what it said, and whether it did what was asked. */
 export type Said = { ok: boolean; text: string }
-/** One line of the root under test's activity, as its /activity gives it: `when` in ms since the epoch, to the second. */
-export type Heard = { n: number; when: number; who: string; surface: string; at: string; what: string }
+/**
+ * One line of the root under test's activity, as its /activity gives it: `when` in ms since the epoch, to the second; `id`
+ * the name its call was given, where the lab gave it one.
+ */
+export type Heard = { n: number; when: number; who: string; surface: string; at: string; what: string; id?: string }
 
 export interface Runs {
   /** Makes run `id`'s directory: the project, a copy of the checkout at `from` (this repository where empty), its root started for `session`. */
   make(id: string, from: string, session: string): Promise<Made>
-  /** Calls a handle in the root under test, as the person. */
-  act(project: string, home: string, session: string, at: string, handle: string, args: Json): Promise<Said>
+  /** Calls a handle in the root under test, as the person, the call named `id`, as its activity will say it. */
+  act(project: string, home: string, session: string, id: string, at: string, handle: string, args: Json): Promise<Said>
   /** What the person sees at a path of the root under test, with the handles offered to them. */
   look(project: string, home: string, session: string, at: string): Promise<Said>
   /** The root under test's activity after entry `after`, oldest first; none where its runtime is not up, which is never woken for it. */
@@ -201,8 +204,8 @@ export function runsAt(root: string = RUNS): Runs {
         throw error
       }
     },
-    async act(project, home, session, at, handle, args) {
-      const answer = await client(project, home, session).request(at, { method: "POST", body: JSON.stringify({ handle, args }) })
+    async act(project, home, session, id, at, handle, args) {
+      const answer = await client(project, home, session).request(at, { method: "POST", id, body: JSON.stringify({ handle, args }) })
       const body = (await answer.json()) as { outcome?: string; reason?: string; error?: string }
 
       return body.outcome === "written"
@@ -229,8 +232,8 @@ export function runsAt(root: string = RUNS): Runs {
         const page = (await answer.json()) as { entries?: unknown; earlier?: { at?: string } }
         const entries = Array.isArray(page.entries) ? (page.entries as (Omit<Heard, "when"> & { when: string })[]) : []
 
-        for (const { n, when, who, surface, at: where, what } of entries)
-          if (n > after) heard.push({ n, when: Date.parse(when), who, surface, at: where ?? "", what })
+        for (const { n, when, who, surface, at: where, what, id } of entries)
+          if (n > after) heard.push({ n, when: Date.parse(when), who, surface, at: where ?? "", what, ...(typeof id === "string" && { id }) })
         at = entries.length && entries.at(-1)!.n > after + 1 ? page.earlier?.at : undefined
       }
 

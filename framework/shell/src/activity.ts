@@ -14,9 +14,10 @@ export type Who = "person" | "agent" | "surface"
 /**
  * One line of activity: its number in the session, when in ms since the epoch, who, the surface and the place it is about,
  * and what; `notice` where a surface said it, absent where it is the mechanical line for a call or the shell's own; `own`
- * where it is the shell's own opening, closing or showing of a tab, which is about the tab but not in it.
+ * where it is the shell's own opening, closing or showing of a tab, which is about the tab but not in it; `id` the name
+ * its call was given by its caller, where it was given one.
  */
-export type Entry = { n: number; when: number; who: Who; surface: string; at: string; what: string; notice?: true; own?: true }
+export type Entry = { n: number; when: number; who: Who; surface: string; at: string; what: string; notice?: true; own?: true; id?: string }
 /** An entry before it is numbered. */
 export type Line = Omit<Entry, "n">
 /** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by their toast. */
@@ -69,6 +70,13 @@ const tabOf = (path: string) => /^\/tabs\/(\d+)(\/.*)?$/.exec(path)
  * at /activity, the person marking what they have seen, gives none: it is how they read the log, not something done.
  */
 export function linesOf(before: Held, message: Call | { kind: "tab"; n: number }, when: number, notices: Notice[] = []): Line[] {
+  const lines = linesFor(before, message, when, notices)
+  const id = message.kind === "call" ? message.id : undefined
+
+  return id ? lines.map((line) => ({ ...line, id })) : lines
+}
+
+function linesFor(before: Held, message: Call | { kind: "tab"; n: number }, when: number, notices: Notice[]): Line[] {
   const told = notices.map(given)
   const tell = (who: Who, tab: { n: number; surface: string }) =>
     told.map((t): Line => ({ when, who, surface: tab.surface, at: t.at ?? `/tabs/${tab.n}`, what: t.text, notice: true }))
@@ -198,7 +206,7 @@ export function activityView(all: Entry[], open: (n: number) => string | undefin
   const row = (e: Entry) => {
     const t = tab(e)
 
-    return { n: e.n, when: stamp(e.when), who: e.who, ...(!notices && { kind: e.notice ? "notice" : "call" }), surface: e.surface, at: live(e.at), ...(t && { tab: t }), what: e.what }
+    return { n: e.n, when: stamp(e.when), who: e.who, ...(!notices && { kind: e.notice ? "notice" : "call" }), surface: e.surface, at: live(e.at), ...(t && { tab: t }), what: e.what, ...(e.id && { id: e.id }) }
   }
 
   return {
@@ -206,7 +214,8 @@ export function activityView(all: Entry[], open: (n: number) => string | undefin
     about: notices
       ? "what the surfaces chose to say in this session, newest first, by who caused it; tab is the tab it is in, at null where that is closed"
       : "who did what in this session, newest first: the person, an agent, or a surface by itself; kind is notice where a surface said it, " +
-        "call where a call said nothing; tab is the tab it is in, absent for the shell's own, at null where the tab is closed",
+        "call where a call said nothing; tab is the tab it is in, absent for the shell's own, at null where the tab is closed; id is the " +
+        "name a call's caller gave it, where it gave one",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),

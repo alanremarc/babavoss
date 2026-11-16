@@ -12,6 +12,8 @@ export interface Call {
   actor: string
   /** When the call was admitted, in ms since the epoch: an update that keeps time takes it from here, never from a clock. */
   t?: number
+  /** The caller's own name for the call, where it gave one: a program acting as the person finds what came of its call by it. */
+  id?: string
 }
 
 /**

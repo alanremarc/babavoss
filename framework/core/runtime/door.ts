@@ -9,6 +9,7 @@
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
+//   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view. And with what it shows first, so its first frame is whole: an island of JSON, the root's state as the
@@ -26,7 +27,7 @@ import { textArgs, textSession, textView } from "./text.ts"
 import { NEEDS } from "../present/present.ts"
 import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
-import { ACTOR_HEADER, CALL_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
 import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
@@ -472,7 +473,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
       if (actor === actorText) text.touch(path)
 
-      const answer = await running.call(path, call.handle, (call.args ?? {}) as Args, actor)
+      const id = req.headers[CALL_ID_HEADER]
+      const answer = await running.call(path, call.handle, (call.args ?? {}) as Args, actor, typeof id === "string" && id ? id : undefined)
       const heard = { path, handle: call.handle, args: call.args ?? {}, actor, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
       for (const res of streams) res.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)

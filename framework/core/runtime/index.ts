@@ -10,6 +10,7 @@ export {
   endpointFile,
   logFile,
   ACTOR_HEADER,
+  CALL_ID_HEADER,
   SERVICE_HEADER,
   Denied,
   DENIED_EXIT,

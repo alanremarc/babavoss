@@ -8,7 +8,7 @@ import { join } from "node:path"
 import { afterEach, expect, it } from "bun:test"
 import { action, defineRoot, detail, surface, view, type Update } from "../../framework/core/index.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
-import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { ACTOR_HEADER, CALL_ID_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { HARNESS_HEADER } from "../../framework/core/runtime/turn.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
@@ -276,6 +276,27 @@ it("tells a notice heard before the runtime started again in the agent's next an
   // The agent's own notice is not told back to it, before a restart or after.
   await request("/tabs/1", { handle: "note", args: { text: "mine" } })
   expect(await request("/_/wait?seconds=0&tell=notices")).toBe("nothing changed")
+})
+
+it("carries the name a call's caller gave it, in the header, into the activity, so a program acting as the person finds its own call", async () => {
+  const { request, runtime, endpoint } = await started()
+  const named = (path: string, call: unknown, id: string) =>
+    fetch(`http://127.0.0.1:${runtime.port}${path}`, {
+      method: "POST",
+      headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token, [CALL_ID_HEADER]: id },
+      body: JSON.stringify(call),
+    })
+
+  await request("/", { handle: "open", args: { surface: "counter" } })
+  expect((await named("/tabs/1", { handle: "note", args: { text: "mine" } }, "lab:act-2")).status).toBe(200)
+  await request("/tabs/1", { handle: "note", args: { text: "theirs" } }, true)
+
+  const rows = JSON.parse(await request("/activity", undefined, true)) as { entries: { what: string; who: string; id?: string }[] }
+
+  expect(rows.entries.slice(0, 2).map(({ what, who, id }) => ({ what, who, id }))).toEqual([
+    { what: "noted theirs", who: "person", id: undefined },
+    { what: "noted mine", who: "person", id: "lab:act-2" },
+  ])
 })
 
 it("tells more than twenty notices waiting as the newest twenty, after one line that counts the older and says where to read them", async () => {

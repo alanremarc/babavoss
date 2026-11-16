@@ -26,8 +26,11 @@ function place(kept: Json[] = []) {
     swept: [] as { id: string; spared: boolean }[],
     /** The root under test's activity, as its /activity has it. */
     activity: [] as Heard[],
-    /** Something done on the page under test, as its activity keeps it. */
-    did: (who: string, at: string, what: string) => void world.activity.push({ n: world.activity.length + 1, when: Date.now(), who, surface: "queue", at, what }),
+    /** Something done on the page under test, as its activity keeps it, with the name its call was given where it was given one. */
+    did: (who: string, at: string, what: string, id?: string) =>
+      void world.activity.push({ n: world.activity.length + 1, when: Date.now(), who, surface: "queue", at, what, ...(id && { id }) }),
+    /** What the person does on the page under test while the lab's act is answered, as their click at that moment would. */
+    meanwhile: undefined as (() => void) | undefined,
     records: new Map<string, Json>(kept.map((r) => [(r as { id: string }).id, r])),
     fail: "",
   }
@@ -38,9 +41,10 @@ function place(kept: Json[] = []) {
 
       return { dir: DIR, ...MADE }
     },
-    async act(_project, _home, _session, at, handle, args) {
+    async act(_project, _home, _session, id, at, handle, args) {
       world.acts.push({ at, handle, args })
-      if (handle === "approve") world.did("person", at, `approve n=${(args as { n?: number }).n}`)
+      world.meanwhile?.()
+      if (handle === "approve") world.did("person", at, `approve n=${(args as { n?: number }).n}`, id)
 
       return handle === "approve" ? { ok: true, text: `written: ${handle} at ${at}` } : { ok: false, text: "refused: approve is offered" }
     },
@@ -415,4 +419,19 @@ test("what the person does on the page under test joins the timeline once each, 
   where.did("person", "/tabs/1", "too late")
   await Bun.sleep(30)
   expect(kinds().filter(([kind]) => kind === "person")).toHaveLength(2)
+})
+
+test("the person's click on the same tab as the lab's act, at the same moment, is the person's: the act is told by the name its call carried", async () => {
+  const { agent, where } = await started()
+  const kinds = () => (agent.sees("/entries") as { entries: Row[] }).entries.map((r) => [r.kind, r.line])
+
+  where.meanwhile = () => where.did("person", "/tabs/1", "approve n=2")
+  await agent.call("/", "act", { at: "/tabs/1", handle: "approve", args: '{"n":1}' })
+  await until(() => kinds().length === 3 && !(agent.sees("/entries/2") as { pending?: boolean }).pending)
+  await Bun.sleep(30)
+  expect(kinds()).toEqual([
+    ["note", expect.any(String)],
+    ["act", 'approve {"n":1} at /tabs/1'],
+    ["person", "approve n=2 at /tabs/1"],
+  ])
 })
