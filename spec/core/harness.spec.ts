@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ADAPTERS, claude, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, codex, fakeHarness, PLUGIN, trust, type HarnessEvent } from "../../framework/core/harness/index.ts"
+import { ADAPTERS, claude, claudeArgs, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, codex, fakeHarness, PLUGIN, trust, type HarnessEvent } from "../../framework/core/harness/index.ts"
 import { VERSION } from "../../framework/core/update.ts"
 import type { Json } from "../../framework/core/index.ts"
 
@@ -73,12 +73,13 @@ const RECORDED: Json[] = [
   { type: "result", subtype: "error_max_budget_usd", is_error: true, duration_ms: 10, num_turns: 1, total_cost_usd: 0.5, usage: {} },
 ]
 
-test("Claude Code's stream reads as the framework's events: hooks' injections, messages, calls with the word told apart, turns", () => {
+test("Claude Code's stream reads as the framework's events: hooks' injections and hooks that added nothing, messages, calls with the word told apart, turns", () => {
   const events = RECORDED.flatMap(claudeEvents)
   const request = { id: "msg_011Ch4xQ", context: 23_758 }
 
   expect(events).toEqual<HarnessEvent[]>([
     { kind: "injected", event: "SessionStart", text: "This project has surfaces." },
+    { kind: "hook", event: "UserPromptSubmit" },
     {
       kind: "started",
       session: SESSION,
@@ -235,12 +236,14 @@ test("the fake harness is driven by the story: its stream is what is emitted, an
 
 test("the plugin the package carries is of its version, has the skill baba's own words and their reminder, and the framework's hook for each of Claude Code's events", () => {
   const read = (path: string) => readFileSync(join(PLUGIN, path), "utf8")
-  const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string }
+  const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string; skills: string[] }
   const hooks = (JSON.parse(read("hooks/hooks.json")) as { hooks: Record<string, { hooks: { type: string; command: string }[] }[]> }).hooks
   const command = 'bun "$(cd -P "${CLAUDE_PLUGIN_ROOT}/../.." && pwd)/bin/baba.ts" hook claude 2>/dev/null || true'
 
   // A release raises the version in package.json by hand; this is raised with it.
   expect(manifest).toMatchObject({ name: "baba", version: VERSION })
+  // Its SKILL.md is the skill folder's, loaded as a skill of its own: loaded as a plugin by --plugin-dir, it is not a second skill.
+  expect(manifest.skills).toEqual([])
   expect(read("SKILL.md")).toBe(readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8"))
   expect(read("reminder.md")).toBe(readFileSync(new URL("../../skill/reminder.md", import.meta.url), "utf8"))
   expect(Object.keys(hooks)).toEqual([...CLAUDE_EVENTS])
@@ -280,6 +283,19 @@ test("each adapter reads its harness's hook input as the framework's moment, and
     expect(adapter.defaults.events).toEqual([...adapter.events])
   }
   expect(codex.run).toBeUndefined()
+})
+
+test("a run of Claude Code loads the project's plugin for the session, so its hooks run however the folder is trusted", () => {
+  const args = claudeArgs({ project: "/runs/r1/project", home: "/runs/r1/home", session: SESSION, model: "haiku", budget: 0.25 })
+  const flag = (name: string) => args[args.indexOf(name) + 1]
+
+  expect(args.slice(0, 2)).toEqual(["claude", "-p"])
+  // A plugin in .claude/skills runs its hooks only in a folder trusted in the home, which -p does not count; --plugin-dir is not asked that.
+  expect(flag("--plugin-dir")).toBe("/runs/r1/project/.claude/skills/baba")
+  // Each hook's run is in the stream, so a run whose hooks never ran says so.
+  expect(args).toContain("--include-hook-events")
+  expect([flag("--session-id"), flag("--model"), flag("--max-budget-usd"), flag("--setting-sources")]).toEqual([SESSION, "haiku", "0.25", "project,local"])
+  expect(args).not.toContain("--bare")
 })
 
 test("a session's project is trusted in its own home, so the project's plugin loads, and whatever else the home's state holds is kept", () => {

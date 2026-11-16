@@ -12,13 +12,15 @@ export type Request = { id: string; context: number }
 export type Loaded = { model: string; cwd: string; tools: string[]; skills: string[]; plugins: string[]; mcp: string[]; commands: string[] }
 
 /**
- * A session's stream, normalised. `injected` is context a hook added; `message` a message as it entered the context; a
+ * A session's stream, normalised. `injected` is context a hook added, `hook` a hook that ran and added none, so a session
+ * whose hooks never ran is told from one they told nothing; `message` a message as it entered the context; a
  * `call` is a tool's, `word` where it is the root's word, and its `result` follows under the same id; a `turn` ends one,
  * with its tokens and the session's cost so far; `ended` is the process's end, the stream's last event.
  */
 export type HarnessEvent =
   | { kind: "started"; session: string; loaded: Loaded }
   | { kind: "injected"; event: string; text: string; error?: boolean }
+  | { kind: "hook"; event: string }
   | { kind: "message"; text: string }
   | { kind: "call"; id: string; tool: string; input: string; word: boolean; request?: Request }
   | { kind: "result"; id: string; text: string; error?: boolean }

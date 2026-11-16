@@ -3,10 +3,12 @@
 // in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json. Hooks: Claude Code's input
 // and output, whose names the framework's moments are. Run: one long-lived headless process per session, spoken to and
 // read as JSON lines, in a home of its own, so its transcripts, settings and caches land there and the person's own are
-// neither read nor written; the project is trusted in that home, so its plugin loads as in the person's own session. Its
-// login is the person's: on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a
-// token or key the environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on
-// nothing of the account's: no account, organisation or user id, and no address, whatever field or text carries one.
+// neither read nor written. A plugin in .claude/skills loads only in a folder trusted in that home, which `-p` does not
+// count; so the run loads the project's plugin by --plugin-dir, for that session only, whatever the trust says, and the
+// project is trusted in the home besides, so its own settings apply as in the person's session. Its login is the person's:
+// on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a token or key the
+// environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on nothing of the
+// account's: no account, organisation or user id, and no address, whatever field or text carries one.
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative } from "node:path"
@@ -90,7 +92,10 @@ export function claudeEvents(line: Json): HarnessEvent[] {
   if (type === "system" && subtype === "hook_response") {
     const text = injected(str(e.stdout))
 
-    return text ? [{ kind: "injected", event: str(e.hook_event) || str(e.hook_name), text, ...(num(e.exit_code) !== 0 && { error: true }) }] : []
+    const event = str(e.hook_event) || str(e.hook_name)
+
+    // A hook that ran and added nothing is heard all the same.
+    return [text ? { kind: "injected", event, text, ...(num(e.exit_code) !== 0 && { error: true }) } : { kind: "hook", event }]
   }
   if (type === "user" && e.parent_tool_use_id == null) {
     const message = obj(e.message)
@@ -224,8 +229,8 @@ async function* jsonLines(stream: ReadableStream<Uint8Array>): AsyncIterable<Jso
 }
 
 /**
- * Marks `project` trusted in the session's `home`, as the person's own session of it is, so the project's plugin loads.
- * Claude Code asks it of a git worktree's main checkout, so that is marked too.
+ * Marks `project` trusted in the session's `home`, as the person's own session of it is, so the project's own settings
+ * apply as there. Claude Code asks it of a git worktree's main checkout, so that is marked too.
  */
 export function trust(home: string, project: string) {
   const file = join(home, ".claude.json")
@@ -243,20 +248,27 @@ export function trust(home: string, project: string) {
   writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`)
 }
 
-function spawnClaude({ project, home, session, model, budget = 0.5 }: Start): Session {
+/**
+ * What a session is started with. Its hooks run however the project is trusted: the project's plugin, its link at
+ * .claude/skills/baba, is loaded for the session only with --plugin-dir, which goes before a plugin of the same name in
+ * .claude/skills; the stream carries each hook's run. The home is the session's own, and the person's user layer of
+ * settings and MCP servers is kept out even where it is not.
+ */
+export const claudeArgs = ({ project, session, model, budget = 0.5 }: Start): string[] => [
+  "claude",
+  "-p",
+  ...["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--replay-user-messages"],
+  ...["--session-id", session, "--model", model, "--permission-mode", "bypassPermissions", "--max-budget-usd", String(budget)],
+  ...["--plugin-dir", join(project, PLUGIN_LINK)],
+  ...["--setting-sources", "project,local", "--strict-mcp-config"],
+]
+
+function spawnClaude(options: Start): Session {
+  const { project, home, session } = options
+
   trust(home, project)
 
-  const child = Bun.spawn(
-    [
-      "claude",
-      "-p",
-      ...["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--replay-user-messages"],
-      ...["--session-id", session, "--model", model, "--permission-mode", "bypassPermissions", "--max-budget-usd", String(budget)],
-      // The home is the session's own; these keep the person's user layer out even where it is not.
-      ...["--setting-sources", "project,local", "--strict-mcp-config"],
-    ],
-    { cwd: project, env: sessionEnv(home), stdin: "pipe", stdout: "pipe", stderr: "pipe" }
-  )
+  const child = Bun.spawn(claudeArgs(options), { cwd: project, env: sessionEnv(home), stdin: "pipe", stdout: "pipe", stderr: "pipe" })
   const stderr = new Response(child.stderr).text()
   const write = (line: Json) => {
     child.stdin.write(`${JSON.stringify(line)}\n`)
