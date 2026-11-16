@@ -332,8 +332,12 @@ const pages = view(actions, {
     return issue && whole(w, issue)
   },
 })
-/** The map's places are the list's, below /map, so the tab's route keeps which view it is in and the menu offers the same there. */
-const viewAt = (w: Work, path: string, actor?: string) => pages.view(w, path === "/map" ? "/" : path.startsWith("/map/") ? path.slice("/map".length) : path, actor)
+/**
+ * The map's and the archive's places are the list's, below /map and /archive, so the tab's route keeps which view it is
+ * in and the menu offers the same there.
+ */
+const listed = (path: string) => path.replace(/^\/(map|archive)(?=\/|$)/, "") || "/"
+const viewAt = (w: Work, path: string, actor?: string) => pages.view(w, listed(path), actor)
 
 /** The queue, with where the session's work is kept given: the session's file in the runtime, memory in its stories. */
 export function queue(work: Store): Surface<Model, Event, Command> {
@@ -367,7 +371,7 @@ export function queue(work: Store): Surface<Model, Event, Command> {
         return { model: { ...held, trouble: `${message.command}: ${message.error}` } }
       }
 
-      const at = message.path.startsWith("/map") ? { ...message, path: message.path.slice("/map".length) || "/" } : message
+      const at = { ...message, path: listed(message.path) }
       const r = pages.update(m.work, at)
 
       if ("refused" in r) return r

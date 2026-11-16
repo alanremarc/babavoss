@@ -169,14 +169,18 @@ test("another pass at an issue is an iteration: why, what was decided and what c
   expect(person.noticed()).toEqual(["Issue 1 begins iteration 1: Ask each harness"])
 })
 
-test("the map's places are the list's below /map, and the same actions are offered and called there", async () => {
+test("the map's and the archive's places are the list's below /map and /archive, and the same actions are offered and called there", async () => {
   const { agent, person } = await tab()
 
   await agent.call("/", "draft", { title: "One", about: "Why" })
   expect(person.sees("/map/issues/1")).toEqual(person.sees("/issues/1"))
+  expect(person.sees("/archive")).toEqual(person.sees("/"))
   expect(person.offered("/map")).toContain("narrate")
+  expect(person.sees("/mapping")).toBeUndefined()
   await person.call("/map/issues/1", "approve", { n: 1 })
   expect(rows(agent.sees())).toEqual([[1, "backlog", undefined]])
+  await person.call("/archive/issues/1", "drop", { n: 1 })
+  expect(rows(agent.sees())).toEqual([])
 })
 
 test("the work is the session's: a second tab shows it and follows changes, and a tab opened after one closed finds it", async () => {
