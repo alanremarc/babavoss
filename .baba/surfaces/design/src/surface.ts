@@ -9,7 +9,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { action, detail, surface, view, type Notice, type Update } from "babavoss/core/index.ts"
 import { delta, masked, said, size, sum, together, type Delta, type Size } from "./measure.ts"
-import { play, type Play, type Played } from "./play.ts"
+import { play, swept, type Play, type Played } from "./play.ts"
 import { GROUPS, SCENARIOS, type Scenario } from "./scenarios.ts"
 import { factsOf, listed, said as factsSaid, shape, type Shape } from "./shape.ts"
 
@@ -304,6 +304,9 @@ export default surface<Model, Event, Command>({
 
     // A play always ends, played or failed, so it is never left playing: one that does not end in time is stopped.
     const bounded = AbortSignal.any([signal, AbortSignal.timeout(PLAY_MS)])
+    // What earlier plays of this root left, cut short or with the root reloaded or killed under them, goes first.
+    await swept()
+
     const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.map((s) => play(s, bounded))), shape()])
 
     if (bounded.aborted && !signal.aborted) throw new Error(`the play did not end within ${PLAY_MS / 1000}s, and was stopped`)

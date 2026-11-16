@@ -8,12 +8,13 @@
 // gives it, and a harness that no longer runs the hooks gives none. Nothing told is
 // made here: the player only records it, with what changed in the project, read as the person's page reads it, and what
 // that page showed: each open tab's view at /, as the person reads it, and the tab in front.
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Json } from "babavoss/core/index.ts"
+import { endDeaf, type Endpoint } from "babavoss/core/runtime/service.ts"
 import type { Scenario, Scripted, Step } from "./scenarios.ts"
 
 /** The session the demo runs in, as the harness names it. */
@@ -57,6 +58,56 @@ const CLOCK = fileURLToPath(new URL("./clock.ts", import.meta.url))
 const AHEAD = "clock"
 /** How long a reload is waited for before the step says it was not seen. */
 const RELOAD_MS = 10_000
+/** The demo's runtime entry, as the framework names it, and as a copy of the demo's surfaces finds it. */
+const ENTRIES = (dir: string) => [join(FRAMEWORK, "framework/shell/scripts/open.ts"), join(dir, ".baba/node_modules/babavoss/framework/shell/scripts/open.ts")]
+
+/**
+ * Where this root's plays are made: one directory of the temporary ones for each checkout's design surface, each play's
+ * directory in it named by the process that plays it. Kept apart, so what one root's plays left is that root's to remove.
+ */
+export const PLAYS = join(realpathSync(tmpdir()), `babavoss-design-${Bun.hash(SURFACES).toString(36)}`)
+const LIVE = Symbol.for("babavoss.design.plays")
+/** The plays under way in this process, by directory: kept on globalThis, which a reload of the root's code leaves as it is. */
+const live = (): Set<string> => ((globalThis as { [LIVE]?: Set<string> })[LIVE] ??= new Set())
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
+/** Removes a play's directory, after ending the demo's runtime it woke, where one still runs: by its pid, only if it is that runtime. */
+async function removed(dir: string) {
+  try {
+    const at = JSON.parse(readFileSync(join(dir, ".babavoss/sessions", SESSION, "baba/service.json"), "utf8")) as Endpoint
+
+    for (const entry of ENTRIES(dir)) if (alive(at.pid) && (await endDeaf(at, entry, SESSION))) break
+  } catch {}
+  rmSync(dir, { recursive: true, force: true })
+}
+
+/**
+ * Removes what earlier plays of this root left, as a play cut short, or one whose root was reloaded or killed, leaves it:
+ * every play's directory and runtime but those of plays under way, here or in another live process.
+ */
+export async function swept() {
+  let names: string[] = []
+
+  try {
+    names = readdirSync(PLAYS)
+  } catch {}
+  await Promise.all(
+    names.map((name) => {
+      const dir = join(PLAYS, name)
+      const owner = Number(name.split("-")[0])
+
+      return live().has(dir) || (owner !== process.pid && alive(owner)) ? undefined : removed(dir)
+    }),
+  )
+}
 
 /** A value as one line of what changed: JSON, cut where long. */
 const short = (v: Json | undefined) => {
@@ -132,9 +183,27 @@ function drawn(value: Json | undefined, address: string): Json {
   )
 }
 
-/** Plays `scenario` on a demo project of its own, made and removed here; aborted, it stops the step under way and its processes. */
+/**
+ * Plays `scenario` on a demo project of its own, made here and, with the runtime it woke, removed on every way out; aborted,
+ * it stops the step under way and its processes. What a process that ended mid-play left, `swept` removes.
+ */
 export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-design-")))
+  mkdirSync(PLAYS, { recursive: true })
+
+  const dir = mkdtempSync(join(PLAYS, `${process.pid}-`))
+
+  live().add(dir)
+  try {
+    return await played(scenario, dir, signal)
+  } catch (error) {
+    return { name: scenario.name, steps: [], error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    await removed(dir)
+    live().delete(dir)
+  }
+}
+
+async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Promise<Play> {
   const home = join(dir, ".babavoss")
   // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are. Every process of the
   // demo reads the time by its clock; bun's options take no quoting, so it is preloaded from the demo's directory.
@@ -427,6 +496,5 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
     await waiting?.catch(() => {})
     if (endpoint()) await run([join(dir, WORD), "close"], undefined, AbortSignal.timeout(10_000)).catch(() => "")
     for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
-    rmSync(dir, { recursive: true, force: true })
   }
 }

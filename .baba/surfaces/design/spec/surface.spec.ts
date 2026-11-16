@@ -1,13 +1,14 @@
 // The design document's rules, as stories. The scenarios are played once for real, on the demo project through the
 // framework's hook, word and runtime, and the demo's shape read from its surfaces, both settled as the play command's
 // event: what is shown is what that code gave, and nothing told is written here.
-import { readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { beforeAll, expect, test } from "bun:test"
 import { story, whole, type Json } from "babavoss/core/index.ts"
 import { TELLS } from "babavoss/core/hook.ts"
 import { QUIET_LINE } from "babavoss/core/runtime/turn.ts"
 import design, { type Model } from "../src/surface.ts"
-import { play, WORD, type Page, type Play } from "../src/play.ts"
+import { play, PLAYS, SESSION, swept, WORD, type Page, type Play } from "../src/play.ts"
 import { SCENARIOS } from "../src/scenarios.ts"
 import { shape, type Shape } from "../src/shape.ts"
 import tasks from "../demo/surfaces/tasks/src/surface.ts"
@@ -310,3 +311,37 @@ test("a play always ends: stopped, it stops the step under way and its processes
   expect(agent.sees()).toMatchObject({ failure: "the play did not end within 120s, and was stopped" })
   expect(design.restore!({ plays, playing: true, again: true })).toMatchObject({ playing: false })
 }, 20_000)
+
+test("a play leaves nothing behind; what a play whose process was killed left, its demo's runtime too, the next play's sweep removes", async () => {
+  const mine = () => readdirSync(PLAYS).filter((name) => name.startsWith(`${process.pid}-`))
+  const runs = (pid: number) => {
+    try {
+      return process.kill(pid, 0)
+    } catch {
+      return false
+    }
+  }
+
+  await play(SCENARIOS.find((s) => s.name === "start")!)
+  expect(mine()).toEqual([])
+
+  // A root killed mid-play: its process ends with the demo's runtime up and the wait under way.
+  const script = `import { play } from ${JSON.stringify(new URL("../src/play.ts", import.meta.url).pathname)}
+await play({ name: "killed", group: "noise", title: "", about: "", steps: [{ kind: "start", source: "startup" }, { kind: "wait", seconds: 30 }, { kind: "waited" }] })`
+  const killed = Bun.spawn([process.execPath, "-e", script], { stdout: "ignore", stderr: "ignore" })
+  const left = join(PLAYS, `${killed.pid}-`)
+  const service = () => readdirSync(PLAYS).map((name) => join(PLAYS, name, ".babavoss/sessions", SESSION, "baba/service.json")).find((file) => file.startsWith(left) && existsSync(file))
+  let file: string | undefined
+
+  for (let i = 0; i < 200 && !(file = service()); i++) await Bun.sleep(50)
+  expect(file).toBeDefined()
+
+  const { pid } = JSON.parse(readFileSync(file!, "utf8")) as { pid: number }
+
+  killed.kill("SIGKILL")
+  await killed.exited
+  expect(runs(pid)).toBe(true)
+  await swept()
+  expect(readdirSync(PLAYS).filter((name) => join(PLAYS, name).startsWith(left))).toEqual([])
+  expect(runs(pid)).toBe(false)
+}, 30_000)
