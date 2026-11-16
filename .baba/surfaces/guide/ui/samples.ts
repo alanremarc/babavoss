@@ -91,9 +91,7 @@ export const ROWS: Row[] = [
   },
   { n: 6, when: ago(200), who: "agent", kind: "notice", surface: "design", at: "/design", tab: "/design", what: "The tellings are pinned as the baseline" },
   { n: 5, when: ago(60 * 26), who: "agent", kind: "call", surface: "lab", at: "/", what: "Opened Lab" },
-  { n: 4, when: ago(60 * 27), who: "surface", kind: "notice", surface: "lab", at: null, tab: "/tabs/2", what: "Run 2 ended" },
+  { n: 4, when: ago(60 * 27), who: "surface", kind: "notice", surface: "lab", at: null, tab: "/tabs/2", title: "Lab", what: "Run 2 ended" },
 ]
 /** The notices the person has not seen, by number. */
 export const FRESH = [12, 10]
-/** A closed tab's title, which names its channel. */
-export const TITLES_BY_TAB = { "/tabs/2": "Lab 2" }

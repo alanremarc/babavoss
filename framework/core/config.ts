@@ -1,15 +1,17 @@
-// The configuration of a .baba/, .baba/baba.config.ts, optional: which harnesses are made aware of its surfaces, and how.
-// A section per harness, by its adapter's name, starting with `enable`; the rest is the adapter's options. Where there is
-// no file, or no section, a harness is enabled with its adapter's defaults. Provisioning reads it, and withdraws a harness
-// not enabled; the hook reads it too as it runs, so `events` changes what is told with nothing provisioned.
+// The configuration of a .baba/, .baba/baba.config.ts, optional: the root's title, and which harnesses are made aware of
+// its surfaces, and how. The title names the root on its page and to the agent, the project directory's name where none
+// is given. A section per harness, by its adapter's name, starting with `enable`; the rest is the adapter's options. Where
+// there is no file, or no section, a harness is enabled with its adapter's defaults. Provisioning reads it, and withdraws a
+// harness not enabled; the hook reads it too as it runs, so `events` changes what is told with nothing provisioned. The
+// root reads the title as it starts.
 import { existsSync } from "node:fs"
-import { join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import type { ClaudeOptions } from "./harness/claude.ts"
 import type { CodexOptions } from "./harness/codex.ts"
 import type { Adapter } from "./harness/harness.ts"
 
 export type Section<O> = { enable: boolean } & Partial<O>
-export type Config = { harnesses?: { claude?: Section<ClaudeOptions>; codex?: Section<CodexOptions> } }
+export type Config = { title?: string; harnesses?: { claude?: Section<ClaudeOptions>; codex?: Section<CodexOptions> } }
 
 /** Types a configuration, which is what it answers: `export default config({ … })`. */
 export const config = (value: Config): Config => value
@@ -59,8 +61,13 @@ export function sectionOf<O extends { events: string[] }>(config: Config, adapte
   return { ...adapter.defaults, ...section } as { enable: boolean } & O
 }
 
-/** Checks every section of `config` against the adapters there are: a harness none of them is, is an error. */
+/** The root's title: the one `config` gives, else the name of the project directory `baba` is in. */
+export const titleOf = (config: Config, baba: string): string =>
+  typeof config.title === "string" && config.title.trim() ? config.title.trim() : basename(dirname(baba))
+
+/** Checks `config`: a title that is no words, or a section against the adapters there are, where a harness none of them is, is an error. */
 export function checkConfig(config: Config, adapters: readonly Adapter[]) {
+  if (config.title !== undefined && (typeof config.title !== "string" || !config.title.trim())) throw new Error(`.baba/${CONFIG_FILE}: title is a few words`)
   for (const name of Object.keys(config.harnesses ?? {}))
     if (!adapters.some((adapter) => adapter.name === name)) throw new Error(`.baba/${CONFIG_FILE}: there is no harness ${name}; there are ${adapters.map((a) => a.name).join(", ")}`)
   for (const adapter of adapters) sectionOf(config, adapter)

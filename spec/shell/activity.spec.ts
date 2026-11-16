@@ -12,6 +12,7 @@ import {
   arrived,
   channelOf,
   channelsOf,
+  distinct,
   groupOf,
   groupsOf,
   levelKey,
@@ -300,6 +301,26 @@ describe("the person's notifications", () => {
     expect(person.sees("/activity/notices")!.unseen).toBe(0)
   })
 
+  it("see exactly the one looked at alone, by its toast, once however often, and the rest stay unseen until a mark passes them", async () => {
+    const { agent, person } = story(shell({ things }))
+
+    await person.call("/", "open", { surface: "things" })
+    await agent.call("/tabs/1", "approve", { n: 12 })
+    await agent.call("/tabs/1", "approve", { n: 12 })
+    await agent.call("/tabs/1", "approve", { n: 12 })
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 3, fresh: [2, 3, 4] })
+
+    await person.call("/activity/notices", "looked", { n: 3 })
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 4] })
+    await person.call("/activity/notices", "looked", { n: 3 })
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 4] })
+    // The newest looked at alone leaves the older unseen: no mark moves past it.
+    await person.call("/activity/notices", "looked", { n: 4 })
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 1, fresh: [2] })
+    await person.call("/activity/notices", "seen", { n: 2 })
+    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 0, fresh: [] })
+  })
+
   it("are marked seen without an entry, and nothing of it is told to the agent", async () => {
     const { agent, person } = story(shell({ things }))
 
@@ -393,7 +414,14 @@ describe("the activity drawer", () => {
         ["/tabs/2", "lab", "lab", true, [2]],
       ])
       expect(channelOf(r(5, undefined))).toBe("/")
-      expect(channelsOf([r(2, "/tabs/2")], tabs, [], new Set(), "babavoss", { "/tabs/2": "Lab" })[0]).toMatchObject({ name: "Lab", closed: true })
+      expect(channelsOf([{ ...r(2, "/tabs/2"), title: "Lab" }], tabs, [], new Set(), "babavoss")[0]).toMatchObject({ name: "Lab", closed: true })
+    })
+
+    it("name each so it points at one tab: where two share a title, each says its tab's address", () => {
+      const rows = [{ ...r(3, "/tabs/2"), title: "Releases" }, r(2, "/tabs/3"), r(1, "/tabs/1")]
+
+      expect(channelsOf(rows, tabs, [], new Set(), "babavoss").map((c) => c.name)).toEqual(["Releases · /tabs/2", "Releases · /tabs/3", "Queue"])
+      expect(distinct([{ key: "/", name: "Queue" }, { key: "/queue", name: "Queue" }]).map((c) => c.name)).toEqual(["Queue", "Queue · /queue"])
     })
 
     it("count what the person has not seen in each, and pin a tab that needs them, with its need, messages or not", () => {

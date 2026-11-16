@@ -51,8 +51,8 @@ export type DoorOptions = {
   end?: () => void
   /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
   current?: () => Promise<string | undefined>
-  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. */
-  about?: Record<string, string>
+  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. A key read as undefined is left out. */
+  about?: Record<string, string | undefined>
   /** The paths whose views the page at a path needs first, given with its html in the boot island. */
   boot?: (path: string) => string[]
 }
@@ -157,6 +157,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   // Read at each page: the version is the code's, and the code may have been loaded again.
   const about = () =>
     Object.entries(options.about ?? {})
+      .flatMap(([key, value]) => (value === undefined ? [] : [[key, value] as const]))
       .map(([key, value]) => `<meta name="babavoss:${escaped(key)}" content="${escaped(value)}">`)
       .join("")
   const actorText = `agent:${options.about?.session ?? "session"}`

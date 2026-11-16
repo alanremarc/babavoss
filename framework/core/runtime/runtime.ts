@@ -28,6 +28,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { modelPorts, stateDir } from "../state/state.ts"
 import { run, STOP_MS, type Answer, type Noticed, type Running } from "../surface/run.ts"
 import type { RootDefinition } from "../root.ts"
+import { later } from "../update.ts"
 import { door } from "./door.ts"
 import { DENIED_EXIT, Denied, PROBE_HEADER, SERVICE_HEADER, failedSince, lastPort, logFile, logSize, ownService } from "./service.ts"
 
@@ -51,7 +52,7 @@ export type RuntimeOptions = {
    * longer the code on disk, and wakes its successor by calling this.
    */
   successor?: () => void
-  /** The later release that is out, if any, asked once as the runtime starts: the page says so, quietly. */
+  /** The latest release, asked once as the runtime starts: the page says so, quietly, while it is later than the version running. */
   latest?: () => Promise<string | undefined>
 }
 export const IDLE_MS = 30 * 60_000
@@ -595,19 +596,24 @@ async function begin(
 
     return leaving
   }
-  // The version is read each time it is told: a package taken while the runtime runs is the version it runs from then on.
-  const about: Record<string, string> = {
+  // The version is read each time it is told: a package taken while the runtime runs is the version it runs from then on,
+  // and the latest release is told as an update only while it is later than that.
+  let released: string | undefined
+  const about: Record<string, string | undefined> = {
     root: root.name,
     get version() {
       return rootVersion(options.entry)
     },
     session,
+    get update() {
+      return released && later(released, rootVersion(options.entry)) ? released : undefined
+    },
   }
 
   void options
     .latest?.()
     .then((version) => {
-      if (version) about.update = version
+      released = version
     })
     .catch(() => {})
   const entrance = door(running, {

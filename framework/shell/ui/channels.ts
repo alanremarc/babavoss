@@ -9,7 +9,7 @@ export type Who = "person" | "agent" | "surface"
  * An entry as /activity gives it: `when` UTC to the second, `at` null where its tab is closed, `tab` the tab it is in, closed
  * or not, absent for the shell's own; `kind` absent at /activity/notices, all notices.
  */
-export type Row = { n: number; when: string; who: Who; kind?: "notice" | "call"; surface: string; at: string | null; tab?: string; what: string }
+export type Row = { n: number; when: string; who: Who; kind?: "notice" | "call"; surface: string; at: string | null; tab?: string; title?: string; what: string }
 /** A tab that needs someone, as / gathers it. */
 export type Need = { at: string; surface: string; who: "person" | "agent"; why: string }
 export type Group = { label: string; rows: Row[] }
@@ -83,11 +83,27 @@ export const SHELL = "/"
 export const channelOf = (row: Row): string => row.tab ?? SHELL
 
 /**
- * The channels of `rows`, newest first, from the open `tabs`, the `needs` of the person and the numbers of the notices they
- * have not seen; `shell` names the shell's own, and `titles` a closed tab by the title it had. A tab that needs the person has a channel, with messages or not, pinned
- * above the rest; the rest go by their latest message.
+ * What the channel `key` is called, from its open tab, its rows and its surface: the shell's own by `shell`; a tab's by its
+ * title, open from the strip, closed from what its rows say it had; else by its surface, and at worst its key.
  */
-export function channelsOf(rows: Row[], tabs: TabInfo[], needs: Need[], fresh: ReadonlySet<number>, shell: string, titles: Record<string, string> = {}): Channel[] {
+export const nameOf = (key: string, tab: TabInfo | undefined, rows: Row[], surface: string | undefined, shell: string): string =>
+  key === SHELL ? shell : (tab?.label ?? rows.find((r) => r.title)?.title ?? surface ?? key)
+
+/** The channels with every name pointing at one tab: where two share one, each says its tab's address after it. */
+export function distinct<C extends { key: string; name: string }>(channels: C[]): C[] {
+  const count = new Map<string, number>()
+
+  for (const c of channels) count.set(c.name, (count.get(c.name) ?? 0) + 1)
+
+  return channels.map((c) => ((count.get(c.name) ?? 0) > 1 && c.key !== SHELL ? { ...c, name: `${c.name} · ${c.key}` } : c))
+}
+
+/**
+ * The channels of `rows`, newest first, from the open `tabs`, the `needs` of the person and the numbers of the notices they
+ * have not seen; `shell` names the shell's own. Each is named so it points at one tab (nameOf, distinct). A tab that needs
+ * the person has a channel, with messages or not, pinned above the rest; the rest go by their latest message.
+ */
+export function channelsOf(rows: Row[], tabs: TabInfo[], needs: Need[], fresh: ReadonlySet<number>, shell: string): Channel[] {
   const by = new Map<string, Row[]>()
 
   for (const row of rows) {
@@ -104,7 +120,7 @@ export function channelsOf(rows: Row[], tabs: TabInfo[], needs: Need[], fresh: R
 
     return {
       key,
-      name: key === SHELL ? shell : (tab?.label ?? titles[key] ?? surface ?? key),
+      name: nameOf(key, tab, rows, surface, shell),
       ...(surface !== undefined && { surface }),
       closed: key !== SHELL && !tab,
       rows,
@@ -114,7 +130,7 @@ export function channelsOf(rows: Row[], tabs: TabInfo[], needs: Need[], fresh: R
   })
   const latest = (c: Channel) => c.rows[0]?.n ?? 0
 
-  return channels.sort((a, b) => Number(!!b.need) - Number(!!a.need) || latest(b) - latest(a))
+  return distinct(channels).sort((a, b) => Number(!!b.need) - Number(!!a.need) || latest(b) - latest(a))
 }
 
 /**

@@ -23,6 +23,9 @@ export type Line = Omit<Entry, "n">
 /** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by their toast. */
 export type Seen = { upto: number; looked: number[] }
 
+/** The tabs an entry can be in: the address the open tab numbered n stands at, and the title a closed one had, where known. */
+export type Tabs = { at: (n: number) => string | undefined; title: (n: number) => string | undefined }
+
 /** How many entries are kept; an older one goes first. */
 export const KEPT = 200
 /** How many entries /activity shows at a time. */
@@ -181,10 +184,11 @@ export const stamp = (when: number): string => new Date(when).toISOString().repl
  * /activity, newest first, PAGE at a time, or with `notices` the notices alone, at /activity/notices: `upto` the number
  * of the newest entry shown, the newest by default; `earlier` names the page before where there is one. `kind` is notice
  * where a surface said it, call for the mechanical line; `at` is null where the entry's tab is closed; `tab` is the tab an
- * entry is in, closed or not, absent for the shell's own. An entry keeps its place by tab number; `open` gives the address
- * an open tab stands at now, which the entry's place and tab are said by; a closed tab is said by its number.
+ * entry is in, closed or not, absent for the shell's own, and `title` the title a closed one had, where it is known. An
+ * entry keeps its place by tab number; `tabs` gives the address an open tab stands at now, which the entry's place and tab
+ * are said by, and a closed tab's title; a closed tab is said by its number.
  */
-export function activityView(all: Entry[], open: (n: number) => string | undefined, upto?: number, notices = false): View | undefined {
+export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = false): View | undefined {
   if (upto !== undefined && (!Number.isInteger(upto) || upto < 1)) return undefined
 
   const base = notices ? NOTICES : ACTIVITY
@@ -194,28 +198,37 @@ export function activityView(all: Entry[], open: (n: number) => string | undefin
   const more = !!oldest && entries[0]!.n < oldest.n
   const live = (at: string) => {
     const m = /^\/tabs\/(\d+)(.*)$/.exec(at)
-    const address = m && open(Number(m[1]))
+    const address = m && tabs.at(Number(m[1]))
 
     return !m ? at : address ? address + m[2] : null
   }
-  const tab = (e: Entry) => {
+  const tab = (e: Entry): { tab: string; title?: string } | undefined => {
     const m = e.own ? undefined : /^\/tabs\/(\d+)/.exec(e.at)
+    const at = m && tabs.at(Number(m[1]))
+    const title = m && !at ? tabs.title(Number(m[1])) : undefined
 
-    return m ? (open(Number(m[1])) ?? m[0]) : undefined
+    return m ? { tab: at ?? m[0], ...(title !== undefined && { title }) } : undefined
   }
-  const row = (e: Entry) => {
-    const t = tab(e)
-
-    return { n: e.n, when: stamp(e.when), who: e.who, ...(!notices && { kind: e.notice ? "notice" : "call" }), surface: e.surface, at: live(e.at), ...(t && { tab: t }), what: e.what, ...(e.id && { id: e.id }) }
-  }
+  const row = (e: Entry) => ({
+    n: e.n,
+    when: stamp(e.when),
+    who: e.who,
+    ...(!notices && { kind: e.notice ? "notice" : "call" }),
+    surface: e.surface,
+    at: live(e.at),
+    ...tab(e),
+    what: e.what,
+    ...(e.id && { id: e.id }),
+  })
 
   return {
     at: upto === undefined ? base : `${base}/${upto}`,
     about: notices
-      ? "what the surfaces chose to say in this session, newest first, by who caused it; tab is the tab it is in, at null where that is closed"
+      ? "what the surfaces chose to say in this session, newest first, by who caused it; tab is the tab it is in, at null where that is closed, " +
+        "and title the title it had"
       : "who did what in this session, newest first: the person, an agent, or a surface by itself; kind is notice where a surface said it, " +
-        "call where a call said nothing; tab is the tab it is in, absent for the shell's own, at null where the tab is closed; id is the " +
-        "name a call's caller gave it, where it gave one",
+        "call where a call said nothing; tab is the tab it is in, absent for the shell's own, at null where the tab is closed, " +
+        "and title the title it had; id is the name a call's caller gave it, where it gave one",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),

@@ -443,6 +443,7 @@ test("the root starts with the surfaces that load, lists one that does not as br
   const word = join(project, ".babavoss/bin/baba")
   const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
   const code = join(baba, "surfaces/by-hand/src/surface.ts")
+  const missing = join(baba, "surfaces/by-hand/src/later.ts")
   const mended = readFileSync(code, "utf8")
 
   writeFileSync(code, `${mended}\nthrow new Error("not configured")\n`)
@@ -464,7 +465,14 @@ test("the root starts with the surfaces that load, lists one that does not as br
     expect(call("/tabs/1").stdout).toContain('greeting: "hello"')
     writeFileSync(code, mended)
     await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain('proposed: "kept"')
+
+    // Broken by an import of a file that is not there, it loads again once the file is made, its own code left as it is.
+    writeFileSync(code, `import { later } from "./later.ts"\n${mended}\nlater()\n`)
+    await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain("./later.ts")
+    writeFileSync(missing, "// Made after the surface that imports it.\nexport const later = () => {}\n")
+    await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain('proposed: "kept"')
   } finally {
+    rmSync(missing, { force: true })
     writeFileSync(code, mended)
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
   }
