@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 12
+export const VERSION = 13
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -53,11 +53,22 @@ export function sessionArgs(args: string[]) {
   return session
 }
 
+/** A call's value that names a file: @ and a path, absolute, relative or from home. Text that begins so is given with @-. */
+const FILE_ARG = /^@(\/|\.\.?\/|~\/)/
+const fileArg = (path: string) => {
+  const file = resolve(path.startsWith("~/") ? join(homedir(), path.slice(2)) : path)
+
+  try {
+    if (statSync(file).isFile()) return readFileSync(file, "utf8")
+  } catch {}
+  throw new SyntaxError(`no file at ${file}: a value @PATH is read from that file; give text that begins with @ by name=@- on standard input`)
+}
+
 const guide = `bv — the roots open in this session
 NAME PATH or bv NAME PATH — each root has its own command when its name is free
 bv                         list open roots and their commands
 NAME PATH                  read a view: demo /notes (or bv demo /notes)
-NAME PATH HANDLE name=value  call: demo / add text=Pharmacy; text=@- reads standard input
+NAME PATH HANDLE name=value  call: demo / add text=Pharmacy; text=@- reads standard input, text=@./note.md a file
 bv NAME PATH               select a root: bv demo /notes
 bv wait [SECONDS]          wait for the person: until something is heard or who is needed changes, then what changed: bv wait 60
 bv close                   close: bv close; the next call wakes the root
@@ -148,7 +159,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
 
           const text = value.slice(at + 1)
 
-          inputs[value.slice(0, at)] = text === "@-" ? (stdin ??= readFileSync(0, "utf8")) : text
+          inputs[value.slice(0, at)] = text === "@-" ? (stdin ??= readFileSync(0, "utf8")) : FILE_ARG.test(text) ? fileArg(text.slice(1)) : text
         }
         method = "POST"
         body = JSON.stringify({ handle, args: inputs })

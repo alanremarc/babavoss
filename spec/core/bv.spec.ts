@@ -135,6 +135,24 @@ it("reads stdin containing an apostrophe", () => {
   expect(s.run(["/", "add", "text=@-"], client, "person's note").status).toBe(0)
   expect(s.run(["/notes"]).out).toContain("person's note")
 })
+it("reads a value @PATH from its file, refuses one with no file, and keeps other text that begins with @", () => {
+  const s = setup()
+  const note = join(s.root, "note.md")
+
+  writeFileSync(note, "# From a file\n")
+  s.open()
+  expect(s.run(["/", "add", `text=@${note}`]).status).toBe(0)
+  expect(s.run(["/notes"]).out).toContain("From a file")
+
+  const missing = s.run(["/", "add", `text=@${join(s.root, "none.md")}`])
+
+  expect(missing.status).toBe(2)
+  expect(missing.err).toContain(`no file at ${join(s.root, "none.md")}`)
+  expect(s.run(["/", "add", "text=@alice says hi"]).status).toBe(0)
+  expect(s.run(["/", "add", "text=@-"], client, "@/not/a/file").status).toBe(0)
+  expect(s.run(["/notes"]).out).toContain("@alice says hi")
+  expect(s.run(["/notes"]).out).toContain("@/not/a/file")
+})
 it("returns exit 1 for refusal", () => {
   const s = setup()
 

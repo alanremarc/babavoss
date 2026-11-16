@@ -1,22 +1,24 @@
 // The queue's rules, as stories: an issue goes from the backlog to a lane to done, a lane delivers one at a time, the issues
 // form a graph without cycles on narratives, each keeps the reasoning of its passes, and the work is the session's, which
-// every tab shares. The work is kept in memory here, the store's own, and its commands are run for real.
+// every tab shares. The work is kept in memory here, the store's own, and its commands are run for real: a tab is idle once
+// what the store told it has landed, though it follows the store while it is open.
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
-import { store, type Store } from "../src/store.ts"
+import { FILE, store, type Store } from "../src/store.ts"
+import type { Work } from "../src/work.ts"
 import { queue } from "../src/surface.ts"
 
 type Row = { n: number; status: string; lane?: number; note?: string; narrative: string; from?: number[] }
 const rows = (sees: unknown) => (sees as { issues: Row[] }).issues.map(({ n, status, lane }) => [n, status, lane])
 
-/** What the store told every tab has landed: its events are queued as they are sent. A tab follows the store while it is open, so it is never idle. */
-const heard = () => new Promise((done) => setTimeout(done, 1))
-
 /** A queue tab over the session's work, kept in memory: a second tab of the same session is given the same store. */
 async function tab(work: Store = store()) {
   const s = story(queue(work), { effects: "real" })
 
-  await heard()
+  await s.world.idle()
 
   return s
 }
@@ -167,14 +169,18 @@ test("another pass at an issue is an iteration: why, what was decided and what c
   expect(person.noticed()).toEqual(["Issue 1 begins iteration 1: Ask each harness"])
 })
 
-test("the map's places are the list's below /map, and the same actions are offered and called there", async () => {
+test("the map's and the archive's places are the list's below /map and /archive, and the same actions are offered and called there", async () => {
   const { agent, person } = await tab()
 
   await agent.call("/", "draft", { title: "One", about: "Why" })
   expect(person.sees("/map/issues/1")).toEqual(person.sees("/issues/1"))
+  expect(person.sees("/archive")).toEqual(person.sees("/"))
   expect(person.offered("/map")).toContain("narrate")
+  expect(person.sees("/mapping")).toBeUndefined()
   await person.call("/map/issues/1", "approve", { n: 1 })
   expect(rows(agent.sees())).toEqual([[1, "backlog", undefined]])
+  await person.call("/archive/issues/1", "drop", { n: 1 })
+  expect(rows(agent.sees())).toEqual([])
 })
 
 test("the work is the session's: a second tab shows it and follows changes, and a tab opened after one closed finds it", async () => {
@@ -183,14 +189,54 @@ test("the work is the session's: a second tab shows it and follows changes, and 
   const second = await tab(work)
 
   await first.agent.call("/", "add", { title: "One", about: "Why" })
-  await heard()
+  await second.world.idle()
   expect(rows(second.agent.sees())).toEqual([[1, "backlog", undefined]])
 
   await second.agent.call("/issues/1", "start", { n: 1, lane: 1 })
-  await heard()
+  await first.world.idle()
   expect(rows(first.agent.sees())).toEqual([[1, "lane", 1]])
   const later = await tab(work)
 
   expect(rows(later.agent.sees())).toEqual([[1, "lane", 1]])
   expect(await later.agent.call("/issues/1", "start", { n: 1, lane: 2 })).toMatchObject({ outcome: "refused" })
+})
+
+test("a new tab says it is reading until it hears the session's work, so its page never shows none for an instant", async () => {
+  const work = store()
+  const first = await tab(work)
+
+  await first.agent.call("/", "add", { title: "One", about: "Why" })
+
+  const fresh = story(queue(work), { effects: "real" })
+
+  expect(fresh.person.sees()).toMatchObject({ reading: true, issues: [] })
+  await fresh.world.idle()
+  expect(fresh.person.sees()).not.toHaveProperty("reading")
+  expect(rows(fresh.person.sees())).toEqual([[1, "backlog", undefined]])
+
+  const kept: Work = { issues: [], narratives: [], next: 1, clock: 0 }
+
+  expect(story(queue(store()), { model: { work: kept } }).person.sees()).not.toHaveProperty("reading")
+})
+
+test("removing the session's file begins its work again, in every tab that is open", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "queue-"))
+  const file = join(dir, FILE)
+  const work = store(() => file)
+  const first = await tab(work)
+  const second = await tab(work)
+
+  try {
+    await first.agent.call("/", "add", { title: "One", about: "Why" })
+    rmSync(file)
+    // The file's watcher hears it removed when the system tells it, which is no set time.
+    for (let waited = 0; rows(second.person.sees()).length && waited < 3000; waited += 20) await new Promise((done) => setTimeout(done, 20))
+    await first.world.idle()
+    expect(rows(first.person.sees())).toEqual([])
+    expect(rows(second.person.sees())).toEqual([])
+    await second.agent.call("/", "add", { title: "Again", about: "Why" })
+    expect(second.agent.sees()).toMatchObject({ issues: [{ n: 1, title: "Again" }] })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

@@ -124,6 +124,7 @@ Each harness beside `.baba/` is made aware by its own adapter when `.baba/` is i
 import { config } from "babavoss/core/config.ts"
 
 export default config({
+  title: "Billing desk",
   harnesses: {
     claude: { enable: true, events: ["SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "SessionEnd"] },
     codex: { enable: false },
@@ -131,7 +132,7 @@ export default config({
 })
 ```
 
-A section per harness, each starting with `enable`; `enable: false` takes back what baba wrote for that harness at the next `bun run baba provision`. `events` lists the hook's events that tell anything, all by default; the hook reads it as it runs, so a change needs no provisioning. Codex's section takes `network: true` too, which opens the sandbox's network in `.codex/config.toml` where that file does not already say, so the shell's command reaches its runtime. A configuration that does not load stops provisioning with its error, and keeps the hooks silent until it is corrected; the shell's answer says so.
+`title` names the root: home's heading, the page's title and the title the agent reads at `/`; without it, the root is named after the project directory. The root reads it as it starts. A section per harness, each starting with `enable`; `enable: false` takes back what baba wrote for that harness at the next `bun run baba provision`. `events` lists the hook's events that tell anything, all by default; the hook reads it as it runs, so a change needs no provisioning. Codex's section takes `network: true` too, which opens the sandbox's network in `.codex/config.toml` where that file does not already say, so the shell's command reaches its runtime. A configuration that does not load stops provisioning with its error, and keeps the hooks silent until it is corrected; the shell's answer says so.
 
 ## Updating
 

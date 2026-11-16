@@ -61,16 +61,19 @@ export function RefusedAlert({ reason, dismiss }: { reason: string; dismiss: () 
   )
 }
 
-/** A place the agent points to while the person is busy: the tab by its label, the route within it, and the way there. */
+/**
+ * A place the agent points to while the person is busy: the tab by its label, the route within it, and the way there. The
+ * buttons stand in the line's flow, after the words, so a long route wraps beside them and never runs under them.
+ */
 export function PointedAlert({ label, route, go, dismiss }: { label: string; route: string; go: () => void; dismiss: () => void }) {
   return (
-    <Alert className="w-auto shadow-md">
+    <Alert className="flex w-auto items-start gap-1.5 shadow-md has-data-[slot=alert-action]:pr-1.5 *:[svg]:mt-1">
       <LocateFixedIcon />
-      <AlertTitle>
+      <AlertTitle className="min-w-0 flex-1 py-0.5">
         The agent points to {label}
-        {route !== "/" && <span className="font-mono text-muted-foreground"> {route}</span>}
+        {route !== "/" && <span className="font-mono break-all text-muted-foreground"> {route}</span>}
       </AlertTitle>
-      <AlertAction className="flex gap-1">
+      <AlertAction className="static flex shrink-0 gap-1">
         <Button size="sm" onClick={go}>
           Go there
         </Button>
