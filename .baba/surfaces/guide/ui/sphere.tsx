@@ -3,7 +3,7 @@
 // shown, at the strip's size, and through each move.
 import { useEffect, useRef, useState, type ComponentType } from "react"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
-import { between, eased, MOVES, next, REST, settled, within, type Gaze } from "babavoss/shell/ui/gaze.ts"
+import { between, drawn, eased, EYES, MOVES, next, REST, settled, within, type Gaze } from "babavoss/shell/ui/gaze.ts"
 import { standingOf } from "babavoss/shell/ui/turn.ts"
 import { WorkbenchSegments } from "babavoss/kit/index.ts"
 import { horizonOf, outline, SPHERE, type Sphere } from "../src/sphere.ts"
@@ -21,8 +21,68 @@ const kept = (): Sphere => {
 /** A move's gaze as far as the sphere reaches: a whole turn round stays whole. */
 const reached = (gaze: Gaze, reach: number): Gaze => ({ ...gaze, yaw: Math.abs(gaze.yaw) > Math.PI ? gaze.yaw : gaze.yaw * reach, pitch: gaze.pitch * reach })
 
-/** The two eyes on the sphere; `move` still, any, or one move's name, made again and again; `shown` draws the sphere's outline. */
-function Eyes({ sphere, move, shown, className }: { sphere: Sphere; move: string; shown?: boolean; className?: string }) {
+/** The shell's mark at a gaze, drawn by its own rule: an ellipse an eye. */
+function Now({ gaze, className }: { gaze: Gaze; className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden className={className} style={{ overflow: "visible" }}>
+      <g className="fill-current">
+        {EYES.map((eye, i) => {
+          const { cx, cy, rx, ry, turn } = drawn(eye, gaze)
+
+          return <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} transform={`rotate(${turn} ${cx} ${cy})`} />
+        })}
+      </g>
+    </svg>
+  )
+}
+
+/** How far the head turns with the pointer at the pad's edge, in radians: round to the side, and up or down. */
+const TURN = { yaw: 1.5, pitch: 1.1 }
+
+/**
+ * The eyes following the pointer: over the pad, where the pointer is from its middle is where the head looks, so any pose
+ * can be held and looked at, with no move played. A click holds the pose, and another lets it go; off the pad the head rests.
+ */
+function Follow({ sphere }: { sphere: Sphere }) {
+  const [gaze, setGaze] = useState<Gaze>(REST)
+  const [held, setHeld] = useState(false)
+  const look = (e: { clientX: number; clientY: number; currentTarget: HTMLElement }) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - box.left) / box.width) * 2 - 1
+    const y = ((e.clientY - box.top) / box.height) * 2 - 1
+
+    setGaze({ yaw: x * TURN.yaw, pitch: y * TURN.pitch, size: 1 })
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        className="relative grid cursor-crosshair grid-cols-2 place-items-center gap-6 rounded-lg border bg-background p-8 select-none"
+        onPointerMove={(e) => !held && look(e)}
+        onPointerLeave={() => !held && setGaze(REST)}
+        onClick={(e) => {
+          if (held) look(e)
+          setHeld(!held)
+        }}
+      >
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-border/60" />
+        <span aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-border/60" />
+        <Eyes sphere={sphere} move="still" gaze={gaze} shown className="size-[200px]" />
+        <Now gaze={gaze} className="size-[200px]" />
+        <span className="pointer-events-none absolute right-3 bottom-2 text-meta text-muted-foreground tabular-nums">
+          yaw {gaze.yaw.toFixed(2)} · pitch {gaze.pitch.toFixed(2)}
+          {held ? " · held: click to let go" : ""}
+        </span>
+      </div>
+      <p className="text-meta text-muted-foreground">
+        Follow the pointer: the exact sphere at the left, the shell's mark at the right, both looking where the pointer is from the pad's middle. A click holds the pose.
+      </p>
+    </div>
+  )
+}
+
+/** The two eyes on the sphere; `move` still, any, or one move's name, made again and again; `gaze` a pose to hold in place of a move; `shown` draws the sphere's outline. */
+function Eyes({ sphere, move, gaze, shown, className }: { sphere: Sphere; move: string; gaze?: Gaze; shown?: boolean; className?: string }) {
   const paths = useRef<(SVGPathElement | null)[]>([])
   const now = useRef(sphere)
 
@@ -77,10 +137,10 @@ function Eyes({ sphere, move, shown, className }: { sphere: Sphere; move: string
       clearTimeout(timer)
     }
   }, [move])
-  // A slider moved while the eyes rest is seen at once.
+  // A slider moved while the eyes rest is seen at once, and so is a pose given.
   useEffect(() => {
-    if (move === "still") place(REST)
-  }, [sphere, move])
+    if (move === "still") place(gaze ?? REST)
+  }, [sphere, move, gaze])
 
   return (
     <svg viewBox="0 0 100 100" aria-hidden className={className} style={{ overflow: "visible" }}>
@@ -138,6 +198,7 @@ function Tuner() {
           </span>
         </State>
       </States>
+      <Follow sphere={sphere} />
       <div className="grid gap-x-6 gap-y-2 rounded-lg border p-3 sm:grid-cols-2">
         {SLIDERS.map((s) => (
           <label key={s.key} className="flex flex-col gap-0.5">
