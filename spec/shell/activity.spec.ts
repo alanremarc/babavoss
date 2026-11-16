@@ -12,6 +12,7 @@ import {
   arrived,
   channelOf,
   channelsOf,
+  distinct,
   groupOf,
   groupsOf,
   levelKey,
@@ -405,7 +406,14 @@ describe("the activity drawer", () => {
         ["/tabs/2", "lab", "lab", true, [2]],
       ])
       expect(channelOf(r(5, undefined))).toBe("/")
-      expect(channelsOf([r(2, "/tabs/2")], tabs, [], new Set(), "babavoss", { "/tabs/2": "Lab" })[0]).toMatchObject({ name: "Lab", closed: true })
+      expect(channelsOf([{ ...r(2, "/tabs/2"), title: "Lab" }], tabs, [], new Set(), "babavoss")[0]).toMatchObject({ name: "Lab", closed: true })
+    })
+
+    it("name each so it points at one tab: where two share a title, each says its tab's address", () => {
+      const rows = [{ ...r(3, "/tabs/2"), title: "Releases" }, r(2, "/tabs/3"), r(1, "/tabs/1")]
+
+      expect(channelsOf(rows, tabs, [], new Set(), "babavoss").map((c) => c.name)).toEqual(["Releases · /tabs/2", "Releases · /tabs/3", "Queue"])
+      expect(distinct([{ key: "/", name: "Queue" }, { key: "/queue", name: "Queue" }]).map((c) => c.name)).toEqual(["Queue", "Queue · /queue"])
     })
 
     it("count what the person has not seen in each, and pin a tab that needs them, with its need, messages or not", () => {

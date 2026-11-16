@@ -23,15 +23,18 @@
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
 import { action, handles, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
-import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen } from "./activity.ts"
+import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen, type Tabs } from "./activity.ts"
 
 /**
  * `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved.
  * `named`: the tab holds its surface's name, so /NAME addresses it.
  */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string; named?: true }
-/** A tab closed, by whom, and whether it held its surface's name: what a path into it is answered with. */
-export type Closed = { n: number; surface: string; by: "person" | "agent"; named?: true }
+/**
+ * A tab closed, by whom, whether it held its surface's name, and the title it had: what a path into it is answered with,
+ * and what names its channel in the activity.
+ */
+export type Closed = { n: number; surface: string; by: "person" | "agent"; named?: true; title?: string }
 /** Where the agent last pointed the person, and how many times it has: the page goes there when the count moves. */
 export type Pointed = { at: string; n: number }
 /**
@@ -194,7 +197,9 @@ export function shell(
     update(model: ShellModel, { n }, call): Update<ShellModel, ShellCommand> {
       const tab = model.tabs.find((t) => t.n === n)
       const by = isPerson(call.actor) ? ("person" as const) : ("agent" as const)
-      const closed = tab ? [...(model.closed ?? []), { n, surface: tab.surface, by, ...(tab.named && { named: true as const }) }] : model.closed
+      const title = tab && attempt(tab, (s) => s.view(tab.model, "/")?.title)?.ok
+      const was: Closed | undefined = tab && { n, surface: tab.surface, by, ...(tab.named && { named: true as const }), ...(typeof title === "string" && { title }) }
+      const closed = was ? [...(model.closed ?? []), was] : model.closed
 
       return { model: { ...model, tabs: model.tabs.filter((t) => t.n !== n), ...(closed && { closed: closed.slice(-REMEMBERED) }) } }
     },
@@ -346,12 +351,15 @@ export function shell(
     ask: true,
     update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({ model: { ...model, seen: lookAt(model.seen ?? { upto: 0, looked: [] }, n) } }),
   })
-  /** The address of the open tab numbered n, which activity says an entry's place by; undefined where it is closed. */
-  const opened = (model: ShellModel) => (n: number) => {
-    const tab = model.tabs.find((t) => t.n === n)
+  /** The tabs activity says an entry's place by: the address of the open tab numbered n, and the title a closed one had. */
+  const opened = (model: ShellModel): Tabs => ({
+    at: (n) => {
+      const tab = model.tabs.find((t) => t.n === n)
 
-    return tab && addressOf(tab)
-  }
+      return tab && addressOf(tab)
+    },
+    title: (n) => model.closed?.findLast((c) => c.n === n)?.title,
+  })
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
       title: "baba",
@@ -504,7 +512,12 @@ export function shell(
         next: kept.next,
         activity,
         seen: seenFrom((saved as { seen?: unknown }).seen, activity),
-        ...(Array.isArray(closed) && { closed: closed.filter(isClosed).slice(-REMEMBERED) }),
+        ...(Array.isArray(closed) && {
+        closed: closed
+          .filter(isClosed)
+          .slice(-REMEMBERED)
+          .map(({ title, ...c }) => ({ ...c, ...(typeof title === "string" && { title }) })),
+      }),
         tabs: tabs.map((t) => (t.named || named.has(t.surface) || !named.add(t.surface) ? t : { ...t, named: true as const })),
       }
     },

@@ -516,6 +516,19 @@ describe("the shell surface", () => {
     await r.stop()
   })
 
+  it("keeps the title a closed tab had, which its activity says, across a restart", async () => {
+    const s = story(shell({ counter }, BABA))
+
+    await s.agent.call("/", "open", { surface: "counter" })
+    await s.agent.call("/counter", "bump", { by: 1 })
+    await s.person.call("/", "close", { n: 1 })
+    await s.restart()
+
+    const rows = s.agent.sees("/activity")!.entries as { tab?: string; title?: string }[]
+
+    expect(rows.filter((r) => r.tab === "/tabs/1").map((r) => r.title)).toEqual(["Counter"])
+  })
+
   it("names tabs and paths, and refuses bad surface names", () => {
     expect(within("/tabs/3")).toEqual({ n: 3, path: "/" })
     expect(within("/tabs/3/notes/2/")).toEqual({ n: 3, path: "/notes/2" })
