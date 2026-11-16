@@ -1,6 +1,7 @@
 // The queue's rules, as stories: an issue goes from the backlog to a lane to done, a lane delivers one at a time, the issues
 // form a graph without cycles on narratives, each keeps the reasoning of its passes, and the work is the session's, which
-// every tab shares. The work is kept in memory here, the store's own, and its commands are run for real.
+// every tab shares. The work is kept in memory here, the store's own, and its commands are run for real: a tab is idle once
+// what the store told it has landed, though it follows the store while it is open.
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
 import { store, type Store } from "../src/store.ts"
@@ -10,14 +11,11 @@ import { queue } from "../src/surface.ts"
 type Row = { n: number; status: string; lane?: number; note?: string; narrative: string; from?: number[] }
 const rows = (sees: unknown) => (sees as { issues: Row[] }).issues.map(({ n, status, lane }) => [n, status, lane])
 
-/** What the store told every tab has landed: its events are queued as they are sent. A tab follows the store while it is open, so it is never idle. */
-const heard = () => new Promise((done) => setTimeout(done, 1))
-
 /** A queue tab over the session's work, kept in memory: a second tab of the same session is given the same store. */
 async function tab(work: Store = store()) {
   const s = story(queue(work), { effects: "real" })
 
-  await heard()
+  await s.world.idle()
 
   return s
 }
@@ -184,11 +182,11 @@ test("the work is the session's: a second tab shows it and follows changes, and 
   const second = await tab(work)
 
   await first.agent.call("/", "add", { title: "One", about: "Why" })
-  await heard()
+  await second.world.idle()
   expect(rows(second.agent.sees())).toEqual([[1, "backlog", undefined]])
 
   await second.agent.call("/issues/1", "start", { n: 1, lane: 1 })
-  await heard()
+  await first.world.idle()
   expect(rows(first.agent.sees())).toEqual([[1, "lane", 1]])
   const later = await tab(work)
 
@@ -205,7 +203,7 @@ test("a new tab says it is reading until it hears the session's work, so its pag
   const fresh = story(queue(work), { effects: "real" })
 
   expect(fresh.person.sees()).toMatchObject({ reading: true, issues: [] })
-  await heard()
+  await fresh.world.idle()
   expect(fresh.person.sees()).not.toHaveProperty("reading")
   expect(rows(fresh.person.sees())).toEqual([[1, "backlog", undefined]])
 
