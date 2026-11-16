@@ -300,3 +300,21 @@ test("the code changing plays again, and what then tells the agent otherwise is 
   expect(agent.noticed()).toEqual(["Played again: what work tells the agent changed"])
   expect(agent.sees()).not.toHaveProperty("playing")
 })
+
+test("a play always ends: stopped, it stops the step under way and its processes; failed, or restored after a restart, it is not playing", async () => {
+  const stop = new AbortController()
+  const began = Date.now()
+  const waiting = play({ name: "waits", group: "noise", title: "", about: "", steps: [{ kind: "start", source: "startup" }, { kind: "wait", seconds: 30 }, { kind: "waited" }] }, stop.signal)
+
+  setTimeout(() => stop.abort(), 2000)
+  expect(await waiting).toMatchObject({ error: "stopped" })
+  expect(Date.now() - began).toBeLessThan(10_000)
+
+  const { agent, world } = story(design)
+
+  await world.settle((c) => c.kind === "watch", { kind: "changed" })
+  await world.settle((c) => c.kind === "play", { kind: "unplayed", error: "the play did not end within 120s, and was stopped" })
+  expect(agent.sees()).not.toHaveProperty("playing")
+  expect(agent.sees()).toMatchObject({ failure: "the play did not end within 120s, and was stopped" })
+  expect(design.restore!({ plays, playing: true, again: true })).toMatchObject({ playing: false })
+}, 20_000)

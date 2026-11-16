@@ -129,7 +129,7 @@ function drawn(value: Json | undefined, address: string): Json {
   )
 }
 
-/** Plays `scenario` on a demo project of its own, made and removed here; aborted, it stops after the step under way. */
+/** Plays `scenario` on a demo project of its own, made and removed here; aborted, it stops the step under way and its processes. */
 export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-design-")))
   const home = join(dir, ".babavoss")
@@ -154,8 +154,11 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
   } else symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
 
   const own = (text: string) => text.replaceAll(dir, PROJECT).trimEnd()
-  const run = async (cmd: string[], stdin?: string) => {
-    const child = Bun.spawn(cmd, { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe" })
+  /** Time let pass within a step, cut short once the play is stopped. */
+  const nap = (ms: number) => sleep(ms, undefined, signal && { signal })
+  /** A process of the demo's, killed once the play is stopped, unless it is what tidies up after it. */
+  const run = async (cmd: string[], stdin?: string, stop: AbortSignal | undefined = signal) => {
+    const child = Bun.spawn(cmd, { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe", ...(stop && { signal: stop }) })
     const [out, err] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
 
     return own([out.trimEnd(), err.trimEnd()].filter(Boolean).join("\n"))
@@ -203,7 +206,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         method: call ? "POST" : "GET",
         headers: { accept: "application/json", "babavoss-service": at.token, "babavoss-actor": "person", "content-type": "application/json" },
         ...(call && { body: JSON.stringify(call) }),
-        signal: AbortSignal.timeout(5000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
       })
 
       return (await response.json()) as Json
@@ -282,7 +285,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       case "wait":
         waiting = word(["wait", String(step.seconds)])
         // The wait is under way at the door before anyone moves, as when the agent waits for the person.
-        await sleep(400)
+        await nap(400)
 
         return { who: "agent", did: `${WORD} wait ${step.seconds}, and waits`, tellings: [] }
       case "waited": {
@@ -348,7 +351,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       case "reloaded": {
         const until = Date.now() + RELOAD_MS
 
-        while (Date.now() < until && (await descriptions()) === loaded) await sleep(50)
+        while (Date.now() < until && (await descriptions()) === loaded) await nap(50)
 
         const seen = (await descriptions()) !== loaded
 
@@ -360,7 +363,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         }
       }
       case "pause":
-        await sleep(step.seconds * 1000)
+        await nap(step.seconds * 1000)
 
         return { who: "root", did: `${step.seconds} seconds pass with no call, as while the agent thinks`, tellings: [] }
       case "hooks":
@@ -376,7 +379,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 
         for (let i = 0; at && i < 100; i++) {
           if (((await page(at)) as { status?: string } | undefined)?.status === status) break
-          await sleep(20)
+          await nap(20)
         }
 
         return { who: "surface", did: `the build moves by itself: ${step.line}`, tellings: [] }
@@ -385,7 +388,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         return { who: "harness", did: "the agent's turn ends", tellings: await hook("Stop", { stop_hook_active: false }) }
       case "sleep":
         await run([join(dir, WORD), "close"])
-        for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
+        for (let i = 0; endpoint() && i < 100; i++) await nap(20)
 
         return { who: "root", did: "the root goes to sleep, as when nothing called it for a while", tellings: [] }
     }
@@ -409,10 +412,10 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 
     return { name: scenario.name, steps }
   } catch (error) {
-    return { name: scenario.name, steps, error: error instanceof Error ? error.message : String(error) }
+    return { name: scenario.name, steps, error: signal?.aborted ? "stopped" : error instanceof Error ? error.message : String(error) }
   } finally {
     await waiting?.catch(() => {})
-    if (endpoint()) await run([join(dir, WORD), "close"]).catch(() => "")
+    if (endpoint()) await run([join(dir, WORD), "close"], undefined, AbortSignal.timeout(10_000)).catch(() => "")
     for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
     rmSync(dir, { recursive: true, force: true })
   }

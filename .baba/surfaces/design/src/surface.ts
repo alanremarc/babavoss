@@ -28,6 +28,8 @@ type Result = Update<Model, Command>
 const FRAMEWORK = dirname(fileURLToPath(import.meta.resolve("babavoss/package.json")))
 /** What the told texts are made of: the framework's code, its command, baba's words, and the demo. */
 const WATCHED = [join(FRAMEWORK, "framework/core"), join(FRAMEWORK, "framework/shell/src"), join(FRAMEWORK, "framework/shell/scripts"), join(FRAMEWORK, "skill"), join(FRAMEWORK, "bin"), fileURLToPath(new URL("../demo", import.meta.url))]
+/** How long a play may take before it is stopped and said to have failed: far longer than one takes, so only a play that died meets it. */
+export const PLAY_MS = 120_000
 const HOW =
   "Each scenario is played on the demo project through the framework's own hook, word and runtime, again whenever their code changes, so this is what an agent is given now. " +
   "A step's path has its texts whole, and its page what the person's page showed after it; /demo is the demo project's shape. " +
@@ -301,12 +303,20 @@ export default surface<Model, Event, Command>({
   view: pages.view,
   async run(command, send, signal) {
     if (command.kind === "watch") return watching(() => send({ kind: "changed" }), signal)
+
+    // A play always ends, played or failed, so it is never left playing: one that does not end in time is stopped.
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(PLAY_MS)])
+    const ended = <T>(value: T): T => {
+      if (bounded.aborted && !signal.aborted) throw new Error(`the play did not end within ${PLAY_MS / 1000}s, and was stopped`)
+
+      return value
+    }
     // Those that take real time are played beside the rest, and told once the rest are, so the page fills at once.
-    const later = Promise.all(SCENARIOS.filter(slow).map((s) => play(s, signal)))
-    const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.filter((s) => !slow(s)).map((s) => play(s, signal))), shape()])
+    const later = Promise.all(SCENARIOS.filter(slow).map((s) => play(s, bounded)))
+    const [plays, demo] = ended(await Promise.all([Promise.all(SCENARIOS.filter((s) => !slow(s)).map((s) => play(s, bounded))), shape()]))
 
     send({ kind: "played", plays, shape: demo, ...(SCENARIOS.some(slow) && { partial: true as const }) })
-    if (SCENARIOS.some(slow)) send({ kind: "played", plays: await later })
+    if (SCENARIOS.some(slow)) send({ kind: "played", plays: ended(await later) })
   },
   failed: (command, error) => (command.kind === "play" ? { kind: "unplayed", error } : { kind: "none" }),
 })
