@@ -15,24 +15,25 @@ const watching = (c: Command) => c.kind === "watch"
 const writing = (c: Command) => c.kind === "write"
 
 describe("the settings", () => {
-  it("say at / the appearance, the shortcuts and the mark, small, with the place that holds the shortcuts", () => {
+  it("say at / the appearance with where the rail stands, the shortcuts and the mark, small, with the place that holds the shortcuts", () => {
     const { agent } = story(settings(() => "unused"))
 
     expect(agent.sees()).toEqual({
       title: "Settings",
       how: expect.any(String),
-      appearance: { mode: "system", same: true, theme: "neutral" },
-      shortcuts: { at: "/shortcuts", home: "mod+p", next: "mod+k", previous: "mod+j", menu: "shift+f10" },
+      appearance: { mode: "system", same: true, theme: "neutral", rail: { side: "left", from: "bottom", drawer: "left" } },
+      shortcuts: { at: "/shortcuts", drawer: "mod+p", next: "mod+k", previous: "mod+j" },
       logo: { animate: true },
       mode: expect.anything(),
       theme: expect.anything(),
       dynamic: expect.anything(),
       same: expect.anything(),
+      rail: expect.anything(),
       animate: expect.anything(),
     })
-    expect(agent.offered()).toEqual(["mode", "theme", "dynamic", "same", "animate"])
+    expect(agent.offered()).toEqual(["mode", "theme", "dynamic", "same", "rail", "animate"])
     expect(agent.offered("/shortcuts")).toEqual(["bind", "reset"])
-    expect(agent.sees("/shortcuts")).toMatchObject({ commands: [{ command: "home", keys: "mod+p", does: expect.any(String) }, {}, {}, {}] })
+    expect(agent.sees("/shortcuts")).toMatchObject({ commands: [{ command: "drawer", keys: "mod+p", does: expect.any(String) }, {}, {}] })
   })
 
   it("are the page's own: a change of one, or of the file, is quiet, told to the agent in no way", async () => {
@@ -42,6 +43,8 @@ describe("the settings", () => {
     try {
       expect(await running.call("/", "mode", { mode: "dark" }, "person")).toMatchObject({ outcome: "written" })
       expect(running.cause()).toMatchObject({ actor: "person", quiet: true })
+      expect(await running.call("/", "rail", { side: "right", from: "top", drawer: "left" }, "person")).toMatchObject({ outcome: "written" })
+      expect(running.cause()).toMatchObject({ quiet: true })
       expect(await running.call("/shortcuts", "reset", { command: "all" }, "person")).toMatchObject({ outcome: "written" })
       expect(running.cause()).toMatchObject({ quiet: true })
     } finally {
@@ -59,7 +62,7 @@ describe("the settings", () => {
     expect(agent.sees()).toMatchObject({ appearance: { mode: "dark", same: true, theme: "clay" }, logo: { animate: false } })
     expect(world.commands().filter(writing).at(-1)).toEqual({
       kind: "write",
-      settings: { appearance: { mode: "dark", same: true, themes: { light: "clay", dark: "neutral" } }, keys: {}, logo: { animate: false } },
+      settings: { appearance: { ...DEFAULTS.appearance, mode: "dark", same: true, themes: { light: "clay", dark: "neutral" } }, keys: {}, logo: { animate: false } },
     })
     expect(agent.noticed()).toEqual([])
   })
@@ -111,28 +114,40 @@ describe("the settings", () => {
     expect(await agent.call("/", "theme", { mode: "dim", theme: "clay" })).toMatchObject({ outcome: "refused", reason: "a theme is of the light or the dark mode, or both, not dim" })
   })
 
+  it("place the rail by one action, all three of its parts given, written to the file, and refuse a part it has not", async () => {
+    const { agent, world } = story(settings(() => "unused"))
+
+    expect(await agent.call("/", "rail", { side: "top", from: "bottom", drawer: "right" })).toMatchObject({ outcome: "written" })
+    expect(agent.sees()).toMatchObject({ appearance: { rail: { side: "top", from: "bottom", drawer: "right" } } })
+    expect(world.commands().filter(writing).at(-1)).toMatchObject({ settings: { appearance: { rail: { side: "top", from: "bottom", drawer: "right" } } } })
+    expect(await agent.call("/", "rail", { side: "middle", from: "top", drawer: "left" })).toEqual({ outcome: "refused", reason: "side is left, right, top, bottom, not middle" })
+    expect(await agent.call("/", "rail", { side: "left", from: "left", drawer: "left" })).toEqual({ outcome: "refused", reason: "from is top or bottom, not left" })
+    expect(await agent.call("/", "rail", { side: "left", from: "top", drawer: "top" })).toEqual({ outcome: "refused", reason: "drawer is left or right, not top" })
+    expect(agent.noticed()).toEqual([])
+  })
+
   it("bind a command to keys, and refuse keys another command has, saying which, and keys that cannot be a binding", async () => {
     const { agent, person } = story(settings(() => "unused"))
 
-    expect(await person.call("/shortcuts", "bind", { command: "home", keys: "mod+shift+h" })).toMatchObject({ outcome: "written" })
-    expect((agent.sees("/shortcuts")!.commands as unknown[])[0]).toEqual({ command: "home", does: expect.any(String), keys: "mod+shift+h", default: "mod+p" })
-    expect(agent.sees()).toMatchObject({ shortcuts: { home: "mod+shift+h" } })
-    expect(await agent.call("/shortcuts", "bind", { command: "home", keys: "mod+k" })).toEqual({
+    expect(await person.call("/shortcuts", "bind", { command: "drawer", keys: "mod+shift+h" })).toMatchObject({ outcome: "written" })
+    expect((agent.sees("/shortcuts")!.commands as unknown[])[0]).toEqual({ command: "drawer", does: expect.any(String), keys: "mod+shift+h", default: "mod+p" })
+    expect(agent.sees()).toMatchObject({ shortcuts: { drawer: "mod+shift+h" } })
+    expect(await agent.call("/shortcuts", "bind", { command: "drawer", keys: "mod+k" })).toEqual({
       outcome: "refused",
       reason: "mod+k is bound to next already: bind next to other keys first, or choose others",
     })
-    expect(await agent.call("/shortcuts", "bind", { command: "home", keys: "h" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("types text") })
+    expect(await agent.call("/shortcuts", "bind", { command: "drawer", keys: "h" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("types text") })
     expect(await agent.call("/shortcuts", "bind", { command: "jump", keys: "mod+x" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("no command jump") })
   })
 
   it("reset one command, or all, to the defaults, unless a default is taken meanwhile", async () => {
     const { agent } = story(settings(() => "unused"))
 
-    await agent.call("/shortcuts", "bind", { command: "home", keys: "mod+h" })
+    await agent.call("/shortcuts", "bind", { command: "drawer", keys: "mod+h" })
     await agent.call("/shortcuts", "bind", { command: "next", keys: "mod+p" })
-    expect(await agent.call("/shortcuts", "reset", { command: "home" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("bound to next now") })
+    expect(await agent.call("/shortcuts", "reset", { command: "drawer" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("bound to next now") })
     expect(await agent.call("/shortcuts", "reset", { command: "all" })).toMatchObject({ outcome: "written" })
-    expect(agent.sees()).toMatchObject({ shortcuts: { home: "mod+p", next: "mod+k" } })
+    expect(agent.sees()).toMatchObject({ shortcuts: { drawer: "mod+p", next: "mod+k" } })
   })
 
   it("follow the file: what it says when read is what the tab says, but never over a change of the tab's own not yet written", async () => {

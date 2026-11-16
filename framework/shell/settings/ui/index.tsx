@@ -1,9 +1,11 @@
-// The settings' page, shown in their tab: the appearance, the shortcuts and the mark, each as it is with the control that
-// changes it, every change a call of the surface. A theme is chosen from swatches, each painted in its own theme; Dynamic
+// The settings' page, shown in their tab: the appearance, where the tabs stand and the mark's motion among it, then the
+// shortcuts, each as it is with the control that changes it, every change a call of the surface. A theme is chosen from swatches, each painted in its own theme; Dynamic
 // shows the picker, which paints the page as it is dragged and keeps the numbers once let go. With one theme for both
 // modes there is one choice, else one for each. A shortcut is rebound by clicking its keys and pressing new ones; Escape
-// gives up, and a clash or keys that cannot be a binding is said on its row. Beside the mark's switch, the mark as it is
-// while the agent works. As the surface says them, the settings are told to the page, which applies them at once.
+// gives up, and a clash or keys that cannot be a binding is said on its row. Where the tabs stand asks next what the side
+// chosen needs: the end the mark is at for a rail at a side, where a drawer opens for one along the top or bottom. Beside
+// the mark's switch, the mark as it is while the agent works. As the surface says them, the settings are told to the page
+// whole, which applies them at once.
 import { useEffect, useState, type ReactNode } from "react"
 import { MonitorIcon, MoonIcon, SettingsIcon, SunIcon } from "lucide-react"
 import type { Handle } from "../../../core/index.ts"
@@ -16,21 +18,17 @@ import { Logo } from "../../ui/mark.tsx"
 import { mac, RECORDING_MARK } from "../../ui/shortcuts.ts"
 import { useLive, useTab } from "../../ui/tab.tsx"
 import { chordOf, COMMANDS, isCommand, shown, type CommandId } from "../src/keys.ts"
-import { appearanceOf, choiceIn, nameOf, numbersOf, resolveMode, settingsOf, type Choice, type Mode } from "../src/settings.ts"
+import { choiceIn, nameOf, numbersOf, resolveMode, settingsFromView, type Choice, type Rail, type SettingsView } from "../src/settings.ts"
 
 export const icon = <SettingsIcon aria-hidden />
 
-/** A theme as the surface tells it: a preset's id, or dynamic with its numbers. */
-type Told = string | ({ theme: "dynamic" } & Theme)
-type Root = {
-  appearance: { mode: Mode | "system"; same: true; theme: Told } | { mode: Mode | "system"; same: false; light: Told; dark: Told }
-  shortcuts: Record<CommandId, string>
-  logo: { animate: boolean }
+type Root = SettingsView & {
   unsaved?: string
   mode?: Handle
   theme?: Handle
   dynamic?: Handle
   same?: Handle
+  rail?: Handle
   animate?: Handle
 }
 type Row = { command: CommandId; does: string; keys: string; default?: string }
@@ -54,19 +52,18 @@ export default function Settings() {
     return answer.outcome !== "refused"
   }
 
-  // What the surface says is what the page applies, as soon as it says it.
+  // What the surface says is what the page applies, the whole of it, as soon as it says it.
   useEffect(() => {
-    if (!root || !shortcuts) return
-
-    const keys = Object.fromEntries(shortcuts.commands.filter((r) => r.default !== undefined).map((r) => [r.command, r.keys]))
-
-    announce(settingsOf({ appearance: keptOf(root.appearance), keys, logo: root.logo }))
-  }, [root, shortcuts])
+    if (root) announce(settingsFromView(root))
+  }, [root])
 
   if (!root) return <p className="p-6 text-muted-foreground">Reading the settings…</p>
 
-  const appearance = appearanceOf(keptOf(root.appearance))
+  const { appearance } = settingsFromView(root)
   const mode = resolveMode(appearance, systemDark)
+  const placed = appearance.rail
+  const place = (change: Partial<Rail>) => void run("rail", root.rail, { ...placed, ...change })
+  const atSide = placed.side === "left" || placed.side === "right"
   const changed = shortcuts?.commands.some((r) => r.default !== undefined) ?? false
 
   return (
@@ -129,7 +126,38 @@ export default function Settings() {
               keep={(t) => void run(`theme ${m}`, root.dynamic, { mode: m, ...t })}
             />
           ))}
-          {refused && (refused.at === "mode" || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
+          <Line label="Tabs" note="the side of the page the rail of tabs stands at">
+            <Choose label="Where the tabs stand" value={placed.side} options={SIDE_OPTIONS} set={(side) => place({ side })} />
+          </Line>
+          {atSide ? (
+            <Line label="Tabs start from" note="the end the mark is at; the newest tab is next to it">
+              <Choose label="Where the tabs start" value={placed.from} options={END_OPTIONS} set={(from) => place({ from })} />
+            </Line>
+          ) : (
+            <Line label="Drawer opens" note="the side a tab's drawer comes in from">
+              <Choose label="Where a drawer opens" value={placed.drawer} options={DRAWER_OPTIONS} set={(drawer) => place({ drawer })} />
+            </Line>
+          )}
+          <Line label="Animate while the agent works" note={root.logo.animate ? "the mark looks about" : "the mark stays still, tinted"}>
+            <span className="flex items-center gap-3">
+              <span className="grid size-7 place-items-center rounded-full bg-foreground/3 text-muted-foreground" aria-label="The mark while the agent works" role="img">
+                <Logo standing={{ state: "working", waiting: 0, said: "" }} animate={root.logo.animate} />
+              </span>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={0}
+                value={root.logo.animate ? "on" : "off"}
+                aria-label="Animate the mark"
+                onValueChange={(value) => value && void run("animate", root.animate, { on: value === "on" })}
+              >
+                <ToggleGroupItem value="on">On</ToggleGroupItem>
+                <ToggleGroupItem value="off">Off</ToggleGroupItem>
+              </ToggleGroup>
+            </span>
+          </Line>
+          {refused && (refused.at === "mode" || refused.at === "rail" || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
         </Section>
 
         <Section
@@ -154,36 +182,38 @@ export default function Settings() {
           ))}
           <p className="text-meta text-muted-foreground">Click a shortcut, then press the keys; Escape gives up. They work anywhere but while you write in a field.</p>
         </Section>
-
-        <Section title="Logo">
-          <Line label="Animate while the agent works" note={root.logo.animate ? "the mark looks about" : "the mark stays still, tinted"}>
-            <span className="flex items-center gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-foreground/3 text-muted-foreground" aria-label="The mark while the agent works" role="img">
-                <Logo standing={{ state: "working", waiting: 0, said: "" }} animate={root.logo.animate} />
-              </span>
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                spacing={0}
-                value={root.logo.animate ? "on" : "off"}
-                aria-label="Animate the mark"
-                onValueChange={(value) => value && void run("animate", root.animate, { on: value === "on" })}
-              >
-                <ToggleGroupItem value="on">On</ToggleGroupItem>
-                <ToggleGroupItem value="off">Off</ToggleGroupItem>
-              </ToggleGroup>
-            </span>
-          </Line>
-        </Section>
       </div>
     </div>
   )
 }
 
-/** The appearance the surface tells, as its file keeps it. */
-const keptOf = (a: Root["appearance"]) =>
-  a.same ? { mode: a.mode, same: true, themes: { light: a.theme, dark: a.theme } } : { mode: a.mode, same: false, themes: { light: a.light, dark: a.dark } }
+const SIDE_OPTIONS = [
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+  { value: "top", label: "Top" },
+  { value: "bottom", label: "Bottom" },
+] as const
+const END_OPTIONS = [
+  { value: "top", label: "Top" },
+  { value: "bottom", label: "Bottom" },
+] as const
+const DRAWER_OPTIONS = [
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+] as const
+
+/** One choice among a few, as a row of toggles: the one chosen pressed. */
+function Choose<T extends string>({ label, value, options, set }: { label: string; value: T; options: readonly { value: T; label: string }[]; set: (value: T) => void }) {
+  return (
+    <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={value} aria-label={label} onValueChange={(to) => to && to !== value && set(to as T)}>
+      {options.map((o) => (
+        <ToggleGroupItem key={o.value} value={o.value}>
+          {o.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
 
 /**
  * A mode's theme: a swatch for each preset and Dynamic, each painted in its own theme in that mode, and under Dynamic the

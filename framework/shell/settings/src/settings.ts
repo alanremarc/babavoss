@@ -1,30 +1,40 @@
 // The person's settings of the shell, as values: what they are, their defaults, and how a kept value is read, tolerant
 // of what it does not know. Pure, for the surface that changes them and for the page that applies them alike: the
-// appearance, a mode and a theme for both modes or for each, a preset or the person's own numbers (the kit's theme.ts);
-// the shortcuts, the person's bindings over the shell's commands (keys.ts); and whether the mark moves while the agent works.
+// appearance, a mode and a theme for both modes or for each, a preset or the person's own numbers (the kit's theme.ts), and
+// where the rail of tabs stands; the shortcuts, the person's bindings over the shell's commands (keys.ts); and whether the
+// mark moves while the agent works.
 import { bounded, isPreset, presetOf, PRESETS, type Mode, type PresetId, type Theme } from "../../../kit/theme.ts"
-import { COMMANDS, isCommand, normal, same, type CommandId } from "./keys.ts"
+import { COMMANDS, isCommand, normal, RENAMED, same, type CommandId } from "./keys.ts"
 
 export type { Mode, Theme }
 /** A mode's theme: a preset, by its id, or dynamic, the person's own three numbers. */
 export type Choice = PresetId | Theme
+/**
+ * The rail of tabs: the side of the page it stands at; for a rail at the left or right, the end the mark is at, `from`;
+ * for one along the top or bottom, the side a tab's drawer opens at, `drawer`. Each is kept whichever side is chosen.
+ */
+export type Rail = { side: "left" | "right" | "top" | "bottom"; from: "top" | "bottom"; drawer: "left" | "right" }
 /** `same`: one theme for both modes, `themes.light`; otherwise each mode has its own. */
-export type Appearance = { mode: Mode | "system"; same: boolean; themes: Record<Mode, Choice> }
+export type Appearance = { mode: Mode | "system"; same: boolean; themes: Record<Mode, Choice>; rail: Rail }
 /** `keys`: the person's bindings, where they differ from a command's default. */
 export type Settings = { appearance: Appearance; keys: Partial<Record<CommandId, string>>; logo: { animate: boolean } }
 
 export const MODES = ["light", "dark", "system"] as const
+export const SIDES = ["left", "right", "top", "bottom"] as const
+export const ENDS = ["top", "bottom"] as const
+export const DRAWERS = ["left", "right"] as const
 /** What a mode's theme may be called: each preset, and dynamic. */
 export const THEMES = [...PRESETS.map((p) => p.id), "dynamic"] as const
 
 export const DEFAULTS: Settings = {
-  appearance: { mode: "system", same: true, themes: { light: "neutral", dark: "neutral" } },
+  appearance: { mode: "system", same: true, themes: { light: "neutral", dark: "neutral" }, rail: { side: "left", from: "bottom", drawer: "left" } },
   keys: {},
   logo: { animate: true },
 }
 
 export const isMode = (value: unknown): value is Appearance["mode"] => value === "light" || value === "dark" || value === "system"
 
+const oneOf = <T extends string>(options: readonly T[], value: unknown, otherwise: T): T => (options.includes(value as T) ? (value as T) : otherwise)
 const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
 
@@ -42,9 +52,18 @@ export function choiceOf(value: unknown): Choice | undefined {
 export const sameChoice = (a: Choice, b: Choice): boolean =>
   typeof a === "string" || typeof b === "string" ? a === b : a.hue === b.hue && a.tint === b.tint && a.vivid === b.vivid
 
+/** The rail a kept value says, each part it does not say, or says wrongly, the default. */
+export function railOf(value: unknown): Rail {
+  const kept = record(value)
+  const { side, from, drawer } = DEFAULTS.appearance.rail
+
+  return { side: oneOf(SIDES, kept.side, side), from: oneOf(ENDS, kept.from, from), drawer: oneOf(DRAWERS, kept.drawer, drawer) }
+}
+
 /**
  * The appearance a kept value says, each part it does not say, or says wrongly, the default. A file of before there were
- * dynamic themes says no `same`: its two modes are the same where they name the same theme.
+ * dynamic themes says no `same`: its two modes are the same where they name the same theme. One of before the rail says
+ * none: the rail stands where it does by default.
  */
 export function appearanceOf(value: unknown): Appearance {
   const kept = record(value)
@@ -52,7 +71,12 @@ export function appearanceOf(value: unknown): Appearance {
   const light = choiceOf(themes.light) ?? "neutral"
   const dark = choiceOf(themes.dark) ?? "neutral"
 
-  return { mode: isMode(kept.mode) ? kept.mode : "system", same: typeof kept.same === "boolean" ? kept.same : sameChoice(light, dark), themes: { light, dark } }
+  return {
+    mode: isMode(kept.mode) ? kept.mode : "system",
+    same: typeof kept.same === "boolean" ? kept.same : sameChoice(light, dark),
+    themes: { light, dark },
+    rail: railOf(kept.rail),
+  }
 }
 
 /** The theme a mode is shown in: the one for both where they are the same. */
@@ -64,13 +88,16 @@ export const numbersOf = (choice: Choice): Theme => (typeof choice === "string" 
 
 /**
  * The settings a kept value says: what is not there, or cannot be read, is the default; a binding of no command, one that
- * cannot be a binding, or one that clashes with another, is dropped. What else the value holds is left to the file.
+ * cannot be a binding, or one that clashes with another, is dropped. A binding kept for a command that was renamed is the
+ * new command's, unless that has its own. What else the value holds is left to the file.
  */
 export function settingsOf(value: unknown): Settings {
   const kept = record(value)
   const keys: Partial<Record<CommandId, string>> = {}
+  const written = record(kept.keys)
+  const renamed = Object.entries(RENAMED).flatMap(([was, now]) => (written[was] !== undefined && written[now] === undefined ? [[now, written[was]] as const] : []))
 
-  for (const [command, binding] of Object.entries(record(kept.keys))) {
+  for (const [command, binding] of [...Object.entries(written), ...renamed]) {
     const keys_ = typeof binding === "string" ? normal(binding) : undefined
 
     if (isCommand(command) && keys_ !== undefined && keys_ !== COMMANDS[command].keys) keys[command] = keys_
@@ -100,3 +127,40 @@ function clashOf(keys: Partial<Record<CommandId, string>>): CommandId | undefine
 }
 
 export const resolveMode = (appearance: Appearance, systemDark: boolean): Mode => (appearance.mode === "system" ? (systemDark ? "dark" : "light") : appearance.mode)
+
+/** A mode's theme as the settings' view tells it: a preset's id, or dynamic with its numbers. */
+export type Told = string | ({ theme: "dynamic" } & Theme)
+/** The appearance as the view tells it: the mode, one theme for both or one each, and the rail. */
+export type ToldAppearance = ({ same: true; theme: Told } | { same: false; light: Told; dark: Told }) & { mode: Appearance["mode"]; rail: Rail }
+/** The settings as their view at / tells them, beside its actions: what the page takes the whole settings from. */
+export type SettingsView = { appearance: ToldAppearance; shortcuts: Record<CommandId, string>; logo: Settings["logo"] }
+
+const told = (choice: Choice): Told => (typeof choice === "string" ? choice : { theme: "dynamic", ...choice })
+
+/** The settings as their view tells them: each binding whole, the default where the person set none. */
+export function viewOf(settings: Settings): SettingsView {
+  const { mode, same, themes, rail } = settings.appearance
+  const keys = Object.fromEntries((Object.keys(COMMANDS) as CommandId[]).map((id) => [id, settings.keys[id] ?? COMMANDS[id].keys])) as Record<CommandId, string>
+
+  return {
+    appearance: same ? { mode, same: true, theme: told(themes.light), rail } : { mode, same: false, light: told(themes.light), dark: told(themes.dark), rail },
+    shortcuts: keys,
+    logo: { animate: settings.logo.animate },
+  }
+}
+
+/**
+ * The whole settings a view tells, as the settings' page hands them to the shell: every part of them, never a chosen few,
+ * so a part added later reaches the page too.
+ */
+export function settingsFromView(view: SettingsView): Settings {
+  const { appearance: a } = view
+  const themes = a.same ? { light: a.theme, dark: a.theme } : { light: a.light, dark: a.dark }
+  const bound = Object.entries(view.shortcuts).filter(([id, keys]) => isCommand(id) && keys !== COMMANDS[id].keys)
+
+  return {
+    appearance: appearanceOf({ mode: a.mode, same: a.same, themes, rail: a.rail }),
+    keys: settingsOf({ keys: Object.fromEntries(bound) }).keys,
+    logo: { animate: view.logo.animate !== false },
+  }
+}

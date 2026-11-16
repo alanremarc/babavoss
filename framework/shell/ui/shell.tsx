@@ -386,26 +386,18 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     void Promise.all(there.map((n) => call(NOTICES, "looked", { n: n.n }))).then(() => told.load(), () => undefined)
   }, [active, routes, unseen])
 
-  // The tab whose menu the shortcut opens: the one focused in the strip, else the one shown.
-  const openMenu = () => {
-    const focused = document.activeElement?.closest('[data-slot="pill"]')
-    const pill = focused ?? document.getElementById(`tab-${active.replaceAll("/", "-")}`)?.closest('[data-slot="pill"]')
-
-    pill?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }))
-  }
   const order = [HOME, ...strip.map((r) => r.at)]
 
   useShortcuts(settings.keys, {
-    home: () => {
+    drawer: () => {
       go(shortcut(active, back))
       requestAnimationFrame(() => document.querySelector<HTMLInputElement>(SEARCH)?.focus())
     },
     next: () => go(cycled(order, active, 1) ?? HOME),
     previous: () => go(cycled(order, active, -1) ?? HOME),
-    menu: openMenu,
   })
 
-  const homeKeys = keysShown(bindings(settings.keys).home, mac)
+  const homeKeys = keysShown(bindings(settings.keys).drawer, mac)
 
   return (
     <ChangesContext.Provider value={stream}>
