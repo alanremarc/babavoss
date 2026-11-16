@@ -54,6 +54,20 @@ const call = (text: string) => text.replace(WORD, "baba")
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const quiet = "text-muted-foreground hover:text-foreground outline-none focus-visible:text-foreground"
 const tokens = (n?: number) => `~${n?.toLocaleString("en") ?? "–"} tok`
+const carried = (tellings: Telling[]) => tellings.map((t) => t.carrier.replace(/ to .*/, "")).join(" + ")
+
+/**
+ * What a step gave the agent, as the strip marks it, and why in words: its size where a text reached it; `0 tok` where a
+ * hook ran, or a command answered, and said nothing; `—` where nothing ran that could tell it anything.
+ */
+function givenMark(step: Step): { mark: string; why: string } {
+  const told = step.tellings.filter((t) => t.text)
+
+  if (told.length) return { mark: tokens(told.reduce((a, t) => a + t.tokens, 0)), why: `Given by the ${carried(told)}` }
+  if (step.tellings.length) return { mark: "0 tok", why: `The ${carried(step.tellings)} ran and said nothing` }
+
+  return { mark: "—", why: step.unhooked ? "No hook ran: the harness runs none now, so nothing reached the agent" : "No hook runs for this step, so nothing reached the agent" }
+}
 
 /** The moment a text reached the agent, in plain words, the call in it apart, and what carried it, as a quiet tag. */
 function momentOf(step: Step, telling: Telling): { when: string; code?: string; tag: string } {
@@ -232,7 +246,7 @@ function Facts({ view }: { view: Json }) {
   )
 }
 
-/** The person's page after a step: its tabs, and the one in front, or the one a path picked, drawn by its surface's own page, inert. */
+/** The person's page after a step: its tabs, and the one in front, or the one a path picked, drawn by its surface's own page, inert; Home where none is. */
 function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?: string }) {
   const frame = useRef<HTMLDivElement | null>(null)
   const page = step?.page
@@ -259,7 +273,7 @@ function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?:
     >
       <div className="flex h-full flex-col">
         <div className="flex h-6 shrink-0 items-center gap-0.5 overflow-hidden border-b px-1">
-          <span className="text-muted-foreground/70 px-1.5 text-meta">Home</span>
+          <span className={`flex h-5 shrink-0 items-center rounded-sm px-1.5 text-meta ${front ? "text-muted-foreground/70" : "bg-muted text-foreground"}`}>Home</span>
           {tabs.map((t) => {
             const view = (t.view ?? {}) as { title?: string; attention?: { who?: string } }
             const isNew = !earlier.some((e) => e.at === t.at)
@@ -281,7 +295,9 @@ function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?:
           {!step ? (
             <p className="text-muted-foreground p-3 text-body">Not played yet.</p>
           ) : !front ? (
-            <p className="text-muted-foreground p-3 text-body">No tab is open: the page shows Home.</p>
+            <p className="text-muted-foreground p-3 text-body">
+              {tabs.length ? "The page shows Home: the person has not gone to a tab, and the agent has not shown them one." : "No tab is open: the page shows Home."}
+            </p>
           ) : (
             (PAGES[front.surface]?.draw(front.view) ?? <Facts view={front.view} />)
           )}
@@ -444,8 +460,7 @@ function Strip({ steps, selected, go }: { steps: Step[]; selected?: Step; go: (n
       </button>
       <ol className="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-3" aria-label="Steps">
         {steps.map((step) => {
-          const told = step.tellings.filter((t) => t.text)
-          const size = told.reduce((a, t) => a + t.tokens, 0)
+          const given = givenMark(step)
           const moved = step.tellings.find((t) => t.delta && t.delta !== "same")?.delta
           const on = step === selected
 
@@ -459,14 +474,16 @@ function Strip({ steps, selected, go }: { steps: Step[]; selected?: Step; go: (n
                   go(step.n)
                 }}
                 aria-current={on ? "step" : undefined}
-                title={`${step.n}. ${step.who}: ${call(step.did)}${told.length ? ` · ${told.map((t) => t.carrier.replace(/ to .*/, "")).join(" + ")}` : " · nothing told"}${moved ? ` · ${moved}` : ""}`}
+                title={`${step.n}. ${step.who}: ${call(step.did)} · ${given.why}${moved ? ` · ${moved}` : ""}`}
                 className={`flex h-16 w-40 flex-col gap-0.5 rounded-md border px-2 py-1.5 text-left outline-none focus-visible:ring-ring focus-visible:ring-1 ${on ? "border-primary/60 bg-accent text-accent-foreground" : "hover:bg-muted/50 border-transparent"}`}
               >
                 <span className="flex items-center gap-1.5 text-badge">
                   <span className={`tabular-nums ${on ? "text-foreground" : "text-muted-foreground/70"}`}>{step.n}</span>
                   <span className={`uppercase ${WHO[step.who] ?? "text-muted-foreground"}`}>{step.who}</span>
                   {moved && <span className={`size-1.5 rounded-full ${moved === "new" ? "bg-info" : "bg-warning"}`} aria-label={moved === "new" ? "new since the pin" : "differs from the pin"} />}
-                  <span className="text-muted-foreground ml-auto tabular-nums">{told.length ? tokens(size) : "—"}</span>
+                  <span className="text-muted-foreground ml-auto tabular-nums" title={given.why}>
+                    {given.mark}
+                  </span>
                 </span>
                 <span className={`line-clamp-2 min-w-0 text-meta break-words ${on ? "" : "text-muted-foreground"}`}>{didOf(step)}</span>
               </button>
