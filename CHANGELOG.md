@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.62.0
+
+- `baba init`, `provision` and `start` say in one line when Claude Code's managed settings keep baba's plugin or its hook from running, naming the settings file and what to do: `strictPluginOnlyCustomization`, a `strictKnownMarketplaces` without `{ "source": "skills-dir" }`, `blockedMarketplaces` naming it, `enabledPlugins` turning `baba@skills-dir` off, `disableAllHooks`, or `allowManagedHooksOnly`. Settings given from the claude.ai console and the Windows registry are not read. An adapter may say the same of its harness by an optional `blocked()`.
+- "This session's hooks are not being heard" is no longer said because of runs made in the session's name from elsewhere, another session's agent using `--session` or a script: only the session's own agent's runs count. The client is version 14 and replaces installed copies.
+- After a resume followed at once by a compaction, baba's short words and the present are given once, not again at each start with nothing heard between.
+- Nothing to adapt in a project's surfaces.
+
 ## 0.61.1
 
 - In this repository the queue's map is replaced by Narratives: a list of the narratives and a page for each with its issues as an outline of what came out of what, links to other narratives said in words. The agent reads it at `/queue/narratives`, `/queue/narratives/ID` and `/queue/narratives/ID/open`; `/queue/map` is gone. The package is unchanged. Nothing to adapt.
