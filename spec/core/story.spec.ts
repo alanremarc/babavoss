@@ -237,6 +237,42 @@ test("an action declared an ask is offered to the person only, wherever it is bo
   expect(agent.told()).toEqual(["approved: false → true", "review.waiting: true → false"])
 })
 
+test("an ask that is an element of a list, at any depth, is kept from the agent as one that is a property is", async () => {
+  type Rows = { approved: string[] }
+
+  const approve = action({
+    name: "approve",
+    description: "Approve a row",
+    subject: { id: "string" },
+    inputs: {},
+    ask: true,
+    update: (m: Rows, { id }) => ({ model: { approved: [...m.approved, id] } }),
+  })
+  const pages = view([approve], {
+    "/": () => ({
+      rows: ["a", "b"].map((id) => ({ id, actions: [approve.bind({ id })] })),
+      pending: [approve.bind({ id: "a" }), [approve.bind({ id: "b" })]],
+    }),
+  })
+  const { agent, person } = story(
+    surface<Rows, { kind: "none" }, never>({
+      description: "Rows to approve",
+      init: () => ({ approved: [] }),
+      view: pages.view,
+      update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m }),
+      run: async () => {},
+      failed: () => ({ kind: "none" }),
+    })
+  )
+
+  expect(person.offered()).toEqual(["approve", "approve", "approve", "approve"])
+  expect(agent.offered()).toEqual([])
+  expect(agent.sees()).toEqual({ rows: [{ id: "a", actions: [] }, { id: "b", actions: [] }], pending: [[]] })
+  expect(JSON.stringify(agent.sees())).not.toContain("approve")
+  expect(await agent.call("/", "approve", { id: "a" })).toMatchObject({ outcome: "refused" })
+  expect(await person.call("/", "approve", { id: "a" })).toMatchObject({ outcome: "written" })
+})
+
 test("an update gives notices beside its model: each side notices them once, the agent not what its own call gave, and no view holds them", async () => {
   type Model = { n: number }
   const bump = action({

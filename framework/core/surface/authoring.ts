@@ -60,9 +60,12 @@ export function view<M, C>(actions: readonly Action<M, C>[], routes: Routes<M>) 
   }
 
   const asks = new Set(actions.filter((a) => a.ask).map((a) => a.name))
-  /** The view without the handles that are the person's alone, and with no handle marked as one. */
+  /** An ask, wherever it stands: a handle of an action this view declares one. */
+  const isAsk = (value: Json | undefined) =>
+    !!value && typeof value === "object" && !Array.isArray(value) && value.kind === "handle" && asks.has(String(value.name))
+  /** The view without the handles that are the person's alone, at any depth, lists included, and with no handle marked as one. */
   const unasked = (value: Json | undefined): Json | undefined => {
-    if (Array.isArray(value)) return value.map((v) => unasked(v) ?? null)
+    if (Array.isArray(value)) return value.filter((v) => !isAsk(v)).map((v) => unasked(v) ?? null)
     if (value && typeof value === "object" && value.kind === "handle") {
       const { ask, ...rest } = value
 
@@ -70,11 +73,7 @@ export function view<M, C>(actions: readonly Action<M, C>[], routes: Routes<M>) 
     }
     if (!value || typeof value !== "object") return value
 
-    return Object.fromEntries(
-      Object.entries(value).flatMap(([k, v]) =>
-        v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle" && asks.has(String(v.name)) ? [] : [[k, unasked(v)]]
-      )
-    )
+    return Object.fromEntries(Object.entries(value).flatMap(([k, v]) => (isAsk(v) ? [] : [[k, unasked(v)]])))
   }
 
   return {

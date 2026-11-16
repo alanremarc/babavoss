@@ -21,7 +21,7 @@ import { standingOf } from "babavoss/shell/ui/turn.ts"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 import { Again, useHeld } from "./primitives.tsx"
-import { FRESH, NEEDS, ROWS, sampleDoor, TABS, TITLES_BY_TAB } from "./samples.ts"
+import { FRESH, NEEDS, ROWS, sampleDoor, TABS } from "./samples.ts"
 
 const ICONS: Record<string, ReactNode> = {
   queue: <ListTodoIcon aria-hidden />,
@@ -256,7 +256,7 @@ function Drawer({ initial, rows = ROWS, open: opened = false }: { initial?: stri
   const [nextOpen, setNextOpen] = useState(opened)
   const [backed, setBacked] = useState(false)
   const fresh = new Set(FRESH)
-  const channels = channelsOf(inView(rows, shown), TABS, rows.length ? NEEDS : [], fresh, "babavoss", TITLES_BY_TAB)
+  const channels = channelsOf(inView(rows, shown), TABS, rows.length ? NEEDS : [], fresh, "babavoss")
   const channel: Channel | undefined = entered && channels.find((c) => c.key === entered.key)
 
   return (
@@ -328,6 +328,11 @@ function Connection() {
         <Overlay>
           <RefusedAlert reason="Lane 1 is delivering issue 4" dismiss={() => {}} />
           <PointedAlert label="Queue" route="/issues/7" go={() => {}} dismiss={() => {}} />
+        </Overlay>
+      </State>
+      <State label="pointed to a long path: it wraps beside the buttons, never under them" wide className="relative block h-28 overflow-hidden p-0">
+        <Overlay>
+          <PointedAlert label="Queue" route="/narratives/release-hardening/issues/128/iterations/3/decisions/the-second-pass-on-the-lane-layout" go={() => {}} dismiss={() => {}} />
         </Overlay>
       </State>
     </States>

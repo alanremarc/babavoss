@@ -59,7 +59,7 @@ it("home lists each thing once: the open tabs, the surfaces with none open, the 
     ["surface", "surface lab"],
     ["broken", "surface bad"],
   ])
-  expect(rows.map(doesOf)).toEqual([{ enter: "Go to tab", other: "Open another" }, { enter: "Open in new tab" }, {}])
+  expect(rows.map(doesOf)).toEqual([{ enter: "Go to tab", other: "Open another tab" }, { enter: "Open in new tab" }, {}])
   // A tab whose surface cannot be opened again offers no other thing.
   expect(doesOf(rowsOf([], [{ at: "/tabs/1", surface: "gone", label: "Gone" }])[0]!)).toEqual({ enter: "Go to tab" })
 })

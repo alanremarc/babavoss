@@ -3,7 +3,8 @@
 // surfaces to open, the settings among them, the open tabs to switch to. A surface's actions and places are in its tab's menu, never here. Typing
 // filters them; arrows and Enter choose. Escape clears what is typed, then returns to the tab shown before. Its shortcut,
 // ⌘P or Ctrl+P by default, goes home from anywhere, and from home back. A surface that does not load is listed, broken,
-// and cannot be opened. Its footer says whose page it is, and when a later babavoss is out.
+// and cannot be opened. Its footer says whose page it is, and when a later babavoss is out; beside home's shortcut, the
+// command key with Enter, where the chosen line is an open tab whose surface opens another.
 import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "../../kit/cn.ts"
 import type { Handle } from "../../core/index.ts"
@@ -14,11 +15,15 @@ import type { Standing as TurnStanding } from "./turn.ts"
 import { doesOf, rowsOf, type HomeRow, type SurfaceEntry } from "./home.ts"
 import { named } from "./commands.ts"
 import { HOME } from "./pointing.ts"
-import { SEARCH_MARK } from "./shortcuts.ts"
+import { mac, SEARCH_MARK } from "./shortcuts.ts"
+import { shown } from "../settings/src/keys.ts"
 import { MARK, standing, type TabNeed } from "./tabs.tsx"
 
 /** An open tab as home offers it, newest first. */
 export type TabEntry = { at: string; n: number; surface: string; label: string; icon: ReactNode; needs?: TabNeed[]; broken?: string; mark?: keyof typeof MARK }
+
+/** What Enter with the command key is, as the person reads it on this platform: ⌘Enter, or Ctrl+Enter. */
+const ANOTHER = shown("mod+enter", mac)
 
 /** Home's search, which the shortcut focuses. */
 export const SEARCH = `#content-${HOME} [cmdk-input]`
@@ -101,13 +106,14 @@ function Does({ row }: { row: HomeRow }) {
 /**
  * Home's page: the root's title, then one list of what the shell has, each thing once: the open tabs, then the surfaces with
  * none open. A line names the thing and says at its end what Enter does on it. Enter with the
- * command key opens another tab of an open tab's surface.
+ * command key opens another tab of an open tab's surface, which the footer says while such a line is chosen.
  */
 export function Home({ title, notice, surfaces, icons, tabs, keys, harness, disabled, loading, launch, select, leave }: Props) {
   const [search, setSearch] = useState("")
   const [picked, setPicked] = useState("")
   const rows = rowsOf(surfaces, tabs)
   const chosen = rows.find((row) => row.value === picked)
+  const other = chosen && !disabled ? doesOf(chosen).other : undefined
   const tabOf = (at: string) => tabs.find((tab) => tab.at === at)
 
   return (
@@ -190,6 +196,11 @@ export function Home({ title, notice, surfaces, icons, tabs, keys, harness, disa
         <span className="whitespace-nowrap">
           <CommandShortcut className="ml-0 tracking-normal">{keys}</CommandShortcut> Home
         </span>
+        {other && (
+          <span className="whitespace-nowrap">
+            <CommandShortcut className="ml-0 tracking-normal">{ANOTHER}</CommandShortcut> {other}
+          </span>
+        )}
       </About>
     </section>
   )

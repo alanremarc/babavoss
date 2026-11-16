@@ -2,6 +2,12 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.56.0
+
+- Breaking: an ask inside a list is kept from the agent, as one that is an object's property always was; it used to reach the agent as an ordinary action it could call. A surface that relied on the agent calling such an action must offer it as an ordinary one.
+- Breaking: `laterRelease` is gone from `babavoss/core/update.ts`. `latestRelease` gives the latest release whatever runs, and `running()` the package's version as it is now; the runtime's `latest` option gives the latest release, unfiltered. A later release is told against the version running, so a root whose package was updated under it no longer offers the release it runs.
+- A surface broken by importing a file that does not exist comes back by itself once the file is made, where the file is under `surfaces/`. Nothing to adapt.
+
 ## 0.55.0
 
 - The mark is redrawn: two eyes of one size on the sphere, under a lens that stays at its middle. The head rests turned to the right, so at rest the left eye, near the middle, is whole and round and the right one smaller and narrower; as the head turns, an eye grows towards the middle and shrinks towards the edge. The two circles of unequal size are gone.

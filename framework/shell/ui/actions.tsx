@@ -10,6 +10,7 @@ import { XIcon } from "lucide-react"
 import { DropdownKit, SearchMenu, type MenuItem } from "../../kit/layouts/menu.tsx"
 import type { Args, View } from "../../core/surface/view.ts"
 import {
+  aboveOf,
   dotted,
   foundItems,
   indexOf,
@@ -101,10 +102,11 @@ function useModel({
   menu?: { notices: string[]; controls: MenuItem[] }
 }): Model {
   // The surface's root, where the tab is, and the place above it: a route that is no path of the surface offers nothing.
+  // The place above is read only where a view known names it, so a parent path with no view is never asked for.
   const up = parentOf(route)
   const root = useView(door, "/")
   const here = useView(door, route === "/" ? undefined : route)
-  const above = useView(door, up === undefined || up === "/" ? undefined : up)
+  const above = useView(door, aboveOf(route, [root, here]))
   const found = useIndex(door.read, !!menu)
   const shown = title ?? named(name)
   const atRoot = offered("/", root)

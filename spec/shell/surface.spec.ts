@@ -129,6 +129,10 @@ describe("the shell surface", () => {
     expect(story(shell({}, BABA)).agent.sees("/")).toEqual({ title: "baba", empty: EMPTY, surfaces: own, tabs: [], activity: { at: "/activity" } })
     expect(EMPTY).toContain("bun run baba new NAME")
     expect(story(shell({})).agent.sees("/")).toEqual({ title: "baba", missing: MISSING, surfaces: own, tabs: [], activity: { at: "/activity" } })
+    // The root is named by its title, the configuration's or the project directory's, to the agent and the person alike.
+    const titled = story(shell({}, BABA, {}, undefined, "Billing desk"))
+
+    expect([titled.agent.sees("/")!.title, titled.person.sees("/")!.title]).toEqual(["Billing desk", "Billing desk"])
   })
 
   it("restores its tabs with their surfaces' models and starts their commands again", async () => {
@@ -440,6 +444,51 @@ describe("the shell surface", () => {
     expect(agent.told()).toEqual(["- need: the person, at /asker, to decide", "- need: you, at /asker, to draft"])
   })
 
+  it("counts to the person at / the asks each tab offers anywhere in its tree, so a tab not shown is dotted; the agent is told none", async () => {
+    type Deep = { open: number[] }
+    const answer = action({
+      name: "answer",
+      description: "answer",
+      subject: { n: "number" },
+      inputs: {},
+      ask: true,
+      update: (m: Deep, { n }): Update<Deep, never> => ({ model: { open: m.open.filter((o) => o !== n) } }),
+    })
+    const pose = action({
+      name: "pose",
+      description: "pose",
+      subject: {},
+      inputs: { n: "number" },
+      update: (m: Deep, { n }): Update<Deep, never> => ({ model: { open: [...m.open, n] } }),
+    })
+    // An ask two places below /, where the tab's first screen does not offer it, and listed again in its group.
+    const deep = view([answer, pose], {
+      "/": () => ({ title: "Deep", groups: [{ at: "/group" }], pose: pose.bind({}) }),
+      "/group": (m) => ({ items: m.open.map((n) => ({ at: `/group/${n}`, answer: answer.bind({ n }) })) }),
+      "/group/:n": (m, { n }) => ({ at: `/group/${n}`, ...(m.open.includes(Number(n)) && { answer: answer.bind({ n: Number(n) }) }) }),
+    })
+    const asker = surface<Deep, { kind: "none" }, never>({
+      description: "asks deep",
+      init: () => ({ open: [] }),
+      update: (m, msg) => (msg.kind === "call" ? deep.update(m, msg) : { model: m }),
+      view: deep.view,
+      run: async () => {},
+      failed: () => ({ kind: "none" }),
+    })
+    const { agent, person } = story(shell({ asker, counter }, BABA))
+    const counted = () => (person.sees()!.tabs as { at: string; asks?: number }[]).map((t) => [t.at, t.asks])
+
+    await agent.call("/", "open", { surface: "counter" })
+    await agent.call("/", "open", { surface: "asker" })
+    expect(counted()).toEqual([["/counter", undefined], ["/asker", undefined]])
+    await agent.call("/asker", "pose", { n: 1 })
+    await agent.call("/asker", "pose", { n: 2 })
+    expect(counted()).toEqual([["/counter", undefined], ["/asker", 2]])
+    expect((agent.sees()!.tabs as object[])[1]).not.toHaveProperty("asks")
+    await person.call("/asker/group/1", "answer", { n: 1 })
+    expect(counted()).toEqual([["/counter", undefined], ["/asker", 1]])
+  })
+
   it("gives a tab's notices with the tab's path whole and its surface named", async () => {
     type Said = { n: number }
     const say = action({
@@ -469,6 +518,19 @@ describe("the shell surface", () => {
       { text: "said there", at: "/sayer/things/1", from: "sayer" },
     ])
     await r.stop()
+  })
+
+  it("keeps the title a closed tab had, which its activity says, across a restart", async () => {
+    const s = story(shell({ counter }, BABA))
+
+    await s.agent.call("/", "open", { surface: "counter" })
+    await s.agent.call("/counter", "bump", { by: 1 })
+    await s.person.call("/", "close", { n: 1 })
+    await s.restart()
+
+    const rows = s.agent.sees("/activity")!.entries as { tab?: string; title?: string }[]
+
+    expect(rows.filter((r) => r.tab === "/tabs/1").map((r) => r.title)).toEqual(["Counter"])
   })
 
   it("names tabs and paths, and refuses bad surface names", () => {

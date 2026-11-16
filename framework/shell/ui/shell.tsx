@@ -4,7 +4,7 @@
 // notifications. Below it a tab's content fills the rest, or home, the shell's own page (home.tsx). A tab the person opens becomes
 // theirs to look at; one the agent opens takes its place beside home, marked until looked at, and the person stays where
 // they are. A tab that is broken, needs someone, offers an ask or holds a notice not yet seen is marked in the strip and
-// on home, from / where the shell gathers who is needed. Each notice heard while the page is open is a toast that then
+// on home, from / where the shell gathers who is needed and counts each tab's asks. Each notice heard while the page is open is a toast that then
 // goes into the notifications' button, and their drawer keeps the notices and all activity (notifications.tsx).
 // The URL is the surface path: / home, also where no tab is, a tab's address and its route; the address is /NAME where
 // the tab holds its surface's name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the agent points to a place, the
@@ -41,8 +41,8 @@ import { standingOf } from "./turn.ts"
  * drawers its frame opens for the inputs of the actions they are named for.
  */
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode; drawers?: Drawers }>
-/** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
-type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
+/** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps; `asks`, how many it offers the person anywhere in it. */
+type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string; asks?: number }
 /** A tab that is needed, as / gathers it. */
 type Need = { at: string; surface: string } & TabNeed
 type RootView = { title: string; needs?: Need[]; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
@@ -123,7 +123,8 @@ export function Shell({ surfaces: project }: { surfaces: Registry }) {
     needs: (root?.needs ?? []).filter((need) => need.at === row.at).map(({ who, why }) => ({ who, why })),
     ...(row.broken !== undefined && { broken: row.broken }),
   }))
-  const waits = (at: string) => asks.count(at) > 0 || noticesIn(at, unseen).length > 0
+  // A tab waits on the person where it offers them an ask, at any depth as / counts them, or where it is shown, or holds a notice not seen.
+  const waits = (at: string) => (rows.find((r) => r.at === at)?.asks ?? 0) > 0 || asks.count(at) > 0 || noticesIn(at, unseen).length > 0
   // Who hears each notice as it comes: the notifications.
   const [hearers] = useState(() => new Set<(notice: Heard) => void>())
   const notices = useMemo(

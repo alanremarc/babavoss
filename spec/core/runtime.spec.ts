@@ -659,6 +659,17 @@ it("tells the version the package says when it is told, not the one the runtime 
   expect(await (await fetch(base + "/", { headers: { accept: "text/html" } })).text()).toContain('<meta name="babavoss:version" content="1.1">')
 })
 
+it("says a later release is out against the version it runs, so a package taken while it runs is no longer told as later", async () => {
+  const dir = scratch()
+  const { base } = await started(dir, { latest: async () => "1.1" })
+  const page = async () => (await fetch(base + "/", { headers: { accept: "text/html" } })).text()
+
+  await poll(page).toContain('<meta name="babavoss:update" content="1.1">')
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1.1" }))
+  expect(await page()).toContain('<meta name="babavoss:version" content="1.1">')
+  expect(await page()).not.toContain("babavoss:update")
+})
+
 it("reads the version from the package beside the root entry", () => {
   const dir = scratch()
   const entry = join(dir, "scripts/open.ts")
