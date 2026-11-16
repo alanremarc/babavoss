@@ -9,8 +9,8 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { action, detail, surface, view, type Notice, type Update } from "babavoss/core/index.ts"
 import { delta, masked, said, size, sum, together, type Delta, type Size } from "./measure.ts"
-import { play, type Play, type Played } from "./play.ts"
-import { GROUPS, SCENARIOS, slow, type Scenario } from "./scenarios.ts"
+import { play, swept, type Play, type Played } from "./play.ts"
+import { GROUPS, SCENARIOS, type Scenario } from "./scenarios.ts"
 import { factsOf, listed, said as factsSaid, shape, type Shape } from "./shape.ts"
 
 /** The tellings as pinned: each scenario's texts, step by step, and when. */
@@ -20,14 +20,16 @@ export type Pin = { t: number; texts: Record<string, string[][]> }
  * play did not end; `shape`: the demo's surfaces as the last play read them.
  */
 export type Model = { plays: Play[]; playing: boolean; again?: boolean; pin?: Pin; failure?: string; shape?: Shape[] }
-/** `played`: some scenarios played, the rest kept as they were; `partial`, the play goes on with those that take real time. */
-export type Event = { kind: "changed" } | { kind: "played"; plays: Play[]; shape?: Shape[]; partial?: true } | { kind: "unplayed"; error: string } | { kind: "none" }
+/** `played`: some scenarios played, the rest kept as they were. */
+export type Event = { kind: "changed" } | { kind: "played"; plays: Play[]; shape?: Shape[] } | { kind: "unplayed"; error: string } | { kind: "none" }
 export type Command = { kind: "watch" } | { kind: "play" }
 type Result = Update<Model, Command>
 
 const FRAMEWORK = dirname(fileURLToPath(import.meta.resolve("babavoss/package.json")))
 /** What the told texts are made of: the framework's code, its command, baba's words, and the demo. */
 const WATCHED = [join(FRAMEWORK, "framework/core"), join(FRAMEWORK, "framework/shell/src"), join(FRAMEWORK, "framework/shell/scripts"), join(FRAMEWORK, "skill"), join(FRAMEWORK, "bin"), fileURLToPath(new URL("../demo", import.meta.url))]
+/** How long a play may take before it is stopped and said to have failed: far longer than one takes, so only a play that died meets it. */
+export const PLAY_MS = 120_000
 const HOW =
   "Each scenario is played on the demo project through the framework's own hook, word and runtime, again whenever their code changes, so this is what an agent is given now. " +
   "A step's path has its texts whole, and its page what the person's page showed after it; /demo is the demo project's shape. " +
@@ -151,13 +153,14 @@ const stepWhole = (m: Model, play: Play, n: number) => {
   }
 }
 
-/** What the person's page showed after a step, in a line: the tab in front and the others, and an at to their views. */
+/** What the person's page showed after a step, in a line: the tab in front and the others, or home in front, and an at to their views. */
 const pageRow = (step: Played, at: string) => {
   const { tabs, shown, asleep } = step.page ?? { tabs: [] }
 
   return {
     at: `${at}/page`,
     tabs: tabs.length ? tabs.map((t) => `${t.surface} ${t.at}${t.at === shown ? " (in front)" : ""}`) : "none open",
+    ...(tabs.length && !shown && { front: "home" }),
     ...(asleep && { asleep: true }),
   }
 }
@@ -261,8 +264,6 @@ function update(m: Model, event: Event): Result {
   const plays = SCENARIOS.flatMap((s) => event.plays.find((p) => p.name === s.name) ?? m.plays.find((p) => p.name === s.name) ?? [])
   const notices = noticed(m.plays, event.plays)
 
-  if (event.partial) return { model: { ...kept, plays, ...(event.shape && { shape: event.shape }) }, notices }
-
   const next = { ...kept, plays, playing: false, again: false, ...(event.shape && { shape: event.shape }) }
 
   return m.again ? { ...playing(next), notices } : { model: next, notices }
@@ -301,12 +302,16 @@ export default surface<Model, Event, Command>({
   view: pages.view,
   async run(command, send, signal) {
     if (command.kind === "watch") return watching(() => send({ kind: "changed" }), signal)
-    // Those that take real time are played beside the rest, and told once the rest are, so the page fills at once.
-    const later = Promise.all(SCENARIOS.filter(slow).map((s) => play(s, signal)))
-    const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.filter((s) => !slow(s)).map((s) => play(s, signal))), shape()])
 
-    send({ kind: "played", plays, shape: demo, ...(SCENARIOS.some(slow) && { partial: true as const }) })
-    if (SCENARIOS.some(slow)) send({ kind: "played", plays: await later })
+    // A play always ends, played or failed, so it is never left playing: one that does not end in time is stopped.
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(PLAY_MS)])
+    // What earlier plays of this root left, cut short or with the root reloaded or killed under them, goes first.
+    await swept()
+
+    const [plays, demo] = await Promise.all([Promise.all(SCENARIOS.map((s) => play(s, bounded))), shape()])
+
+    if (bounded.aborted && !signal.aborted) throw new Error(`the play did not end within ${PLAY_MS / 1000}s, and was stopped`)
+    send({ kind: "played", plays, shape: demo })
   },
   failed: (command, error) => (command.kind === "play" ? { kind: "unplayed", error } : { kind: "none" }),
 })

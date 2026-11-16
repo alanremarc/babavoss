@@ -149,6 +149,25 @@ test("real effects can be awaited with idle", async () => {
   expect(agent.sees()).toMatchObject({ items: ["One"] })
 })
 
+test("idle waits for finite work alone, not for a session command that runs on, as one following a store", async () => {
+  const following = surface<Model, Event, Command | { follow: true }>({
+    ...list,
+    start: () => [{ follow: true }],
+    session: (c) => "follow" in c,
+    run: async (command, send, signal) => {
+      if ("follow" in command) return new Promise<void>((done) => signal.addEventListener("abort", () => done(), { once: true }))
+      await Bun.sleep(5)
+      send({ kind: "added", text: command.text })
+    },
+    failed: (_, error) => ({ kind: "failed", error }),
+  })
+  const { agent, world } = story(following, { effects: "real" })
+
+  await agent.call("/", "fetch", { text: "One" })
+  await world.idle()
+  expect(agent.sees()).toMatchObject({ items: ["One"] })
+})
+
 test("restart keeps saved state and each actor's told record", async () => {
   const { agent, person, world, restart } = story(list)
 

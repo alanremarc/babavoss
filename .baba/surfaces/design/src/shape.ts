@@ -46,6 +46,17 @@ export const said = (facts: Facts) => [...facts].map(([k, fields]) => (fields.le
 /** Facts as listed, taken back. */
 export const listed = (lines: string[]): Facts => new Map(lines.map((line) => [line.split(": ")[0]!, line.split(": ")[1]?.split(" ") ?? []]))
 
+/**
+ * A handle's description said of any subject rather than the one it was offered for: each fixed argument's value written
+ * as its name in capitals, as the framework writes what is to be filled in, "Approve task N" for "Approve task 1".
+ */
+export const described = (h: Handle) =>
+  Object.entries(h.args ?? {}).reduce((text, [k, v]) => {
+    const value = String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+    return typeof v === "number" || typeof v === "string" ? text.replace(new RegExp(`(?<![\\w-])${value}(?![\\w-])`, "g"), k.toUpperCase()) : text
+  }, h.description)
+
 /** Every path a view names under `at`, with the row it names it in. */
 function places(value: Json | undefined, out: { at: string; row: { [key: string]: Json | undefined } }[] = []) {
   if (Array.isArray(value)) value.forEach((v) => places(v, out))
@@ -128,7 +139,7 @@ export async function explore<M, E extends { kind: string }, C>(name: string, su
         if (answer.outcome === "refused") continue
         placeOf(seen.get(path)!).actions.set(h.name, {
           name: h.name,
-          description: h.description,
+          description: described(h),
           inputs: Object.keys(h.open),
           ...(h.ask && { ask: true as const }),
           ...(probe.agent.noticed().length > 0 && { notice: true as const }),

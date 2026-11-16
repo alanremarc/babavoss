@@ -55,12 +55,13 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
 
   hear()
   const barrier = () => running.settled()
+  // Idle is when no finite work is left: a session command, as one that follows a store, runs on for the surface's life.
   const idle = async () => {
     await barrier()
-    if (running.busy() || running.jobs().length)
+    if (running.jobs().length)
       await new Promise<void>((resolve) => {
         const off = running.subscribe(() => {
-          if (!running.busy() && !running.jobs().length) {
+          if (!running.jobs().length) {
             off()
             resolve()
           }

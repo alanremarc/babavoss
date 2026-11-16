@@ -43,7 +43,7 @@ export type Step =
   | { kind: "reloaded" }
   /** The harness stops running the framework's hooks, or runs them again. */
   | { kind: "hooks"; on: boolean }
-  /** Time passes with no call, as while the agent thinks: real seconds, so a scenario with one is played after the rest. */
+  /** Time passes with no call, as while the agent thinks: seconds on the demo's clock, which pass at once. */
   | { kind: "pause"; seconds: number }
 
 /** A step as a script has it: `timing` says why what it was told may vary with timing, and so is recorded, not settled. */
@@ -51,8 +51,6 @@ export type Scripted = Step & { timing?: string }
 /** `group`: the canonical moments, or a kind of noise. */
 export type Scenario = { name: string; group: "canonical" | "noise"; title: string; about: string; steps: Scripted[] }
 export const GROUPS: Record<Scenario["group"], string> = { canonical: "Canonical", noise: "Noise" }
-/** Whether a scenario takes real time, and so is played after the rest. */
-export const slow = (s: Scenario) => s.steps.some((step) => step.kind === "pause")
 
 const opened = (...surfaces: string[]): Scripted[] => surfaces.map((surface) => ({ kind: "call", path: "/", handle: "open", args: { surface } }))
 
