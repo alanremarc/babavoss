@@ -4,7 +4,8 @@
 // unrecorded; or the shell's own opening, closing and pointing. A command's event gives entries only by its notices: what
 // a surface does on its own is told where it chose to tell it. /activity/notices is the notices alone. Time is the
 // message's own, stamped as it enters, a call by the run loop and a tab's event by the shell's run, so the update that
-// keeps it stays pure. The last KEPT entries are kept; the agent is never fed them. What the person has seen of the
+// keeps it stays pure. The last KEPT entries are kept; the agent is never fed them. An entry lives with the tab it is in:
+// when the tab closes its entries go with it, and the shell's own line that it closed stays. What the person has seen of the
 // notices is kept beside them, a mark the page sets, so a page opened later counts what is new from the log itself, and
 // sees a tab's notices alone, one by one.
 import { isPerson, type Args, type Call, type Json, type Notice, type View } from "../../core/index.ts"
@@ -23,8 +24,8 @@ export type Line = Omit<Entry, "n">
 /** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by their toast. */
 export type Seen = { upto: number; looked: number[] }
 
-/** The tabs an entry can be in: the address the open tab numbered n stands at, and the title a closed one had, where known. */
-export type Tabs = { at: (n: number) => string | undefined; title: (n: number) => string | undefined }
+/** The tabs an entry can be in: the address the open tab numbered n stands at. */
+export type Tabs = { at: (n: number) => string | undefined }
 
 /** How many entries are kept; an older one goes first. */
 export const KEPT = 200
@@ -58,6 +59,21 @@ export function record(kept: Entry[], lines: Line[]): Entry[] {
 
   return [...kept, ...lines.map((line, i) => ({ n: next + i, ...line }))].slice(-KEPT)
 }
+
+/** The tab an entry is in, by its number: none for the shell's own, which is about a tab but not in it. */
+export const tabOfEntry = (e: Entry): number | undefined => {
+  const m = e.own ? undefined : /^\/tabs\/(\d+)/.exec(e.at)
+
+  return m ? Number(m[1]) : undefined
+}
+
+/** The entries left once the tabs numbered `gone` are closed: what was in them goes with them; the shell's own lines stay. */
+export const without = (entries: Entry[], gone: (n: number) => boolean): Entry[] =>
+  entries.filter((e) => {
+    const n = tabOfEntry(e)
+
+    return n === undefined || !gone(n)
+  })
 
 /** What the shell held before a message: its tabs, by number and surface, and the number the next one opened takes. */
 type Held = { tabs: { n: number; surface: string }[]; next: number }
@@ -183,10 +199,9 @@ export const stamp = (when: number): string => new Date(when).toISOString().repl
 /**
  * /activity, newest first, PAGE at a time, or with `notices` the notices alone, at /activity/notices: `upto` the number
  * of the newest entry shown, the newest by default; `earlier` names the page before where there is one. `kind` is notice
- * where a surface said it, call for the mechanical line; `at` is null where the entry's tab is closed; `tab` is the tab an
- * entry is in, closed or not, absent for the shell's own, and `title` the title a closed one had, where it is known. An
- * entry keeps its place by tab number; `tabs` gives the address an open tab stands at now, which the entry's place and tab
- * are said by, and a closed tab's title; a closed tab is said by its number.
+ * where a surface said it, call for the mechanical line; `tab` is the tab an entry is in, absent for the shell's own; `at`
+ * is null in the shell's own line about a tab now closed, whose entries went with it. An entry keeps its place by tab
+ * number; `tabs` gives the address an open tab stands at now, which the entry's place and tab are said by.
  */
 export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = false): View | undefined {
   if (upto !== undefined && (!Number.isInteger(upto) || upto < 1)) return undefined
@@ -202,12 +217,10 @@ export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = 
 
     return !m ? at : address ? address + m[2] : null
   }
-  const tab = (e: Entry): { tab: string; title?: string } | undefined => {
-    const m = e.own ? undefined : /^\/tabs\/(\d+)/.exec(e.at)
-    const at = m && tabs.at(Number(m[1]))
-    const title = m && !at ? tabs.title(Number(m[1])) : undefined
+  const tab = (e: Entry): { tab: string } | undefined => {
+    const n = tabOfEntry(e)
 
-    return m ? { tab: at ?? m[0], ...(title !== undefined && { title }) } : undefined
+    return n === undefined ? undefined : { tab: tabs.at(n) ?? `/tabs/${n}` }
   }
   const row = (e: Entry) => ({
     n: e.n,
@@ -224,11 +237,10 @@ export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = 
   return {
     at: upto === undefined ? base : `${base}/${upto}`,
     about: notices
-      ? "what the surfaces chose to say in this session, newest first, by who caused it; tab is the tab it is in, at null where that is closed, " +
-        "and title the title it had"
+      ? "what the surfaces chose to say in this session's open tabs, newest first, by who caused it; tab is the tab it is in"
       : "who did what in this session, newest first: the person, an agent, or a surface by itself; kind is notice where a surface said it, " +
-        "call where a call said nothing; tab is the tab it is in, absent for the shell's own, at null where the tab is closed, " +
-        "and title the title it had; id is the name a call's caller gave it, where it gave one",
+        "call where a call said nothing; tab is the tab it is in, absent for the shell's own; a closed tab's entries go with it, " +
+        "and the shell's line that it closed has at null; id is the name a call's caller gave it, where it gave one",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),

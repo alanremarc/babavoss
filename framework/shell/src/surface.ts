@@ -23,17 +23,14 @@
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
 import { action, handles, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
-import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, type Entry, type Seen, type Tabs } from "./activity.ts"
+import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, without, type Entry, type Seen, type Tabs } from "./activity.ts"
 
 /**
  * `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved.
  * `named`: the tab holds its surface's name, so /NAME addresses it.
  */
 export type Tab = { n: number; surface: string; model: unknown; broken?: string; named?: true }
-/**
- * A tab closed, by whom, whether it held its surface's name, and the title it had: what a path into it is answered with,
- * and what names its channel in the activity.
- */
+/** A tab closed, by whom, whether it held its surface's name, and the title it had: what a path into it is answered with. */
 export type Closed = { n: number; surface: string; by: "person" | "agent"; named?: true; title?: string }
 /** Where the agent last pointed the person, and how many times it has: the page goes there when the count moves. */
 export type Pointed = { at: string; n: number }
@@ -338,7 +335,7 @@ export function shell(
   const seen = action({
     name: "seen",
     quiet: true,
-    description: "the person saw every notice up to n, as on opening their notifications",
+    description: "the person saw every notice up to n",
     subject: {},
     inputs: { n: "number" },
     ask: true,
@@ -347,20 +344,19 @@ export function shell(
   const looked = action({
     name: "looked",
     quiet: true,
-    description: "the person looked at notice n alone, as by clicking its toast or opening its tab's channel",
+    description: "the person looked at notice n alone, as by opening the drawer of the tab it is in",
     subject: {},
     inputs: { n: "number" },
     ask: true,
     update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({ model: { ...model, seen: lookAt(model.seen ?? { upto: 0, looked: [] }, n) } }),
   })
-  /** The tabs activity says an entry's place by: the address of the open tab numbered n, and the title a closed one had. */
+  /** The tabs activity says an entry's place by: the address of the open tab numbered n. */
   const opened = (model: ShellModel): Tabs => ({
     at: (n) => {
       const tab = model.tabs.find((t) => t.n === n)
 
       return tab && addressOf(tab)
     },
-    title: (n) => model.closed?.findLast((c) => c.n === n)?.title,
   })
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
@@ -512,7 +508,8 @@ export function shell(
 
       return {
         next: kept.next,
-        activity,
+        // Entries of a tab closed before entries went with their tab, or not restored, go now.
+        activity: without(activity, (n) => !tabs.some((t) => t.n === n)),
         seen: seenFrom((saved as { seen?: unknown }).seen, activity),
         ...(Array.isArray(closed) && {
         closed: closed
@@ -550,8 +547,11 @@ export function shell(
             }
       const notices = result.notices?.map((n) => (typeof n === "string" || typeof n.at !== "string" ? n : { ...n, at: kept(model, n.at) }))
       const lines = linesOf(model, numbered, message.t ?? log.at(-1)?.when ?? 0, notices)
+      // A closed tab's entries go with it, once its own line is kept: that line is the newest, so numbers never repeat.
+      const gone = (n: number) => model.tabs.some((t) => t.n === n) && !result.model.tabs.some((t) => t.n === n)
+      const activity = without(record(log, lines), gone)
 
-      return !lines.length ? result : { ...result, model: { ...result.model, activity: record(log, lines) } }
+      return !lines.length && activity.length === log.length ? result : { ...result, model: { ...result.model, activity } }
     },
     absent: (model, path) => gone(model, path),
     view(model, path, actor): View | undefined {
@@ -571,13 +571,15 @@ export function shell(
         const person = actor !== undefined && isPerson(actor)
         const rows = model.tabs.map((tab) => said(tab, actor))
         const needs: Need[] = rows.flatMap(({ needs }, i) => needs.map((need) => ({ at: addressOf(model.tabs[i]!), surface: model.tabs[i]!.surface, ...need })))
-        const { title, ...rest } = home
+        const { title, ...all } = home
+        // Pointing is the agent's, at the person: the person is not offered it, so home's menu, drawn from this view, has it not.
+        const { show: _, ...rest } = all
         const tabs = (home.tabs as View[]).map((row, i) => {
           const asks = person && rows[i]!.row.broken === undefined ? asksIn(model.tabs[i]!, actor) : 0
 
           return { ...row, ...rows[i]!.row, ...(asks && { asks }) }
         })
-        const root = { title, ...(needs.length && { needs }), ...rest, tabs }
+        const root = { title, ...(needs.length && { needs }), ...(person ? rest : all), tabs }
 
         // A tab's detail stays marked only in the agent's present, which counts it; the person reads it as it is.
         return person ? revealed(root) : root

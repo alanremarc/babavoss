@@ -105,7 +105,7 @@ describe("the activity log", () => {
   it("restores none from state kept before it, and only what reads as an entry", () => {
     expect(restored(undefined)).toEqual([])
 
-    const entry: Entry = { n: 1, when: T, who: "person", surface: "queue", at: "/tabs/2", what: "opened" }
+    const entry: Entry = { n: 1, when: T, who: "person", surface: "queue", at: "/", what: "bump" }
 
     expect(restored([entry, { n: 2, what: "half" }, null])).toEqual([entry])
 
@@ -162,20 +162,32 @@ describe("the shell's activity", () => {
     ])
   })
 
-  it("keeps a command's notices as the surface's, and names no place in a tab once it is closed, but still the tab it was in", async () => {
+  it("keeps a command's notices as the surface's, and lets a tab's entries go with it when it closes, the shell's own lines staying", async () => {
     const { agent, world } = story(shell({ things }))
 
     await agent.call("/", "open", { surface: "things" })
+    await agent.call("/", "open", { surface: "things" })
     await agent.call("/tabs/1", "ring")
     await world.settle({ kind: "tab", n: 1, event: { kind: "rang" } })
-    await agent.call("/", "close", { n: 1 })
+    await agent.call("/tabs/2", "bump", { by: 1, why: "x" })
 
-    expect((agent.sees("/activity")!.entries as Row[]).map((r) => [r.who, r.at, r.tab, r.what])).toEqual([
-      ["agent", null, undefined, "closed"],
-      ["surface", null, "/tabs/1", "Rang"],
-      ["agent", null, "/tabs/1", "ring"],
-      ["agent", null, undefined, "opened"],
+    expect((agent.sees("/activity")!.entries as Row[]).map((r) => [r.n, r.who, r.tab, r.what])).toEqual([
+      [5, "agent", "/tabs/2", 'bump by=1 why=x'],
+      [4, "surface", "/things", "Rang"],
+      [3, "agent", "/things", "ring"],
+      [2, "agent", undefined, "opened"],
+      [1, "agent", undefined, "opened"],
     ])
+    await agent.call("/", "close", { n: 1 })
+    expect((agent.sees("/activity")!.entries as Row[]).map((r) => [r.n, r.at, r.tab, r.what])).toEqual([
+      [6, null, undefined, "closed"],
+      [5, "/tabs/2", "/tabs/2", 'bump by=1 why=x'],
+      [2, "/tabs/2", undefined, "opened"],
+      [1, null, undefined, "opened"],
+    ])
+    expect(agent.sees("/activity/notices")).toMatchObject({ kept: 0 })
+    await agent.call("/tabs/2", "bump", { by: 1, why: "y" })
+    expect((agent.sees("/activity")!.entries as Row[])[0]!.n).toBe(7)
   })
 
   it("shows PAGE at a time, newest first, and names the page before", async () => {
