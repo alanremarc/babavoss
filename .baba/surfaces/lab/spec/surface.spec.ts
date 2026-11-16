@@ -365,12 +365,14 @@ test("a record is forgotten whole from the list of runs, the shown one once it i
 })
 
 test("on start, what a lab that is gone left is swept: every run but the one shown here and those of a lab still running", async () => {
-  const running = { ...KEPT, id: "2026-11-15T09-00-00-cd34", lab: process.ppid }
+  // Another lab still running is a process of this user's that lives through the story, as the spec's parent may not.
+  const other = Bun.spawn(["sleep", "30"])
+  const running = { ...KEPT, id: "2026-11-15T09-00-00-cd34", lab: other.pid }
   const gone = { ...KEPT, id: "2026-11-15T08-00-00-ef56", lab: 2 ** 22 + 1 }
   const where = place([KEPT, running, gone])
 
   story(lab(fakeHarness().harness, where.runs), { model: { next: 4, runs: [], run: KEPT } as unknown as Model, effects: "real" })
-  await until(() => where.swept.length === 3)
+  await until(() => where.swept.length === 3).finally(() => other.kill())
   expect(where.swept).toEqual([
     { id: KEPT.id, spared: true },
     { id: running.id, spared: true },
