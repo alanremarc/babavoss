@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs"
 import { beforeAll, expect, test } from "bun:test"
 import { story, whole, type Json } from "babavoss/core/index.ts"
 import { TELLS } from "babavoss/core/hook.ts"
+import { QUIET_LINE } from "babavoss/core/runtime/turn.ts"
 import design, { type Model } from "../src/surface.ts"
 import { play, WORD, type Page, type Play } from "../src/play.ts"
 import { SCENARIOS } from "../src/scenarios.ts"
@@ -265,22 +266,13 @@ test("the page reads every told text without changing a character of it; a sessi
   expect(start[1]!.text.split("\n")[0]).toMatch(/^The shell of .* answered:$/)
 })
 
-test("what takes real time is played after the rest: the rest are shown at once, the play under way until it is in", async () => {
-  const { agent, world } = story(design)
-  const quick = plays.filter((p) => !SCENARIOS.find((s) => s.name === p.name)!.steps.some((step) => step.kind === "pause"))
+test("a pause passes at once on the demo's clock, and the framework finds it passed: the call after it is told the hooks are quiet", async () => {
+  const began = Date.now()
+  const quiet = await play(SCENARIOS.find((s) => s.name === "quiet")!)
+  const after = quiet.steps.findIndex((s) => s.did.includes("seconds pass")) + 1
 
-  expect(quick.length).toBeLessThan(plays.length)
-  await world.settle((c) => c.kind === "watch", { kind: "changed" })
-  await world.send((c) => c.kind === "play", { kind: "played", plays: quick, partial: true })
-
-  const rows = () => (agent.sees() as { scenarios: Row[] }).scenarios
-
-  expect(agent.sees()).toMatchObject({ playing: true })
-  expect(rows().filter((r) => r.tokens !== undefined).length).toBe(quick.length)
-  await world.settle((c) => c.kind === "play", { kind: "played", plays: plays.filter((p) => !quick.includes(p)) })
-  expect(agent.sees()).not.toHaveProperty("playing")
-  expect(rows().every((r) => r.tokens! > 0)).toBe(true)
-  expect(agent.noticed()).toEqual([])
+  expect(Date.now() - began).toBeLessThan(8000)
+  expect(quiet.steps[after]!.tellings[0]!.text.split("\n")[0]).toBe(QUIET_LINE)
 })
 
 test("the code changing plays again, and what then tells the agent otherwise is noticed", async () => {

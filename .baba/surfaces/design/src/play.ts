@@ -52,6 +52,9 @@ const FRAMEWORK = realpathSync(dirname(fileURLToPath(import.meta.resolve("babavo
 const BABA = join(FRAMEWORK, "bin/baba.ts")
 const SURFACES = realpathSync(fileURLToPath(new URL("../demo/surfaces", import.meta.url)))
 const BUILD = "build.txt"
+/** The demo's clock, which a pause puts ahead (clock.ts), and the file it reads, both in the demo's directory. */
+const CLOCK = fileURLToPath(new URL("./clock.ts", import.meta.url))
+const AHEAD = "clock"
 /** How long a reload is waited for before the step says it was not seen. */
 const RELOAD_MS = 10_000
 
@@ -133,18 +136,23 @@ function drawn(value: Json | undefined, address: string): Json {
 export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-design-")))
   const home = join(dir, ".babavoss")
-  // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are.
+  // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are. Every process of the
+  // demo reads the time by its clock; bun's options take no quoting, so it is preloaded from the demo's directory.
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     BABAVOSS_HOME: home,
     BABAVOSS_LATEST: "",
     BABAVOSS_SETTINGS: join(dir, "settings.json"),
     CLAUDE_CODE_SESSION_ID: SESSION,
+    BUN_OPTIONS: `--preload ${join(dir, "clock.ts")}`,
+    DESIGN_CLOCK: join(dir, AHEAD),
   }
+  let ahead = 0
 
   for (const key of ["CODEX_THREAD_ID", "BABAVOSS_BIN"]) delete env[key]
   mkdirSync(join(dir, ".baba"), { recursive: true })
   writeFileSync(join(dir, ".baba/package.json"), JSON.stringify({ name: "demo", private: true, type: "module" }))
+  cpSync(CLOCK, join(dir, "clock.ts"))
   if (scenario.steps.some((s) => s.kind === "code")) {
     // A copy the scenario may change, which finds the framework and the page's packages where the demo's own do.
     cpSync(SURFACES, join(dir, ".baba/surfaces"), { recursive: true, dereference: true })
@@ -363,7 +371,9 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         }
       }
       case "pause":
-        await nap(step.seconds * 1000)
+        // Passed at once, on the demo's clock.
+        ahead += step.seconds * 1000
+        writeFileSync(join(dir, AHEAD), String(ahead))
 
         return { who: "root", did: `${step.seconds} seconds pass with no call, as while the agent thinks`, tellings: [] }
       case "hooks":
