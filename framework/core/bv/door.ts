@@ -8,7 +8,7 @@ import { startRuntime } from "../runtime/runtime.ts"
 import { checkConfig, loadConfig } from "../config.ts"
 import { ADAPTERS } from "../harness/index.ts"
 import { findBaba } from "../provision.ts"
-import { laterRelease, updateNote } from "../update.ts"
+import { latestRelease, updateNote } from "../update.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenRoot } from "./bv.ts"
 
@@ -33,7 +33,7 @@ export async function main(root: RootDefinition) {
       }).unref()
 
     // Another process serves this session already. Under hot reload a process with nothing to do would stay, so it ends here.
-    const latest = at < 0 ? undefined : () => laterRelease(process.env.BABAVOSS_HOME!)
+    const latest = at < 0 ? undefined : () => latestRelease(process.env.BABAVOSS_HOME!)
 
     if (!(await startRuntime(root, ["--session", args[1]!], { command: args[2] ?? `bv ${root.name}`, successor, latest }))) process.exit(0)
 
