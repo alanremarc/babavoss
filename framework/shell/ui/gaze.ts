@@ -18,9 +18,12 @@ export const SPHERE = { x: 50, y: 50, radius: 70 }
 const APART = 0.28
 /** How far to the right the head is turned at rest, in radians. */
 export const TURNED = 0.25
-/** How much smaller the lens makes an eye for how far from the front it is; and the least it makes of one, however near the edge. */
-const LENS = 2.2
-const LENS_LEAST = 0.3
+/**
+ * How fast the lens makes an eye smaller as it leaves the front: its size is how near the front it is, to this power. One
+ * smooth curve from whole at the middle to nothing at the edge, so an eye that turns away shrinks all the way as it
+ * narrows, and never stops at a least size while it goes on narrowing.
+ */
+const LENS = 2.4
 export const EYES: Eye[] = [-1, 1].map((side) => ({ x: SPHERE.x + SPHERE.radius * Math.sin(side * APART), r: 18 }))
 export const REST: Gaze = { yaw: 0, pitch: 0, size: 1 }
 
@@ -35,7 +38,7 @@ export function drawn(eye: Eye, gaze: Gaze): Drawn {
   const x = sx * Math.cos(yaw) + depth * Math.sin(yaw)
   // How near the front the eye is: 1 at the middle, 0 at the edge and behind, where it is not seen.
   const z = Math.max(0, -sx * Math.sin(yaw) + depth * Math.cos(yaw))
-  const r = eye.r * gaze.size * Math.max(LENS_LEAST, 1 + LENS * (z - 1))
+  const r = eye.r * gaze.size * z ** LENS
 
   return {
     cx: SPHERE.x + x * SPHERE.radius,

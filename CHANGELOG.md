@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.59.1
+
+- The mark's lens is one smooth curve: an eye that turns away from the middle shrinks all the way to nothing at the sphere's edge as it narrows. It used to stop at a least size a third of the way round and go on narrowing, a sliver of fixed height. At rest the eyes are as they were. Nothing to adapt.
+
 ## 0.59.0
 
 - A caller may name a call: the request header `babavoss-call-id`, `CALL_ID_HEADER`, which `serviceClient` can send. The name is on the call, `Call.id`, and the shell's activity keeps it on the entry, given as `id` at `/activity`, so whoever made a call can tell its entry from another's made at the same moment. Nothing to adapt.
