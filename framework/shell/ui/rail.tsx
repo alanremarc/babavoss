@@ -81,10 +81,19 @@ export function Rail({
     }
   })
 
-  // The tab shown is kept in view, as is one just opened.
+  // The tab shown is kept in view, as is one just opened: the rail scrolls, never what holds it.
   useLayoutEffect(() => {
-    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" })
-  }, [active, tabs.length])
+    const element = list.current
+    const shown = element?.querySelector('[aria-selected="true"]')
+
+    if (!element || !shown) return
+
+    const a = shown.getBoundingClientRect()
+    const b = element.getBoundingClientRect()
+
+    if (column) element.scrollTop += a.top < b.top ? a.top - b.top : a.bottom > b.bottom ? a.bottom - b.bottom : 0
+    else element.scrollLeft += a.left < b.left ? a.left - b.left : a.right > b.right ? a.right - b.right : 0
+  }, [active, tabs.length, column])
 
   const keys = (event: KeyboardEvent) => {
     const buttons = [...list.current!.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
