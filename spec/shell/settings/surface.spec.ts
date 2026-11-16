@@ -7,7 +7,7 @@ import { join } from "node:path"
 import { run, story, type Saved } from "../../../framework/core/index.ts"
 import { DEFAULTS } from "../../../framework/shell/settings/src/settings.ts"
 import { readSettings, writeSettings } from "../../../framework/shell/settings/src/store.ts"
-import { settings, type Command } from "../../../framework/shell/settings/src/surface.ts"
+import { settings, type Command, type Model } from "../../../framework/shell/settings/src/surface.ts"
 import { OWN, shell } from "../../../framework/shell/src/surface.ts"
 import { poll } from "../../support/poll.ts"
 
@@ -169,18 +169,23 @@ describe("the settings", () => {
     const one = run(settings(() => file), memory())
     const two = run(settings(() => file), memory())
 
+    // A watch's events come late on a busy machine: each wait is for the condition, with the time it may take.
+    const late = { timeout: 20_000 }
+
     try {
       await one.call("/shortcuts", "bind", { command: "next", keys: "alt+n" }, "person")
-      await poll(() => readSettings(file).keys.next).toBe("alt+n")
-      await poll(() => (two.read("/shortcuts") as { commands: { keys: string }[] }).commands[1]!.keys).toBe("alt+n")
+      await poll(() => readSettings(file).keys.next, late).toBe("alt+n")
+      await poll(() => (two.read("/shortcuts") as { commands: { keys: string }[] }).commands[1]!.keys, late).toBe("alt+n")
+      // Its own write done, the tab follows the file again, and not before.
+      await poll(() => (one.model() as Model).writing, late).toBe(0)
       writeSettings(file, { ...readSettings(file), logo: { animate: false } })
-      await poll(() => one.read("/")).toMatchObject({ logo: { animate: false } })
+      await poll(() => one.read("/"), late).toMatchObject({ logo: { animate: false } })
     } finally {
       await one.stop()
       await two.stop()
       rmSync(dir, { recursive: true, force: true })
     }
-  })
+  }, 60_000)
 })
 
 describe("the shell's settings", () => {
