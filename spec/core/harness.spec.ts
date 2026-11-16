@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ADAPTERS, claude, claudeArgs, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, codex, fakeHarness, PLUGIN, trust, type HarnessEvent } from "../../framework/core/harness/index.ts"
+import { ADAPTERS, claude, claudeArgs, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, codex, codexArgs, codexCli, codexEvents, codexInjected, codexTurn, fakeHarness, PLUGIN, trust, type HarnessEvent } from "../../framework/core/harness/index.ts"
 import { VERSION } from "../../framework/core/update.ts"
 import type { Json } from "../../framework/core/index.ts"
 
@@ -282,7 +282,7 @@ test("each adapter reads its harness's hook input as the framework's moment, and
     expect(JSON.parse(adapter.hookOutput(tool, "told"))).toEqual({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: "told" } })
     expect(adapter.defaults.events).toEqual([...adapter.events])
   }
-  expect(codex.run).toBeUndefined()
+  expect(codex.run).toBeDefined()
 })
 
 test("a run of Claude Code loads the project's plugin for the session, so its hooks run however the folder is trusted", () => {
@@ -310,4 +310,85 @@ test("a session's project is trusted in its own home, so the project's plugin lo
   })
   rmSync(home, { recursive: true, force: true })
   rmSync(project, { recursive: true, force: true })
+})
+
+test("a run of Codex trusts the project and its hooks for that invocation alone, a process a turn, the later ones resuming the thread", () => {
+  const first = codexArgs({ project: "/runs/r1/project", model: "gpt-6-luna" })
+  const later = codexArgs({ project: "/runs/r1/project", model: "gpt-6-luna" }, "01a1e475")
+
+  expect(first.slice(0, 2)).toEqual(["codex", "exec"])
+  // Project hooks load only in a trusted project, and run only once reviewed: both are given here, never asked of the person.
+  for (const args of [first, later]) for (const flag of ["--json", "--trust", "--dangerously-bypass-hook-trust"]) expect(args).toContain(flag)
+  expect(first[first.indexOf("-C") + 1]).toBe("/runs/r1/project")
+  expect(later.slice(0, 4)).toEqual(["codex", "exec", "resume", "01a1e475"])
+  expect(later).not.toContain("-C")
+  expect(first.at(-1)).toBe("-")
+})
+
+test("Codex's stream reads as the framework's events, and what its hooks added is read from its session file by where it stands", () => {
+  const stream: Json[] = [
+    { type: "thread.started", thread_id: "01a1e475" },
+    { type: "item.completed", item: { id: "item_0", type: "error", message: "`--dangerously-bypass-hook-trust` is enabled." } },
+    { type: "item.started", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc '.babavoss/bin/baba /'", status: "in_progress" } },
+    { type: "item.completed", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc true", aggregated_output: "no", exit_code: 1 } },
+    { type: "item.completed", item: { id: "item_3", type: "agent_message", text: "done" } },
+  ]
+
+  expect(codexEvents({ type: "item.started", item: { id: "i", type: "command_execution", command: "/bin/zsh -lc true" } })).toMatchObject([{ input: "true" }])
+  expect(stream.flatMap(codexEvents)).toEqual<HarnessEvent[]>([
+    { kind: "call", id: "item_2", tool: "shell", input: ".babavoss/bin/baba /", word: true },
+    { kind: "result", id: "item_2", text: "no", error: true },
+    { kind: "reply", text: "done" },
+  ])
+  expect(codexTurn({ type: "turn.completed", usage: { input_tokens: 41_691, cached_input_tokens: 32_000, cache_write_input_tokens: 0, output_tokens: 108 } }, 900, 1)).toEqual({
+    kind: "turn",
+    ok: true,
+    text: "",
+    tokens: { input: 9691, cache_write: 0, cache_read: 32_000, output: 108 },
+    total: 0,
+    ms: 900,
+    calls: 1,
+  })
+  expect(codexTurn({ type: "turn.failed", error: { message: "usage limit" } }, 5, 0)).toMatchObject({ kind: "turn", ok: false, text: "usage limit" })
+
+  const developer = (text: string) => ({ type: "response_item", payload: { type: "message", role: "developer", content: [{ type: "input_text", text }] } })
+  const file: Json[] = [
+    developer("You are Codex."),
+    { type: "turn_context", payload: {} },
+    developer("This project has surfaces."),
+    { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Hi" }] } },
+    developer("What changed: tabs.1"),
+    { type: "response_item", payload: { type: "custom_tool_call_output", output: [] } },
+    developer("The person approved n=1"),
+    { type: "event_msg", payload: { type: "task_complete" } },
+    developer("Codex's own, between turns"),
+  ]
+
+  expect(codexInjected(file)).toEqual<HarnessEvent[]>([
+    { kind: "injected", event: "SessionStart", text: "This project has surfaces." },
+    { kind: "injected", event: "UserPromptSubmit", text: "What changed: tabs.1" },
+    { kind: "injected", event: "PostToolUse", text: "The person approved n=1" },
+  ])
+})
+
+test("a Codex session's home reaches the person's login file by a link, never a copy; release takes it back and keeps the transcripts", () => {
+  const own = temp()
+  const home = temp()
+
+  mkdirSync(join(own, ".codex"), { recursive: true })
+  writeFileSync(join(own, ".codex/auth.json"), "{}")
+
+  const harness = codexCli(own)
+
+  expect(harness.home(home)).toBe("the person's Codex login file, linked")
+  expect(lstatSync(join(home, ".codex/auth.json")).isSymbolicLink()).toBe(true)
+  mkdirSync(join(home, ".codex/sessions"), { recursive: true })
+  writeFileSync(join(home, ".codex/state_5.sqlite"), "")
+  harness.release(home)
+  expect(existsSync(join(own, ".codex/auth.json"))).toBe(true)
+  expect(existsSync(join(home, ".codex/state_5.sqlite"))).toBe(false)
+  expect(lstatSync(join(home, ".codex/auth.json"), { throwIfNoEntry: false })).toBeUndefined()
+  expect(existsSync(join(home, ".codex/sessions"))).toBe(true)
+  rmSync(own, { recursive: true, force: true })
+  rmSync(home, { recursive: true, force: true })
 })
