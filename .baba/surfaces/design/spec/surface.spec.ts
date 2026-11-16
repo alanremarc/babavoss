@@ -167,6 +167,13 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
     ["approve", true, true],
     ["reopen", true, true],
   ])
+  // An action's description is said of any task, not of the one the exploration reached.
+  expect(tasks.views[1]!.actions.map((a) => a.description)).toEqual([
+    "Note on task N what was done or found: a line",
+    "Mark task N done; the person reviews it",
+    "Approve task N",
+    "Reopen task N: it is not done",
+  ])
   // What the build's own command brings is in its facts too, as the plays saw it.
   expect(build).toMatchObject({ description: own.description, itself: ["watch"], views: [{ path: "/", actions: [{ name: "rerun", inputs: [] }] }] })
   expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why", "attention"]))
