@@ -4,6 +4,7 @@
 import { describe, expect, it } from "bun:test"
 import { handle, type View } from "../../framework/core/surface/view.ts"
 import {
+  aboveOf,
   actionItems,
   argsOf,
   dotted,
@@ -107,6 +108,15 @@ describe("a tab's menus from the surface", () => {
     expect(labelOf("/issues/2", undefined, placesOf(view))).toBe("two")
     expect(labelOf("/issues/1", { title: "Own" })).toBe("Own")
     expect([parentOf("/issues/3"), parentOf("/issues"), parentOf("/")]).toEqual(["/issues", "/", undefined])
+  })
+
+  it("reads the place above only where a view known names it, so a parent with no view is never asked for", () => {
+    const root: View = { narratives: [{ at: "/narratives/work" }], issues: [{ at: "/issues/1" }] }
+
+    expect(aboveOf("/narratives/work/runs", [root, undefined])).toBe("/narratives/work")
+    expect(aboveOf("/issues/1", [root, { at: "/issues/1" }])).toBeUndefined()
+    expect(aboveOf("/issues/1", [root, { back: { at: "/issues" } }])).toBe("/issues")
+    expect([aboveOf("/issues", [root]), aboveOf("/", [root])]).toEqual([undefined, undefined])
   })
 
   it("reads the tree breadth-first within its caps, and finds places and actions by every word", async () => {
