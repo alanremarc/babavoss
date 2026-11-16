@@ -11,12 +11,17 @@ import {
   freshIn,
   itemsOf,
   kindOf,
+  knownAfter,
   pinnedOf,
   placeIn,
   shellEntries,
   tabIn,
   tabLine,
+  UNHEARD,
+  unheardLine,
+  unheardPinned,
   waitingRows,
+  withUnheard,
   type Row,
 } from "../../framework/shell/ui/thread.ts"
 
@@ -99,6 +104,53 @@ describe("what a thread's foot pins", () => {
   it("on home, is what of the person's waits for the agent's next turn: their latest calls, as many as wait", () => {
     expect(waitingRows(ROWS, 2).map((r) => r.n)).toEqual([6, 2])
     expect(waitingRows(ROWS, 0)).toEqual([])
+  })
+
+  it("on home, is that the session's hooks are not heard, while they are not: never heard, or gone quiet, with what to do", () => {
+    const never = unheardPinned({ ever: false, since: 0 })!
+    const quiet = unheardPinned({ ever: true, since: 0 })!
+
+    expect(never).toMatchObject({ tone: "person", text: UNHEARD })
+    expect(never.detail).toStartWith("No hook of its harness has been heard.")
+    expect(quiet).toMatchObject({ tone: "person", text: UNHEARD })
+    expect(quiet.detail).toEndWith("Start a new session to get them back.")
+    expect(never.does ?? quiet.does).toBeUndefined()
+    // Heard again: nothing is pinned.
+    expect(unheardPinned(undefined)).toBeUndefined()
+  })
+})
+
+describe("home's thread", () => {
+  const at = (iso: string) => Date.parse(iso)
+
+  it("keeps each stretch of the hooks' silence the page has known as its own notice, by its time among the shell's entries", () => {
+    const rows = [
+      row(3, { when: "2026-11-16T12:05:00Z", at: "/tabs/3" }),
+      row(2, { when: "2026-11-16T12:01:00Z" }),
+      row(1, { when: "2026-11-16T12:00:00Z", at: null }),
+    ]
+    const known = [
+      { ever: false, since: at("2026-11-16T11:00:00.500Z") },
+      { ever: true, since: at("2026-11-16T12:03:00.250Z") },
+    ]
+    const thread = withUnheard(rows, known)
+
+    expect(thread.map((r) => r.n)).toEqual([3, -known[1]!.since, 2, 1, -known[0]!.since])
+    expect(thread[1]).toMatchObject({ kind: "notice", who: "surface", surface: "baba", at: null, when: "2026-11-16T12:03:00Z" })
+    expect(thread[1]!.what).toBe(`${UNHEARD}. Start a new session to get them back.`)
+    expect(thread[4]!.what).toBe(`${UNHEARD}.`)
+    expect(itemsOf(thread).map((i) => i.kind)).toEqual(["tab", "notice", "tab", "tab", "notice"])
+    expect(unheardLine(known[0]!)).toBe(`${UNHEARD}.`)
+  })
+
+  it("knows a stretch once, by when it began: a turn that says it again, as on a reload or a reconnect, adds none", () => {
+    const one = { ever: true, since: 5 }
+    const known = knownAfter([], one)
+
+    expect(known).toEqual([one])
+    expect(knownAfter(known, { ...one })).toBe(known)
+    expect(knownAfter(known, undefined)).toBe(known)
+    expect(knownAfter(known, { ever: true, since: 9 })).toEqual([one, { ever: true, since: 9 }])
   })
 })
 

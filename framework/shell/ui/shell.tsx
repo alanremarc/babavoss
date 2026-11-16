@@ -7,8 +7,10 @@
 // moment (bubbles.tsx). A tab the person opens becomes theirs to look at; one the agent opens takes its place beside the
 // mark, marked until looked at, and the person stays where they are. A tab that is broken, needs someone, offers an ask or
 // holds a notice not yet seen is marked on the rail and on home, from / where the shell gathers who is needed and counts
-// each tab's asks. The URL is the surface path: / home, also where no tab is, a tab's address and its route; the address
-// is /NAME where the tab holds its surface's name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the
+// each tab's asks. While the session's hooks are not heard, as the turn says, the mark has a dot, home's drawer pins why
+// and what to do, and as that begins it is a bubble beside the mark, kept in home's thread. The URL is the surface path:
+// / home, also where no tab is, a tab's address and its route; the address is /NAME where the tab holds its surface's
+// name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). The person's settings,
 // their own surface's that comes with the shell, are applied here: the appearance and where the rail stands, the shortcuts
 // (shortcuts.ts) and the mark's animation (appearance.ts). It loads no stylesheet: the root's page does, one, which
@@ -16,7 +18,7 @@
 import { Activity, Component, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
 import type { Args, Handle, View } from "../../core/index.ts"
 import { cn } from "../../kit/cn.ts"
-import { call, changes, read, type Notice, type Turn } from "./client.ts"
+import { call, changes, read, type Notice, type Turn, type Unheard } from "./client.ts"
 import { Actions, useTabAsks, useTabMenu } from "./actions.tsx"
 import { controlsOf, named, noticesIn, type Offered } from "./commands.ts"
 import { added, Bubbles, gone, type Bubble } from "./bubbles.tsx"
@@ -35,9 +37,9 @@ import { boot, booted, servedAs } from "./boot.ts"
 import { Overlay, PointedAlert, RefusedAlert, useSaid, type Connected } from "./connection.tsx"
 import { cachesBy } from "./live.ts"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
-import { awayOf, cycled, doesOf, drawerSide, markOf, newestFirst, onScreen, standing, successor, type Mark, type TabNeed } from "./rail.ts"
+import { awayOf, cycled, doesOf, drawerSide, homeMarkOf, markOf, newestFirst, onScreen, standing, successor, type Mark, type TabNeed } from "./rail.ts"
 import { Rail, tabId, type RailItem } from "./rail.tsx"
-import { entriesIn, freshIn, pinnedOf, placeIn, shellEntries, tabIn, waitingRows, type Row as Entry } from "./thread.ts"
+import { entriesIn, freshIn, knownAfter, pinnedOf, placeIn, shellEntries, tabIn, unheardLine, unheardPinned, waitingRows, withUnheard, type Row as Entry } from "./thread.ts"
 import { TabBroken, TabContent, TabFailed, TabNoPage } from "./tabs.tsx"
 import { standingOf } from "./turn.ts"
 
@@ -126,6 +128,9 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   // Whose move it is, as the runtime hears it from the harness's hooks.
   const [turn, setTurn] = useState<Turn | undefined>(() => boot().turn)
   const standingNow = standingOf(turn)
+  // Each stretch of the hooks' silence the page has known, kept in home's thread; one that begins while it is open is a bubble.
+  const [known, setKnown] = useState<readonly Unheard[]>(() => knownAfter([], boot().turn?.unheard))
+  const knownNow = useRef(known)
   // The notices, read once: what marks the tabs until seen.
   const [servedNotices] = useState(() => booted<NoticesPage>(NOTICES))
   const told = useFeed(NOTICES, stream, true, servedNotices)
@@ -170,7 +175,15 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
       (notice) => {
         for (const fn of hearers) fn(notice)
       },
-      setTurn
+      (next) => {
+        const after = knownAfter(knownNow.current, next.unheard)
+
+        setTurn(next)
+        if (after === knownNow.current || !next.unheard) return
+        knownNow.current = after
+        setKnown(after)
+        for (const fn of hearers) fn({ text: unheardLine(next.unheard) })
+      }
     )
   }, [listeners, hearers, settingsAgain, caches])
 
@@ -493,12 +506,15 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const shownTab = tabs.find((t) => t.row.at === drawer)
   const homeTabs = tabs.map((t) => ({ at: t.row.at, surface: t.row.surface, label: t.label, icon: t.icon, ...(t.mark && { mark: t.mark }), go: () => go(t.row.at) }))
   const HomePage = OwnHome ?? Desktop
+  const homeMark = homeMarkOf(turn?.unheard)
+  const homePinned = unheardPinned(turn?.unheard)
   const rail: { mark: RailItem; tabs: RailItem[] } = {
     mark: {
       id: HOME,
       label: "Home",
       icon: <Logo standing={standingNow} animate={settings.logo.animate} lost={!!lost} />,
-      why: [lost ?? standingNow.said],
+      ...(homeMark && { mark: homeMark }),
+      why: [lost ?? standingNow.said, ...(turn?.unheard ? [unheardLine(turn.unheard)] : [])],
     },
     tabs: tabs.map((t) => ({
       id: t.row.at,
@@ -602,10 +618,11 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
                   items: homeMenu({ view: root as View | undefined, title, tabs: homeTabs, start: startHome, navigate: (at) => go(placeOf(at).key, placeOf(at).route) }),
                   empty: "Nothing to do here yet",
                 }}
-                rows={shellEntries(all.rows)}
+                rows={withUnheard(shellEntries(all.rows), known)}
                 loaded={all.loaded}
                 {...(all.earlier && { more: all.more })}
                 stay={stay}
+                {...(homePinned && { pinned: homePinned })}
                 waiting={waitingRows(all.rows, standingNow.waiting)}
                 go={(entry) => {
                   closeDrawer()

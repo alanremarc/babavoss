@@ -3,6 +3,7 @@
 // the person lands when the tab they look at closes; the side a drawer opens at and the way a bubble points, away from
 // the rail; and a tab's one mark, and why, as its tooltip says it. Pure: rail.tsx draws it.
 import type { Rail } from "../settings/src/settings.ts"
+import type { Unheard } from "./client.ts"
 
 /** Who a tab needs, and why. */
 export type TabNeed = { who: "person" | "agent"; why: string }
@@ -76,6 +77,9 @@ export type Mark = keyof typeof MARK
  */
 export const markOf = ({ needs = [], broken, unseen, waits }: { needs?: TabNeed[]; broken?: string; unseen?: boolean; waits?: boolean }): Mark | undefined =>
   broken !== undefined ? "broken" : waits || unseen || needs.some((n) => n.who === "person") ? "person" : needs.length ? "agent" : undefined
+
+/** The mark's own dot, home's: the person's, while the session's hooks are not heard; the mark's look is its own. */
+export const homeMarkOf = (unheard: Unheard | undefined): Mark | undefined => (unheard ? "person" : undefined)
 
 /**
  * Why a tab is marked, one line each, as its tooltip says it under its title: broken; who it needs and why; what waits on

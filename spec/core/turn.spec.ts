@@ -19,6 +19,7 @@ import {
   startTurn,
   turned,
   unheardHooks,
+  unheardOf,
   unknownTurn,
   type Hooks,
   type Turn,
@@ -151,4 +152,25 @@ test("the hooks are quiet where a run of the word begins over HUSH_MS after anot
 
   expect(none.line).toBe(NO_HOOKS_LINE)
   expect(ask(answered(none.hooks, "b", HUSH_MS + 2), "c", 10 * HUSH_MS).line).toBeUndefined()
+})
+
+test("the person is shown the silence the agent was told of, never heard or gone quiet, from the run that found it to the next hook", () => {
+  const ask = (hooks: Hooks, call: string, at: number) => hushed(hooks, call, at).hooks
+
+  // Before the first run, and between turns, nothing is found: the agent's silence alone is no sign.
+  expect(unheardOf(unheardHooks())).toBeUndefined()
+  expect(unheardOf(answered(unheardHooks(), "a", 0))).toBeUndefined()
+  expect(unheardOf(ask(answered(hooksHeard(), "a", 0), "a", 10 * HUSH_MS))).toBeUndefined()
+
+  // Never heard: a harness with no hooks for the session.
+  const never = ask(answered(unheardHooks(), "a", 0), "b", HUSH_MS + 1)
+
+  expect(unheardOf(never)).toEqual({ ever: false, since: HUSH_MS + 1 })
+  // Heard, then gone quiet; and it lasts while the agent runs on, dated from when it was found.
+  const quiet = ask(answered(hooksHeard("claude"), "a", 0), "b", HUSH_MS + 5)
+
+  expect(unheardOf(quiet)).toEqual({ ever: true, since: HUSH_MS + 5 })
+  expect(unheardOf(ask(answered(quiet, "b", HUSH_MS + 6), "c", 100 * HUSH_MS))).toEqual({ ever: true, since: HUSH_MS + 5 })
+  // A hook heard ends either.
+  expect(unheardOf(hooksHeard("claude"))).toBeUndefined()
 })

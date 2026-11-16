@@ -5,7 +5,8 @@
 //                                 notice { text, at?, from?, by? }, each notice as it is heard, `by` absent where the person
 //                                 caused it; a line about the root's own code is one too, and is given to a page that connects
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
-//                                 turn { agent, since, waiting, drivable }, whose move it is (turn.ts), as it changes and on connect
+//                                 turn { agent, since, waiting, drivable, harness?, unheard? }, whose move it is (turn.ts), as it
+//                                 changes and on connect; `unheard` while the hooks' silence the agent was told of lasts, for the person
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
@@ -29,7 +30,7 @@ import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
-import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
+import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unheardOf, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
 export type UiHosting = (
@@ -202,29 +203,50 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   let turnSent = ""
   let stale: ReturnType<typeof setTimeout> | undefined
   // Whether the hooks speak between the agent's runs of the word (turn.ts); whether any did, and whether it was told they
-  // are quiet, kept beside the session's state so a runtime that starts again tells it once.
+  // are quiet, and since when, kept beside the session's state so a runtime that starts again tells it once; and the page,
+  // which shows the person that silence while it lasts, by the turn.
   const hooksFile = join(options.identity.dir, "hooks.json")
   let hooks: Hooks = unheardHooks()
 
   try {
     const kept = JSON.parse(readFileSync(hooksFile, "utf8")) as Partial<Hooks>
+    const told = kept.told === true
 
-    hooks = { ever: kept.ever === true, told: kept.told === true, ...(harnessOf(kept.harness) && { harness: harnessOf(kept.harness) }) }
+    // Kept before its time was: the silence is dated from now.
+    hooks = {
+      ever: kept.ever === true,
+      told,
+      ...(told && { since: typeof kept.since === "number" ? kept.since : Date.now() }),
+      ...(harnessOf(kept.harness) && { harness: harnessOf(kept.harness) }),
+    }
   } catch {}
 
   const keepHooks = (next: Hooks) => {
-    const changed = next.ever !== hooks.ever || next.told !== hooks.told || next.harness !== hooks.harness
+    const changed = next.ever !== hooks.ever || next.told !== hooks.told || next.since !== hooks.since || next.harness !== hooks.harness
 
     hooks = next
-    if (changed)
-      try {
-        writeFileSync(hooksFile, JSON.stringify({ ever: next.ever, told: next.told, ...(next.harness && { harness: next.harness }) }))
-      } catch {}
+    if (!changed) return
+
+    // What was heard of the runs is the runtime's alone.
+    const { last: _, ...kept } = next
+
+    try {
+      writeFileSync(hooksFile, JSON.stringify(kept))
+    } catch {}
+    pushTurn()
   }
   const turnNow = () => {
     const { agent, since } = reading(turn, Date.now(), busy > 0 && !hooks.told)
+    const unheard = unheardOf(hooks)
 
-    return { agent, since, waiting: text.waiting(), drivable: !!driverOf(options.about?.session ?? "session"), ...(hooks.harness && { harness: hooks.harness }) }
+    return {
+      agent,
+      since,
+      waiting: text.waiting(),
+      drivable: !!driverOf(options.about?.session ?? "session"),
+      ...(hooks.harness && { harness: hooks.harness }),
+      ...(unheard && { unheard }),
+    }
   }
   const turnEvent = () => `event: turn\ndata: ${(turnSent = JSON.stringify(turnNow()))}\n\n`
   const pushTurn = () => {

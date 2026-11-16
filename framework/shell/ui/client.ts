@@ -32,8 +32,17 @@ export type Change = { version: number; jobs: string[] }
 /** What just happened, told once as it is heard: `at` the path it is about, `from` who says it, `by` who caused it where not the person. */
 export type Notice = { text: string; at?: string; from?: string; by?: string }
 
-/** Whose move it is in the session, and how many of the person's calls wait for the agent's next answer; `drivable` where the page can start a turn; `harness` the session's harness, by its adapter's name, once a hook of it was heard. */
-export type Turn = { agent: "working" | "idle" | "unknown"; since: number; waiting: number; drivable: boolean; harness?: string }
+/**
+ * The hooks' silence the agent was told of, while it lasts: `since` when the runtime found it, `ever` where a hook was heard
+ * before, so they went quiet rather than were never heard.
+ */
+export type Unheard = { ever: boolean; since: number }
+/**
+ * Whose move it is in the session, and how many of the person's calls wait for the agent's next answer; `drivable` where
+ * the page can start a turn; `harness` the session's harness, by its adapter's name, once a hook of it was heard; `unheard`
+ * while its hooks are not heard.
+ */
+export type Turn = { agent: "working" | "idle" | "unknown"; since: number; waiting: number; drivable: boolean; harness?: string; unheard?: Unheard }
 
 /** Told on every change of the surface, of each notice, of the turn, and whether the stream is up; the browser reconnects by itself. Returns stop. */
 export function changes(

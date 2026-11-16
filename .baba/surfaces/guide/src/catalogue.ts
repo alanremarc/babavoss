@@ -23,7 +23,12 @@ export const GROUPS = [
       {
         title: "Mark",
         entries: [
-          { id: "states", title: "States", files: [`${SHELL}/mark.tsx`, `${SHELL}/turn.ts`], states: ["still", "working", "working, animation off", "waiting", "lost"] },
+          {
+            id: "states",
+            title: "States",
+            files: [`${SHELL}/mark.tsx`, `${SHELL}/turn.ts`, `${SHELL}/rail.ts`],
+            states: ["still", "working", "working, animation off", "waiting", "lost", "hooks not heard"],
+          },
           { id: "moves", title: "Moves", files: [`${SHELL}/gaze.ts`], states: ["any", ...MOVES.map((m) => m.name)] },
           { id: "sphere", title: "Sphere", files: [`${SHELL}/gaze.ts`], states: ["still", "any", ...MOVES.map((m) => m.name), "following the pointer"] },
         ],
@@ -143,7 +148,7 @@ export const GROUPS = [
       {
         title: "Drawer",
         entries: [
-          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`], states: ["a tab's", "home's", "broken", "menu", "search", "pinned"] },
+          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`], states: ["a tab's", "home's", "home's, hooks not heard", "broken", "menu", "search", "pinned"] },
           { id: "entries", title: "Entries", files: [`${SHELL}/thread.ts`, `${SHELL}/drawer.tsx`], states: ["notice", "calls", "tab entry", "on home"] },
           { id: "inputs", title: "Input modal", files: [`${SHELL}/inputs.tsx`], states: ["form", "refused"] },
         ],

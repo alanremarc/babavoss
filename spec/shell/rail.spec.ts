@@ -4,7 +4,7 @@
 // one mark and why; and where the shortcuts give way to a field, the drawer's search excepted.
 import { describe, expect, it } from "bun:test"
 import type { Rail } from "../../framework/shell/settings/src/settings.ts"
-import { awayOf, cycled, doesOf, drawerSide, markOf, newestFirst, onScreen, opensDrawer, standing, stepOf, successor } from "../../framework/shell/ui/rail.ts"
+import { awayOf, cycled, doesOf, drawerSide, homeMarkOf, markOf, newestFirst, onScreen, opensDrawer, standing, stepOf, successor } from "../../framework/shell/ui/rail.ts"
 import { yields, RECORDING_MARK, SEARCH_MARK, type Focused } from "../../framework/shell/ui/shortcuts.ts"
 
 const tab = (n: number) => ({ at: `/tabs/${n}`, n })
@@ -96,6 +96,14 @@ describe("a tab's drawer", () => {
 
   it("has the bubbles of its notices point away from the rail", () => {
     expect([awayOf(at("left")), awayOf(at("right")), awayOf(at("top")), awayOf(at("bottom"))]).toEqual(["right", "left", "down", "up"])
+  })
+})
+
+describe("the mark's dot", () => {
+  it("is the person's while the session's hooks are not heard, never heard or gone quiet, and none once one is heard", () => {
+    expect(homeMarkOf({ ever: false, since: 1 })).toBe("person")
+    expect(homeMarkOf({ ever: true, since: 1 })).toBe("person")
+    expect(homeMarkOf(undefined)).toBeUndefined()
   })
 })
 
