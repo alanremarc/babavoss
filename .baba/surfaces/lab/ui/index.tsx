@@ -351,6 +351,12 @@ function Header({
       <Badge variant={TONE[s]} className={s === "working" || s === "starting" ? "animate-pulse" : undefined}>
         {s}
       </Badge>
+      {/* A run whose agent was told nothing by a hook says so beside its status, wherever the page is read. */}
+      {typeof root.hooks === "string" && root.turns ? (
+        <Badge variant="destructive" title={`${root.hooks}: it did what it did without the surfaces' words and present`}>
+          no hook heard
+        </Badge>
+      ) : null}
       {root.run !== undefined && (
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground tabular-nums">
           <span className="shrink-0 font-medium text-foreground">{root.model}</span>

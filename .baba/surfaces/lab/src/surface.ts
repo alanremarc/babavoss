@@ -10,7 +10,7 @@ import { randomBytes, randomUUID } from "node:crypto"
 import { action, detail, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
 import { LEFT_OUT, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
-import { append, empty, line, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
+import { append, empty, line, NO_HOOK, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
 
 export const MODELS = ["haiku", "sonnet", "opus"]
 export const END_MOVE = "[The person ended their move on the page.]"
@@ -277,6 +277,8 @@ const injected = (m: Model, from = 0) => ({
   run: m.run?.id ?? null,
   injected: (m.run?.entries ?? []).slice(from).filter((entry) => entry.kind === "hook").map(whole),
 })
+/** Which hooks were heard in the run: a run whose turn ended with none heard says so, as its timeline does. */
+const hooksOf = (run: Run): string[] | string => (run.hooks.length ? run.hooks : run.turns ? `${NO_HOOK}: the agent under test was told nothing by baba's hooks` : "none heard yet")
 const checkout = (c: Checkout | undefined) => c && { checkout: c.from, commit: c.commit.slice(0, 10), uncommitted: c.dirty.length }
 const HOW =
   "Start a run, say a message, then wait: the wait ends when the turn does, status idle. Read what the agent under test was told: " +
@@ -308,6 +310,7 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             cost: detail(Math.round(run.cost * 10_000) / 10_000),
             ...(working && { turn: { since: run.since, at: `/entries/since/${run.since}` } }),
             ...(!still && {
+              hooks: hooksOf(run),
               entries: detail(run.entries.length),
               ...(run.turns > 0 && { last_turn: { at: `/entries/since/${run.since}` } }),
               timeline: { at: "/entries" },
@@ -436,7 +439,7 @@ const recorded = (saved: Json | undefined, n: number, ended: string): Run | unde
   if (!run || typeof run !== "object" || !Array.isArray(run.entries)) return undefined
 
   // A record from before a run had these is shown without them.
-  const kept: Run = { ...run, from: run.from ?? "", since: run.since ?? 0, n }
+  const kept: Run = { ...run, from: run.from ?? "", since: run.since ?? 0, hooks: run.hooks ?? [], n }
 
   return live(kept) ? note({ ...kept, status: "ended", ended }, at(kept), "process gone", ended, true) : kept
 }

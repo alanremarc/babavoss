@@ -209,11 +209,40 @@ test("while a turn runs the root stands still, so a wait ends with the turn; the
   expect((agent.sees("/injected/since/3") as { injected: Json[] }).injected).toEqual([expect.objectContaining({ text: "What changed: tabs.1.title" })])
 })
 
+test("a run says which hooks were heard, one that added nothing among them; a turn that ends with none heard says so plainly, once", async () => {
+  const told = await started()
+
+  expect(told.agent.sees()).toMatchObject({ hooks: "none heard yet" })
+  await told.agent.call("/", "say", { text: "Hi" })
+  told.harness.emit({ kind: "injected", event: "SessionStart", text: "baba's words" }, replay("Hi"), { kind: "hook", event: "UserPromptSubmit" }, turn(0.001))
+  await until(() => root(told.agent).status === "idle")
+  expect(told.agent.sees()).toMatchObject({ hooks: ["SessionStart", "UserPromptSubmit"] })
+  expect((told.agent.sees("/entries") as { entries: Row[] }).entries.map((r) => r.title)).not.toContain("no hook heard")
+
+  // A run whose harness ran no hook: the agent under test was never told of the surfaces, and the run does not pass for one that was.
+  const silent = await started()
+
+  for (const text of ["Hi", "Again"]) {
+    await silent.agent.call("/", "say", { text })
+    silent.harness.emit(replay(text), { kind: "reply", text: "Hello.", request: request(text) }, turn(0.001))
+    await until(() => root(silent.agent).status === "idle")
+  }
+
+  const rows = (silent.agent.sees("/entries") as { entries: Row[] }).entries
+  const note = rows.filter((r) => r.title === "no hook heard")
+
+  expect(silent.agent.sees()).toMatchObject({ hooks: "no hook heard: the agent under test was told nothing by baba's hooks" })
+  expect(note).toHaveLength(1)
+  expect(rows.indexOf(note[0]!)).toBe(rows.findIndex((r) => r.kind === "turn") + 1)
+  expect(silent.agent.sees(note[0]!.at)).toMatchObject({ kind: "note", error: true, text: expect.stringContaining("told nothing by baba's hooks") })
+  expect(silent.where.records.get(silent.where.made[0]!.id)).toMatchObject({ hooks: [], entries: expect.arrayContaining([expect.objectContaining({ title: "no hook heard" })]) })
+})
+
 test("a second turn adds its cost; the run's totals are the harness's", async () => {
   const { agent, harness } = await started()
 
   await agent.call("/", "say", { text: "Hi" })
-  harness.emit(turn(0.0042))
+  harness.emit({ kind: "hook", event: "UserPromptSubmit" }, turn(0.0042))
   await until(() => root(agent).status === "idle")
   await agent.call("/", "say", { text: "Again" })
   harness.emit(turn(0.0062))
