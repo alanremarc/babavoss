@@ -9,7 +9,7 @@ import { afterEach, expect, it, setSystemTime } from "bun:test"
 import { action, defineRoot, detail, surface, view, type Update } from "../../framework/core/index.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
-import { HARNESS_HEADER, HUSH_MS, QUIET_LINE } from "../../framework/core/runtime/turn.ts"
+import { HARNESS_HEADER, HUSH_MS, NO_HOOKS_LINE, QUIET_LINE, type Unheard } from "../../framework/core/runtime/turn.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
 
@@ -532,4 +532,68 @@ it("finds the hooks quiet by the runs that carry a call, the agent's own, and ne
   } finally {
     setSystemTime()
   }
+})
+
+it("shows the page the hooks' silence the agent was told of, never heard or gone quiet, until a hook is heard, and the same after a restart", async () => {
+  const first = await started()
+  const runOf = (at: Awaited<ReturnType<typeof started>>) => async (call: string) =>
+    (
+      await fetch(`http://127.0.0.1:${at.runtime.port}/`, {
+        headers: { accept: "text/plain", [SERVICE_HEADER]: at.endpoint.token, [ACTOR_HEADER]: "agent:S", [CALL_HEADER]: call },
+      })
+    ).text()
+  /** The turn as the page reads it on connecting, or as it next changes. */
+  const unheardIn = async (at: Awaited<ReturnType<typeof started>>) => {
+    const ctrl = new AbortController()
+    const stream = await fetch(`http://127.0.0.1:${at.runtime.port}/`, { headers: { accept: "text/event-stream", [SERVICE_HEADER]: at.endpoint.token }, signal: ctrl.signal })
+    const reader = stream.body!.getReader()
+    let text = ""
+
+    while (!/event: turn\ndata: .*\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value)
+    ctrl.abort()
+
+    return (JSON.parse(/event: turn\ndata: (.*)\n/.exec(text)![1]!) as { unheard?: Unheard }).unheard
+  }
+  const run = runOf(first)
+  const later = (ms: number) => setSystemTime(new Date(Date.now() + ms))
+
+  try {
+    // A fresh session, before any hook: its agent's first run finds nothing, nor does a run soon after.
+    await run("a")
+    expect(await unheardIn(first)).toBeUndefined()
+    await run("b")
+    expect(await unheardIn(first)).toBeUndefined()
+    // Never heard: the agent is told once, as before, and the page from then on.
+    later(HUSH_MS + 1)
+    expect(await run("c")).toStartWith(NO_HOOKS_LINE)
+
+    const never = await unheardIn(first)
+
+    expect(never).toMatchObject({ ever: false })
+    // It lasts while the agent runs on, never told it again.
+    later(HUSH_MS + 1)
+    expect(await run("d")).not.toContain(NO_HOOKS_LINE)
+    expect(await unheardIn(first)).toEqual(never!)
+    // A hook heard clears it.
+    await first.turn("working")
+    expect(await unheardIn(first)).toBeUndefined()
+    // Heard, then gone quiet: a run, and the next long after it with no hook between.
+    await run("e")
+    later(HUSH_MS + 1)
+    expect(await run("f")).toStartWith(QUIET_LINE)
+    expect(await unheardIn(first)).toMatchObject({ ever: true })
+  } finally {
+    setSystemTime()
+  }
+
+  // A runtime that starts again, as for a page opened long after, shows it the same, and its first hook clears it.
+  const kept = await unheardIn(first)
+
+  await first.runtime.close()
+
+  const again = await started(first.dir)
+
+  expect(await unheardIn(again)).toEqual(kept!)
+  await again.turn("started")
+  expect(await unheardIn(again)).toBeUndefined()
 })
