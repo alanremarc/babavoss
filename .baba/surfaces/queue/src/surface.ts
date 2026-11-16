@@ -1,7 +1,7 @@
 // The queue: the session's work as issues, each a draft, in the backlog, in a lane or done, and each on a narrative, an
 // effort going its own way, with the issues it came out of and the reasoning of its iterations. The agent orchestrates up
 // to five lanes, each a subagent in its own worktree delivering one issue at a time, and keeps this current as the work
-// moves; the person reads it on the page, as a list or as a map. Nothing here does the work: it says who is delivering what
+// moves; the person reads it on the page, as a list or by narrative. Nothing here does the work: it says who is delivering what
 // and why. The work is the session's, not a tab's: every queue tab of the session opens the one record (store.ts) and
 // writes through to it, so a second tab shows the same work and a closed one loses nothing. A tab keeps a copy of the work
 // as it last heard it, so it shows at once, and a new one says it is reading until it first hears it; a tab kept from
@@ -9,8 +9,9 @@
 import { action, admit, detail, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
 import { sessionDir } from "babavoss/core/state/session-dir.ts"
 import { adopt, isLegacy } from "./migrate.ts"
+import { openOnly, outline, type Elsewhere, type Place } from "./outline.ts"
 import { fileIn, store as kept, type Store } from "./store.ts"
-import { DEFAULT, empty, find, isWork, parents, reaches, union, withDefault, type Issue, type Status, type Work } from "./work.ts"
+import { DEFAULT, empty, find, isWork, parents, reaches, union, withDefault, type Issue, type Narrative, type Status, type Work } from "./work.ts"
 
 export const LANES = 5
 /** How many updates an issue's channel keeps: the latest. */
@@ -254,6 +255,47 @@ const row = (issue: Issue) => ({
 })
 /** An issue another names, by its number and title, so the menu's Go can list it. */
 const ref = (issue: Issue) => ({ at: `/issues/${issue.n}`, n: issue.n, title: issue.title, status: issue.status })
+/** A narrative as a list names it: what it is about, and how many of its issues there are and are open. */
+function counted(w: Work, x: Narrative) {
+  const mine = w.issues.filter((issue) => issue.narrative === x.id)
+
+  return { at: `/narratives/${x.id}`, id: x.id, title: x.title, about: x.about, issues: mine.length, open: mine.filter(open).length }
+}
+/** Issues on other narratives as a table's cell has them, a line per narrative: ["leftovers: 50, 51"]. */
+const across = (by: Elsewhere) => Object.entries(by).map(([id, ns]) => `${id}: ${ns.join(", ")}`)
+/** An issue in its place in a narrative's outline: how deep it stands, and what else it came out of and led to. */
+const placed = ({ issue, depth, also, from, to }: Place) => {
+  const { at, n, narrative: _narrative, from: _from, ...line } = row(issue)
+
+  return {
+    at,
+    n,
+    depth,
+    ...line,
+    ...(also.length && { also }),
+    ...(Object.keys(from).length && { from: across(from) }),
+    ...(Object.keys(to).length && { to: across(to) }),
+  }
+}
+const READS =
+  "Its outline, its issues read top to bottom: depth 0 for an issue that came out of none here, else it stands under the nearest " +
+  "issue above it one less deep, the first here it came out of; also, the others here it came out of; from and to, what it came out " +
+  "of and led to on other narratives, a line per narrative."
+/** A narrative whole: its outline, every issue or, when `only`, those open and the path to them. */
+function narrative(w: Work, id: string | undefined, only: boolean) {
+  const x = w.narratives.find((x) => x.id === id)
+
+  if (!x) return undefined
+
+  const all = outline(w, x.id)
+
+  return {
+    ...counted(w, x),
+    reads: READS,
+    ...(only ? { only: "open", all: { at: `/narratives/${x.id}` } } : { open_only: { at: `/narratives/${x.id}/open` } }),
+    outline: (only ? openOnly(all) : all).map(placed),
+  }
+}
 /** How the page's menu for an issue groups its actions: moving it along, its words and edges, its reasoning. */
 const menu = [
   { label: "Move", actions: ["start", "done", "back", "move"] },
@@ -307,9 +349,9 @@ const pages = view(actions, {
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       narratives: w.narratives.map((x) => {
-        const mine = w.issues.filter((issue) => issue.narrative === x.id)
+        const { about: _about, ...named } = counted(w, x)
 
-        return { at: `/narratives/${x.id}`, id: x.id, title: x.title, issues: mine.length, open: mine.filter(open).length }
+        return named
       }),
       // What is done is detail: read at the tab's path, and only counted in the shell's present.
       issues: [...[...lanes, ...backlog, ...drafts].map(row), ...finished.map((issue) => detail(row(issue)))],
@@ -321,22 +363,18 @@ const pages = view(actions, {
       narrate: narrate.bind({}),
     }
   },
-  "/narratives/:id": (w, { id }) => {
-    const x = w.narratives.find((x) => x.id === id)
-
-    return x && { title: x.title, id: x.id, about: x.about, issues: w.issues.filter((issue) => issue.narrative === x.id).map((issue) => ({ ...row(issue), iterations: issue.iterations.length })) }
-  },
+  // Those with open issues first, each kept in the order it began.
+  "/narratives": (w) => ({ title: "Narratives", narratives: w.narratives.map((x) => counted(w, x)).sort((a, b) => Number(!a.open) - Number(!b.open)) }),
+  "/narratives/:id": (w, { id }) => narrative(w, id, false),
+  "/narratives/:id/open": (w, { id }) => narrative(w, id, true),
   "/issues/:n": (w, { n }) => {
     const issue = find(w, Number(n))
 
     return issue && whole(w, issue)
   },
 })
-/**
- * The map's and the archive's places are the list's, below /map and /archive, so the tab's route keeps which view it is
- * in and the menu offers the same there.
- */
-const listed = (path: string) => path.replace(/^\/(map|archive)(?=\/|$)/, "") || "/"
+/** The archive's places are the list's, below /archive, so the tab's route keeps which view it is in and the menu offers the same there. */
+const listed = (path: string) => path.replace(/^\/archive(?=\/|$)/, "") || "/"
 const viewAt = (w: Work, path: string, actor?: string) => pages.view(w, listed(path), actor)
 
 /** The queue, with where the session's work is kept given: the session's file in the runtime, memory in its stories. */
@@ -344,7 +382,7 @@ export function queue(work: Store): Surface<Model, Event, Command> {
   return surface<Model, Event, Command>({
     description:
       "Track the session's work as issues, each in the backlog, in a lane or done, on a narrative with what it came out of and the reasoning of each pass, " +
-      "seen as a list or as a map. Use when work is asked for, starts, moves, branches, needs another pass or lands.",
+      "seen as a list or by narrative. Use when work is asked for, starts, moves, branches, needs another pass or lands.",
     init: () => ({ work: empty(), reading: true }),
     // A tab kept from before holds the queue's issues itself: they are brought into the session's work. State that is
     // neither, as when the surface was still the template it began as, starts empty.
@@ -401,6 +439,8 @@ export function queue(work: Store): Surface<Model, Event, Command> {
         return "refused" in r ? undefined : r.model
       })
     },
+    // The map was a view the page had; what it showed, the narratives now show, each as an outline of its issues.
+    absent: (_m, path) => (/^\/map(?=\/|$)/.test(path) ? `the map is gone: the narratives are at /narratives, each an outline of its issues at /narratives/ID` : undefined),
     failed: (c, error) => ({ kind: "failed", command: c.kind, error }),
   })
 }

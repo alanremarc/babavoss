@@ -1,4 +1,4 @@
-// The session's work, one record that the list and the map are two views of: issues, each on a narrative, an effort going
+// The session's work, one record that the list and the narratives are views of: issues, each on a narrative, an effort going
 // its own way, with the issues it came out of, the reasoning of each of its iterations, and where it stands in the queue.
 // The issues form a graph without cycles. Pure: no store, no clock.
 
