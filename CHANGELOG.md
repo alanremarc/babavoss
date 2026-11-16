@@ -2,6 +2,28 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.60.0
+
+- The mark is drawn exactly: its eyes are two round patches of one size on a sphere, seen by a camera three and a half of its radii away, and each is the true outline of its edge as that camera sees it. Near the middle an eye is large; towards the limb it is smaller and, faster, narrower; over the camera's horizon it is cut by the sphere's own outline, and behind it is gone. The ellipse squashed by one rule and shrunk by a lens is gone.
+- Breaking, for code that drew the mark itself: `framework/shell/ui/gaze.ts` no longer has `drawn`, `EYES`, `Eye`, `Drawn`, `TURNED` or the old `SPHERE`. It has `SPHERE`, a `Sphere` of `camera`, `radius`, `eye`, `apart` and `turned`; `SIDES`; `outline(side, gaze, sphere?)`, an eye as an SVG path; `edgeOf`, its points and whether it is cut; `centreOf` and `seen`. `Logo` and `Eyes` are as they were. The moves turn the head a fifth further. Nothing to adapt in a project that only uses the shell.
+- This repository's Design Guide tunes the sphere at `/guide/mark/sphere`: its numbers on sliders beside the shell's mark, through each move, and following the pointer.
+
+## 0.59.4
+
+- The exact sphere tried in this repository's Design Guide starts from the numbers the person chose. Nothing to adapt.
+
+## 0.59.3
+
+- This repository's Design Guide has a pad at `/guide/mark/sphere` where the exact sphere and the shell's mark both look where the pointer is, so any pose can be held and looked at with no move played. Nothing to adapt.
+
+## 0.59.2
+
+- This repository's Design Guide tries the mark as an exact sphere at `/guide/mark/sphere`: two round patches of one size seen by a close camera, each drawn as the true outline of its edge and cut by the sphere's horizon, beside the shell's mark, with the camera's distance, the sphere's and the eyes' size, their spacing and the resting turn on sliders. The shell's mark is unchanged. Nothing to adapt.
+
+## 0.59.1
+
+- The mark's lens is one smooth curve: an eye that turns away from the middle shrinks all the way to nothing at the sphere's edge as it narrows. It used to stop at a least size a third of the way round and go on narrowing, a sliver of fixed height. At rest the eyes are as they were. Nothing to adapt.
+
 ## 0.59.0
 
 - A caller may name a call: the request header `babavoss-call-id`, `CALL_ID_HEADER`, which `serviceClient` can send. The name is on the call, `Call.id`, and the shell's activity keeps it on the entry, given as `id` at `/activity`, so whoever made a call can tell its entry from another's made at the same moment. Nothing to adapt.

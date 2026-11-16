@@ -1,70 +1,102 @@
-// The mark's eyes on their sphere, under a lens at its middle: two of one size that rest to the right of it and so unequal,
-// narrower and smaller towards the edge, gone behind, and never the same move twice running.
+// The mark's eyes on their sphere, seen by a close camera: two of one size that rest to the right of the middle and so
+// unequal, smaller and narrower towards the limb, cut by the horizon and gone behind it, and never the same move twice
+// running.
 import { expect, test } from "bun:test"
-import { between, drawn, eased, EYES, MOVES, next, REST, SEARCH, settled, SPHERE, TURNED } from "../../framework/shell/ui/gaze.ts"
+import { between, centreOf, eased, edgeOf, MIDDLE, MOVES, next, outline, REST, SEARCH, seen, settled, SPHERE, type Gaze, type Side } from "../../framework/shell/ui/gaze.ts"
 
-const [left, right] = EYES as [(typeof EYES)[0], (typeof EYES)[0]]
+/** An eye's box as drawn: its middle, width and height. */
+const boxOf = (side: Side, gaze: Gaze) => {
+  const { points } = edgeOf(side, gaze)
+  const xs = points.map((p) => p[0])
+  const ys = points.map((p) => p[1])
 
-test("the eyes are of one size, the same distance either side of the head's front", () => {
-  expect(left.r).toBe(right.r)
-  expect(SPHERE.x - left.x).toBeCloseTo(right.x - SPHERE.x, 6)
+  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2, w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }
+}
+const straight = (side: Side): Gaze => ({ yaw: -SPHERE.turned - side * SPHERE.apart, pitch: 0, size: 1 })
+
+test("the sphere's outline is its horizon: a point there is drawn at the sphere's radius, and the middle at the middle", () => {
+  const z = 1 / SPHERE.camera
+  const [x, y] = seen([Math.sqrt(1 - z * z), 0, z])
+
+  expect(x - MIDDLE).toBeCloseTo(SPHERE.radius, 6)
+  expect(y).toBeCloseTo(MIDDLE, 6)
+  expect(seen([0, 0, 1])).toEqual([MIDDLE, MIDDLE])
 })
 
-test("at rest the head is turned to the right: the left eye is near the middle, nearly whole and round, and the right one smaller and narrower", () => {
-  const [l, r] = [drawn(left, REST), drawn(right, REST)]
+test("an eye dead ahead is a circle at the middle, 18 of the box's 100 from centre to edge", () => {
+  for (const side of [-1, 1] as const) {
+    const eye = boxOf(side, straight(side))
 
-  expect(Math.abs(l.cx - SPHERE.x)).toBeLessThan(5)
-  expect(l.ry).toBeGreaterThan(left.r * 0.99)
-  expect(l.rx).toBeGreaterThan(l.ry * 0.99)
-  expect(r.cx).toBeGreaterThan(l.cx + l.rx + r.rx)
-  expect(r.ry).toBeLessThan(l.ry * 0.75)
-  expect(r.rx).toBeLessThan(r.ry)
-  expect(l.cy).toBe(SPHERE.y)
+    expect(eye.x).toBeCloseTo(MIDDLE, 4)
+    expect(eye.w).toBeCloseTo(eye.h, 1)
+    expect(eye.w / 2).toBeGreaterThan(17.5)
+    expect(eye.w / 2).toBeLessThan(18.5)
+  }
 })
 
-test("the lens stays at the middle: an eye brought there by a turn is whole, and the sizes swap as the head looks the other way", () => {
-  // Turned back by its rest and by the eye's own angle, the right eye is dead ahead.
-  const ahead = drawn(right, { yaw: -TURNED - Math.asin((right.x - SPHERE.x) / SPHERE.radius), pitch: 0, size: 1 })
+test("at rest the head is turned to the right: the left eye is near the middle and nearly round, the right one beside it, smaller and narrower", () => {
+  const [l, r] = [boxOf(-1, REST), boxOf(1, REST)]
 
-  expect(ahead.cx).toBeCloseTo(SPHERE.x, 6)
-  expect(ahead.rx).toBeCloseTo(right.r, 6)
-  expect(ahead.ry).toBeCloseTo(right.r, 6)
-
-  const away = { yaw: -2 * TURNED, pitch: 0, size: 1 }
-
-  expect(drawn(right, away).ry).toBeCloseTo(drawn(left, REST).ry, 6)
-  expect(drawn(left, away).ry).toBeCloseTo(drawn(right, REST).ry, 6)
+  expect(Math.abs(l.x - MIDDLE)).toBeLessThan(8)
+  expect(l.w).toBeGreaterThan(l.h * 0.97)
+  expect(r.x - r.w / 2).toBeGreaterThan(l.x + l.w / 2)
+  expect(r.h).toBeLessThan(l.h)
+  expect(r.w).toBeLessThan(r.h)
+  expect(l.y).toBeCloseTo(MIDDLE, 6)
+  expect(edgeOf(1, REST).cut).toBe(false)
 })
 
-test("an eye that turns down moves there and narrows along the radius, as a patch on a ball does", () => {
-  const down = drawn(left, { yaw: 0, pitch: 0.36, size: 1 })
+test("the eyes swap as the head looks the other way: what the camera sees is the same from either side", () => {
+  const away = { yaw: -2 * SPHERE.turned, pitch: 0, size: 1 }
 
-  expect(down.cy).toBeGreaterThan(SPHERE.y)
-  expect(down.rx).toBeLessThan(down.ry)
-  expect(Math.abs(down.turn)).toBeGreaterThan(45)
+  expect(boxOf(1, away).h).toBeCloseTo(boxOf(-1, REST).h, 6)
+  expect(boxOf(-1, away).w).toBeCloseTo(boxOf(1, REST).w, 6)
+  expect(boxOf(1, away).x - MIDDLE).toBeCloseTo(MIDDLE - boxOf(-1, REST).x, 6)
 })
 
-test("every move keeps both eyes inside the sphere, focusing changes their size alone, and an eye behind the head is not seen", () => {
-  for (const move of MOVES)
-    for (const gaze of move.through)
-      for (const eye of EYES) {
-        const d = drawn(eye, gaze)
+test("an eye that turns away gets smaller and, faster, narrower; over the horizon it is cut by the sphere's outline, and behind it is gone", () => {
+  const horizon = Math.acos(1 / SPHERE.camera)
+  const at = (angle: number): Gaze => ({ yaw: straight(1).yaw + angle, pitch: 0, size: 1 })
+  const [near, far] = [boxOf(1, at(0.3)), boxOf(1, at(0.9))]
 
-        expect(Math.hypot(d.cx - SPHERE.x, d.cy - SPHERE.y) + Math.max(d.rx, d.ry)).toBeLessThan(SPHERE.radius)
-      }
+  expect(far.h).toBeLessThan(near.h)
+  expect(far.w / far.h).toBeLessThan(near.w / near.h)
+  expect(edgeOf(1, at(horizon)).cut).toBe(true)
+  expect(outline(1, at(horizon))).toContain(`A${SPHERE.radius} ${SPHERE.radius}`)
+  for (const [x, y] of edgeOf(1, at(horizon)).points) expect(Math.hypot(x - MIDDLE, y - MIDDLE)).toBeLessThanOrEqual(SPHERE.radius + 1e-6)
+  expect(edgeOf(1, at(horizon + SPHERE.eye + 0.01)).points).toEqual([])
+  expect(outline(1, { yaw: Math.PI, pitch: 0, size: 1 })).toBe("")
+})
+
+test("an eye that turns down moves down, and focusing changes its size alone", () => {
+  const down = boxOf(-1, { yaw: 0, pitch: 0.43, size: 1 })
+
+  expect(down.y).toBeGreaterThan(MIDDLE)
+  expect(down.h).toBeLessThan(boxOf(-1, REST).h)
 
   const focus = MOVES.find((m) => m.name === "focus")!.through[0]!
 
-  expect(drawn(left, { ...REST, size: focus.size }).ry).toBeCloseTo(drawn(left, REST).ry * focus.size, 6)
-  expect(drawn(left, { yaw: Math.PI, pitch: 0, size: 1 })).toMatchObject({ rx: 0, ry: 0 })
+  expect(boxOf(-1, { ...REST, size: focus.size }).h).toBeLessThan(boxOf(-1, REST).h)
+  expect(centreOf(-1, { ...REST, size: focus.size })).toEqual(centreOf(-1, REST))
+})
+
+test("every move but the spin keeps both eyes whole and in sight", () => {
+  for (const move of MOVES.filter((m) => m.name !== "spin"))
+    for (const gaze of move.through)
+      for (const side of [-1, 1] as const) {
+        const { points, cut } = edgeOf(side, gaze)
+
+        expect(points.length).toBeGreaterThan(0)
+        expect(cut).toBe(false)
+      }
 })
 
 test("a spin takes the head once round to where it rests, and is then said as rest, so the next turn takes the short way", () => {
   const spin = MOVES.find((m) => m.name === "spin")!.through.at(-1)!
 
-  for (const eye of EYES) {
-    expect(drawn(eye, spin).cx).toBeCloseTo(drawn(eye, REST).cx, 6)
-    expect(drawn(eye, spin).ry).toBeCloseTo(drawn(eye, REST).ry, 6)
+  for (const side of [-1, 1] as const) {
+    expect(boxOf(side, spin).x).toBeCloseTo(boxOf(side, REST).x, 6)
+    expect(boxOf(side, spin).h).toBeCloseTo(boxOf(side, REST).h, 6)
   }
   expect(settled(spin).yaw).toBeCloseTo(0, 6)
   expect(settled({ yaw: 3.5, pitch: 0, size: 1 }).yaw).toBeCloseTo(3.5 - 2 * Math.PI, 6)
@@ -82,5 +114,5 @@ test("a turn eases in and out, and the next move is never the one just made", ()
 
 test("a page that lost its runtime looks from one side to the other, both eyes in sight", () => {
   expect(SEARCH.map((s) => Math.sign(s.to.yaw))).toEqual([-1, 1])
-  for (const { to } of SEARCH) for (const eye of EYES) expect(drawn(eye, to).rx).toBeGreaterThan(0)
+  for (const { to } of SEARCH) for (const side of [-1, 1] as const) expect(edgeOf(side, to).points.length).toBeGreaterThan(0)
 })

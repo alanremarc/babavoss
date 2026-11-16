@@ -1,22 +1,14 @@
 // The babavoss mark, the two eyes of the brand, as home's tab, the rail's first; and the agent's standing in it: at rest,
 // looking about like a face that thinks while the agent works, a tint instead where motion is reduced or the person turned
 // the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the
-// activity. The eyes sit on an invisible sphere under a lens, gaze.ts; here they are moved, a frame at a time and only
-// while they turn.
+// activity. The eyes are patches on a sphere seen by a close camera, gaze.ts; here they are moved, a frame at a time and
+// only while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "../../kit/cn.ts"
-import { between, drawn, eased, EYES, MOVES, next, REST, SEARCH, settled, within, type Drawn, type Gaze } from "./gaze.ts"
+import { between, eased, MOVES, next, outline, REST, SEARCH, settled, SIDES, within, type Gaze } from "./gaze.ts"
 import type { Standing } from "./turn.ts"
 
-const put = (el: SVGEllipseElement | null | undefined, { cx, cy, rx, ry, turn }: Drawn) => {
-  if (!el) return
-  el.setAttribute("cx", cx.toFixed(2))
-  el.setAttribute("cy", cy.toFixed(2))
-  el.setAttribute("rx", rx.toFixed(2))
-  el.setAttribute("ry", ry.toFixed(2))
-  el.setAttribute("transform", `rotate(${turn.toFixed(1)} ${cx.toFixed(2)} ${cy.toFixed(2)})`)
-}
-const place = (eyes: (SVGEllipseElement | null)[], gaze: Gaze) => eyes.forEach((el, i) => put(el, drawn(EYES[i]!, gaze)))
+const place = (eyes: (SVGPathElement | null)[], gaze: Gaze) => eyes.forEach((el, i) => el?.setAttribute("d", outline(SIDES[i]!, gaze)))
 
 /**
  * Moves the eyes. While `looking`: one move after another in no fixed order, each an eased turn and then a rest; frames
@@ -25,7 +17,7 @@ const place = (eyes: (SVGEllipseElement | null)[], gaze: Gaze) => eyes.forEach((
  * when the eyes return to where they rest. `only` names the one move to make, again and again, in place of one after
  * another: a move looked at on its own.
  */
-function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boolean, lost: boolean, only?: string) {
+function useGaze(eyes: { current: (SVGPathElement | null)[] }, looking: boolean, lost: boolean, only?: string) {
   const at = useRef<Gaze>(REST)
 
   useEffect(() => {
@@ -104,18 +96,16 @@ function useGaze(eyes: { current: (SVGEllipseElement | null)[] }, looking: boole
  * `lost` dims them and has them look from side to side.
  */
 export function Eyes({ looking = false, lost = false, move, className }: { looking?: boolean; lost?: boolean; move?: string; className?: string }) {
-  const eyes = useRef<(SVGEllipseElement | null)[]>([])
+  const eyes = useRef<(SVGPathElement | null)[]>([])
 
   useGaze(eyes, looking, lost, move)
 
   return (
     <svg viewBox="0 0 100 100" aria-hidden className={cn("overflow-visible", className)}>
       <g className={cn("fill-current transition-opacity duration-300 motion-reduce:transition-none", lost && "opacity-60")}>
-        {EYES.map((eye, i) => {
-          const { cx, cy, rx, ry } = drawn(eye, REST)
-
-          return <ellipse key={i} ref={(el) => void (eyes.current[i] = el)} cx={cx} cy={cy} rx={rx} ry={ry} />
-        })}
+        {SIDES.map((side, i) => (
+          <path key={side} ref={(el) => void (eyes.current[i] = el)} d={outline(side, REST)} />
+        ))}
       </g>
     </svg>
   )

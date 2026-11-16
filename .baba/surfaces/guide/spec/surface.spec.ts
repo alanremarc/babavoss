@@ -30,7 +30,7 @@ test("the agent reads the groups at /, a group's specimens below it, and a speci
   const { agent } = story(guide)
 
   expect((agent.sees() as { groups: { at: string }[] }).groups.map((g) => g.at)).toEqual(["/mark", "/foundations", "/primitives", "/layouts", "/shell"])
-  expect(agent.sees("/mark")).toMatchObject({ title: "Mark", sections: [{ specimens: [{ at: "/mark/states" }, { at: "/mark/moves" }] }] })
+  expect(agent.sees("/mark")).toMatchObject({ title: "Mark", sections: [{ specimens: [{ at: "/mark/states" }, { at: "/mark/moves" }, { at: "/mark/sphere" }] }] })
   expect(agent.sees("/shell/drawer")).toMatchObject({ title: "Drawer", group: { at: "/shell" }, files: expect.arrayContaining(["framework/shell/ui/drawer.tsx"]) })
   expect(agent.sees("/primitives/nothing")).toBeUndefined()
   expect(agent.offered()).toEqual([])
