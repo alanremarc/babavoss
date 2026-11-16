@@ -7,7 +7,8 @@ import type { Handle } from "babavoss/core/index.ts"
 export type Status = "draft" | "backlog" | "lane" | "done"
 export type Row = { at: string; n: number; title: string; status: Status; lane?: number; narrative: string; from?: number[]; note?: string }
 export type Story = { at: string; id: string; title: string; issues: number; open: number }
-export type Root = { lanes: number; free: number[]; narratives: Story[]; issues: Row[] }
+/** `reading`: a new tab has not heard the session's work yet. */
+export type Root = { lanes: number; free: number[]; narratives: Story[]; issues: Row[]; reading?: true }
 export type Told = { id: string; title: string; about: string; issues: (Row & { iterations: number })[] }
 export type Ref = { at: string; n: number; title: string; status: Status }
 export type Iteration = { n: number; title: string; why: string; decided: string; outcome: string }

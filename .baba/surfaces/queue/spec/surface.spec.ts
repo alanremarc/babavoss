@@ -4,6 +4,7 @@
 import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
 import { store, type Store } from "../src/store.ts"
+import type { Work } from "../src/work.ts"
 import { queue } from "../src/surface.ts"
 
 type Row = { n: number; status: string; lane?: number; note?: string; narrative: string; from?: number[] }
@@ -193,4 +194,22 @@ test("the work is the session's: a second tab shows it and follows changes, and 
 
   expect(rows(later.agent.sees())).toEqual([[1, "lane", 1]])
   expect(await later.agent.call("/issues/1", "start", { n: 1, lane: 2 })).toMatchObject({ outcome: "refused" })
+})
+
+test("a new tab says it is reading until it hears the session's work, so its page never shows none for an instant", async () => {
+  const work = store()
+  const first = await tab(work)
+
+  await first.agent.call("/", "add", { title: "One", about: "Why" })
+
+  const fresh = story(queue(work), { effects: "real" })
+
+  expect(fresh.person.sees()).toMatchObject({ reading: true, issues: [] })
+  await heard()
+  expect(fresh.person.sees()).not.toHaveProperty("reading")
+  expect(rows(fresh.person.sees())).toEqual([[1, "backlog", undefined]])
+
+  const kept: Work = { issues: [], narratives: [], next: 1, clock: 0 }
+
+  expect(story(queue(store()), { model: { work: kept } }).person.sees()).not.toHaveProperty("reading")
 })

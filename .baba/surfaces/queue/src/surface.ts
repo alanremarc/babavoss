@@ -4,7 +4,8 @@
 // moves; the person reads it on the page, as a list or as a map. Nothing here does the work: it says who is delivering what
 // and why. The work is the session's, not a tab's: every queue tab of the session opens the one record (store.ts) and
 // writes through to it, so a second tab shows the same work and a closed one loses nothing. A tab keeps a copy of the work
-// as it last heard it, so it shows at once; a tab kept from before brings its issues into the record once (migrate.ts).
+// as it last heard it, so it shows at once, and a new one says it is reading until it first hears it; a tab kept from
+// before brings its issues into the record once (migrate.ts).
 import { action, admit, detail, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
 import { sessionDir } from "babavoss/core/state/session-dir.ts"
 import { adopt, isLegacy } from "./migrate.ts"
@@ -15,8 +16,11 @@ export const LANES = 5
 /** How many updates an issue's channel keeps: the latest. */
 const KEPT = 200
 
-/** `brings`: work kept from before, to merge into the session's when the tab opens it; `trouble`: why the record cannot be reached. */
-export type Model = { work: Work; brings?: Work; trouble?: string }
+/**
+ * `brings`: work kept from before, to merge into the session's when the tab opens it; `trouble`: why the record cannot be
+ * reached; `reading`: a new tab has not heard the record yet, so the work it holds is no one's and is not shown as none.
+ */
+export type Model = { work: Work; brings?: Work; trouble?: string; reading?: true }
 export type Event = { kind: "heard"; work: Work } | { kind: "failed"; command: string; error: string }
 export type Command = { kind: "open"; brings?: Work } | { kind: "apply"; call: Call }
 type Result = Update<Work, never>
@@ -337,7 +341,7 @@ export function queue(work: Store): Surface<Model, Event, Command> {
     description:
       "Track the session's work as issues, each in the backlog, in a lane or done, on a narrative with what it came out of and the reasoning of each pass, " +
       "seen as a list or as a map. Use when work is asked for, starts, moves, branches, needs another pass or lands.",
-    init: () => ({ work: empty() }),
+    init: () => ({ work: empty(), reading: true }),
     // A tab kept from before holds the queue's issues itself: they are brought into the session's work. State that is
     // neither, as when the surface was still the template it began as, starts empty.
     restore(saved) {
@@ -357,7 +361,11 @@ export function queue(work: Store): Surface<Model, Event, Command> {
     session: (c) => c.kind === "open",
     update(m, message): Update<Model, Command> {
       if (message.kind === "heard") return { model: { work: message.work } }
-      if (message.kind === "failed") return { model: { ...m, trouble: `${message.command}: ${message.error}` } }
+      if (message.kind === "failed") {
+        const { reading: _reading, ...held } = m
+
+        return { model: { ...held, trouble: `${message.command}: ${message.error}` } }
+      }
 
       const at = message.path.startsWith("/map") ? { ...message, path: message.path.slice("/map".length) || "/" } : message
       const r = pages.update(m.work, at)
@@ -369,7 +377,10 @@ export function queue(work: Store): Surface<Model, Event, Command> {
     view(m, path, actor) {
       const seen = viewAt(m.work, path, actor)
 
-      return seen && path === "/" && m.trouble ? { ...seen, broken: `the session's work cannot be kept: ${m.trouble}` } : seen
+      if (!seen || path !== "/") return seen
+      if (m.trouble) return { ...seen, broken: `the session's work cannot be kept: ${m.trouble}` }
+
+      return m.reading ? { ...seen, reading: true } : seen
     },
     async run(c, send, signal) {
       if (c.kind === "open") return work.open(c.brings, (w) => send({ kind: "heard", work: w }), signal)

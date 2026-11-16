@@ -249,7 +249,9 @@ export default function Queue() {
         roomy={roomy}
       />
     )
-  const empty = (
+  // A new tab that has not heard the session's work yet shows its ground alone: the work it holds is no one's, not none.
+  const heard = root && !root.reading ? root : undefined
+  const empty = heard && (
     <Empty>
       <EmptyHeader>
         <EmptyTitle>No issues</EmptyTitle>
@@ -275,7 +277,7 @@ export default function Queue() {
               </Button>
             </div>
           )}
-          {detail(false) ?? (root && <Narratives root={root} told={told} focus={focus && told[focus] ? focus : undefined} colorOf={colorOf} go={go} />)}
+          {detail(false) ?? (heard && <Narratives root={heard} told={told} focus={focus && told[focus] ? focus : undefined} colorOf={colorOf} go={go} />)}
         </aside>
       </div>
     )
@@ -287,7 +289,7 @@ export default function Queue() {
         {focus && told[focus] ? <Narrative told={told[focus]!} color={colorOf(focus)} go={go} /> : (detail(true) ?? (!issues.length && empty))}
       </main>
       <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label={lens === "archive" ? "Archive" : "Issues"}>
-        {root && <Stack root={root} groups={lens === "archive" ? ARCHIVE : OPEN} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
+        {heard && <Stack root={heard} groups={lens === "archive" ? ARCHIVE : OPEN} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
       </aside>
     </div>
   )
