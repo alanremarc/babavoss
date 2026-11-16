@@ -246,7 +246,7 @@ function Facts({ view }: { view: Json }) {
   )
 }
 
-/** The person's page after a step: its tabs, and the one in front, or the one a path picked, drawn by its surface's own page, inert. */
+/** The person's page after a step: its tabs, and the one in front, or the one a path picked, drawn by its surface's own page, inert; Home where none is. */
 function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?: string }) {
   const frame = useRef<HTMLDivElement | null>(null)
   const page = step?.page
@@ -273,7 +273,7 @@ function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?:
     >
       <div className="flex h-full flex-col">
         <div className="flex h-6 shrink-0 items-center gap-0.5 overflow-hidden border-b px-1">
-          <span className="text-muted-foreground/70 px-1.5 text-meta">Home</span>
+          <span className={`flex h-5 shrink-0 items-center rounded-sm px-1.5 text-meta ${front ? "text-muted-foreground/70" : "bg-muted text-foreground"}`}>Home</span>
           {tabs.map((t) => {
             const view = (t.view ?? {}) as { title?: string; attention?: { who?: string } }
             const isNew = !earlier.some((e) => e.at === t.at)
@@ -295,7 +295,9 @@ function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?:
           {!step ? (
             <p className="text-muted-foreground p-3 text-body">Not played yet.</p>
           ) : !front ? (
-            <p className="text-muted-foreground p-3 text-body">No tab is open: the page shows Home.</p>
+            <p className="text-muted-foreground p-3 text-body">
+              {tabs.length ? "The page shows Home: the person has not gone to a tab, and the agent has not shown them one." : "No tab is open: the page shows Home."}
+            </p>
           ) : (
             (PAGES[front.surface]?.draw(front.view) ?? <Facts view={front.view} />)
           )}

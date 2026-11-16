@@ -121,11 +121,12 @@ test("a scenario's path lists its steps with sizes and an at each; a step's path
 test("a step carries what the person's page showed after it: each open tab at /, as the person reads it, and the tab in front", async () => {
   const { agent } = await played()
   const at = (did: string) => agent.sees(`/scenarios/ask/${stepOf("ask", did).n}/page`) as Page
-  const task = (page: Page) => (page.tabs.find((t) => t.at === page.shown)!.view as { tasks: Json[] }).tasks[0]
+  const task = (page: Page) => (page.tabs.find((t) => t.at === "/tasks")!.view as { tasks: Json[] }).tasks[0]
   const done = at(`${WORD} /tabs/1/tasks/1 done`)
 
   expect(at("says: Write the notes and have me check them.")).toEqual({ tabs: [] })
-  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toMatchObject({ shown: "/tasks", tabs: [{ at: "/tasks", surface: "tasks" }] })
+  // The agent opening a tab leaves the page on home, as the shell's page does until the person moves.
+  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toEqual({ tabs: [expect.objectContaining({ at: "/tasks", surface: "tasks" })] })
   expect(task(at(`${WORD} /tabs/1 add 'title=Write the notes'`))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "todo" })
   // In review, the task carries the person's asks, as their page has them, and the tab says they are waited for.
   expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve", ask: true }, reopen: { ask: true } })
@@ -138,14 +139,23 @@ test("a step carries what the person's page showed after it: each open tab at /,
   expect(told.filter((t) => /baba \S+ (approve|reopen)/.test(t))).toEqual([])
   expect((agent.sees(`/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
     at: `/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
-    tabs: ["tasks /tasks (in front)"],
+    tabs: ["tasks /tasks"],
+    front: "home",
   })
 
-  // Where the person acts is in front, and a page that sleeps is as it last was.
+  // Where the person acts is in front from then on, and a page that sleeps is as it last was.
   const beside = plays.find((p) => p.name === "beside")!.steps
+  const acted = stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1
 
-  expect(beside.map((s) => s.page.shown).filter(Boolean).at(-1)).toBe("/tasks")
-  expect(beside[stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1]!.page.shown).toBe("/tasks")
+  expect(beside.slice(0, acted).map((s) => s.page.shown)).toEqual(Array(acted).fill(undefined))
+  expect(beside.slice(acted).every((s) => s.page.shown === "/tasks")).toBe(true)
+  // The agent's show is gone to; a tab the person opens from home is gone to; one closed in front leaves the next, or home.
+  const shownAt = (name: string, did: string) => plays.find((p) => p.name === name)!.steps[stepOf(name, did).n - 1]!.page.shown
+
+  expect(shownAt("housekeeping", `${WORD} / show at=/tabs/1/tasks/1`)).toBe("/tasks")
+  expect(shownAt("housekeeping", 'on the page: open surface="settings" at /')).toBe("/settings")
+  expect(shownAt("moved", "on the page: close n=1 at /")).toBeUndefined()
+  expect(shownAt("moved", 'on the page: open surface="tasks" at /')).toBe("/tasks")
   expect(plays.find((p) => p.name === "break")!.steps.find((s) => s.who === "root")!.page).toMatchObject({ asleep: true, tabs: [{}, {}] })
 })
 

@@ -153,13 +153,14 @@ const stepWhole = (m: Model, play: Play, n: number) => {
   }
 }
 
-/** What the person's page showed after a step, in a line: the tab in front and the others, and an at to their views. */
+/** What the person's page showed after a step, in a line: the tab in front and the others, or home in front, and an at to their views. */
 const pageRow = (step: Played, at: string) => {
   const { tabs, shown, asleep } = step.page ?? { tabs: [] }
 
   return {
     at: `${at}/page`,
     tabs: tabs.length ? tabs.map((t) => `${t.surface} ${t.at}${t.at === shown ? " (in front)" : ""}`) : "none open",
+    ...(tabs.length && !shown && { front: "home" }),
     ...(asleep && { asleep: true }),
   }
 }

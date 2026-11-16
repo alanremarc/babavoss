@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Json } from "babavoss/core/index.ts"
 import { endDeaf, type Endpoint } from "babavoss/core/runtime/service.ts"
+import { HOME, placeOf, pointedSince, type Pointed } from "babavoss/shell/ui/pointing.ts"
+import { newestFirst, successor } from "babavoss/shell/ui/strip.ts"
 import type { Scenario, Scripted, Step } from "./scenarios.ts"
 
 /** The session the demo runs in, as the harness names it. */
@@ -42,9 +44,9 @@ export type Played = {
 /** An open tab as the person's page draws it: its path, its surface, and its view at /, the paths in it the tab's own and each handle kept to what a page draws. */
 export type Drawn = { at: string; surface: string; view: Json }
 /**
- * What the person's page showed after a step: the open tabs, and the one in front, `shown`: where the person last acted,
- * or where the agent last pointed them; before either, the tab opened last, which the strip marks for them. `asleep`: the
- * root was asleep, so the page is as it last was.
+ * What the person's page showed after a step: the open tabs, and the one in front, `shown`, by the shell's page's own rule:
+ * none, home, until the person moves, and then where they moved or the agent pointed them. `asleep`: the root was asleep,
+ * so the page is as it last was.
  */
 export type Page = { tabs: Drawn[]; shown?: string; asleep?: true }
 export type Play = { name: string; steps: Played[]; error?: string }
@@ -292,12 +294,6 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
     }
   }
   const tabsOf = (root: Json | undefined) => (root as { tabs?: { at: string; n: number; surface: string }[] } | undefined)?.tabs ?? []
-  /** The address of the open tab a path is in, by that address or by its number, /tabs/N. */
-  const tabIn = (root: Json | undefined, path: string) => {
-    const under = (at: string) => path === at || path.startsWith(`${at}/`)
-
-    return tabsOf(root).find((t) => under(t.at) || under(`/tabs/${t.n}`))?.at
-  }
   /** The project as the page has it: /, what /activity added since the last look, and each open tab at /. */
   let seen = 0
   const look = async () => {
@@ -311,18 +307,42 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
     return { root, tabs, activity: fresh.map((e) => `activity: ${e.who} · ${e.surface} ${e.at ?? ""} · ${e.what}`) }
   }
   const tabOf = (root: Json | undefined, surface: string) => tabsOf(root).find((t) => t.surface === surface)?.at
-  /** The tab in front: where the person acted or the agent pointed, held until it closes; else the tab opened last. */
-  let front: string | undefined
+  /**
+   * Where the person's page stands, as the shell's page keeps it in its URL (shell.tsx): home until the person moves. The
+   * person's call at a tab is made in it; opened from home, a tab is gone to; closed while in front, the page goes to the
+   * next in the strip, or home. The agent's `show` is gone to, where its tab is open, as when the person is not busy, but
+   * not one made before the page first looked. A tab in front that closes otherwise leaves home in front, unless the URL's
+   * number names a tab that now stands at its surface's name.
+   */
+  let at = HOME
   let pointed: number | undefined
-  const shownAfter = (step: Step, root: Json | undefined, tabs: Drawn[]) => {
-    const point = (root as { pointed?: { at: string; n: number } } | undefined)?.pointed
+  const activeIn = (rows: { at: string; n: number }[]) => (at === HOME || rows.some((r) => r.at === at) ? at : (rows.find((r) => at === `/tabs/${r.n}`)?.at ?? HOME))
+  const shownAfter = (step: Step, previous: Json | undefined, root: Json | undefined) => {
+    const rows = tabsOf(root)
+    const active = () => activeIn(rows)
+    const front = activeIn(tabsOf(previous))
+    const moved = (path: string, handle: string, args: Record<string, Json> = {}) => {
+      const key = placeOf(path).key
 
-    if (step.kind === "act") front = tabIn(root, step.path)
-    else if (point && point.n !== pointed) front = tabIn(root, point.at)
-    pointed = point?.n ?? pointed
-    if (front && !tabs.some((t) => t.at === front)) front = undefined
+      if (key !== HOME) at = key
+      else if (handle === "open") at = newestFirst(rows.filter((r) => r.surface === args.surface))[0]?.at ?? at
+      else if (handle === "close") {
+        const closed = tabsOf(previous).find((t) => t.n === args.n)
 
-    return front ?? tabs.at(-1)?.at
+        if (closed?.at === front) at = successor(newestFirst(tabsOf(previous)), closed.at) ?? HOME
+      }
+    }
+
+    if (step.kind === "act") moved(step.path, step.handle, step.args)
+    if (step.kind === "acts") for (const c of step.calls) moved(c.path, c.handle, c.args)
+
+    const { seen, fresh } = pointedSince(pointed, (root as { pointed?: Pointed } | undefined)?.pointed)
+
+    pointed = seen
+    if (fresh && rows.some((r) => r.at === placeOf(fresh.at).key)) at = placeOf(fresh.at).key
+    if (!rows.some((r) => at === `/tabs/${r.n}`)) at = active()
+
+    return at === HOME ? undefined : active()
   }
   let waiting: Promise<Telling> | undefined
   const steps: Played[] = []
@@ -406,9 +426,9 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
       }
       case "go": {
         const root = await page("/")
-        const point = (root as { pointed?: { at: string } } | undefined)?.pointed
+        const point = (root as { pointed?: Pointed } | undefined)?.pointed
 
-        front = point && tabIn(root, point.at)
+        if (point && tabsOf(root).some((r) => r.at === placeOf(point.at).key)) at = placeOf(point.at).key
 
         return { who: "person", did: `goes where the agent pointed them${point ? `: ${point.at}` : ", but it pointed nowhere"}`, tellings: [] }
       }
@@ -481,7 +501,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
       const done = { ...(await one(step)), ...(step.timing && { timing: step.timing }), ...(unhooked ? { unhooked: true as const } : {}) }
       const after = await look()
 
-      const shown = after.root === undefined ? undefined : shownAfter(step, after.root, after.tabs)
+      const shown = after.root === undefined ? undefined : shownAfter(step, before.root, after.root)
       const page: Page =
         after.root === undefined ? { ...(steps.at(-1)?.page ?? { tabs: [] }), asleep: true } : { tabs: after.tabs, ...(shown && { shown }) }
 
