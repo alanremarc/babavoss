@@ -268,13 +268,15 @@ const open = action({
 const row = (entry: Entry) => ({ at: `/entries/${entry.i}`, i: entry.i, kind: entry.kind, title: entry.title, size: entry.text.length, line: line(entry) })
 /** An entry whole: what entered the context, its size, and what it cost where it is a turn. */
 const whole = (entry: Entry) => ({ at: `/entries/${entry.i}`, ...entry, size: entry.text.length })
-const rows = (m: Model, from = 0) =>
-  m.run && {
-    run: m.run.id ?? null,
-    entries: m.run.entries.slice(from).map((entry) => ({ ...row(entry), context: entry.context ?? null, growth: entry.growth ?? null })),
-  }
-const injected = (m: Model, from = 0) =>
-  m.run && { run: m.run.id ?? null, injected: m.run.entries.slice(from).filter((entry) => entry.kind === "hook").map(whole) }
+// With no run, the timeline is there and empty: the page asks for it before a run starts.
+const rows = (m: Model, from = 0) => ({
+  run: m.run?.id ?? null,
+  entries: (m.run?.entries ?? []).slice(from).map((entry) => ({ ...row(entry), context: entry.context ?? null, growth: entry.growth ?? null })),
+})
+const injected = (m: Model, from = 0) => ({
+  run: m.run?.id ?? null,
+  injected: (m.run?.entries ?? []).slice(from).filter((entry) => entry.kind === "hook").map(whole),
+})
 const checkout = (c: Checkout | undefined) => c && { checkout: c.from, commit: c.commit.slice(0, 10), uncommitted: c.dirty.length }
 const HOW =
   "Start a run, say a message, then wait: the wait ends when the turn does, status idle. Read what the agent under test was told: " +

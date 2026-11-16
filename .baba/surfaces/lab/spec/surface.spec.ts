@@ -264,6 +264,8 @@ test("a message is refused while no run is up", async () => {
   const { agent } = story(lab(fakeHarness().harness, place().runs), { effects: "real" })
 
   expect(agent.sees()).toMatchObject({ status: "no run", runs: { count: 0 } })
+  expect(agent.sees("/entries")).toEqual({ run: null, entries: [] })
+  expect(agent.sees("/injected")).toEqual({ run: null, injected: [] })
   expect(agent.offered()).toEqual(["start", "start_from"])
   expect(await agent.call("/", "say", { text: "hello" })).toMatchObject({ outcome: "refused" })
   expect(await agent.call("/", "start", { model: "gpt" })).toEqual({ outcome: "refused", reason: "model is one of haiku, sonnet, opus" })
