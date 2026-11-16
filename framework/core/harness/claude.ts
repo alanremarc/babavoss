@@ -1,6 +1,7 @@
 // Claude Code's adapter. Set up: a project-level plugin, the package's plugin/claude/, which is the skill baba and the
 // framework's hook for each event; the project gets one link to it, .claude/skills/baba, which Claude Code loads in place
-// in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json. Hooks: Claude Code's input
+// in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json; an organisation's managed
+// settings that keep the plugin or its hook from running are read, where they can be, and said. Hooks: Claude Code's input
 // and output, whose names the framework's moments are. Run: one long-lived headless process per session, spoken to and
 // read as JSON lines, in a home of its own, so its transcripts, settings and caches land there and the person's own are
 // neither read nor written; the project is trusted in that home, so its plugin loads as in the person's own session. Its
@@ -303,6 +304,129 @@ function ours(link: string): boolean {
   }
 }
 
+/** The plugin's id in Claude Code: its manifest's name, loaded from a skills folder. */
+export const PLUGIN_ID = "baba@skills-dir"
+
+/**
+ * Where Claude Code reads an organisation's managed settings on this machine, as its documents say, highest first: the
+ * MDM profile, on macOS, then the system directory's managed-settings.json with managed-settings.d/*.json merged after it.
+ * BABAVOSS_MANAGED stands for the system directory, and leaves the profile out, so a spec reads its own and never the machine's.
+ */
+export function managedAt(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): { profiles: string[]; dir?: string } {
+  if (env.BABAVOSS_MANAGED !== undefined) return { profiles: [], dir: env.BABAVOSS_MANAGED || undefined }
+  if (platform === "darwin") {
+    const domain = "com.anthropic.claudecode.plist"
+    const user = env.USER ? [join("/Library/Managed Preferences", env.USER, domain)] : []
+
+    return { profiles: [join("/Library/Managed Preferences", domain), ...user], dir: "/Library/Application Support/ClaudeCode" }
+  }
+
+  return { profiles: [], dir: platform === "win32" ? "C:\\Program Files\\ClaudeCode" : platform === "linux" ? "/etc/claude-code" : undefined }
+}
+
+/** Two documents merged as Claude Code merges its drop-ins: lists joined, objects key by key, any other value the later's. */
+const merged = (a: O, b: O): O =>
+  Object.fromEntries(
+    [...new Set([...Object.keys(a), ...Object.keys(b)])].map((key) => {
+      const [x, y] = [a[key], b[key]]
+
+      if (y === undefined) return [key, x]
+      if (Array.isArray(x) && Array.isArray(y)) return [key, [...x, ...y]]
+      if (x && y && typeof x === "object" && typeof y === "object" && !Array.isArray(x) && !Array.isArray(y)) return [key, merged(x, y)]
+
+      return [key, y]
+    })
+  )
+const readObject = (text: string): O | undefined => {
+  try {
+    const value = JSON.parse(text) as Json
+
+    return value && typeof value === "object" && !Array.isArray(value) ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+/** The keys that say how managed sources combine, and set no policy themselves. */
+const CONTROL = ["managedSourcesBehavior", "parentSettingsBehavior"]
+const policyIn = (value: O | undefined): value is O => !!value && Object.keys(value).some((key) => !CONTROL.includes(key))
+
+/**
+ * The managed policy Claude Code applies on this machine, as far as it can be read without changing anything, and where
+ * it was read: the first source that sets a policy, or each, merged, where the first says "merge". The settings an
+ * organisation's console delivers are read by Claude Code from its servers, and the registry on Windows, are not read here.
+ */
+export function managedPolicy(at = managedAt()): { from: string; policy: O } | undefined {
+  const sources: { from: string; policy: O }[] = []
+
+  for (const profile of at.profiles) {
+    if (!existsSync(profile)) continue
+
+    const read = Bun.spawnSync(["plutil", "-convert", "json", "-o", "-", profile], { stdout: "pipe", stderr: "ignore" })
+    const policy = read.exitCode === 0 ? readObject(read.stdout.toString()) : undefined
+
+    if (policyIn(policy)) sources.push({ from: profile, policy })
+  }
+  if (at.dir) {
+    const drops = join(at.dir, "managed-settings.d")
+    const files = [
+      join(at.dir, "managed-settings.json"),
+      ...(existsSync(drops) ? readdirSync(drops).filter((name) => name.endsWith(".json") && !name.startsWith(".")).sort().map((name) => join(drops, name)) : []),
+    ]
+    const read = files.flatMap((file) => {
+      const policy = existsSync(file) ? readObject(readFileSync(file, "utf8")) : undefined
+
+      return policy ? [{ file, policy }] : []
+    })
+    const policy = read.reduce<O>((all, { policy }) => merged(all, policy), {})
+
+    if (policyIn(policy)) sources.push({ from: read.length === 1 ? read[0]!.file : at.dir, policy })
+  }
+
+  const [first] = sources
+
+  if (!first) return undefined
+
+  return first.policy.managedSourcesBehavior === "merge" ? { from: sources.map((s) => s.from).join(" and "), policy: sources.reduce<O>((all, s) => merged(all, s.policy), {}) } : first
+}
+
+const SURFACES = ["skills", "agents", "hooks", "mcp"]
+const skillsDir = (sources: Json | undefined) => list(sources).some((source) => obj(source).source === "skills-dir")
+
+/**
+ * Why a managed policy keeps the plugin's hook from running, as Claude Code's documents say, with what can be done; undefined
+ * where nothing in it does. A skills folder's plugin is skipped whole where customisation is locked to plugins, where the
+ * marketplaces allowed leave out skills folders or those blocked name them, or where the plugin is turned off; its hooks
+ * alone stop where only managed hooks run, unless the policy turns the plugin on, or where hooks are disabled.
+ */
+export function blockOf(policy: O): string | undefined {
+  const enabled = obj(policy.enabledPlugins)[PLUGIN_ID]
+  const locked = policy.strictPluginOnlyCustomization
+  const allowed = policy.strictKnownMarketplaces ?? policy.allowedMarketplaces
+  const skipped = (why: string) => `${why}, so Claude Code skips the plugin ${PLUGIN_LINK}, and its hook`
+  const offer = "ask whoever manages Claude Code here to allow it"
+  const flag = policy.disableSideloadFlags === true ? "" : `, or start claude with --plugin-dir ${PLUGIN_LINK}`
+
+  if (enabled === false) return `${skipped(`turn ${PLUGIN_ID} off`)}; ${offer}`
+  if (locked === true || (Array.isArray(locked) ? locked.some((s) => SURFACES.includes(str(s))) : locked !== undefined && locked !== false))
+    return `${skipped("lock customisation to plugins (strictPluginOnlyCustomization)")}; ${offer}${flag}`
+  if (allowed !== undefined && !skillsDir(allowed))
+    return `${skipped('allow no skills folder among the marketplaces (strictKnownMarketplaces)')}; ${offer}: { "source": "skills-dir" } among them${flag}`
+  if (skillsDir(policy.blockedMarketplaces)) return `${skipped("block skills folders (blockedMarketplaces)")}; ${offer}${flag}`
+  if (policy.disableAllHooks === true) return `disable every hook (disableAllHooks), baba's among them; ${offer}`
+  if (policy.allowManagedHooksOnly === true && enabled !== true)
+    return `run only the organisation's hooks (allowManagedHooksOnly), not baba's; ${offer}: "${PLUGIN_ID}": true in its enabledPlugins`
+
+  return undefined
+}
+
+/** What keeps Claude Code from running baba's hook on this machine, said in one line; undefined where nothing read does. */
+export function blocked(at = managedAt()): string | undefined {
+  const managed = managedPolicy(at)
+  const why = managed && blockOf(managed.policy)
+
+  return why && `baba: Claude Code's managed settings (${managed.from}) ${why}. Until then no session here is told of the surfaces.`
+}
+
 /** The settings' hooks without the framework's, which the plugin now carries: run from both, each would run twice. */
 const stripped = (project: string) => editJson(join(project, SETTINGS), (value) => withHooks(value, without((value.hooks ?? {}) as Hooks)), false)
 
@@ -338,8 +462,11 @@ export const claude: Adapter<ClaudeOptions> = {
     }
     if (stripped(project)) paths.push(SETTINGS)
 
-    return { paths }
+    const said = blocked()
+
+    return { paths, ...(said && { said }) }
   },
+  blocked: () => blocked(),
   withdraw(project): SetUp {
     const link = join(project, PLUGIN_LINK)
     const paths: string[] = []

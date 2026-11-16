@@ -283,6 +283,32 @@ test("the hook reads the configuration as it runs: an event not listed tells not
   }
 }, 60_000)
 
+test("provision and start say in one line where an organisation's managed settings keep Claude Code from running baba's hook; a harness not enabled is not read for", () => {
+  const managed = mkdtempSync(join(tmpdir(), "managed-"))
+  const env = { ...process.env, BABAVOSS_MANAGED: managed, CLAUDE_CODE_SESSION_ID: "managed", CODEX_THREAD_ID: "" }
+  const baba_ = (args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: baba, encoding: "utf8", env })
+  const line = `baba: Claude Code's managed settings (${join(managed, "managed-settings.json")}) disable every hook (disableAllHooks), baba's among them;`
+
+  try {
+    expect(baba_(["provision"]).stdout).not.toContain("managed settings")
+    writeFileSync(join(managed, "managed-settings.json"), JSON.stringify({ disableAllHooks: true }))
+    expect(baba_(["provision"]).stdout).toContain(line)
+
+    const started = baba_(["start"])
+
+    expect(started.status, started.stderr).toBe(0)
+    expect(started.stderr.split("\n").filter((l) => l.startsWith("baba: "))).toEqual([expect.stringContaining(line)])
+    expect(started.stdout).toContain("page: ")
+    config("{ harnesses: { claude: { enable: false } } }")
+    expect(baba_(["start"]).stderr).not.toContain("managed settings")
+  } finally {
+    rmSync(join(baba, "baba.config.ts"), { force: true })
+    baba_(["provision"])
+    baba_(["start", "close"])
+    rmSync(managed, { recursive: true, force: true })
+  }
+}, 60_000)
+
 test("a session's start gives what the skill baba gives and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)
 
