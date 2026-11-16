@@ -134,20 +134,23 @@ export const GROUPS = [
     about: "What the shell draws around every surface",
     sections: [
       {
-        title: "Strip",
+        title: "Rail",
         entries: [
-          { id: "strip", title: "Strip", files: [`${SHELL}/tabs.tsx`, `${SHELL}/strip.ts`, `${SHELL}/tab-scroll.ts`], states: ["home", "active", "new", "waits on you", "needs the agent", "broken", "long title", "dots"] },
-          { id: "tab-menu", title: "Tab menu", files: [`${SHELL}/actions.tsx`, `${SHELL}/commands.ts`], states: ["actions", "asks", "place", "go", "dots", "search", "controls"] },
-          { id: "home", title: "Home", files: [`${SHELL}/home.tsx`, `${SHELL}/home.ts`], states: ["tabs", "surfaces", "needs", "broken"] },
+          { id: "rail", title: "Rail", files: [`${SHELL}/rail.tsx`, `${SHELL}/rail.ts`, `${SHELL}/tab-scroll.ts`], states: ["left", "right", "top", "bottom", "marks", "long title", "dots"] },
+          { id: "bubble", title: "Bubble", files: [`${SHELL}/bubbles.tsx`], states: ["right", "left", "down", "up", "from"] },
+        ],
+      },
+      {
+        title: "Drawer",
+        entries: [
+          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`], states: ["a tab's", "home's", "broken", "menu", "search", "pinned"] },
+          { id: "entries", title: "Entries", files: [`${SHELL}/thread.ts`, `${SHELL}/drawer.tsx`], states: ["notice", "calls", "tab entry", "on home"] },
           { id: "inputs", title: "Input modal", files: [`${SHELL}/inputs.tsx`], states: ["form", "refused"] },
         ],
       },
       {
-        title: "Activity",
-        entries: [
-          { id: "notices", title: "Notices", files: [`${SHELL}/notifications.tsx`], states: ["toasts", "idle", "unseen", "waiting", "open"] },
-          { id: "activity", title: "Activity", files: [`${SHELL}/notifications.tsx`, `${SHELL}/activity.tsx`, `${SHELL}/channels.ts`], states: ["channels", "the agent sees next", "history", "needs you", "empty"] },
-        ],
+        title: "Home",
+        entries: [{ id: "desktop", title: "Desktop", files: [`${SHELL}/home.tsx`, `${SHELL}/home.ts`], states: ["open", "tabs", "marked", "broken", "foot"] }],
       },
       {
         title: "Standing",

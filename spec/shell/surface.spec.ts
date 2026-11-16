@@ -365,6 +365,8 @@ describe("the shell surface", () => {
     await agent.call("/", "open", { surface: "counter" })
     await world.settle({ kind: "tab", n: 1, event: { kind: "bumped" } })
     expect(agent.offered("/")).toContain("show")
+    // The person is not offered it: home's menu, drawn from the view at /, has no way to point them at themselves.
+    expect(person.offered("/")).not.toContain("show")
     expect(await agent.call("/", "show", { at: "/tabs/1/n/" })).toMatchObject({ outcome: "written" })
     // Pointed by number or by name, it is said by the tab's address.
     expect(person.sees("/")!.pointed).toEqual({ at: "/counter/n", n: 1 })
@@ -520,17 +522,19 @@ describe("the shell surface", () => {
     await r.stop()
   })
 
-  it("keeps the title a closed tab had, which its activity says, across a restart", async () => {
+  it("lets a closed tab's entries go across a restart, and those of a tab closed in state kept before entries went with their tab", async () => {
     const s = story(shell({ counter }, BABA))
 
     await s.agent.call("/", "open", { surface: "counter" })
     await s.agent.call("/counter", "bump", { by: 1 })
     await s.person.call("/", "close", { n: 1 })
     await s.restart()
+    expect((s.agent.sees("/activity")!.entries as { what: string }[]).map((r) => r.what)).toEqual(["closed", "opened"])
 
-    const rows = s.agent.sees("/activity")!.entries as { tab?: string; title?: string }[]
+    const old = { n: 1, when: 0, who: "agent", surface: "counter", at: "/tabs/4", what: "bump by=1" }
+    const kept = shell({ counter }, BABA).restore!({ tabs: [], next: 5, activity: [old, { ...old, n: 2, what: "closed", own: true }] })
 
-    expect(rows.filter((r) => r.tab === "/tabs/1").map((r) => r.title)).toEqual(["Counter"])
+    expect(kept.activity!.map((e) => e.what)).toEqual(["closed"])
   })
 
   it("names tabs and paths, and refuses bad surface names", () => {

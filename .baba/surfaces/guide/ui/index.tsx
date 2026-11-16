@@ -41,7 +41,7 @@ export default function Guide() {
       const target = entry ? document.getElementById(idOf(`${group.at}/${entry}`)) : null
       const box = main.current
 
-      // The content scrolls, never the page around it, which the strip heads.
+      // The content scrolls, never the page around it, which the rail stands beside.
       if (box) box.scrollTop = target ? target.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12 : 0
       document.scrollingElement?.scrollTo({ top: 0 })
     }

@@ -1,6 +1,7 @@
-// What an action asks of the person before it runs, in a modal over the tab: the surface's own drawer for it, where its page
-// exports one, or else a form the shell makes from the action's inputs, one field each, under its description. Both end in
-// the same call; a refusal is shown in the modal with its reason and the modal stays open, and a call admitted closes it.
+// What an action asks of the person before it runs, in a modal over the page, wherever it was started, a tab's drawer or
+// home's: the surface's own drawer for it, where its page exports one, or else a form the shell makes from the action's
+// inputs, one field each, under its description. Both end in the same call; a refusal is shown in the modal with its
+// reason and the modal stays open, and a call admitted closes it.
 import { useState, type ComponentType, type ReactNode } from "react"
 import { Button } from "../../kit/components/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../kit/components/dialog"
@@ -8,7 +9,6 @@ import { Input } from "../../kit/components/input"
 import { Textarea } from "../../kit/components/textarea"
 import type { Args, Handle, View } from "../../core/surface/view.ts"
 import { argsOf, named, type Offered } from "./commands.ts"
-import { useLive } from "./tab.tsx"
 
 /**
  * What a drawer is given: the handle as offered, the path within the tab it is offered at, the view there now, `submit`,
@@ -18,18 +18,20 @@ export type DrawerProps = { handle: Handle; path: string; view?: View; submit: (
 /** A page's drawers, by the name of the action each asks the inputs of: `export const drawers = { add: AddIssue }`. */
 export type Drawers = Record<string, ComponentType<DrawerProps>>
 
+/** `view` is the view where the action is offered, which a surface's drawer is given. */
 export function Inputs({
   action,
+  view,
   drawer: Drawer,
   call,
   close,
 }: {
   action: Offered
+  view?: View
   drawer?: ComponentType<DrawerProps>
   call: (action: Offered, args: Args) => Promise<string | undefined>
   close: () => void
 }) {
-  const { view } = useLive(action.path)
   const [refused, setRefused] = useState("")
   const submit = async (args: Args) => {
     const reason = await call(action, args)

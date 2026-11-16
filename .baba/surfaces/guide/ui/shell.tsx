@@ -1,27 +1,30 @@
-// The shell's specimens: the strip with tabs in every standing and their menus, home, the modal an action's inputs open
-// in, the notices and the activity drawer, the connection's states and a tab's own. Each is the shell's component, given
-// sample data (samples.ts) where the live shell gives it the runtime's; a tab's menu reads sample views through a door
-// of their own, so what it lists, orders and dots is the shell's own working.
+// The shell's specimens: the rail in each of its four positions with tabs in every standing, a tab's drawer and home's,
+// the three kinds of entry in a thread, a notice's bubble, the desktop, the modal an action's inputs open in, the
+// connection's states and a tab's own. Each is the shell's component, given sample data (samples.ts) where the live shell
+// gives it the runtime's; a drawer's menu reads sample views through a door of their own, so what it lists, orders and
+// dots is the shell's own working.
 import { Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { BookOpenTextIcon, FlaskConicalIcon, ListTodoIcon, SettingsIcon, StickyNoteIcon } from "lucide-react"
-import { handle, type Args } from "babavoss/core/surface/view.ts"
-import { Button, Sheet, Toasts, type ToastItem } from "babavoss/kit/index.ts"
-import { DropdownKit, MenuDropdown, MenuItems } from "babavoss/kit/layouts/menu.tsx"
-import { RefusedLine, TabMenu } from "babavoss/shell/ui/actions.tsx"
-import { BY, MARK, Mark } from "babavoss/shell/ui/activity.tsx"
-import { channelsOf, type Channel } from "babavoss/shell/ui/channels.ts"
+import { handle, type Args, type View } from "babavoss/core/surface/view.ts"
+import { Button } from "babavoss/kit/index.ts"
+import { RefusedLine, useTabMenu } from "babavoss/shell/ui/actions.tsx"
+import { Said, type Bubble } from "babavoss/shell/ui/bubbles.tsx"
 import { controlsOf, noticesIn, type Offered } from "babavoss/shell/ui/commands.ts"
 import { Overlay, PointedAlert, RefusedAlert, said } from "babavoss/shell/ui/connection.tsx"
-import { Home, HomeTab, type TabEntry } from "babavoss/shell/ui/home.tsx"
-import type { SurfaceEntry } from "babavoss/shell/ui/home.ts"
+import { Drawer, Line } from "babavoss/shell/ui/drawer.tsx"
+import { Desktop, Foot } from "babavoss/shell/ui/home.tsx"
+import { homeMenu, type HomeProps } from "babavoss/shell/ui/home.ts"
 import { Inputs } from "babavoss/shell/ui/inputs.tsx"
-import { ActivityButton, ActivityLevels, inView, waitingRows, type Entered, type Shown } from "babavoss/shell/ui/notifications.tsx"
-import { markOf, SurfaceTabs, TabBroken, TabFailed, TabNoPage } from "babavoss/shell/ui/tabs.tsx"
+import { Logo } from "babavoss/shell/ui/mark.tsx"
+import { Rail, RailEntry, type RailItem } from "babavoss/shell/ui/rail.tsx"
+import { entriesIn, itemsOf, pinnedOf, shellEntries, waitingRows } from "babavoss/shell/ui/thread.ts"
+import { TabBroken, TabFailed, TabNoPage } from "babavoss/shell/ui/tabs.tsx"
 import { standingOf } from "babavoss/shell/ui/turn.ts"
+import type { Rail as Placed } from "babavoss/shell/settings/src/settings.ts"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 import { Again, useHeld } from "./primitives.tsx"
-import { FRESH, NEEDS, ROWS, sampleDoor, TABS } from "./samples.ts"
+import { FRESH, ROWS, sampleDoor } from "./samples.ts"
 
 const ICONS: Record<string, ReactNode> = {
   queue: <ListTodoIcon aria-hidden />,
@@ -37,6 +40,20 @@ const controls = (others = true) => controlsOf({ close: { hint: "Close the tab",
 /** The unseen notices of the sample, about the queue's tab: one at issue 2. */
 const UNSEEN = noticesIn("/queue", [{ at: "/queue/issues/2" }])
 
+/** The mark, home's entry on the rail, as a row has it: its standing, or a connection lost. */
+const Mark = ({ lost }: { lost?: string }) => (
+  <RailEntry
+    item={{ id: "home", label: "Home", icon: <Logo standing={STILL} lost={!!lost} />, why: [lost ?? STILL.said] }}
+    home
+    column={false}
+    side="top"
+    active={false}
+    open={false}
+    select={() => {}}
+    toggle={() => {}}
+  />
+)
+
 /** The modal an action asks its inputs in, as the shell opens it: a refusal shows in it, and an admitted call closes it. */
 function Asking({ action, close }: { action?: Offered; close: () => void }) {
   const call = async (_: Offered, args: Args) =>
@@ -49,136 +66,222 @@ function Asking({ action, close }: { action?: Offered; close: () => void }) {
   ) : null
 }
 
-/** A tab's menu over the sample's views, at `route`, as the strip opens it; an action with inputs opens its modal. */
-function SampleMenu({ route, close, start }: { route: string; close: () => void; start: (action: Offered) => void }) {
+/** The sample's tabs, newest first, one in each standing, and one whose title is longer than a pill. */
+const TABS: RailItem[] = [
+  { id: "/tabs/9", label: "Settle the second channel's history and its dots", icon: ICONS.settings },
+  { id: "/notes", label: "Notes", icon: ICONS.notes, mark: "broken", why: ["Broken"] },
+  { id: "/design", label: "Design", icon: ICONS.design, mark: "agent", why: ["Needs the agent: to play the scenarios again"] },
+  { id: "/tabs/5", label: "Lab", icon: ICONS.lab, mark: "person", why: ["Opened by the agent"] },
+  { id: "/queue", label: "Queue", icon: ICONS.queue, mark: "person", why: ["Needs you: to approve or drop 1 draft", "1 new notice"] },
+]
+const PLACES: { label: string; placed: Placed }[] = [
+  { label: "left, from the bottom: the mark at the foot, the newest tab above it", placed: { side: "left", from: "bottom", drawer: "left" } },
+  { label: "right, from the top: the mark at the head, the newest tab under it", placed: { side: "right", from: "top", drawer: "left" } },
+  { label: "top: the mark first, the newest tab beside it; more than fit scroll sideways", placed: { side: "top", from: "bottom", drawer: "left" } },
+  { label: "bottom: the same, along the foot", placed: { side: "bottom", from: "bottom", drawer: "right" } },
+]
+const DIRECTION: Record<Placed["side"], string> = { left: "flex-row", right: "flex-row-reverse", top: "flex-col", bottom: "flex-col-reverse" }
+
+/** The rail at one side, worked as the shell works it: a click shows a tab, again opens its drawer, here only its dots. */
+function RailAt({ placed }: { placed: Placed }) {
+  const [active, setActive] = useState("/queue")
+  const [drawer, setDrawer] = useState<string>()
+
   return (
-    <TabMenu
-      door={door}
-      address="/queue"
-      route={route}
-      title="Queue"
-      name="queue"
-      start={start}
-      navigate={close}
-      notices={UNSEEN}
-      controls={controls()}
-      close={close}
+    <div className={`flex h-72 w-full overflow-hidden rounded-lg border bg-background ${DIRECTION[placed.side]}`}>
+      <Rail
+        placed={placed}
+        mark={{ id: "home", label: "Home", icon: <Logo standing={STILL} />, why: [STILL.said] }}
+        tabs={TABS}
+        active={active}
+        {...(drawer && { drawer })}
+        select={(id) => {
+          setActive(id)
+          setDrawer(undefined)
+        }}
+        toggle={(id) => setDrawer((open) => (open === id ? undefined : id))}
+      />
+      <div className="grid flex-1 place-items-center p-3 text-meta text-muted-foreground">{drawer ? `${drawer}'s drawer is open` : `${active} is shown`}</div>
+    </div>
+  )
+}
+
+function RailSpecimen() {
+  return (
+    <States min={320}>
+      {PLACES.map((p) => (
+        <State key={p.label} label={p.label} bare>
+          <RailAt placed={p.placed} />
+        </State>
+      ))}
+    </States>
+  )
+}
+
+/** The shell's view at / as home's menu reads it: open for each surface, close for each tab. */
+const ROOT: View = {
+  title: "babavoss",
+  surfaces: [
+    { name: "queue", open: handle("open", "open a queue tab", { surface: "queue" }) },
+    { name: "design", open: handle("open", "open a design tab", { surface: "design" }) },
+    { name: "settings", open: handle("open", "open the settings tab, or show the one open", { surface: "settings" }) },
+  ],
+  tabs: [{ at: "/queue", close: handle("close", "close tab 3; its state is dropped", { n: 3 }) }],
+}
+
+/** A tab's drawer over a sample page, its menu read from the sample's views, as the shell opens it; closed, a button opens it again. */
+function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: string; empty?: boolean }) {
+  const menu = useTabMenu({ door, address: "/queue", route: "/issues/4", title: "Queue", name: "queue", start: () => {}, navigate: () => {}, notices: UNSEEN, controls: controls() })
+  const pinned = pinnedOf({ needs: broken ? [] : [{ who: "person", why: "to approve or drop 1 draft" }], ...(broken && { broken }), ...(menu.ask && { ask: menu.ask }) })
+
+  return (
+    <Drawer
+      label="Queue"
+      side={side}
+      menu={broken ? { items: controls() } : { items: menu.items, find: menu.find }}
+      rows={empty ? [] : entriesIn(ROWS, "/queue")}
+      loaded
+      stay={new Set(FRESH)}
+      {...(pinned && { pinned })}
+      go={() => {}}
+      goThere={() => {}}
+      reload={() => {}}
+      close={() => {}}
     />
   )
 }
 
-function Strip() {
-  const [active, setActive] = useState("/guide/queue")
-  const [asking, setAsking] = useState<Offered>()
-  const start = (action: Offered) => Object.keys(action.handle.open).length && setAsking(action)
-  const items = [
-    { id: "/guide/queue", label: "Queue", icon: ICONS.queue, menu: (close: () => void) => <SampleMenu route="/issues/4" close={close} start={start} /> },
-    { id: "/guide/queue-2", label: "Queue", icon: ICONS.queue, waits: true, needs: [{ who: "person" as const, why: "to approve or drop 1 draft" }], menu: (close: () => void) => <SampleMenu route="/" close={close} start={start} /> },
-    { id: "/guide/lab", label: "Lab", icon: ICONS.lab, unseen: true, menu: () => <MenuItems kit={DropdownKit} items={controls()} /> },
-    { id: "/guide/design", label: "Design", icon: ICONS.design, needs: [{ who: "agent" as const, why: "to play the scenarios again" }], menu: () => <MenuItems kit={DropdownKit} items={controls()} /> },
-    { id: "/guide/notes", label: "Notes", icon: ICONS.notes, broken: "its saved state does not load", menu: () => <MenuItems kit={DropdownKit} items={controls()} /> },
-    { id: "/guide/long", label: "Settle the second channel's history and its dots", icon: ICONS.settings, menu: () => <MenuItems kit={DropdownKit} items={controls(false)} /> },
-  ]
-
+/** Home's drawer: the shell's menu from its view at /, the shell's own entries, and what of the person's waits for the agent. */
+function HomeDrawer() {
   return (
-    <States>
-      <State
-        label="home · active · waits on you · new, opened by the agent · needs the agent · broken · a long title, which scrolls on hover. Hover an icon for its dots; right-click or Shift+F10 opens the menu"
-        wide
-        className="block min-h-0 overflow-hidden p-0"
-      >
-        <SurfaceTabs
-          items={items.map((item) => ({ ...item, onClose: () => {} }))}
-          active={active}
-          onSelect={setActive}
-          home={<HomeTab active={active === "home"} standing={STILL} animate keys="⌘P" onSelect={() => setActive("home")} />}
-          end={<ActivityButton badge={2} waiting={1} open={false} onClick={() => {}} />}
-        />
-        <Asking {...(asking && { action: asking })} close={() => setAsking(undefined)} />
-      </State>
-    </States>
+    <Drawer
+      label="babavoss"
+      side="left"
+      home
+      menu={{ items: homeMenu({ view: ROOT, title: "babavoss", tabs: [{ at: "/queue", label: "Queue", mark: "person" }], start: () => {}, navigate: () => {} }) }}
+      rows={shellEntries(ROWS)}
+      loaded
+      stay={new Set()}
+      waiting={waitingRows(ROWS, 2)}
+      go={() => {}}
+      goThere={() => {}}
+      reload={() => {}}
+      close={() => {}}
+    />
   )
 }
 
-/** A tab's menu, dropped from a button as the strip drops it from the tab's dots. */
-function MenuAt({ route, label, start }: { route: string; label: string; start: (action: Offered) => void }) {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <MenuDropdown
-      open={open}
-      setOpen={setOpen}
-      label={`Menu at ${route}`}
-      trigger={
-        <Button variant="outline" size="sm">
-          {label}
-        </Button>
-      }
-    >
-      {open && <SampleMenu route={route} close={() => setOpen(false)} start={start} />}
-    </MenuDropdown>
-  )
-}
-
-function TabMenus() {
-  const [asking, setAsking] = useState<Offered>()
-  const start = (action: Offered) => Object.keys(action.handle.open).length && setAsking(action)
-
-  return (
-    <States min={260}>
-      <State label="at an issue: its actions under its name, asks first and dotted, the view's groups, Go with the dots on the way, the controls">
-        <MenuAt route="/issues/4" label="Queue at /issues/4" start={start} />
-      </State>
-      <State label="at /: the surface's actions, Go of more than 8 places with a filter; type to search the whole tree">
-        <MenuAt route="/" label="Queue at /" start={start} />
-      </State>
-      <Asking {...(asking && { action: asking })} close={() => setAsking(undefined)} />
-    </States>
-  )
-}
-
-const SURFACES: SurfaceEntry[] = [
-  { name: "queue", description: "Track the session's work as issues. Use when work is asked for.", open: handle("open", "Open a queue tab", { surface: "queue" }) },
-  { name: "design", description: "Inspect what an agent is given. Use when baba's words change.", open: handle("open", "Open a design tab", { surface: "design" }) },
-  { name: "settings", description: "The person's settings. Use when they ask to change one.", open: handle("open", "Open the settings", { surface: "settings" }) },
-  { name: "notes", broken: "src/surface.ts: Unexpected end of file" },
-]
-/** The open tabs as home lists them, each marked on its icon as the strip marks it. */
-const HOME_TABS: TabEntry[] = (
-  [
-    { at: "/queue", n: 3, surface: "queue", label: "Queue", icon: ICONS.queue, needs: [{ who: "person", why: "to approve or drop 1 draft" }] },
-    { at: "/tabs/2", n: 2, surface: "lab", label: "Lab", icon: ICONS.lab, needs: [{ who: "agent", why: "to read the run" }] },
-    { at: "/tabs/1", n: 1, surface: "lab", label: "Lab 1", icon: ICONS.lab, broken: "its saved state does not load" },
-  ] satisfies TabEntry[]
-).map((tab) => {
-  const mark = markOf(tab)
-
-  return mark ? { ...tab, mark } : tab
-})
-
-function HomeSpecimen() {
+/** A sample page under a drawer, which keeps the focus a drawer takes as it opens, as the guide must. */
+function Under({ children }: { children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
 
-  // Home takes the focus as it is drawn, as it should in the shell; here the guide keeps it.
   useEffect(() => {
     if (box.current?.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
   }, [])
 
   return (
+    <div ref={box} className="relative h-[34rem] w-full overflow-hidden rounded-lg border bg-background">
+      <div className="p-4 text-muted-foreground">The tab's content, dimmed under its drawer.</div>
+      {children}
+    </div>
+  )
+}
+
+function DrawerSpecimen() {
+  return (
+    <States min={420}>
+      <State label="a tab's: its menu at rest over its thread, new notices dotted, what it needs pinned at the foot. Click the field to open the menu; type to search" bare>
+        <Under>
+          <TabDrawer side="left" />
+        </Under>
+      </State>
+      <State label="home's: the shell's actions and the tabs as its places, the shell's own entries, what waits for the agent" bare>
+        <Under>
+          <HomeDrawer />
+        </Under>
+      </State>
+      <State label="a broken tab's, at the right: nothing yet, Reload pinned" bare>
+        <Under>
+          <TabDrawer side="right" broken="its saved state does not load: Unexpected token" empty />
+        </Under>
+      </State>
+    </States>
+  )
+}
+
+function Entries() {
+  const items = itemsOf(entriesIn(ROWS, "/queue"))
+  const own = itemsOf(shellEntries(ROWS))
+
+  return (
+    <States min={360}>
+      <State label="notices, the agent's, the surface's and yours; calls in a row folded, click to open; the tab entry" className="flex-col items-stretch gap-2">
+        {[...items].reverse().map((item) => (
+          <Line key={item.kind === "calls" ? item.rows[0]!.n : item.row.n} item={item} label="Queue" home={false} fresh={item.kind === "notice" && FRESH.includes(item.row.n)} go={() => {}} />
+        ))}
+      </State>
+      <State label="on home, each naming its surface" className="flex-col items-stretch gap-2">
+        {[...own].reverse().map((item) => (
+          <Line key={item.kind === "calls" ? item.rows[0]!.n : item.row.n} item={item} label="babavoss" home fresh={false} go={() => {}} />
+        ))}
+      </State>
+    </States>
+  )
+}
+
+const BUBBLES: (Bubble & { away: "right" | "left" | "down" | "up"; label: string })[] = [
+  { id: 1, text: "Issue 4, Show the present, is done", kept: true, away: "right", label: "beside a tab on a rail at the left" },
+  { id: 2, text: "The run ended: 2 turns, 41s", kept: true, away: "left", label: "at the right" },
+  { id: 3, text: "Lane 2 is free again", kept: true, away: "down", label: "under a rail along the top" },
+  { id: 4, text: "Saved", from: "Settings", kept: true, away: "up", label: "beside the mark, saying its surface" },
+]
+
+function BubbleSpecimen() {
+  const { shown, dismiss, again } = useHeld(BUBBLES)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <States min={200}>
+        {BUBBLES.map((b) => {
+          const now = shown.find((s) => s.away === b.away)
+
+          return (
+            <State key={b.away} label={`${b.label}; hover holds it, it goes after 3s`} className="min-h-20">
+              {now && <Said bubble={now} away={now.away} act={() => {}} dismiss={() => dismiss(now.id)} />}
+            </State>
+          )
+        })}
+      </States>
+      <div>
+        <Again onClick={again} />
+      </div>
+    </div>
+  )
+}
+
+const DESKTOP: HomeProps = {
+  title: "babavoss",
+  surfaces: [
+    { name: "queue", label: "Queue", description: "Track the session's work as issues. Use when work is asked for.", icon: ICONS.queue, open: () => {} },
+    { name: "lab", label: "Lab", description: "Have an agent under test use a checkout. Use when checking a surface.", icon: ICONS.lab, open: () => {} },
+    { name: "design", label: "Design", description: "Inspect what an agent is given. Use when baba's words change.", icon: ICONS.design, open: () => {} },
+    { name: "settings", label: "Settings", description: "The person's settings. Use when they ask to change one.", icon: ICONS.settings, open: () => {} },
+    { name: "notes", label: "Notes", description: "", icon: ICONS.notes, broken: "the notes surface does not load (src/surface.ts: Unexpected end of file)" },
+  ],
+  tabs: [
+    { at: "/queue", surface: "queue", label: "Queue", mark: "person", go: () => {} },
+    { at: "/tabs/5", surface: "lab", label: "Lab", mark: "agent", go: () => {} },
+    { at: "/tabs/4", surface: "lab", label: "Lab 4", go: () => {} },
+  ],
+  foot: <Foot harness="claude" facts={{ root: "babavoss", version: "0.60.0", session: "d437fdcb-0d70-40c0-b515-97ae0de7c265", update: undefined }} />,
+}
+
+function DesktopSpecimen() {
+  return (
     <States>
-      <State label="the open tabs, each marked by what it needs; the surfaces to open; one that does not load" wide className="flex h-[26rem] flex-col items-stretch overflow-hidden p-0">
-        <div ref={box} className="contents">
-          <Home
-            title="babavoss"
-            surfaces={SURFACES}
-            icons={ICONS}
-            tabs={HOME_TABS}
-            keys="⌘P"
-            disabled={false}
-            loading={false}
-            launch={() => {}}
-            select={() => {}}
-          />
+      <State label="a surface each: open, two tabs, marked where a tab of it waits on someone, one that does not load; whose page this is at the foot" wide bare>
+        <div className="flex h-80 w-full overflow-hidden rounded-lg border bg-background">
+          <Desktop {...DESKTOP} />
         </div>
       </State>
     </States>
@@ -207,110 +310,6 @@ function InputsSpecimen() {
   )
 }
 
-/** The toasts the shell raises for notices heard: who did it, what, and from which tab; one goes to its place, the rest into the button. */
-const HEARD: ToastItem[] = [
-  { id: 1, text: "Issue 4, Show the present, is done", title: "Queue", mark: <Mark label={BY.agent}>{MARK.agent}</Mark>, onSelect: () => {} },
-  { id: 2, text: "The run ended", title: "Lab", mark: <Mark label={BY.surface}>{MARK.surface}</Mark>, onSelect: () => {} },
-  { id: 3, text: "Saved", title: "Settings", mark: <Mark label={BY.person}>{MARK.person}</Mark> },
-]
-
-function Notices() {
-  const button = useRef<HTMLButtonElement>(null)
-  const { shown, dismiss, again } = useHeld(HEARD)
-
-  return (
-    <div className="flex flex-col gap-3">
-      <States min={110}>
-        {[
-          { label: "idle", badge: 0, waiting: 0, open: false },
-          { label: "unseen", badge: 2, waiting: 0, open: false },
-          { label: "waiting: 3", badge: 0, waiting: 3, open: false },
-          { label: "both", badge: 1, waiting: 12, open: false },
-          { label: "open", badge: 0, waiting: 0, open: true },
-        ].map((s) => (
-          <State key={s.label} label={s.label} className="justify-center bg-sidebar">
-            <ActivityButton badge={s.badge} waiting={s.waiting} open={s.open} onClick={() => {}} />
-          </State>
-        ))}
-      </States>
-      <States>
-        <State label="toasts: a dismissed or passed one goes into the button" wide className="flex-col items-stretch gap-0 overflow-hidden p-0">
-          <div className="flex h-11 items-center justify-end border-b bg-sidebar px-2">
-            <ActivityButton ref={button} badge={HEARD.length - shown.length} waiting={0} open={false} onClick={() => {}} />
-          </div>
-          <div className="flex min-h-36 flex-col items-end gap-2 p-2">
-            <Toasts toasts={shown} dismiss={dismiss} into={button} className="static" from="top" />
-            <Again onClick={again} />
-          </div>
-        </State>
-      </States>
-    </div>
-  )
-}
-
-/** The drawer's levels with sample activity, worked as the drawer works them: entering a channel, back, Notices and All. */
-function Drawer({ initial, rows = ROWS, open: opened = false }: { initial?: string; rows?: typeof ROWS; open?: boolean }) {
-  const [shown, setShown] = useState<Shown>("notices")
-  const [entered, setEntered] = useState<Entered | undefined>(() => (initial ? { key: initial, stay: new Set(FRESH), since: rows[0]?.n ?? 0 } : undefined))
-  const [expanded, setExpanded] = useState<number>()
-  const [nextOpen, setNextOpen] = useState(opened)
-  const [backed, setBacked] = useState(false)
-  const fresh = new Set(FRESH)
-  const channels = channelsOf(inView(rows, shown), TABS, rows.length ? NEEDS : [], fresh, "babavoss")
-  const channel: Channel | undefined = entered && channels.find((c) => c.key === entered.key)
-
-  return (
-    <Sheet open>
-      <div className="flex h-[26rem] w-full flex-col overflow-hidden rounded-lg border bg-popover text-body text-popover-foreground">
-        <ActivityLevels
-          {...(channel && entered && { channel, entered })}
-          icons={ICONS}
-          elsewhere={!!channel}
-          leave={() => {
-            setEntered(undefined)
-            setBacked(true)
-          }}
-          goTo={() => {}}
-          expanded={expanded}
-          expand={setExpanded}
-          shown={shown}
-          show={setShown}
-          unseen={rows.filter((r) => fresh.has(r.n)).length}
-          seeAll={() => {}}
-          next={waitingRows(rows, 2)}
-          tabs={TABS}
-          nextOpen={nextOpen}
-          toggleNext={() => setNextOpen((o) => !o)}
-          channels={channels}
-          since={rows[0]?.n ?? 0}
-          enter={(key) => setEntered({ key, stay: new Set(FRESH), since: rows[0]?.n ?? 0 })}
-          backed={backed}
-          {...(rows.length && { more: () => {} })}
-        />
-      </div>
-    </Sheet>
-  )
-}
-
-function Activity() {
-  return (
-    <States min={320}>
-      <State label="channels: needs you pinned, unseen dotted, a closed tab's; choose one" bare>
-        <Drawer />
-      </State>
-      <State label="the agent sees next, opened" bare>
-        <Drawer open />
-      </State>
-      <State label="a channel's history, grouped by when, a line opened whole; back with ←" bare>
-        <Drawer initial="/queue" />
-      </State>
-      <State label="nothing yet" bare>
-        <Drawer rows={[]} />
-      </State>
-    </States>
-  )
-}
-
 function Connection() {
   const lost = said("lost", Infinity)!
   const connecting = said("connecting", Infinity)!
@@ -318,10 +317,10 @@ function Connection() {
   return (
     <States min={220}>
       <State label={`${connecting.toLowerCase()}: the page never had its stream`} className="justify-center bg-sidebar">
-        <HomeTab active={false} standing={STILL} animate keys="⌘P" lost={connecting} onSelect={() => {}} />
+        <Mark lost={connecting} />
       </State>
       <State label={`${lost.toLowerCase()}: it had it and lost it`} className="justify-center bg-sidebar">
-        <HomeTab active={false} standing={STILL} animate keys="⌘P" lost={lost} onSelect={() => {}} />
+        <Mark lost={lost} />
       </State>
       <State label="over the content: a refusal, and where the agent points while you are busy" wide className="relative block h-40 overflow-hidden p-0">
         <div className="p-3 pt-28 text-muted-foreground">The tab's content, unmoved under them.</div>
@@ -360,12 +359,12 @@ function TabStates() {
 }
 
 export const shell: Record<EntryOf<"shell">, ComponentType> = {
-  strip: Strip,
-  "tab-menu": TabMenus,
-  home: HomeSpecimen,
+  rail: RailSpecimen,
+  bubble: BubbleSpecimen,
+  drawer: DrawerSpecimen,
+  entries: Entries,
   inputs: InputsSpecimen,
-  notices: Notices,
-  activity: Activity,
+  desktop: DesktopSpecimen,
   connection: Connection,
   "tab-states": TabStates,
 }

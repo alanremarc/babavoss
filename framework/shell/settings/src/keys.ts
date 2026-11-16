@@ -4,11 +4,13 @@
 // Pure, for the settings surface and the page alike.
 
 export const COMMANDS = {
-  home: { does: "go home, and from home back to the tab shown before", keys: "mod+p" },
-  next: { does: "go to the next tab in the strip, after the last to home", keys: "mod+k" },
-  previous: { does: "go to the previous tab in the strip, before home to the last", keys: "mod+j" },
-  menu: { does: "open the shown tab's menu", keys: "shift+f10" },
+  drawer: { does: "open the drawer of the tab shown, or of the one focused on the rail, and close it again", keys: "mod+p" },
+  next: { does: "go to the next tab along the rail, as it stands on screen, round from the last", keys: "mod+k" },
+  previous: { does: "go to the previous tab along the rail, as it stands on screen, round from the first", keys: "mod+j" },
 } as const
+
+/** Commands kept under an earlier name, by it: a person's binding of `home`, which went home, is the drawer's now. */
+export const RENAMED: Record<string, CommandId> = { home: "drawer" }
 
 export type CommandId = keyof typeof COMMANDS
 

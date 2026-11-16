@@ -1,9 +1,9 @@
 // The queue's page: the session's work in three views, switched from the toolbar at its foot. The list has the open
 // issues as one-liners in the sidebar on the right, grouped by where they stand, and the selected one in the content;
-// the archive is the same over the issues that are done, grouped by narrative; the map has the issues as a plane of
-// narratives in the content, and the selected one, or the narratives, in the sidebar. Both show an issue with the one
-// Detail. Which view and what is selected is the tab's route, so a refresh and the agent's pointing land on it:
-// /issues/N and /narratives/ID in the list, the same below /map in the map. The person approves or drops a draft here;
+// the archive is the same over the issues that are done, grouped by narrative; the narratives are a list, and a page for
+// each with its issues as an outline (narratives.tsx), from which an issue opens in the list. Which view and what is
+// selected is the tab's route, the same as the views' paths, so a refresh and the agent's pointing land on it: /issues/N
+// in the list, below /archive in the archive, /narratives, /narratives/ID and /narratives/ID/open. The person approves or drops a draft here;
 // anything else, they tell the agent. `drawers` ask for an issue to add or draft: a title, about as markdown, and where
 // there is room for them, what it came out of and its narrative.
 import { useEffect, useState } from "react"
@@ -12,8 +12,8 @@ import type { Handle } from "babavoss/core/index.ts"
 import { Button, DialogFooter, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Input, Textarea } from "babavoss/kit/index.ts"
 import { useLive, useTab, type DrawerProps } from "babavoss/shell/ui/index.tsx"
 import { Detail } from "./detail.tsx"
-import { Narratives, Plane, type Node } from "./map.tsx"
-import { Label, Lane, Line, Mark, Modes, hue, type Lens, type Root, type Row, type Status, type Told, type Whole } from "./parts.tsx"
+import { Narrative, Narratives, type Target } from "./narratives.tsx"
+import { Lane, Mark, Modes, hue, type Lens, type Root, type Row, type Status, type Whole } from "./parts.tsx"
 import { Peek, usePeek } from "./peek.tsx"
 
 export const icon = <ListTodoIcon aria-hidden />
@@ -116,24 +116,6 @@ const open = (root: Root): Section[] =>
 const archive = (root: Root, colorOf: (id: string) => string): Section[] =>
   root.narratives.map((x) => ({ key: x.id, label: x.title, color: colorOf(x.id), rows: root.issues.filter((issue) => issue.status === "done" && issue.narrative === x.id) }))
 
-/** Every narrative's view, kept current: its about, and how many passes each of its issues had, which / does not list. */
-function useNarratives(root: Root | undefined) {
-  const { live } = useTab()
-  const [told, setTold] = useState<Record<string, Told>>({})
-  const ats = (root?.narratives ?? []).map((x) => x.at).join(" ")
-
-  useEffect(() => {
-    const stops = ats
-      .split(" ")
-      .filter(Boolean)
-      .map((at) => live<Told>(at, (view) => setTold((previous) => ({ ...previous, [view.id]: view }))))
-
-    return () => stops.forEach((stop) => stop())
-  }, [live, ats])
-
-  return told
-}
-
 /**
  * The issues as a sidebar has them, in sections: the list's by where they stand, the lanes first with how many are busy;
  * the archive's by narrative. A line is the issue's standing as an icon in its narrative's hue, its number and its title;
@@ -196,71 +178,52 @@ function Stack({ root, sections, none, picked, colorOf, go }: { root: Root; sect
   )
 }
 
-/** A narrative in the list's content: what it is about and its issues. */
-function Narrative({ told, color, go }: { told: Told; color: string; go: (route: string) => void }) {
-  return (
-    <article className="flex max-w-3xl flex-col gap-4 p-6">
-      <div className="text-muted-foreground flex items-center gap-2 text-body">
-        <span className="size-2 rounded-full" style={{ background: color }} />
-        Narrative
-      </div>
-      <h1 className="text-lg leading-snug font-medium">{told.title}</h1>
-      {told.about && <p className="text-large text-foreground/85">{told.about}</p>}
-      <section className="flex flex-col gap-1 border-t pt-4">
-        <Label>Issues · {told.issues.length}</Label>
-        <ul className="-mx-1.5 max-w-xl">
-          {told.issues.map((row) => (
-            <Line key={row.n} to={row} color={color} onPick={() => go(`/issues/${row.n}`)} />
-          ))}
-        </ul>
-      </section>
-    </article>
-  )
-}
+/** How long an issue a link led to stays lit on its narrative's page. */
+const LIT_MS = 2400
 
 export default function Queue() {
   const { view: root, error } = useLive<Root>("/")
   const { call, route, navigate } = useTab()
-  const told = useNarratives(root)
-  const lens: Lens = (["map", "archive"] as const).find((name) => route === `/${name}` || route.startsWith(`/${name}/`)) ?? "list"
-  const prefix = lens === "list" ? "" : `/${lens}`
+  const lens: Lens = route === "/narratives" || route.startsWith("/narratives/") ? "narratives" : route === "/archive" || route.startsWith("/archive/") ? "archive" : "list"
+  const prefix = lens === "archive" ? "/archive" : ""
   const place = route.slice(prefix.length) || "/"
   const named = Number(/^\/issues\/(\d+)$/.exec(place)?.[1]) || undefined
-  const focus = /^\/narratives\/([^/]+)$/.exec(place)?.[1]
+  const narrated = /^\/narratives\/([^/]+)(\/open)?$/.exec(route)
   const issues = root?.issues ?? []
   const index = new Map((root?.narratives ?? []).map((x, i) => [x.id, i]))
   const colorOf = (id: string) => hue(index.get(id) ?? 0)
   const sections = root ? (lens === "archive" ? archive(root, colorOf) : open(root)) : []
   // The list and the archive always show an issue: the one in the route, else the first their sidebar lists, open work in
-  // the list and done in the archive; the map shows one only where the route names it.
+  // the list and done in the archive.
   const first = sections.flatMap((section) => section.rows)[0] ?? (lens === "list" ? issues[0] : undefined)
-  const picked = issues.find((issue) => issue.n === named)?.n ?? (lens !== "map" && !focus ? first?.n : undefined)
+  const picked = lens === "narratives" ? undefined : (issues.find((issue) => issue.n === named)?.n ?? first?.n)
   const { view: whole } = useLive<Whole>(picked ? `/issues/${picked}` : "/")
   const [refused, setRefused] = useState("")
-  const go = (to: string) => navigate(prefix ? `${prefix}${to === "/" ? "" : to}` : to)
-  // Another view begins at its own first issue, but for the map, which keeps what was selected.
-  const switchTo = (next: Lens) => navigate(next === "list" ? "/" : next === "map" ? `/map${place === "/" ? "" : place}` : "/archive")
+  const [target, setTarget] = useState<Target>()
+  // An issue opens in the view it is picked in; a narrative's page is where it is in every view.
+  const go = (to: string) => navigate(to.startsWith("/issues/") ? `${prefix}${to}` : to)
+  const aim = (next: Target) => {
+    setTarget(next)
+    if (narrated?.[1] !== next.id) navigate(`/narratives/${next.id}`)
+  }
+  // Another view begins at its own first place.
+  const switchTo = (next: Lens) => navigate(next === "list" ? "/" : `/${next}`)
   const byN = new Map(issues.map((issue) => [issue.n, issue]))
-  const nodes: Node[] = issues.map((issue) => ({ ...issue, iterations: told[issue.narrative]?.issues.find((row) => row.n === issue.n)?.iterations ?? 0 }))
+
+  useEffect(() => {
+    if (!target) return
+
+    const timer = setTimeout(() => setTarget(undefined), LIT_MS)
+
+    return () => clearTimeout(timer)
+  }, [target])
+
   const decide = async (handle: Handle) => {
     const answer = await call(`/issues/${picked}`, handle.name, handle.args)
 
     setRefused(answer.outcome === "refused" ? answer.reason : "")
   }
   const shown = picked !== undefined && whole?.n === picked && whole.about !== undefined ? whole : undefined
-  const detail = (roomy: boolean) =>
-    shown && (
-      <Detail
-        whole={shown}
-        color={colorOf(shown.narrative.id)}
-        colorOf={(n) => colorOf(byN.get(n)?.narrative ?? "")}
-        laneOf={(n) => byN.get(n)?.lane}
-        go={go}
-        decide={(handle) => void decide(handle)}
-        refused={refused || error}
-        roomy={roomy}
-      />
-    )
   // A new tab that has not heard the session's work yet shows its ground alone: the work it holds is no one's, not none.
   const heard = root && !root.reading ? root : undefined
   const empty = heard && (
@@ -272,25 +235,16 @@ export default function Queue() {
     </Empty>
   )
 
-  if (lens === "map")
+  if (lens === "narratives")
     return (
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <Modes lens={lens} onLens={switchTo} />
-        {issues.length ? (
-          <Plane stories={root!.narratives} nodes={nodes} picked={picked} focus={focus} origin="This session's work" colorOf={colorOf} go={go} />
-        ) : (
-          <main className="flex min-w-0 flex-1 flex-col">{empty}</main>
-        )}
-        <aside className="bg-muted/30 flex w-96 shrink-0 flex-col overflow-auto border-l" aria-label={shown ? `Issue ${shown.n}` : "Narratives"}>
-          {place !== "/" && (
-            <div className="bg-muted/30 sticky top-0 z-10 flex h-9 shrink-0 items-center border-b px-2 backdrop-blur">
-              <Button variant="ghost" size="sm" className="min-w-0" onClick={() => go(shown && !focus ? `/narratives/${shown.narrative.id}` : "/")}>
-                <span className="truncate">← {shown ? shown.narrative.title : "All narratives"}</span>
-              </Button>
-            </div>
-          )}
-          {detail(false) ?? (heard && <Narratives root={heard} told={told} focus={focus && told[focus] ? focus : undefined} colorOf={colorOf} go={go} />)}
-        </aside>
+        {heard &&
+          (narrated ? (
+            <Narrative id={narrated[1]!} only={!!narrated[2]} root={heard} colorOf={colorOf} go={navigate} target={target} aim={aim} />
+          ) : (
+            <Narratives root={heard} colorOf={colorOf} go={navigate} />
+          ))}
       </div>
     )
 
@@ -298,10 +252,21 @@ export default function Queue() {
     <div className="relative flex min-h-0 flex-1">
       <Modes lens={lens} onLens={switchTo} />
       <main className="flex min-w-0 flex-1 flex-col overflow-auto">
-        {focus && told[focus] ? <Narrative told={told[focus]!} color={colorOf(focus)} go={go} /> : (detail(true) ?? (!issues.length && empty))}
+        {(shown && (
+          <Detail
+            whole={shown}
+            color={colorOf(shown.narrative.id)}
+            colorOf={(n) => colorOf(byN.get(n)?.narrative ?? "")}
+            laneOf={(n) => byN.get(n)?.lane}
+            go={go}
+            decide={(handle) => void decide(handle)}
+            refused={refused || error}
+          />
+        )) ??
+          (!issues.length && empty)}
       </main>
       <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label={lens === "archive" ? "Archive" : "Issues"}>
-        {heard && <Stack root={heard} sections={sections} {...(lens === "archive" && { none: "Nothing is done yet" })} picked={focus ? undefined : picked} colorOf={colorOf} go={go} />}
+        {heard && <Stack root={heard} sections={sections} {...(lens === "archive" && { none: "Nothing is done yet" })} picked={picked} colorOf={colorOf} go={go} />}
       </aside>
     </div>
   )

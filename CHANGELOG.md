@@ -2,6 +2,21 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.61.1
+
+- In this repository the queue's map is replaced by Narratives: a list of the narratives and a page for each with its issues as an outline of what came out of what, links to other narratives said in words. The agent reads it at `/queue/narratives`, `/queue/narratives/ID` and `/queue/narratives/ID/open`; `/queue/map` is gone. The package is unchanged. Nothing to adapt.
+
+## 0.61.0
+
+- Breaking: the strip, the activity button and its drawer, toasts, the tab's dropdown menu and home's palette are gone. The tabs stand on a rail at a side of the page the person chooses, left, right, top or bottom, and every tab, home included, has a drawer: its menu at the head, drawn from its surface's views as before, over its activity as a thread, newest at the foot. A click shows a tab; a click on the tab shown, a right click, the menu key or the shortcut opens its drawer.
+- Breaking: the `home` shortcut is `drawer`, mod+p by default: it opens and closes the shown tab's drawer. A person's own `home` binding carries over to it. The `menu` command is gone; shift+F10 and the menu key still open the drawer of a focused tab.
+- Breaking: when a tab closes its activity entries go with it; home's thread keeps the line that it closed. An entry of `/activity` no longer gives `title`. `show` at `/` is offered to the agent alone.
+- Breaking, for code that imported the shell's page: `babavoss/shell/ui/home.tsx`, `notifications.tsx`, `activity.tsx`, `channels.ts` and `strip.ts` are gone; there are `rail.ts` and `rail.tsx`, `thread.ts`, `drawer.tsx` and `feed.ts`, and `TabMenu` is `useTabMenu`. A surface that used `useShell().toast` needs no change: it shows a bubble beside the tab.
+- A notice appears as a bubble beside the tab it is in, beside the mark where it is in none, for three seconds; hovering keeps it and a click opens that tab's drawer. Opening a drawer marks its tab's notices seen.
+- Home is a desktop, an icon a surface. A project draws its own with `.baba/home.tsx`: its default export, given `HomeProps` from `babavoss/shell/ui/index.tsx`, the title, the surfaces each with a way to open one, the open tabs each with a way to go there, and what home's foot says. See `skill/making-surfaces.md`.
+- The person's settings have `appearance.rail: { side, from, drawer }`: where the rail stands, the end it starts from at a side, and the side a drawer opens at under a rail along the top or bottom; left, bottom and left by default, and a file from before reads so. The settings surface sets it by one quiet action, `rail`, and its page has the mark's animation under Appearance.
+- What a surface's people were told of "the strip" or "notifications" should speak of the rail and a tab's drawer. An action's description shown as a menu's entry starts with a capital.
+
 ## 0.60.0
 
 - The mark is drawn exactly: its eyes are two round patches of one size on a sphere, seen by a camera three and a half of its radii away, and each is the true outline of its edge as that camera sees it. Near the middle an eye is large; towards the limb it is smaller and, faster, narrower; over the camera's horizon it is cut by the sphere's own outline, and behind it is gone. The ellipse squashed by one rule and shrunk by a lens is gone.

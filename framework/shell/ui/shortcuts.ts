@@ -1,14 +1,14 @@
 // The shell's shortcuts on the page: a key pressed anywhere, a surface's content too, is matched to the command the
 // person bound it to (settings/src/keys.ts), and the browser's own use of the keys is prevented. Not while they write in
-// a field, which keeps its keys, unless the field is home's search; nor while a binding is being recorded.
+// a field, which keeps its keys, unless the field is a drawer's search; nor while a binding is being recorded.
 import { useEffect, useRef } from "react"
 import { commandOf, type CommandId } from "../settings/src/keys.ts"
 import type { Settings } from "../settings/src/settings.ts"
 
 export const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
 
-/** What marks home's search, where the shortcuts still work. */
-export const SEARCH_MARK = "data-home-search"
+/** What marks a drawer's search, where the shortcuts still work, so the drawer's shortcut closes it from there. */
+export const SEARCH_MARK = "data-drawer-search"
 /** What marks an element recording a binding, which takes every key. */
 export const RECORDING_MARK = "data-recording-keys"
 
@@ -17,7 +17,7 @@ export type Focused = { tagName: string; type?: string; isContentEditable?: bool
 
 const TYPELESS = new Set(["button", "checkbox", "radio", "submit", "reset", "range", "color", "file", "image"])
 
-/** Whether the shortcuts give way to what has focus: a field that takes text, other than home's search, or a recording. */
+/** Whether the shortcuts give way to what has focus: a field that takes text, other than a drawer's search, or a recording. */
 export function yields(focused: Focused | undefined): boolean {
   if (!focused) return false
   if (focused.marked(RECORDING_MARK)) return true

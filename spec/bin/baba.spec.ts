@@ -96,6 +96,22 @@ test("provision generates the root from the surfaces that are there, from anywhe
   for (const folder of FOLDERS) expect(existsSync(skill(folder, "baba"))).toBe(true)
 })
 
+test("a project's own home, .baba/home.tsx, takes the desktop's place in the root's page, and leaves it when it goes", () => {
+  const main = () => readFileSync(join(baba, ".root/main.tsx"), "utf8")
+
+  expect(main()).not.toContain("home.tsx")
+  writeFileSync(
+    join(baba, "home.tsx"),
+    'import type { HomeProps } from "babavoss/shell/ui/index.tsx"\n\nexport default function Home({ title, foot }: HomeProps) {\n  return <main>{title}{foot}</main>\n}\n'
+  )
+  expect(run(["provision"]).status).toBe(0)
+  expect(main()).toContain('import Home from "../home.tsx"')
+  expect(main()).toContain(" home={Home} />")
+  rmSync(join(baba, "home.tsx"))
+  expect(run(["provision"]).status).toBe(0)
+  expect(main()).not.toContain("home={Home}")
+})
+
 test("a surface's own stylesheet joins the root's page after the shell's, scoped to its tabs, and one whose braces do not balance is left out", () => {
   expect(run(["new", "lane-board"]).status).toBe(0)
   expect(run(["new", "ledger"]).status).toBe(0)

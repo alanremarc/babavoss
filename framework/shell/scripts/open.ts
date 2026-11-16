@@ -9,7 +9,7 @@ import { dirname, join } from "node:path"
 import { main } from "../../core/bv/door.ts"
 import { loadConfig, titleOf } from "../../core/config.ts"
 import { defineRoot } from "../../core/root.ts"
-import { findBaba, generateRoot, SURFACES_DIR } from "../../core/provision.ts"
+import { findBaba, generateRoot, HOME_FILE, SURFACES_DIR } from "../../core/provision.ts"
 import { bootPaths } from "../src/boot.ts"
 import { shellUi } from "../src/hosting.ts"
 import { loadSurfaces, type Loaders } from "../src/loading.ts"
@@ -26,7 +26,8 @@ const { surfaces, broken } = generated
 // fails, it is watched again. A file read while it is replaced is read again after the next change. Hot reload follows only
 // the files the code imported: a surface broken by importing one that is not there would wait for an edit of its own code.
 // So while one is broken, any change in surfaces/ writes the generated module again, as it is, and the shell is made again.
-const held = globalThis as { babavossSurfaces?: FSWatcher }
+// The project's own home, .baba/home.tsx, made or removed, generates the page again too.
+const held = globalThis as { babavossSurfaces?: FSWatcher; babavossHome?: FSWatcher }
 const inode = (dir: string) => {
   try {
     return statSync(dir).ino
@@ -62,8 +63,30 @@ const follow = (baba: string) => {
   }
 }
 
-if (baba) follow(baba)
-else held.babavossSurfaces?.close()
+/** Follows .baba/ itself for its home being made or removed: the page is generated again with it, or without it. */
+const home = (baba: string) => {
+  held.babavossHome?.close()
+  try {
+    held.babavossHome = watch(baba, (_, file) => {
+      if (file !== HOME_FILE) return
+      try {
+        generateRoot(baba)
+      } catch {}
+    })
+    held.babavossHome.on("error", () => (held.babavossHome = undefined))
+    held.babavossHome.unref()
+  } catch {
+    held.babavossHome = undefined
+  }
+}
+
+if (baba) {
+  follow(baba)
+  home(baba)
+} else {
+  held.babavossSurfaces?.close()
+  held.babavossHome?.close()
+}
 
 // The root's title is the configuration's, or the project directory's name; a configuration that does not load names it
 // so too, and the hook says what is wrong with it. Where there is no .baba/, the page is the shell's own, with no surface to hold.
