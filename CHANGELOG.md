@@ -2,6 +2,10 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.61.1
+
+- In this repository the queue's map is replaced by Narratives: a list of the narratives and a page for each with its issues as an outline of what came out of what, links to other narratives said in words. The agent reads it at `/queue/narratives`, `/queue/narratives/ID` and `/queue/narratives/ID/open`; `/queue/map` is gone. The package is unchanged. Nothing to adapt.
+
 ## 0.61.0
 
 - Breaking: the strip, the activity button and its drawer, toasts, the tab's dropdown menu and home's palette are gone. The tabs stand on a rail at a side of the page the person chooses, left, right, top or bottom, and every tab, home included, has a drawer: its menu at the head, drawn from its surface's views as before, over its activity as a thread, newest at the foot. A click shows a tab; a click on the tab shown, a right click, the menu key or the shortcut opens its drawer.
