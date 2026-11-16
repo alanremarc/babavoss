@@ -129,7 +129,7 @@ test("an issue comes out of others on a narrative: its own, its first parent's, 
       { at: "/narratives/work", id: "work", issues: 1, open: 1 },
     ],
   })
-  expect(agent.sees("/narratives/shell")).toMatchObject({ title: "The shell as a desktop", issues: [{ n: 2 }, { n: 3 }, { n: 4, status: "draft" }] })
+  expect(agent.sees("/narratives/shell")).toMatchObject({ title: "The shell as a desktop", outline: [{ n: 2 }, { n: 3 }, { n: 4, status: "draft" }] })
   expect(agent.sees("/issues/3")).toMatchObject({ narrative: { id: "shell" }, from: [{ n: 2 }, { n: 1 }], to: [{ n: 4 }] })
   expect(await agent.call("/", "add_from", { title: "Nowhere", about: "Why", from: "", narrative: "moon" })).toEqual({ outcome: "refused", reason: "There is no narrative moon" })
   expect(await agent.call("/", "add_from", { title: "Orphan", about: "Why", from: "77", narrative: "" })).toEqual({ outcome: "refused", reason: "There is no issue 77" })
@@ -169,18 +169,123 @@ test("another pass at an issue is an iteration: why, what was decided and what c
   expect(person.noticed()).toEqual(["Issue 1 begins iteration 1: Ask each harness"])
 })
 
-test("the map's and the archive's places are the list's below /map and /archive, and the same actions are offered and called there", async () => {
+test("the archive's places are the list's below /archive, and the same actions are offered and called there", async () => {
   const { agent, person } = await tab()
 
   await agent.call("/", "draft", { title: "One", about: "Why" })
-  expect(person.sees("/map/issues/1")).toEqual(person.sees("/issues/1"))
+  expect(person.sees("/archive/issues/1")).toEqual(person.sees("/issues/1"))
   expect(person.sees("/archive")).toEqual(person.sees("/"))
-  expect(person.offered("/map")).toContain("narrate")
-  expect(person.sees("/mapping")).toBeUndefined()
-  await person.call("/map/issues/1", "approve", { n: 1 })
+  expect(person.offered("/archive")).toContain("narrate")
+  expect(person.sees("/archived")).toBeUndefined()
+  await person.call("/archive/issues/1", "approve", { n: 1 })
   expect(rows(agent.sees())).toEqual([[1, "backlog", undefined]])
   await person.call("/archive/issues/1", "drop", { n: 1 })
   expect(rows(agent.sees())).toEqual([])
+})
+
+test("the map is gone: a path into it says where the narratives are", async () => {
+  const { agent } = await tab()
+
+  await agent.call("/", "add", { title: "One", about: "Why" })
+  expect(agent.sees("/map")).toBeUndefined()
+  expect(agent.sees("/map/issues/1")).toBeUndefined()
+  expect(await agent.call("/map/issues/1", "start", { n: 1, lane: 1 })).toEqual({
+    outcome: "refused",
+    reason: "the map is gone: the narratives are at /narratives, each an outline of its issues at /narratives/ID",
+  })
+})
+
+/** A narrative's outline as the agent reads it: each issue's number, depth and links, without its status and title. */
+type Placed = { n: number; depth: number; also?: number[]; from?: Record<string, number[]>; to?: Record<string, number[]> }
+const outlined = (sees: unknown) => (sees as { outline: Placed[] }).outline.map(({ n, depth, also, from, to }) => ({ n, depth, ...(also && { also }), ...(from && { from }), ...(to && { to }) }))
+
+/** Work on two narratives: on shell, 1 with 2 and 4 out of it, 3 out of 2, 5 out of 2 and 4; on told, 6, and 7 out of 6 and 3. */
+async function branching() {
+  const s = await tab()
+  const { agent } = s
+
+  await agent.call("/", "narrate", { id: "shell", title: "The shell", about: "What the root offers" })
+  await agent.call("/", "narrate", { id: "told", title: "What the agent is told", about: "Its words" })
+  await agent.call("/", "add_from", { title: "A strip", about: "Why", from: "", narrative: "shell" })
+  await agent.call("/", "add_from", { title: "A menu", about: "Why", from: "1", narrative: "" })
+  await agent.call("/", "add_from", { title: "A palette", about: "Why", from: "2", narrative: "" })
+  await agent.call("/", "add_from", { title: "A dock", about: "Why", from: "1", narrative: "" })
+  await agent.call("/", "add_from", { title: "A drawer", about: "Why", from: "2, 4", narrative: "" })
+  await agent.call("/", "add_from", { title: "The words", about: "Why", from: "", narrative: "told" })
+  await agent.call("/", "add_from", { title: "The palette's words", about: "Why", from: "6, 3", narrative: "" })
+
+  return s
+}
+
+test("a narrative's issues are an outline: its roots in the order added, and under each what came out of it, in that order", async () => {
+  const { agent } = await branching()
+
+  await agent.call("/", "add_from", { title: "Another strip", about: "Why", from: "", narrative: "shell" })
+  expect(agent.sees("/narratives/shell")).toMatchObject({ title: "The shell", about: "What the root offers", issues: 6, open: 6, open_only: "/narratives/shell/open" })
+  expect(outlined(agent.sees("/narratives/shell")).map(({ n, depth }) => [n, depth])).toEqual([
+    [1, 0],
+    [2, 1],
+    [3, 2],
+    [5, 2],
+    [4, 1],
+    [8, 0],
+  ])
+  expect((agent.sees("/narratives/shell") as { outline: unknown[] }).outline[0]).toEqual({ at: "/issues/1", n: 1, title: "A strip", status: "backlog", depth: 0 })
+})
+
+test("an issue with several parents on its narrative stands once, under the first, and names the others", async () => {
+  const { agent } = await branching()
+
+  expect(outlined(agent.sees("/narratives/shell")).filter((place) => place.n === 5)).toEqual([{ n: 5, depth: 2, also: [4] }])
+})
+
+test("links across narratives are said on the issues they touch, by narrative, and a root here may come out of an issue elsewhere", async () => {
+  const { agent } = await branching()
+
+  expect(outlined(agent.sees("/narratives/told"))).toEqual([
+    { n: 6, depth: 0 },
+    { n: 7, depth: 1, from: { shell: [3] } },
+  ])
+  expect(outlined(agent.sees("/narratives/shell")).find((place) => place.n === 3)).toEqual({ n: 3, depth: 2, to: { told: [7] } })
+  await agent.call("/issues/6", "move", { n: 6, narrative: "shell" })
+  expect(outlined(agent.sees("/narratives/told"))).toEqual([{ n: 7, depth: 0, from: { shell: [6, 3] } }])
+})
+
+test("open only keeps the open issues and the path to each, and says where the whole outline is", async () => {
+  const { agent } = await branching()
+
+  for (const n of [1, 2, 3, 4]) {
+    await agent.call(`/issues/${n}`, "start", { n, lane: 1 })
+    await agent.call(`/issues/${n}`, "done", { n })
+  }
+  expect(agent.sees("/narratives/shell")).toMatchObject({ issues: 5, open: 1 })
+  expect(agent.sees("/narratives/shell/open")).toMatchObject({ only: "open", all: "/narratives/shell" })
+  expect(outlined(agent.sees("/narratives/shell/open")).map(({ n, depth }) => [n, depth])).toEqual([
+    [1, 0],
+    [2, 1],
+    [5, 2],
+  ])
+  await agent.call("/issues/5", "start", { n: 5, lane: 1 })
+  await agent.call("/issues/5", "done", { n: 5 })
+  expect(outlined(agent.sees("/narratives/shell/open"))).toEqual([])
+  expect(agent.sees("/narratives/moon/open")).toBeUndefined()
+})
+
+test("the narratives are listed with what each is about and how many issues are open, those with open issues first", async () => {
+  const { agent } = await branching()
+
+  await agent.call("/", "narrate", { id: "quiet", title: "Nothing yet", about: "Waits" })
+  for (const n of [6, 7]) await agent.call(`/issues/${n}`, "drop", { n })
+  expect(agent.sees("/narratives")).toEqual({
+    title: "Narratives",
+    narratives: [
+      { at: "/narratives/shell", id: "shell", title: "The shell", about: "What the root offers", issues: 5, open: 5 },
+      { at: "/narratives/told", id: "told", title: "What the agent is told", about: "Its words", issues: 0, open: 0 },
+      { at: "/narratives/quiet", id: "quiet", title: "Nothing yet", about: "Waits", issues: 0, open: 0 },
+    ],
+  })
+  expect(agent.sees("/narratives/quiet")).toMatchObject({ issues: 0, outline: [] })
+  expect(agent.sees()).not.toHaveProperty("narratives.0.about")
 })
 
 test("the work is the session's: a second tab shows it and follows changes, and a tab opened after one closed finds it", async () => {

@@ -1,6 +1,5 @@
-// An issue whole, the one component both views show it with: where it stands, what it is about as markdown, what it came
-// out of and led to, the reasoning of each of its passes, the updates from its lane, and a draft's approve or drop. The list
-// shows it in the content, the map in its panel; `roomy` is the list's.
+// An issue whole, as the list and the archive show it in their content: where it stands, what it is about as markdown, what
+// it came out of and led to, the reasoning of each of its passes, the updates from its lane, and a draft's approve or drop.
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Handle } from "babavoss/core/index.ts"
@@ -34,10 +33,9 @@ export type DetailProps = {
   go: (route: string) => void
   decide: (handle: Handle) => void
   refused?: string
-  roomy?: boolean
 }
 
-export function Detail({ whole, color, colorOf, laneOf, go, decide, refused, roomy }: DetailProps) {
+export function Detail({ whole, color, colorOf, laneOf, go, decide, refused }: DetailProps) {
   const last = whole.iterations.length - 1
   const lines = (refs: Whole["from"]) => (
     <ul className="-mx-1.5">
@@ -48,7 +46,7 @@ export function Detail({ whole, color, colorOf, laneOf, go, decide, refused, roo
   )
 
   return (
-    <article className={`flex flex-col gap-4 ${roomy ? "max-w-3xl p-6" : "px-4 py-4"}`}>
+    <article className="flex max-w-3xl flex-col gap-4 p-6">
       <div className="text-muted-foreground flex items-center gap-2 text-body">
         <Mark status={whole.status as Status} />
         <span>{NAMES[whole.status]}</span>
@@ -64,12 +62,12 @@ export function Detail({ whole, color, colorOf, laneOf, go, decide, refused, roo
           <span className="truncate">{whole.narrative.title}</span>
         </button>
       </div>
-      <h1 className={`${roomy ? "text-lg" : "text-sm"} leading-snug font-medium text-balance`}>{whole.title}</h1>
-      <div className={`${PROSE} ${roomy ? "text-large" : "text-body"}`}>
+      <h1 className="text-lg leading-snug font-medium text-balance">{whole.title}</h1>
+      <div className={`${PROSE} text-large`}>
         <Markdown remarkPlugins={[remarkGfm]}>{whole.about}</Markdown>
       </div>
       {whole.note && (
-        <p className={`border-primary/50 border-l-2 pl-3 ${roomy ? "text-sm" : "text-body"}`}>
+        <p className="border-primary/50 border-l-2 pl-3 text-sm">
           <span className="text-muted-foreground">Now: </span>
           {whole.note}
         </p>
@@ -90,7 +88,7 @@ export function Detail({ whole, color, colorOf, laneOf, go, decide, refused, roo
         </p>
       )}
       {(whole.from.length > 0 || whole.to.length > 0) && (
-        <div className={`grid gap-4 border-t pt-4 ${roomy ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className="grid grid-cols-2 gap-4 border-t pt-4">
           {whole.from.length > 0 && (
             <section className="flex min-w-0 flex-col gap-1">
               <Label>Came out of</Label>
