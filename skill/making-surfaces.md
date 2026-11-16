@@ -39,19 +39,19 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 | a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
 | a notice from `update` | what just happened, told once and kept nowhere | `notices`, beside `model` and `commands` |
 
-`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab in the strip and shows the why; a list says it of both. Where an ask is offered, say it: the ask is how the person decides, `attention` is that they are waited for.
+`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where an ask is offered, say it: the ask is how the person decides, `attention` is that they are waited for.
 
 ```ts
 ...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
 ```
 
-A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab, and keeps it in the person's notifications; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
+A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a bubble beside its tab for a moment, and keeps it in the tab's drawer, as a message in its thread; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
 
 ```ts
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
-A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page under all activity, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person's notifications.
+A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and in its tab's drawer, where calls in a row are one folded line, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person as words. A tab's entries go with it when it closes.
 
 The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
 
@@ -71,14 +71,14 @@ A page reads its views with `useLive(path)` and is shown once its first reads ha
 
 ## The tab and its menu
 
-A tab is the home of one instance of a surface, with its own state. The page's strip holds home, the babavoss mark, which also shows whether the agent is working, then the tabs, then the notifications. Each tab carries its surface's menu, the same for every surface and made from its views alone: over the tab, or with it focused, its icon gives way to dots that open the menu, as a right click or Shift+F10 does. A page cannot add to it or replace it: `ui/index.tsx` returns its content, which fills the tab under the strip, and optionally `icon` and `drawers`.
+A tab is the home of one instance of a surface, with its own state. The page's rail, at the side of the page the person chose, holds home, the babavoss mark, which also shows whether the agent is working, then the tabs, newest beside it. Each tab has a drawer, the same for every surface: its menu at the head, made from its views alone, over its activity as a thread. A click on the tab shown opens it, as a right click, the context-menu key or the drawer's shortcut does. A page cannot add to it or replace it: `ui/index.tsx` returns its content, which fills the tab beside the rail, and optionally `icon` and `drawers`.
 
 - A search of the actions and places of the whole tree below the tab, read breadth-first from `/` along the `at`s.
 - The surface's actions at `/`, under its `title`.
 - Where the tab's route is below `/`, the actions offered there, under the place's view's `title` or `name`, or its row's.
 - Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. Go of more than 8 places opens on a field that filters it.
 - The shell's own: close the tab, close the others, copy its link, reload its views.
-- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask stands first in its group, dotted; an ask at another place, or a notice they have not seen about one, dots Go and that place. Home, the strip's first tab, is the shell's own page, never a surface's: the surfaces to open, the settings among them, the tabs to switch to, and the shell's commands; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P goes home from any tab, and back; ⌘J and ⌘K go to the next and previous tab. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
+- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask stands first in its group, dotted; an ask at another place, or a notice they have not seen about one, dots Go and that place. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
 
 So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
 
@@ -90,16 +90,28 @@ An action with inputs opens a modal. The shell makes a form of its inputs, one f
 
 What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
 
-Whose move it is is the shell's too: the mark at the strip's start moves while the agent works and counts the person's changes that wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
+Whose move it is is the shell's too: the mark on the rail moves while the agent works, and home's drawer says which of the person's changes wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
 
 ## A page's own
 
-A page is a React component the shell wraps in its tab. Inside the tab everything is the surface's: any library installed in `.baba/`, any pattern, its own CSS. The kit is where to start, and the project's own shadcn components stand beside it. The strip, a tab's menu, the activity, a drawer's frame and the theme's tokens are the shell's.
+A page is a React component the shell wraps in its tab. Inside the tab everything is the surface's: any library installed in `.baba/`, any pattern, its own CSS. The kit is where to start, and the project's own shadcn components stand beside it. The rail, a tab's drawer with its menu and thread, a modal's frame and the theme's tokens are the shell's.
 
 - A library: `bun add NAME` in `.baba/`, then import it. The page has one React, the framework's, whatever a library brings. A library's own stylesheet is imported from the page, `import "NAME/dist/style.css"`; it is not scoped, so restyle it to the tokens in `ui/styles.css`.
 - A shadcn component: `bunx shadcn@latest add NAME` in `.baba/` writes it to `components/ui/`, shared by every surface, imported as `@/components/ui/NAME`. It reads the tokens the shell's theme defines, so it follows the palette and the mode. The css file `components.json` names is not part of the page: what the CLI writes there changes nothing.
 - Tailwind sees every file in `.baba/` but `node_modules`. A package whose own classes must be generated is named by a `@source` line in `ui/styles.css`, its path from there: `@source "../../../node_modules/NAME";`.
-- The shell's services, by convention, from `useShell()`: `toast(text, at?)`, a toast from the tab that clicking returns to, kept nowhere and not told to the agent, where what both sides should know is a notice from `update`; `open(surface)`, its tab, the open one or a new one; `go(at)`, a place by its whole path, `/queue/issues/3`; `appearance`, `{ mode, theme }`, for a library that must be told them, such as a chart's or an editor's. A page drawn by the tokens needs none of it.
+- The shell's services, by convention, from `useShell()`: `toast(text, at?)`, a bubble beside the tab for a moment, which a click follows to `at`, kept nowhere and not told to the agent, where what both sides should know is a notice from `update`; `open(surface)`, its tab, the open one or a new one; `go(at)`, a place by its whole path, `/queue/issues/3`; `appearance`, `{ mode, theme }`, for a library that must be told them, such as a chart's or an editor's. A page drawn by the tokens needs none of it.
+
+## Home
+
+A click on the mark shows home: by default a desktop, an icon a surface, with Open or how many tabs under it, marked where a tab of it waits on someone; a click goes to its newest tab or opens one. A project may draw its own: `.baba/home.tsx`, whose default export takes the desktop's place, given `HomeProps` from `babavoss/shell/ui/index.tsx`: the project's `title`, a `notice` where there are no surfaces, `surfaces` each with `name`, `label`, `description`, `icon`, and `open()` or why it is `broken`, the open `tabs` newest first each with `label`, `surface`, `icon`, `mark` and `go()`, and the `foot` that says the root, its version, the session and its harness, to place where it fits. It is a page like a surface's, drawn with the kit; it has no view, so its state is the surfaces'. Made or removed, the root's page is generated again with it.
+
+```tsx
+import type { HomeProps } from "babavoss/shell/ui/index.tsx"
+
+export default function Home({ title, surfaces, tabs, foot }: HomeProps) {
+  return <main className="flex flex-1 flex-col gap-4 p-8">…{foot}</main>
+}
+```
 
 ## Looks
 

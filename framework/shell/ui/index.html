@@ -6,8 +6,8 @@
     <title>baba</title>
     <script>
       // The person's appearance before the first paint, from the settings the page is served with, which say what each
-      // mode is painted in, its theme's name and numbers; where their file has none yet, the mode from the cookie an older
-      // page kept, in Neutral. appearance.ts applies it by the same rules after.
+      // mode is painted in, its theme's name and numbers, and the side the rail stands at; where their file has none yet,
+      // the mode from the cookie an older page kept, in Neutral. appearance.ts applies it by the same rules after.
       ;(() => {
         let p = {}
         let paint = {}
@@ -32,12 +32,25 @@
         root.dataset.theme = t.theme || "neutral"
         root.style.colorScheme = mode
         for (const n of ["hue", "tint", "vivid"]) root.style.setProperty("--theme-" + n, String(Number(t[n]) || 0))
+        const side = p.rail && p.rail.side
+        root.dataset.rail = side === "right" || side === "top" || side === "bottom" ? side : "left"
       })()
     </script>
   </head>
   <body>
-    <!-- The page's ground and the strip's bar before the script draws them, as it will: React takes their place. -->
-    <div id="root"><div class="flex h-dvh min-h-64 flex-col overflow-hidden text-xs"><nav class="h-11 shrink-0 border-b bg-sidebar"></nav></div></div>
+    <!-- The page's ground and the rail before the script draws them, at the side it will stand: React takes their place. -->
+    <div id="root"><div id="babavoss-ground" class="flex h-dvh min-h-64 overflow-hidden text-xs"><nav class="shrink-0 bg-sidebar"></nav></div></div>
+    <script>
+      ;(() => {
+        const side = document.documentElement.dataset.rail
+        const ground = document.getElementById("babavoss-ground")
+        const rail = ground.firstElementChild
+        const column = side === "left" || side === "right"
+
+        ground.classList.add({ left: "flex-row", right: "flex-row-reverse", top: "flex-col", bottom: "flex-col-reverse" }[side])
+        rail.classList.add(column ? "w-11" : "h-11", { left: "border-r", right: "border-l", top: "border-b", bottom: "border-t" }[side])
+      })()
+    </script>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>

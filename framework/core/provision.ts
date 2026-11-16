@@ -97,13 +97,16 @@ export function scaffold(baba: string): string[] {
   return done
 }
 
+/** A .baba/'s own home, drawn in the desktop's place where it is there. */
+export const HOME_FILE = "home.tsx"
+
 /** Where the root of a .baba/ is generated: its surfaces named in one module, each loaded on its own, and the page that holds each in its tab. */
 export const ROOT_DIR = ".root"
 
 /**
  * Generates the root of `baba` from its surfaces, and answers with its directory: surfaces.ts, the surfaces by name, each
  * loaded when the shell's runtime asks; and the page, index.html, main.tsx and styles.css, the shell with each surface's component
- * and, scoped to its tabs, its own stylesheet.
+ * and, scoped to its tabs, its own stylesheet, and the project's own home where `.baba/home.tsx` draws one.
  */
 export function generateRoot(baba: string): string {
   const dir = join(baba, ROOT_DIR)
@@ -116,11 +119,15 @@ export function generateRoot(baba: string): string {
     join(dir, "surfaces.ts"),
     `${head}export default {\n${names.map((name) => `  ${JSON.stringify(name)}: () => import("../${SURFACES_DIR}/${name}/src/surface.ts"),\n`).join("")}}\n`
   )
+  // The project's own home, where .baba/ draws one: its default export, in the desktop's place.
+  const home = existsSync(join(baba, HOME_FILE))
+
   written(
     join(dir, "main.tsx"),
     `${head}import { createRoot } from "react-dom/client"\nimport Shell from "babavoss/shell/ui/index.tsx"\n` +
       paged.map((name, i) => `import * as p${i} from "../${SURFACES_DIR}/${name}/ui/index.tsx"\n`).join("") +
-      `import "./styles.css"\n\ncreateRoot(document.getElementById("root")!).render(<Shell surfaces={{ ${paged.map((name, i) => `${JSON.stringify(name)}: p${i}`).join(", ")} }} />)\n`
+      (home ? `import Home from "../${HOME_FILE}"\n` : "") +
+      `import "./styles.css"\n\ncreateRoot(document.getElementById("root")!).render(<Shell surfaces={{ ${paged.map((name, i) => `${JSON.stringify(name)}: p${i}`).join(", ")} }}${home ? " home={Home}" : ""} />)\n`
   )
   // A surface's own stylesheet, ui/styles.css, comes after the shell's, scoped to its tabs: it styles them and nothing else.
   // Its braces must balance outside comments and strings, or a stray one would close the scope; then it is left out, and
