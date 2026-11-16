@@ -1,7 +1,11 @@
-// The mark's specimens: home's tab in each standing, at the rail's size and enlarged so its motion can be judged, side
-// by side and live; and its moves, one at a time or one after another as while the agent works.
+// The mark's specimens: home's tab in each standing, and with its dot while the session's hooks are not heard, at the
+// rail's size and enlarged so its motion can be judged, side by side and live; and its moves, one at a time or one after
+// another as while the agent works.
 import { useState, type ComponentType } from "react"
 import { RailEntry } from "babavoss/shell/ui/rail.tsx"
+import { homeMarkOf } from "babavoss/shell/ui/rail.ts"
+import { unheardLine } from "babavoss/shell/ui/thread.ts"
+import type { Unheard } from "babavoss/shell/ui/client.ts"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
 import { MOVES } from "babavoss/shell/ui/gaze.ts"
 import { standingOf, type Standing } from "babavoss/shell/ui/turn.ts"
@@ -11,31 +15,44 @@ import { State, States } from "./frame.tsx"
 import { sphere } from "./sphere.tsx"
 
 /** Each standing of the mark, as the rail gives it to home's tab. */
-const STANDINGS: { label: string; standing: Standing; animate?: false; lost?: string }[] = [
+const STANDINGS: { label: string; standing: Standing; animate?: false; lost?: string; unheard?: Unheard }[] = [
   { label: "still", standing: standingOf({ agent: "idle", waiting: 0 }) },
   { label: "working", standing: standingOf({ agent: "working", waiting: 0 }) },
   { label: "working, animation off", standing: standingOf({ agent: "working", waiting: 0 }), animate: false },
   { label: "waiting: 2 changes", standing: standingOf({ agent: "idle", waiting: 2 }) },
   { label: "lost: reconnecting", standing: standingOf(undefined), lost: "Reconnecting" },
+  { label: "hooks not heard: its dot", standing: standingOf({ agent: "idle", waiting: 0 }), unheard: { ever: true, since: 0 } },
 ]
 /** How much bigger the enlarged mark is than the strip's. */
 const LARGE = 5
 
 /** Home's tab as a rail along the top has it, on the rail's ground; `zoom` enlarges the whole of it, crisp, as it is drawn. */
-const Tab = ({ standing, animate = true, lost, zoom = 1 }: { standing: Standing; animate?: boolean; lost?: string; zoom?: number }) => (
-  <div className="grid place-items-center rounded-md bg-sidebar p-1" style={{ zoom }}>
-    <RailEntry
-      item={{ id: "home", label: "Home", icon: <Logo standing={standing} animate={animate} lost={!!lost} />, why: [lost ?? standing.said] }}
-      home
-      column={false}
-      side="top"
-      active={false}
-      open={false}
-      select={() => {}}
-      toggle={() => {}}
-    />
-  </div>
-)
+type Shown = { standing: Standing; animate?: boolean; lost?: string; unheard?: Unheard; zoom?: number }
+
+function Tab({ standing, animate = true, lost, unheard, zoom = 1 }: Shown) {
+  const mark = homeMarkOf(unheard)
+
+  return (
+    <div className="grid place-items-center rounded-md bg-sidebar p-1" style={{ zoom }}>
+      <RailEntry
+        item={{
+          id: "home",
+          label: "Home",
+          icon: <Logo standing={standing} animate={animate} lost={!!lost} />,
+          ...(mark && { mark }),
+          why: [lost ?? standing.said, ...(unheard ? [unheardLine(unheard)] : [])],
+        }}
+        home
+        column={false}
+        side="top"
+        active={false}
+        open={false}
+        select={() => {}}
+        toggle={() => {}}
+      />
+    </div>
+  )
+}
 
 function States_() {
   return (
@@ -43,14 +60,14 @@ function States_() {
       <States min={120}>
         {STANDINGS.map((s) => (
           <State key={s.label} label={s.label} className="justify-center">
-            <Tab standing={s.standing} {...(s.animate === false && { animate: false })} {...(s.lost && { lost: s.lost })} />
+            <Tab {...s} />
           </State>
         ))}
       </States>
       <States min={180}>
         {STANDINGS.map((s) => (
           <State key={s.label} label={`${s.label}, ×${LARGE}`} className="justify-center p-4">
-            <Tab standing={s.standing} zoom={LARGE} {...(s.animate === false && { animate: false })} {...(s.lost && { lost: s.lost })} />
+            <Tab {...s} zoom={LARGE} />
           </State>
         ))}
       </States>

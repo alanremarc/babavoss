@@ -17,7 +17,7 @@ import { homeMenu, type HomeProps } from "babavoss/shell/ui/home.ts"
 import { Inputs } from "babavoss/shell/ui/inputs.tsx"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
 import { Rail, RailEntry, type RailItem } from "babavoss/shell/ui/rail.tsx"
-import { entriesIn, itemsOf, pinnedOf, shellEntries, waitingRows } from "babavoss/shell/ui/thread.ts"
+import { entriesIn, itemsOf, pinnedOf, shellEntries, unheardPinned, waitingRows, withUnheard } from "babavoss/shell/ui/thread.ts"
 import { TabBroken, TabFailed, TabNoPage } from "babavoss/shell/ui/tabs.tsx"
 import { standingOf } from "babavoss/shell/ui/turn.ts"
 import type { Rail as Placed } from "babavoss/shell/settings/src/settings.ts"
@@ -151,18 +151,25 @@ function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: s
   )
 }
 
-/** Home's drawer: the shell's menu from its view at /, the shell's own entries, and what of the person's waits for the agent. */
-function HomeDrawer() {
+/**
+ * Home's drawer: the shell's menu from its view at /, the shell's own entries, and what of the person's waits for the agent;
+ * with `unheard`, the session's hooks gone quiet 20 minutes ago, its notice kept among the entries and why pinned at the foot.
+ */
+function HomeDrawer({ unheard = false }: { unheard?: boolean }) {
+  const quiet = unheard ? { ever: true, since: Date.now() - 20 * 60_000 } : undefined
+  const pinned = unheardPinned(quiet)
+
   return (
     <Drawer
       label="babavoss"
       side="left"
       home
       menu={{ items: homeMenu({ view: ROOT, title: "babavoss", tabs: [{ at: "/queue", label: "Queue", mark: "person" }], start: () => {}, navigate: () => {} }) }}
-      rows={shellEntries(ROWS)}
+      rows={withUnheard(shellEntries(ROWS), quiet ? [quiet] : [])}
       loaded
       stay={new Set()}
-      waiting={waitingRows(ROWS, 2)}
+      {...(pinned && { pinned })}
+      waiting={waitingRows(ROWS, unheard ? 0 : 2)}
       go={() => {}}
       goThere={() => {}}
       reload={() => {}}
@@ -198,6 +205,11 @@ function DrawerSpecimen() {
       <State label="home's: the shell's actions and the tabs as its places, the shell's own entries, what waits for the agent" bare>
         <Under>
           <HomeDrawer />
+        </Under>
+      </State>
+      <State label="home's, the session's hooks gone quiet: the notice kept in its thread, why and what to do pinned at the foot" bare>
+        <Under>
+          <HomeDrawer unheard />
         </Under>
       </State>
       <State label="a broken tab's, at the right: nothing yet, Reload pinned" bare>

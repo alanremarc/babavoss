@@ -4,9 +4,10 @@
 // clear so the oldest entry can be scrolled out from under the island, earlier entries read as the person scrolls up. A
 // notice is a message bubble under its author and time, the person's at the right, tinted; calls in a row by one author
 // are one small centred line that opens to them; a tab entry is one small centred line. What the tab needs, or that it is
-// broken, is pinned at the foot with its one action; on home, what of the person's waits for the agent's next turn. The
-// notices that were new as it opened keep a dot while it stays. Escape, a click outside, or the gesture that opened it
-// closes it; the shell gives focus back to the tab. It opens with the cursor in its search.
+// broken, is pinned at the foot with its one action; on home, what of the person's waits for the agent's next turn, and
+// that the session's hooks are not heard. The notices that were new as it opened keep a dot while it stays. Escape, a
+// click outside, or the gesture that opened it closes it; the shell gives focus back to the tab. It opens with the cursor
+// in its search.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "../../kit/cn.ts"
 import type { MenuItem } from "../../kit/layouts/menu.tsx"

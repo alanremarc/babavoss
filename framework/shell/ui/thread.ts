@@ -3,7 +3,9 @@
 // author folded into one line; or a tab entry, the shell's opening, closing or showing of a tab. A tab's thread is what
 // is in it and the shell's lines about it; home's is the shell's own, each naming its surface. What a tab needs, or that
 // it is broken, is pinned at the thread's foot with its one action, as is what of the person's waits for the agent on
-// home's. Pure: drawer.tsx draws it.
+// home's, and that the session's hooks are not heard, with what to do, while that lasts; each time it began is kept in
+// home's thread as the page's own notice. Pure: drawer.tsx draws it.
+import type { Unheard } from "./client.ts"
 import { named } from "./commands.ts"
 
 export type Who = "person" | "agent" | "surface"
@@ -35,7 +37,8 @@ export function agoOf(when: Date, now: Date): string {
  * What an entry is: in a tab, a notice where it is marked so, else a call; in none, the shell's line about a tab, or a call
  * made on the shell itself, at its /.
  */
-export const kindOf = (row: Row): Kind => (row.tab === undefined ? (row.at === "/" ? "call" : "tab") : row.kind === "call" ? "call" : "notice")
+export const kindOf = (row: Row): Kind =>
+  row.tab === undefined ? (row.kind === "notice" ? "notice" : row.at === "/" ? "call" : "tab") : row.kind === "call" ? "call" : "notice"
 
 /** Whether `at` is the tab at `address`, or a place in it. */
 const inside = (at: string | null, address: string): boolean => at !== null && (at === address || at.startsWith(`${address}/`))
@@ -127,6 +130,48 @@ export function pinnedOf({ broken, needs = [], ask }: { broken?: string; needs?:
  * first; a call that gave a notice is that notice. Read from all activity, where every row has its kind.
  */
 export const waitingRows = (rows: readonly Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.kind !== undefined).slice(0, Math.max(0, waiting))
+
+/** What the person is told as the session's hooks are found not heard: never heard, or heard and gone quiet. */
+export const UNHEARD = "This session's agent is not told of changes; it sees them only when it reads"
+const BACK = "Start a new session to get them back."
+
+/** The notice that the hooks are not heard, as its bubble and its entry in home's thread say it. */
+export const unheardLine = (unheard: Unheard): string => (unheard.ever ? `${UNHEARD}. ${BACK}` : `${UNHEARD}.`)
+
+/** What home's thread pins while the hooks are not heard: that the agent is not told, why, and what to do; nothing to press. */
+export function unheardPinned(unheard: Unheard | undefined): Pinned | undefined {
+  if (!unheard) return undefined
+
+  return {
+    tone: "person",
+    text: UNHEARD,
+    detail: unheard.ever
+      ? `Its harness's hooks were heard, then went quiet. ${BACK}`
+      : "No hook of its harness has been heard. Start the session in a harness set up for this project, from its folder, to have them.",
+  }
+}
+
+/** The stretches of silence the page has known, with one more where `unheard` is new: the same list where it is known or there is none. */
+export const knownAfter = (known: readonly Unheard[], unheard: Unheard | undefined): readonly Unheard[] =>
+  !unheard || known.some((k) => k.since === unheard.since) ? known : [...known, unheard]
+
+/**
+ * Home's entries with the page's own notices among them, one for each stretch of silence it has known, by its time: newest
+ * first as given, each before the first entry older than it. Numbered below every entry's, so their keys never meet.
+ */
+export function withUnheard(rows: readonly Row[], known: readonly Unheard[]): Row[] {
+  const all = [...rows]
+
+  for (const unheard of [...known].sort((a, b) => a.since - b.since)) {
+    const when = new Date(unheard.since).toISOString().replace(/\.\d{3}Z$/, "Z")
+    const older = all.findIndex((r) => Date.parse(r.when) < Date.parse(when))
+    const row: Row = { n: -unheard.since, when, who: "surface", kind: "notice", surface: "baba", at: null, what: unheardLine(unheard) }
+
+    all.splice(older < 0 ? all.length : older, 0, row)
+  }
+
+  return all
+}
 
 /** The notices of `rows` the person has not seen, by number, of those the shell names. */
 export const freshIn = (rows: readonly Row[], fresh: readonly number[]): number[] => rows.filter((r) => kindOf(r) === "notice" && fresh.includes(r.n)).map((r) => r.n)
