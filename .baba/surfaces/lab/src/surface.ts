@@ -5,7 +5,7 @@
 // and what was done on its page as the person, by the developing agent or by the person's own clicks, which the lab
 // follows in the root under test's activity. A turn that ends, and a run that cannot go on, are noticed. A run's record
 // is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
-// left behind by a lab that is gone is cleared when the lab starts.
+// left behind by a lab that is gone is cleared when the lab starts, its record saying so.
 import { randomBytes, randomUUID } from "node:crypto"
 import { action, detail, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
 import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
@@ -21,8 +21,12 @@ const FOLLOW_MS = 1000
 /** How many runs' records are kept: past it, the oldest is forgotten. */
 export const KEEP = 20
 
-/** starting: the project is being made; idle: the agent waits for a message; working: a turn runs; ended: its process is gone. */
-export type Status = "starting" | "idle" | "working" | "ended" | "closing" | "closed"
+/**
+ * starting: the project is being made; idle: the agent waits for a message; working: a turn runs; ended: its process is
+ * gone, its project still to close; closed: closed here; cleared: its project and home deleted when a lab started, as a
+ * lab that is gone left them, never closed.
+ */
+export type Status = "starting" | "idle" | "working" | "ended" | "closing" | "closed" | "cleared"
 export type Run = Timeline & {
   /** This tab's number for the run, which its events carry; `id` is its directory's name, once made. */
   n: number
@@ -57,7 +61,8 @@ export type Event =
   | { kind: "acted"; n: number; t: number; id: string; said: Said; own?: number[] }
   | { kind: "heard"; n: number; entries: Heard[] }
   | { kind: "closed"; n: number; t: number; changed: string }
-  | { kind: "listed"; runs: Json[] }
+  /** The records of every run, `cleared` those a lab's start cleared just now. */
+  | { kind: "listed"; runs: Json[]; cleared: string[] }
   | { kind: "read"; run: Json }
   | { kind: "failed"; n: number; t: number; command: string; error: string; id?: string }
 export type Command =
@@ -68,7 +73,6 @@ export type Command =
   | { kind: "follow"; n: number; project: string; session: string }
   | { kind: "close"; n: number; session?: string; dir?: string; project?: string; home?: string }
   | { kind: "record"; dir: string; run: Run }
-  | { kind: "list" }
   | { kind: "read"; id: string }
   | { kind: "forget"; ids: string[] }
   | { kind: "sweep"; keep?: string }
@@ -77,6 +81,8 @@ type Result = Update<Model, Command>
 const up = (run: Run | undefined): boolean => !!run && (run.status === "idle" || run.status === "working")
 /** A run with a process, or one being closed: nothing new starts until it is done. */
 const live = (run: Run | undefined) => !!run && ["starting", "idle", "working", "closing"].includes(run.status)
+/** A run whose project and home are gone: closed here, or cleared when a lab started. */
+const gone = (run: Run | undefined) => !!run && (run.status === "closed" || run.status === "cleared")
 /** The run with a note of the lab's own, `t` in ms since the epoch. */
 const note = (run: Run, t: number, title: string, text = "", error = false): Run => ({
   ...run,
@@ -227,7 +233,7 @@ const forget = action({
   inputs: {},
   update(m: Model, { id }): Result {
     if (!m.runs.some((r) => r.id === id)) return { refused: `no run ${id}` }
-    if (m.run?.id === id && m.run.status !== "closed") return { refused: "the run is shown here and not closed: close it first" }
+    if (m.run?.id === id && !gone(m.run)) return { refused: "the run is shown here and not closed: close it first" }
 
     const { run, ...rest } = m
 
@@ -290,8 +296,8 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             status: run.status,
             model: run.model,
             ...(checkout(run.checkout) ?? (run.from && { checkout: run.from })),
-            ...(run.project && run.status !== "closed" && { project: run.project }),
-            ...(run.page && run.status !== "closed" && { page: run.page }),
+            ...(run.project && !gone(run) && { project: run.project }),
+            ...(run.page && !gone(run) && { page: run.page }),
             ...(run.ended && { ended: run.ended }),
             turns: run.turns,
             // The run's counters are detail: read at the tab's path, and only counted in the shell's present.
@@ -337,7 +343,7 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
         cost: Math.round(r.cost * 10_000) / 10_000,
         entries: r.entries,
         ...(r.id === m.run?.id ? { shown: true } : !live(m.run) && { open: open.bind({ id: r.id }) }),
-        ...((r.id !== m.run?.id || m.run.status === "closed") && { forget: forget.bind({ id: r.id }) }),
+        ...((r.id !== m.run?.id || gone(m.run)) && { forget: forget.bind({ id: r.id }) }),
       })),
   }),
 })
@@ -446,12 +452,15 @@ const ranElsewhere = (record: Json | undefined): boolean => {
     return false
   }
 }
-const summaries = (records: Json[]): Summary[] =>
+const CLEARED = "its project and home were deleted when a lab started, as the lab that ran it left them; this record stays"
+/** The records as runs, those a lab's start cleared just now marked so. */
+const restoredAll = (records: Json[], cleared: string[]): Run[] =>
   records.flatMap((r) => {
     const run = recorded(r, 0, ORPHANED)
-    const s = run && summary(run)
 
-    return s ? [s] : []
+    if (!run) return []
+
+    return [run.id && cleared.includes(run.id) && !gone(run) ? note({ ...run, status: "cleared" }, at(run), "cleared", CLEARED) : run]
   })
 
 /** Who follows a run's activity: what was heard up to, the turn its reads and acts take one at a time, and its end. */
@@ -496,12 +505,17 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
       return { next: kept.next, runs: Array.isArray(kept.runs) ? kept.runs : [], ...(run && { run }) }
     },
     // What a lab that is gone left of its runs is cleared: every run but the one shown here and those of a lab still running.
-    start: (m) => [{ kind: "sweep", ...(m.run?.id && m.run.status !== "closed" && { keep: m.run.id }) }, { kind: "list" }],
+    start: (m) => [{ kind: "sweep", ...(m.run?.id && !gone(m.run) && { keep: m.run.id }) }],
     working: (m) => live(m.run),
     session: (c) => c.kind === "harness" || c.kind === "follow",
     update(m, message) {
       if (message.kind === "call") return pages.update(m, message)
-      if (message.kind === "listed") return kept({ model: { ...m, runs: summaries(message.runs) } })
+      if (message.kind === "listed") {
+        const all = restoredAll(message.runs, message.cleared)
+        const records = all.flatMap((run): Command[] => (run.dir && run.id && message.cleared.includes(run.id) ? [{ kind: "record", dir: run.dir, run }] : []))
+
+        return kept({ model: { ...m, runs: all.flatMap((run) => summary(run) ?? []) }, commands: records })
+      }
       if (message.kind === "read") {
         const run = recorded(message.run, m.next, ORPHANED)
 
@@ -523,12 +537,13 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
     view: pages.view,
     async run(c, send, signal) {
       if (c.kind === "record") return place.record(c.dir, c.run)
-      if (c.kind === "list") return send({ kind: "listed", runs: place.list() })
       if (c.kind === "forget") return c.ids.forEach((id) => place.forget(id))
       if (c.kind === "sweep") {
         const spared = (id: string, record: Json | undefined) => id === c.keep || ranElsewhere(record)
 
-        return void (await place.sweep(spared, (home) => harness.release(home)))
+        const cleared = await place.sweep(spared, (home) => harness.release(home))
+
+        return send({ kind: "listed", runs: place.list(), cleared })
       }
       if (c.kind === "read") {
         const found = place.list().find((r) => (r as { id?: unknown } | null)?.id === c.id)

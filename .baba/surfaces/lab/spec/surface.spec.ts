@@ -60,8 +60,11 @@ function place(kept: Json[] = []) {
       world.forgotten.push(id)
       world.records.delete(id)
     },
+    // As where runs live has it, a closed run has nothing left to clear.
     async sweep(spared) {
-      world.swept = [...world.records.keys()].map((id) => ({ id, spared: spared(id, world.records.get(id)) }))
+      const held = [...world.records].filter(([, r]) => !["closed", "cleared"].includes((r as { status: string }).status))
+
+      world.swept = held.map(([id, r]) => ({ id, spared: spared(id, r) }))
 
       return world.swept.filter((r) => !r.spared).map((r) => r.id)
     },
@@ -318,19 +321,19 @@ test("a restored run whose process is gone is ended, its timeline kept", async (
 })
 
 test("past runs are listed from their records, and one is shown here when no run is up", async () => {
-  const { agent } = story(lab(fakeHarness().harness, place([KEPT]).runs), { effects: "real" })
+  const { agent } = story(lab(fakeHarness().harness, place([{ ...KEPT, status: "closed" }]).runs), { effects: "real" })
 
   await until(() => (agent.sees() as { runs: { count: number } }).runs.count === 1)
 
   const listed = agent.sees("/runs") as { runs: { id: string; status: string; open?: Json }[] }
 
-  expect(listed.runs).toMatchObject([{ id: KEPT.id, status: "ended", checkout: "/repo", commit: "fedcba9876", uncommitted: 0, turns: 0 }])
+  expect(listed.runs).toMatchObject([{ id: KEPT.id, status: "closed", checkout: "/repo", commit: "fedcba9876", uncommitted: 0, turns: 0 }])
   expect(agent.offered("/runs")).toEqual(["open", "forget"])
   expect(await agent.call("/runs", "open", { id: KEPT.id })).toMatchObject({ outcome: "written" })
   await until(() => root(agent).run === KEPT.id)
-  expect(agent.sees()).toMatchObject({ status: "ended", ended: expect.stringContaining("the lab that ran it is gone") })
+  expect(agent.sees()).toMatchObject({ status: "closed" })
   expect(agent.sees("/entries/1")).toMatchObject({ text: "hi" })
-  expect(agent.offered()).toEqual(["start", "start_from", "close"])
+  expect(agent.offered()).toEqual(["start", "start_from"])
 })
 
 test("a record is forgotten whole from the list of runs, the shown one once it is closed, and only the last 20 are kept", async () => {
@@ -367,6 +370,24 @@ test("on start, what a lab that is gone left is swept: every run but the one sho
     { id: running.id, spared: true },
     { id: gone.id, spared: false },
   ])
+})
+
+test("a run swept on start reads as cleared, in the list and once shown: no project, no page, nothing to close, its record saying so", async () => {
+  const gone = { ...KEPT, id: "2026-11-15T08-00-00-ef56", lab: 2 ** 22 + 1, page: "http://127.0.0.1:5555/" }
+  const where = place([gone])
+  const { agent } = story(lab(fakeHarness().harness, where.runs), { effects: "real" })
+
+  await until(() => (agent.sees() as { runs: { count: number } }).runs.count === 1)
+  expect(agent.sees("/runs")).toMatchObject({ runs: [{ id: gone.id, status: "cleared" }] })
+  expect(where.records.get(gone.id)).toMatchObject({ status: "cleared" })
+  expect(await agent.call("/runs", "open", { id: gone.id })).toMatchObject({ outcome: "written" })
+  await until(() => root(agent).run === gone.id)
+  expect(agent.sees()).toMatchObject({ status: "cleared" })
+  expect(agent.sees()).not.toHaveProperty("project")
+  expect(agent.sees()).not.toHaveProperty("page")
+  expect(agent.offered()).toEqual(["start", "start_from"])
+  expect(agent.offered("/runs")).toEqual(["forget"])
+  expect((root(agent).recent ?? []).map((r) => r.title)).toEqual(["the developing agent", "process gone", "cleared"])
 })
 
 test("what the person does on the page under test joins the timeline once each, in order; what the lab did there as the person is not doubled", async () => {
