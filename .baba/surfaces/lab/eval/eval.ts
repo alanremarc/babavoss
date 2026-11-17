@@ -7,7 +7,7 @@
 //
 //   --variant   a babavoss checkout; this one where none is given. The first is the baseline the others are compared with.
 //   --tasks     the tasks by name, all by default: done-one, add-one, note-one, start-oldest, move-drafts, lanes-read,
-//               open-count, note-backlog, done-list, create-eight (tasks.ts)
+//               open-count, note-backlog, note-parents, done-list, create-eight (tasks.ts)
 //   --model     the model Claude Code runs, claude-sonnet-5-5 by default; the one it reports is recorded beside it
 //   --runs      runs of each task on each variant, 3 by default
 //   --budget    optional: the most the campaign may spend in dollars as the harness counts them; refused before it starts

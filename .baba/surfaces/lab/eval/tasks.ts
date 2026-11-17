@@ -49,6 +49,7 @@ const every = (w: Work, ns: number[], test: (i: Issue) => string | undefined): V
 const names = (answer: string, n: number) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer)
 
 const BACKLOG_NOTE = "triaged in the November review"
+const PARENT_NOTE = "out of: "
 const DONE_LIST = [3, 5, 6, 8, 11, 13, 15, 17, 19, 22]
 const EIGHT: [string, number, string][] = [
   ["Count the hook's words per event", 21, "Each hook event's text is measured, so the words can be cut where they weigh most."],
@@ -165,6 +166,26 @@ export const TASKS: Task[] = [
         [
           "-e",
           `for (const n of [3,5,6,8,11,12,13,15,17,19,22,26]) console.log(await root.call("/queue/issues/" + n, "note", { n, text: "${BACKLOG_NOTE}" }))`,
+        ],
+      ],
+    },
+  },
+  {
+    name: "note-parents",
+    kind: "batch",
+    prompt: `In the queue, set the note on every issue in the backlog to "${PARENT_NOTE}" followed by the title of the issue it came out of.`,
+    check: ({ seed, final }) => {
+      const ns = backlogOf(seed)
+      const parent = (i: Issue) => issue(seed, issue(seed, i.n)!.from[0]!)?.title ?? ""
+
+      return only(ns, seed, final, () => every(final, ns, (i) => (same(i.note, `${PARENT_NOTE}${parent(i)}`) ? undefined : `has note "${i.note ?? ""}"`)))
+    },
+    dry: {
+      calls: [
+        [
+          "-e",
+          `const q = await root.read("/queue"); const title = (n) => q.issues.find((i) => i.n === n).title\n` +
+            `for (const i of q.issues.filter((i) => i.status === "backlog")) console.log((await root.call("/queue/issues/" + i.n, "note", { n: i.n, text: "${PARENT_NOTE}" + title(i.from[0]) })).outcome)`,
         ],
       ],
     },
