@@ -120,6 +120,7 @@ test("counts the root's command in a shell line by what follows it: a read, an a
   expect(babaIn(".babavoss/bin/baba /queue/issues/3 done n=3 && .babavoss/bin/baba /queue | head")).toEqual({ reads: 1, actions: 1, programs: 0, other: 0 })
   expect(babaIn(".babavoss/bin/baba --session x /queue/issues/3 note n=3 text='a b'")).toEqual({ reads: 0, actions: 1, programs: 0, other: 0 })
   expect(babaIn(`.babavoss/bin/baba -e 'await root.read("/")'`)).toEqual({ reads: 0, actions: 0, programs: 1, other: 0 })
+  expect(babaIn(`.babavoss/bin/baba / -e 'await root.read("/")'`)).toEqual({ reads: 0, actions: 0, programs: 1, other: 0 })
   expect(babaIn(".babavoss/bin/baba sleep; ls")).toEqual({ reads: 0, actions: 0, programs: 0, other: 1 })
   expect(babaIn("ls .babavoss")).toEqual({ reads: 0, actions: 0, programs: 0, other: 0 })
 })

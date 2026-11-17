@@ -139,8 +139,12 @@ export function makePlace(variant: Variant, session: string): Place {
     // The release the variant runs is the latest heard: no lookup, and no word of an update in what the agent is told.
     mkdirSync(join(project, ".babavoss"), { recursive: true })
     writeFileSync(join(project, ".babavoss/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
-    sh(["git", "init", "-q"], project)
     sh(["bun", "run", "baba", "provision"], baba, env)
+    // A repository with a first commit, as a project is: the harness's own tools, a worktree for a subagent, need one.
+    writeFileSync(join(project, ".gitignore"), "node_modules\n.babavoss\n.root\n")
+    sh(["git", "init", "-q"], project)
+    sh(["git", "add", "-A"], project)
+    sh(["git", "-c", "user.name=eval", "-c", "user.email=eval@lab.invalid", "commit", "-qm", "the project as the eval made it"], project)
     sh(["bun", "run", "baba", "start", "--session", session], baba, env)
   } catch (error) {
     rmSync(dir, { recursive: true, force: true })
@@ -228,7 +232,8 @@ export function babaIn(line: string): Baba {
       .map((word) => word.replace(/^["']|["']$/g, ""))
       .filter((word, i, all) => !(word === "--session" || all[i - 1] === "--session"))
 
-    if (first === "-e") seen.programs++
+    // A program may follow a path, as `baba / -e CODE`, which the command refuses: it is counted as the program it was meant to be.
+    if (first === "-e" || second === "-e") seen.programs++
     else if (first?.startsWith("/")) second && !OPERATOR.test(second) && !second.startsWith(">") ? seen.actions++ : seen.reads++
     else seen.other++
   }
