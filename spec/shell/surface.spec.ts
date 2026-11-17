@@ -390,24 +390,24 @@ describe("the shell surface", () => {
   })
 
   it("gathers who each tab needs first at /, as needs, and no longer among the tab's facts", async () => {
-    type Ask = { asking?: "person" | "agent" | "both" | "bad" }
-    const ask = action({
-      name: "ask",
-      description: "ask",
+    type Calling = { calling?: "person" | "agent" | "both" | "bad" }
+    const call = action({
+      name: "call",
+      description: "call for someone",
       subject: {},
       inputs: { who: "string" },
-      update: (_m: Ask, { who }): Update<Ask, never> => ({ model: who ? { asking: who as Ask["asking"] } : {} }),
+      update: (_m: Calling, { who }): Update<Calling, never> => ({ model: who ? { calling: who as Calling["calling"] } : {} }),
     })
-    const needing = view([ask], {
+    const needing = view([call], {
       "/": (m) => ({
         title: "Asker",
-        ...(m.asking === "person" && { attention: { who: "person", why: "to decide" } }),
-        ...(m.asking === "both" && { attention: [{ who: "person", why: "to decide" }, { who: "agent", why: "to draft" }] }),
-        ...(m.asking === "bad" && { attention: "someone" }),
-        ask: ask.bind({}),
+        ...(m.calling === "person" && { attention: { who: "person", why: "to decide" } }),
+        ...(m.calling === "both" && { attention: [{ who: "person", why: "to decide" }, { who: "agent", why: "to draft" }] }),
+        ...(m.calling === "bad" && { attention: "someone" }),
+        call: call.bind({}),
       }),
     })
-    const asker = surface<Ask, { kind: "none" }, never>({
+    const asker = surface<Calling, { kind: "none" }, never>({
       description: "asks",
       init: () => ({}),
       update: (m, msg) => (msg.kind === "call" ? needing.update(m, msg) : { model: m }),
@@ -420,29 +420,29 @@ describe("the shell surface", () => {
     await agent.call("/", "open", { surface: "counter" })
     await agent.call("/", "open", { surface: "asker" })
     expect(agent.sees()).not.toHaveProperty("needs")
-    await agent.call("/tabs/2", "ask", { who: "person" })
+    await agent.call("/tabs/2", "call", { who: "person" })
     expect(Object.keys(agent.sees()!)).toEqual(["title", "needs", "surfaces", "tabs", "show", "activity"])
     expect(agent.sees()).toMatchObject({ needs: [{ at: "/asker", surface: "asker", who: "person", why: "to decide" }] })
     expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({})
     // The tab's own path still says it.
     expect(agent.sees("/tabs/2")).toMatchObject({ attention: { who: "person", why: "to decide" } })
-    await agent.call("/tabs/2", "ask", { who: "both" })
+    await agent.call("/tabs/2", "call", { who: "both" })
     expect(agent.sees()!.needs).toEqual([
       { at: "/asker", surface: "asker", who: "person", why: "to decide" },
       { at: "/asker", surface: "asker", who: "agent", why: "to draft" },
     ])
     // What is not attention is not gathered, and stays a fact of its tab.
-    await agent.call("/tabs/2", "ask", { who: "bad" })
+    await agent.call("/tabs/2", "call", { who: "bad" })
     expect(agent.sees()).not.toHaveProperty("needs")
     expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({ attention: "someone" })
-    await agent.call("/tabs/2", "ask", { who: "" })
+    await agent.call("/tabs/2", "call", { who: "" })
     agent.told()
-    await agent.call("/tabs/2", "ask", { who: "person" })
+    await agent.call("/tabs/2", "call", { who: "person" })
     // A need is told as an event on it: who is needed, where and why, one line each.
     expect(agent.told()).toEqual(["+ need: the person, at /asker, to decide"])
-    await agent.call("/tabs/2", "ask", { who: "both" })
+    await agent.call("/tabs/2", "call", { who: "both" })
     expect(agent.told()).toEqual(["+ need: you, at /asker, to draft"])
-    await agent.call("/tabs/2", "ask", { who: "" })
+    await agent.call("/tabs/2", "call", { who: "" })
     expect(agent.told()).toEqual(["- need: the person, at /asker, to decide", "- need: you, at /asker, to draft"])
   })
 
@@ -486,7 +486,6 @@ describe("the shell surface", () => {
     await person.call("/poser", "pose", { n: 2 })
     expect(agent.sees("/poser/group")).toEqual(person.sees("/poser/group"))
     expect(agent.sees("/poser/group")).toMatchObject({ reader: "anyone" })
-    expect((person.sees()!.tabs as object[])[0]).not.toHaveProperty("asks")
     expect(await agent.call("/poser/group", "answer", { n: 1 })).toMatchObject({ outcome: "written" })
     expect(await person.call("/poser/group", "answer", { n: 2 })).toMatchObject({ outcome: "written" })
   })

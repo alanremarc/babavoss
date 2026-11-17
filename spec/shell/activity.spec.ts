@@ -1,6 +1,6 @@
 // The shell's activity: entries from notices, marked so, and from calls that gave none, the shell's own open, close and
 // show, the bound, what is kept from before, /activity and /activity/notices and their pages, what the agent is told of it,
-// what the person has seen of the notices, one by one or up to a mark, and its asks; a closed tab's entries going with it.
+// what the person has seen of the notices, one by one or up to a mark, by the page's quiet actions; a closed tab's entries going with it.
 import { describe, expect, it } from "bun:test"
 import { action, story, surface, view, type Call, type Update } from "../../framework/core/index.ts"
 import { KEPT, PAGE, linesOf, lookAt, record, restored, said, seenFrom, seeUpto, unseenIn, unseenOf, type Entry, type Line } from "../../framework/shell/src/activity.ts"

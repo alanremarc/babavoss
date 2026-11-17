@@ -221,7 +221,7 @@ const act = action({
 })
 const look = action({
   name: "look",
-  description: "Read a path of the root under test as the person sees it, with the handles offered to them alone; its answer joins the timeline",
+  description: "Read a path of the root under test as the person's page reads it; its answer joins the timeline",
   subject: {},
   inputs: { at: "string" },
   update: (m: Model, { at }, call): Result =>

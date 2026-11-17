@@ -24,7 +24,7 @@ export interface Runs {
   make(id: string, from: string, session: string): Promise<Made>
   /** Calls a handle in the root under test, as the person, the call named `id`, as its activity will say it. */
   act(project: string, home: string, session: string, id: string, at: string, handle: string, args: Json): Promise<Said>
-  /** What the person sees at a path of the root under test, with the handles offered to them. */
+  /** What the person's page reads at a path of the root under test. */
   look(project: string, home: string, session: string, at: string): Promise<Said>
   /** The root under test's activity after entry `after`, oldest first; none where its runtime is not up, which is never woken for it. */
   activity(project: string, session: string, after: number): Promise<Heard[]>
