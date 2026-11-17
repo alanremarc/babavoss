@@ -134,7 +134,6 @@ const summary = (run: Run): Summary | undefined =>
       }
     : undefined
 const starting = (m: Model, model: string, from: string): Result => {
-  if (!MODELS.includes(model)) return { refused: `model is one of ${MODELS.join(", ")}` }
   if (live(m.run)) return { refused: `the run ${m.run!.id ?? ""} is up or closing: close it first` }
 
   const run: Run = { ...empty(), n: m.next, model, status: "starting", began: 0, from, since: 0 }
@@ -145,23 +144,23 @@ const starting = (m: Model, model: string, from: string): Result => {
 
 const start = action({
   name: "start",
-  description: `Start a run on this repository as it is now, uncommitted changes included; model is ${MODELS.join(", ")}, haiku the cheapest`,
+  description: "a run on this repository as it is now, uncommitted changes included; haiku the cheapest",
   subject: {},
-  inputs: { model: "string" },
+  inputs: { model: { type: "string", choices: MODELS } },
   update: (m: Model, { model }): Result => starting(m, model, ""),
 })
 const startFrom = action({
   name: "start_from",
-  description: "Start a run on another checkout as it is now, such as the worktree you built in: from is the path of its top, which has a .baba/",
+  description: "as start, on another checkout as it is now, such as the worktree you built in: from, its top, with a .baba/",
   subject: {},
-  inputs: { model: "string", from: "string" },
+  inputs: { model: { type: "string", choices: MODELS }, from: { type: "string", kind: "directory" } },
   update: (m: Model, { model, from }): Result => (from.trim() ? starting(m, model, from.trim()) : { refused: "from is a checkout's path" }),
 })
 const say = action({
   name: "say",
-  description: "Send the agent under test a message, as the person would; a turn starts, or the message waits for the one running",
+  description: "to the agent under test, as the person would; a turn starts, or it waits for the one running",
   subject: {},
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "markdown" } },
   update(m: Model, { text }, call): Result {
     if (!text.trim()) return { refused: "a message needs text" }
 
@@ -170,14 +169,14 @@ const say = action({
 })
 const endMove = action({
   name: "end_move",
-  description: "End the person's move on the page under test: a message starts the agent's turn, and its hook tells it what changed",
+  description: "of the person, on the page under test: a message starts the agent's turn, and its hook tells it what changed",
   subject: {},
   inputs: {},
   update: (m: Model, _args, call): Result => (m.run ? said(m, m.run, END_MOVE, call) : { refused: "no run is up: start one" }),
 })
 const stop = action({
   name: "stop",
-  description: "Interrupt the agent under test's turn",
+  description: "interrupts the agent under test's turn",
   subject: {},
   inputs: {},
   update: (m: Model): Result =>
@@ -200,11 +199,9 @@ const acting = (m: Model, call: Call, title: string, what: string, command: Pick
 }
 const act = action({
   name: "act",
-  description:
-    "Call a handle in the root under test as the person, as their click on its page would: " +
-    'at is its path, such as /tabs/1; args is a JSON object, such as {"n":1}',
+  description: 'calls a handle in the root under test as the person, as a click on its page would; args as {"n":1}',
   subject: {},
-  inputs: { at: "string", handle: "string", args: "string" },
+  inputs: { at: { type: "string", kind: "path" }, handle: { type: "string", kind: "name" }, args: { type: "string", kind: "json" } },
   update(m: Model, { at, handle, args }, call): Result {
     let parsed: Json
 
@@ -221,15 +218,15 @@ const act = action({
 })
 const look = action({
   name: "look",
-  description: "Read a path of the root under test as the person's page reads it; its answer joins the timeline",
+  description: "reads it in the root under test as the person's page does; its answer joins the timeline",
   subject: {},
-  inputs: { at: "string" },
+  inputs: { at: { type: "string", kind: "path" } },
   update: (m: Model, { at }, call): Result =>
     at.startsWith("/") ? acting(m, call, `look at ${at}`, `look at ${at}`, { at }) : { refused: "at is a path, such as /tabs/1" },
 })
 const close = action({
   name: "close",
-  description: "Close the run: its agent's process is killed, its root closed, its project and home deleted; its timeline and record stay",
+  description: "the run: its agent killed, its root closed, its project and home deleted; its timeline and record stay",
   subject: {},
   inputs: {},
   update(m: Model): Result {
@@ -243,7 +240,7 @@ const close = action({
 })
 const forget = action({
   name: "forget",
-  description: ({ id }) => `Delete run ${id}'s record whole`,
+  description: "deletes its record whole",
   subject: { id: "string" },
   inputs: {},
   update(m: Model, { id }): Result {
@@ -267,7 +264,7 @@ const kept = (result: { model: Model; commands?: Command[]; notices?: Notice[] }
 }
 const open = action({
   name: "open",
-  description: ({ id }) => `Show run ${id} here, its timeline as it was recorded`,
+  description: "here, its timeline as it was recorded",
   subject: { id: "string" },
   inputs: {},
   update(m: Model, { id }): Result {

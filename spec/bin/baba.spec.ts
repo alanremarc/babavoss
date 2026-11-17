@@ -385,7 +385,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     expect(started.stdout).toContain('"desk"\t"Keep a greeting the person has agreed to. Use when the greeting is to be changed."')
     // Two surfaces, one open action: its argument is the table's name column.
-    expect(started.stdout).toContain(".babavoss/bin/baba / open surface=NAME   open a NAME tab")
+    expect(started.stdout).toContain("actions: .babavoss/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
 
     // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
     const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
@@ -430,8 +430,8 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call(tab).stdout).toContain('how: "Propose a greeting when the person asks for another.')
     expect(call(tab).stdout).toContain('greeting: "hello"')
 
-    // The tab's own path offers its actions, as the exact commands.
-    expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
+    // The tab's own path offers its actions, the command once and a line each, an input as what it means.
+    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   a greeting, for the person to decide on`)
 
     // The page holds the surface's component in its tab.
     // At its bare address: no link, no key, no cookie.

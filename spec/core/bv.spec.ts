@@ -19,6 +19,16 @@ import {
 import { HUSH_MS, QUIET_LINE } from "../../framework/core/runtime/turn.ts"
 
 const client = resolve("framework/core/bv/bv.ts")
+
+/** A handle's command as an answer prints it: its block's head, with its name for ACTION and its line's arguments for the rest. */
+function printed(answer: string, name: string): string {
+  const lines = answer.split("\n")
+  const at = lines.findIndex((line) => line === `  ${name}` || line.startsWith(`  ${name} `))
+  const head = lines.slice(0, at).findLast((line) => line.startsWith("actions: "))!
+  const own = lines[at]!.trim().split("   ")[0]!.split(" ")
+
+  return head.slice("actions: ".length).replace(" name=value…", "").replace("ACTION", own.join(" "))
+}
 const roots: string[] = []
 
 function setup(dev = false) {
@@ -245,7 +255,7 @@ describe("changed code", () => {
   const edit = (s: ReturnType<typeof setup>) => {
     const source = join(s.root, "root/src/root.ts")
 
-    writeFileSync(source, readFileSync(source, "utf8").replace('description: "Keep a note"', 'description: "Keep a note, as edited"'))
+    writeFileSync(source, readFileSync(source, "utf8").replace('name: "add",\n  description: ""', 'name: "add",\n  description: "as edited"'))
   }
 
   it("in dev mode restarts the runtime at once: the same address, the notes kept, the new code answering, a reminder under way cut and said", async () => {
@@ -260,7 +270,7 @@ describe("changed code", () => {
     const answers: string[] = []
 
     edit(s)
-    await poll(() => answers[answers.push(s.run(["/"]).out) - 1], { timeout: 10_000 }).toContain("Keep a note, as edited")
+    await poll(() => answers[answers.push(s.run(["/"]).out) - 1], { timeout: 10_000 }).toContain("add text=line   as edited")
     // The first answer from the code as edited says what the restart cut, as the agent may have to do it again.
     expect(answers.at(-1)).toMatch(/^demo: its code changed \(.*root\.ts\) and it restarted; the restart cut remind by agent:S\n/)
 
@@ -286,7 +296,7 @@ describe("changed code", () => {
 
     expect(restarted.out).toBe(`demo: instance ${before.instance} restarts\ndemo: instance ${s.endpoint().instance} answers\n`)
     expect(s.endpoint().port).toBe(before.port)
-    expect(s.run(["/"]).out).toContain("Keep a note, as edited")
+    expect(s.run(["/"]).out).toContain("add text=line   as edited")
     expect(s.run(["/"]).out).not.toContain("code: changed")
   })
 
@@ -669,7 +679,7 @@ it("makes a root's word and uses it", () => {
   const answer = spawnSync(join(s.bin, "demo"), ["/"], { env: s.env, encoding: "utf8" })
 
   expect(answer.status, answer.stderr).toBe(0)
-  expect(answer.stdout).toContain("add: demo / add")
+  expect(answer.stdout).toContain("actions: demo / ACTION")
 })
 it("keeps another command's word and uses bv NAME", () => {
   const s = setup()
@@ -679,7 +689,7 @@ it("keeps another command's word and uses bv NAME", () => {
   s.env.PATH = `${s.bin}:${process.env.PATH}`
   expect(s.open().out).toContain("command: bv demo;")
   expect(readFileSync(occupied, "utf8")).toContain("exit 0")
-  expect(s.run(["demo", "/"]).out).toContain("add: bv demo / add")
+  expect(s.run(["demo", "/"]).out).toContain("actions: bv demo / ACTION")
 })
 
 
@@ -698,8 +708,7 @@ it("two roots answer under their words and printed handles run as printed", () =
   try {
     for (const name of ["demo", "other"]) {
       const answer = spawnSync(join(s.bin, name), ["/"], { env: s.env, encoding: "utf8" })
-      const line = answer.stdout.split("\n").find((line) => line.startsWith("add: "))!
-      const command = line.slice("add: ".length).split("   ")[0]!.replace("text=string", `text=${name}`).split(" ")
+      const command = printed(answer.stdout, "add").replace("text=line", `text=${name}`).split(" ")
       const called = spawnSync(join(s.bin, command[0]!), command.slice(1), { env: s.env, encoding: "utf8" })
 
       expect(called.status, called.stderr).toBe(0)
@@ -848,8 +857,7 @@ it("a project handle runs exactly as printed from the project root", () => {
     expect(answer.status).toBe(0)
     expect(answer.stdout).toContain("command: .babavoss/bin/demo, from the project's directory;")
 
-    const line = answer.stdout.split("\n").find((line) => line.startsWith("add: "))!
-    const command = line.slice(5).split("   ")[0]!.replace("text=string", "text=Printed").split(" ")
+    const command = printed(answer.stdout, "add").replace("text=line", "text=Printed").split(" ")
     const called = s.run(command[0]!, command.slice(1))
 
     expect(called.status, called.stderr).toBe(0)

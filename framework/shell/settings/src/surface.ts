@@ -10,16 +10,14 @@
 // person's in every project as the rest is; and two clears, which act on the project of the session the tab is open in,
 // each saying what it frees before it is taken, as measured by a command as the tab starts and after each clear, or when
 // asked. A clear is no bookkeeping: it is kept as activity, and says what it freed.
-import { action, surface, view, type Schema, type Update } from "../../../core/index.ts"
-import { clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
-import { bounded, isPreset } from "../../../kit/theme.ts"
+import { action, surface, view, type Update } from "../../../core/index.ts"
+import { clashing, COMMANDS, parse, type CommandId } from "./keys.ts"
+import { bounded } from "../../../kit/theme.ts"
 import {
   DRAWERS,
   KEEP_BOUNDS,
-  keeps,
   ENDS,
   isChoice,
-  isMode,
   MODES,
   numbersOf,
   PREFERENCE_NAMES,
@@ -58,14 +56,16 @@ const changed = (m: Model, settings: Settings): Update<Model, Command> => ({
   model: { settings, writing: m.writing + 1 },
   commands: [{ kind: "write", settings }],
 })
-const THEME_NAMES = THEMES.join(", ")
+/** Which mode a theme is of: both while the modes are the same. */
+const OF = { type: "string", choices: ["both", "light", "dark"] } as const
+/** A value from 0 to `most`, of a dynamic theme's numbers. */
+const upto = (most: number) => ({ type: "number", range: [0, most] }) as const
 
 /** Where a theme is set: both modes while they are the same, else the one named; or why it cannot be. */
-function target(m: Model, mode: string): { modes: Mode[] } | { refused: string } {
+function target(m: Model, mode: "both" | Mode): { modes: Mode[] } | { refused: string } {
   const { same } = m.settings.appearance
 
   if (mode === "both") return same ? { modes: ["light"] } : { refused: "the modes have themes of their own: name light or dark, or call same with on true first" }
-  if (mode !== "light" && mode !== "dark") return { refused: `a theme is of the light or the dark mode, or both, not ${mode}` }
   if (same) return { refused: `both modes use one theme: name both, or call same with on false first to give ${mode} its own` }
 
   return { modes: [mode] }
@@ -79,23 +79,21 @@ const chosen = (m: Model, modes: Mode[], choice: Choice): Update<Model, Command>
 const mode = action({
   name: "mode",
   quiet: true,
-  description: `set the colour mode: ${MODES.join(", ")}`,
+  description: "the page's colours, light or dark; system follows the machine",
   subject: {},
-  inputs: { mode: "string" },
-  update: (m: Model, { mode }): Update<Model, Command> =>
-    isMode(mode) ? changed(m, { ...m.settings, appearance: { ...m.settings.appearance, mode } }) : { refused: `no mode ${mode}: it is ${MODES.join(", ")}` },
+  inputs: { mode: { type: "string", choices: MODES } },
+  update: (m: Model, { mode }): Update<Model, Command> => changed(m, { ...m.settings, appearance: { ...m.settings.appearance, mode } }),
 })
 const theme = action({
   name: "theme",
   quiet: true,
-  description: `choose a theme: mode both while the modes are the same, else light or dark; theme ${THEME_NAMES}. Dynamic keeps the mode's numbers, or starts from the theme it replaces`,
+  description: "of mode both while the modes are the same; dynamic keeps the mode's numbers, or starts from the theme it replaces",
   subject: {},
-  inputs: { mode: "string", theme: "string" },
+  inputs: { mode: OF, theme: { type: "string", choices: THEMES } },
   update(m: Model, { mode, theme }): Update<Model, Command> {
     const at = target(m, mode)
 
     if ("refused" in at) return at
-    if (theme !== "dynamic" && !isPreset(theme)) return { refused: `no theme ${theme}: it is ${THEME_NAMES}` }
 
     const now = m.settings.appearance.themes[at.modes[0]!]
 
@@ -105,16 +103,13 @@ const theme = action({
 const dynamic = action({
   name: "dynamic",
   quiet: true,
-  description: "give a mode a dynamic theme of these numbers: mode as for theme; hue 0–360, tint (how strongly the greys lean to the hue) and vivid (how coloured the accent is) 0–100",
+  description: "a theme of these numbers, its mode as for theme; tint, how strongly the greys lean to the hue; vivid, how coloured the accent is",
   subject: {},
-  inputs: { mode: "string", hue: "number", tint: "number", vivid: "number" },
+  inputs: { mode: OF, hue: upto(360), tint: upto(100), vivid: upto(100) },
   update(m: Model, { mode, hue, tint, vivid }): Update<Model, Command> {
     const at = target(m, mode)
 
     if ("refused" in at) return at
-    if (!Number.isFinite(hue) || hue < 0 || hue > 360) return { refused: `hue is 0 to 360, not ${hue}` }
-    if (!Number.isFinite(tint) || tint < 0 || tint > 100) return { refused: `tint is 0 to 100, not ${tint}` }
-    if (!Number.isFinite(vivid) || vivid < 0 || vivid > 100) return { refused: `vivid is 0 to 100, not ${vivid}` }
 
     return chosen(m, at.modes, bounded({ hue, tint, vivid }))
   },
@@ -122,7 +117,7 @@ const dynamic = action({
 const same = action({
   name: "same",
   quiet: true,
-  description: "whether both modes use one theme; off, each mode starts from the one they shared and is chosen on its own",
+  description: "whether both modes use one theme; off, each starts from the one they shared and is chosen on its own",
   subject: {},
   inputs: { on: "boolean" },
   update(m: Model, { on }): Update<Model, Command> {
@@ -136,7 +131,7 @@ const same = action({
 const animate = action({
   name: "animate",
   quiet: true,
-  description: "whether the mark looks about while the agent works; off, it stays still and shows the work by its tint alone",
+  description: "whether the mark looks about while the agent works; off, it shows the work by its tint alone",
   subject: {},
   inputs: { on: "boolean" },
   update: (m: Model, { on }): Update<Model, Command> => changed(m, { ...m.settings, logo: { animate: on } }),
@@ -144,16 +139,10 @@ const animate = action({
 const rail = action({
   name: "rail",
   quiet: true,
-  description: `where the rail of tabs stands: side ${SIDES.join(", ")}; from ${ENDS.join(" or ")}, the end the mark is at on a rail at the left or right; drawer ${DRAWERS.join(" or ")}, where a tab's drawer opens under a rail along the top or bottom. Give all three, the ones not changed as they are`,
+  description: "where the tabs stand; from, the mark's end of a rail at a side; drawer, where a drawer opens under one at the top or bottom; all three given",
   subject: {},
-  inputs: { side: "string", from: "string", drawer: "string" },
+  inputs: { side: { type: "string", choices: SIDES }, from: { type: "string", choices: ENDS }, drawer: { type: "string", choices: DRAWERS } },
   update(m: Model, { side, from, drawer }): Update<Model, Command> {
-    const one = <T extends string>(options: readonly T[], value: string): value is T => options.includes(value as T)
-
-    if (!one(SIDES, side)) return { refused: `side is ${SIDES.join(", ")}, not ${side}` }
-    if (!one(ENDS, from)) return { refused: `from is ${ENDS.join(" or ")}, not ${from}` }
-    if (!one(DRAWERS, drawer)) return { refused: `drawer is ${DRAWERS.join(" or ")}, not ${drawer}` }
-
     const placed: Rail = { side, from, drawer }
 
     return changed(m, { ...m.settings, appearance: { ...m.settings.appearance, rail: placed } })
@@ -166,9 +155,9 @@ const preferred = PREFERENCE_NAMES.map((name) => {
   return action({
     name,
     quiet: true,
-    description: `${does}: ${choices.join(", ")}`,
+    description: does,
     subject: {},
-    inputs: { [name]: typeof usual === "number" ? "number" : "string" } as Schema,
+    inputs: { [name]: { type: typeof usual === "number" ? "number" : "string", choices } } as Record<string, { type: "string" | "number"; choices: readonly (string | number)[] }>,
     update(m: Model, args): Update<Model, Command> {
       const value = args[name]
 
@@ -181,12 +170,10 @@ const preferred = PREFERENCE_NAMES.map((name) => {
 const bind = action({
   name: "bind",
   quiet: true,
-  description: `bind a command to keys, written as mod+p or mod+shift+k, mod being ⌘ on a Mac and Ctrl elsewhere; command is ${Object.keys(COMMANDS).join(", ")}`,
+  description: "to keys written as mod+p or mod+shift+k, mod being ⌘ on a Mac and Ctrl elsewhere",
   subject: {},
-  inputs: { command: "string", keys: "string" },
+  inputs: { command: { type: "string", choices: Object.keys(COMMANDS) as CommandId[] }, keys: { type: "string", kind: "keys" } },
   update(m: Model, { command, keys }): Update<Model, Command> {
-    if (!isCommand(command)) return { refused: `no command ${command}: it is ${Object.keys(COMMANDS).join(", ")}` }
-
     const read = parse(keys)
 
     if ("refused" in read) return read
@@ -203,12 +190,11 @@ const bind = action({
 const reset = action({
   name: "reset",
   quiet: true,
-  description: "bind a command to its default keys again; command=all for every command",
+  description: "binds it to its default keys again; all, every command",
   subject: {},
-  inputs: { command: "string" },
+  inputs: { command: { type: "string", choices: [...(Object.keys(COMMANDS) as CommandId[]), "all"] } },
   update(m: Model, { command }): Update<Model, Command> {
     if (command === "all") return changed(m, { ...m.settings, keys: {} })
-    if (!isCommand(command)) return { refused: `no command ${command}: it is ${Object.keys(COMMANDS).join(", ")}, or all` }
 
     const { [command]: _, ...rest } = m.settings.keys
     const clash = clashing(rest, command, COMMANDS[command].keys)
@@ -222,27 +208,25 @@ const reset = action({
 const keep = action({
   name: "keep",
   quiet: true,
-  description: `how the archive of closed tabs clears itself, in every project: a closed tab, or a session over, goes days after it closed or ended (${KEEP_BOUNDS.days.join(" to ")}), and the oldest first while a project's archive is past megabytes (${KEEP_BOUNDS.megabytes.join(" to ")}). Give both, the one not changed as it is`,
+  description:
+    "how the archive of closed tabs clears itself, in every project: a closed tab or a session over goes days after it ended, and the oldest first while a project's archive is past megabytes; both given",
   subject: {},
-  inputs: { days: "number", megabytes: "number" },
+  inputs: { days: { type: "number", range: KEEP_BOUNDS.days }, megabytes: { type: "number", range: KEEP_BOUNDS.megabytes } },
   update(m: Model, { days, megabytes }): Update<Model, Command> {
-    if (!keeps("days", days)) return { refused: `days is a whole number from ${KEEP_BOUNDS.days.join(" to ")}, not ${days}` }
-    if (!keeps("megabytes", megabytes)) return { refused: `megabytes is a whole number from ${KEEP_BOUNDS.megabytes.join(" to ")}, not ${megabytes}` }
-
     return changed(m, { ...m.settings, archive: { days, megabytes } })
   },
 })
 const measuring = action({
   name: "measure",
   quiet: true,
-  description: "measure again what each clear of closed tabs would free",
+  description: "again, what each clear of closed tabs would free",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, Command> => ({ model: m, commands: [{ kind: "measure" }], quiet: true }),
 })
 const clearing = action({
   name: "clear",
-  description: ({ scope }) => `clear the closed tabs of this ${scope}`,
+  description: "frees the closed tabs it keeps",
   subject: { scope: "string" },
   inputs: {},
   update(m: Model, { scope }): Update<Model, Command> {
@@ -263,7 +247,7 @@ const archived = (m: Model, place: string | undefined) => {
   const measured = m.measured
   const offer = (scope: Scope, f: Freed | undefined) =>
     f && (f.tabs || f.sessions) && !m.clearing
-      ? { [`clear${scope === "session" ? "Session" : "Project"}`]: { ...clearing.bind({ scope }), description: `clear ${scope === "session" ? "this session's" : `the project's, ${project},`} ${freeing(f)}` } }
+      ? { [`clear${scope === "session" ? "Session" : "Project"}`]: { ...clearing.bind({ scope }), description: `frees ${freeing(f)}${scope === "project" ? `, of ${project}` : ""}` } }
       : {}
 
   return {

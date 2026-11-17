@@ -5,7 +5,7 @@
 // dots is the shell's own working.
 import { Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { BookOpenTextIcon, FlaskConicalIcon, ListTodoIcon, SettingsIcon, StickyNoteIcon } from "lucide-react"
-import { handle, type Args, type View } from "../../../../framework/core/surface/view.ts"
+import { handle, meant, type Args, type View } from "../../../../framework/core/surface/view.ts"
 import { Button } from "babavoss/kit/index.ts"
 import { RefusedLine, useTabMenu } from "../../../../framework/shell/ui/actions.tsx"
 import { Said, type Bubble } from "../../../../framework/shell/ui/bubbles.tsx"
@@ -58,7 +58,7 @@ const Mark = ({ lost }: { lost?: string }) => (
 /** The modal an action asks its inputs in, as the shell opens it: a refusal shows in it, and an admitted call closes it. */
 function Asking({ action, close }: { action?: Offered; close: () => void }) {
   const call = async (_: Offered, args: Args) =>
-    typeof args.lane === "number" && (args.lane < 1 || args.lane > 5) ? "There are lanes 1 to 5" : typeof args.about === "string" && !args.about.trim() ? "Say what it is about" : undefined
+    typeof args.about === "string" && !args.about.trim() ? "Say what it is about" : args.mode === "dark" ? "dark is refused here, to show a refusal" : undefined
 
   return action ? (
     <Suspense fallback={null}>
@@ -123,11 +123,14 @@ function RailSpecimen() {
 const ROOT: View = {
   title: "babavoss",
   surfaces: [
-    { name: "queue", open: handle("open", "open a queue tab", { surface: "queue" }) },
-    { name: "design", open: handle("open", "open a design tab", { surface: "design" }) },
-    { name: "settings", open: handle("open", "open the settings tab, or show the one open", { surface: "settings" }) },
+    { name: "queue", open: handle("open", "in a new tab, unless its surface keeps one", { surface: "queue" }) },
+    { name: "design", open: handle("open", "in a new tab, unless its surface keeps one", { surface: "design" }) },
+    { name: "settings", open: handle("open", "in a new tab, unless its surface keeps one", { surface: "settings" }) },
   ],
-  tabs: [{ at: "/queue", close: handle("close", "close tab 3, Queue; its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 3 }) }],
+  tabs: [
+    { at: "/queue", title: "Queue", close: handle("close", "its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 3 }) },
+    { at: "/tabs/5", title: "Queue", close: handle("close", "its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 5 }) },
+  ],
 }
 
 /** A tab's drawer over a sample page, its menu read from the sample's views, as the shell opens it; closed, a button opens it again. */
@@ -348,8 +351,16 @@ function DesktopSpecimen() {
 }
 
 const ASKS: { label: string; action: Offered }[] = [
-  { label: "Describe…", action: { path: "/", handle: handle("describe", "Rewrite what issue 4 is about, as brief markdown; empty is refused", { n: 4 }, { about: "string" }) } },
-  { label: "Start…", action: { path: "/", handle: handle("start", "Give issue 4 to a lane, 1 to 5; another is refused", { n: 4 }, { lane: "number", notify: "boolean" }) } },
+  { label: "Describe…", action: { path: "/", handle: handle("describe", "empty is refused", { n: 4 }, { about: { type: "string", kind: "markdown" } }) } },
+  {
+    label: "Start…",
+    action: { path: "/", handle: handle("start", "when a subagent begins on it", { n: 4 }, { lane: { type: "number", range: [1, 5] }, notify: "boolean" }) },
+  },
+  {
+    label: "Theme…",
+    action: { path: "/", handle: handle("theme", "dark is refused", {}, { mode: { type: "string", choices: ["light", "dark", "system"] }, hue: { type: "number", range: [0, 360] } }) },
+  },
+  { label: "Note…", action: { path: "/", handle: handle("note", "what is being done or waited for", { n: 4 }, { text: { type: "string", kind: "line" } }) } },
 ]
 
 function InputsSpecimen() {
@@ -358,7 +369,7 @@ function InputsSpecimen() {
   return (
     <States min={200}>
       {ASKS.map((a) => (
-        <State key={a.label} label={`${Object.values(a.action.handle.open).join(", ")} fields; refused stays open`}>
+        <State key={a.label} label={`${Object.values(a.action.handle.open).map(meant).join(", ")}; refused stays open`}>
           <Button variant="outline" size="sm" onClick={() => setAsking(a.action)}>
             {a.label}
           </Button>

@@ -63,10 +63,10 @@ describe("home", () => {
     })
 
     expect(labels(items)).toEqual([
-      "Open a counter tab",
-      "Open the settings tab, or show the one open",
-      "Close tab 1, Counter; its state and log are kept read only in the archive of closed tabs, /activity/closed",
-      "Close tab 2, Counter; its state and log are kept read only in the archive of closed tabs, /activity/closed",
+      "Open counter",
+      "Open settings",
+      "Close Counter (1)",
+      "Close Counter (2)",
       "—",
       { Go: ["Counter 2", "Counter •"] },
     ])
@@ -87,7 +87,7 @@ describe("home", () => {
       }
     }
 
-    run("Open a counter tab")
+    run("Open counter")
     run("Counter")
     expect(started).toEqual(['open {"surface":"counter"}'])
     expect(went).toEqual(["/counter"])

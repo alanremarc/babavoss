@@ -288,7 +288,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         for (const value of values) {
           const at = value.indexOf("=")
 
-          if (at < 1) throw new SyntaxError("call arguments must be name=value")
+          if (at < 1) throw new SyntaxError(`call arguments are name=value, each input by its name, as text=Hello: ${JSON.stringify(value)} is not`)
 
           const text = value.slice(at + 1)
 

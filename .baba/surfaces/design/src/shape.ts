@@ -6,7 +6,7 @@
 // commands change is read from what it starts.
 import { readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { story, type Args, type Handle, type Json, type Schema, type Surface, type View } from "babavoss/core/index.ts"
+import { story, typeOf, type Args, type Handle, type Input, type Json, type Surface, type Type, type View } from "babavoss/core/index.ts"
 
 export type Action = { name: string; description: string; inputs: string[]; notice?: true }
 export type Place = { path: string; facts: string[]; actions: Action[] }
@@ -20,7 +20,9 @@ const STATES = 40
 
 type Call = { path: string; handle: string; args: Args }
 
-const SAMPLE: Record<Schema[string], Json> = { string: "Example", number: 1, boolean: true }
+const SAMPLE: Record<Type, Json> = { string: "Example", number: 1, boolean: true }
+/** A value an input takes: its first choice, the start of its range, else a sample of its base type. */
+const sample = (input: Input): Json => (typeof input === "string" ? SAMPLE[input] : (input.choices?.[0] ?? input.range?.[0] ?? SAMPLE[typeOf(input)]))
 const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle"
 const isRow = (v: Json | undefined): v is { [key: string]: Json | undefined } => !!v && typeof v === "object" && !Array.isArray(v) && !isHandle(v)
 
@@ -128,7 +130,7 @@ export async function explore<M, E extends { kind: string }, C>(name: string, su
         if (tried.has(key)) continue
         tried.add(key)
 
-        const args: Args = { ...h.args, ...Object.fromEntries(Object.entries(h.open).map(([k, t]) => [k, SAMPLE[t]])) }
+        const args: Args = { ...h.args, ...Object.fromEntries(Object.entries(h.open).map(([k, t]) => [k, sample(t)])) }
         const probe = story(surface)
 
         for (const c of calls) await probe.person.call(c.path, c.handle, c.args)

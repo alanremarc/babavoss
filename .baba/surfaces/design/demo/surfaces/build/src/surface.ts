@@ -18,7 +18,7 @@ export const BUILD_FILE = "build.txt"
 
 const rerun = action({
   name: "rerun",
-  description: "Run the build again",
+  description: "runs the build again",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, Command> => ({ model: { ...m, asked: (m.asked ?? 0) + 1, queued: true } }),

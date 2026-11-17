@@ -1,15 +1,21 @@
 // Authoring vocabulary: objects with identity, actions bound to subjects, a view composed from routes. The result runs through the ordinary loop.
 import { route, type Routes } from "./routes.ts"
 import type { Call, Update } from "./surface.ts"
-import { handle, type Args, type Schema, type View } from "./view.ts"
+import { handle, type Args, type Schema, type Type, type View } from "./view.ts"
 
 /** Select public facts and relationships deliberately; references carry only the object's identity. */
 export function object<S, Id extends Args>(identity: (subject: S) => Id, project: (subject: S) => View) {
   return { ref: identity, view: (subject: S): View => ({ ...project(subject), ...identity(subject) }) }
 }
 
-/** Caller and subject arguments use the same scalar vocabulary as handles. */
-export type Inputs<S extends Schema> = { [K in keyof S]: { string: string; number: number; boolean: boolean }[S[K]] }
+/** An input as an action declares it, as a handle's `open` has it, its lists read-only so a declaration may be a constant. */
+export type Declared = Type | { readonly type: Type; readonly kind?: string; readonly choices?: readonly (string | number)[]; readonly range?: readonly [number, number] }
+
+/** Caller and subject arguments use the same scalar vocabulary as handles: an input's base type, or its choices where it has them. */
+export type Inputs<S extends Record<string, Declared>> = { [K in keyof S]: Value<S[K]> }
+type Value<I extends Declared> = I extends { readonly choices: readonly (infer C)[] }
+  ? C
+  : { string: string; number: number; boolean: boolean }[I extends Type ? I : I extends { readonly type: infer T extends Type } ? T : never]
 
 type Action<M, C> = { name: string; quiet?: boolean; update(model: M, call: Call): Update<M, C> }
 
@@ -18,7 +24,7 @@ type Action<M, C> = { name: string; quiet?: boolean; update(model: M, call: Call
  * person are offered it alike. A decision that is the person's is said in the view, and raised by the agent in the conversation.
  * A quiet action is the page's own bookkeeping, of no event in the work: what it changes is told to the agent in no way.
  */
-export function action<M, const S extends Schema, const I extends Schema, C = never>(definition: {
+export function action<M, const S extends Schema, const I extends Record<string, Declared>, C = never>(definition: {
   name: string
   description: string | ((subject: Inputs<S>) => string)
   subject: S
@@ -29,6 +35,12 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
   for (const key of Object.keys(definition.subject)) {
     if (key in definition.inputs) throw new Error(`${definition.name}: ${key} is both a subject and an input`)
   }
+  for (const [key, input] of Object.entries(definition.inputs)) {
+    if (typeof input === "string") continue
+    if (input.choices?.some((c) => typeof c !== input.type)) throw new Error(`${definition.name}: ${key}'s choices are each a ${input.type}`)
+    if (input.range && (input.type !== "number" || !input.range.every(Number.isInteger) || input.range[0] > input.range[1]))
+      throw new Error(`${definition.name}: ${key}'s range is two whole numbers, the least first, of a number`)
+  }
 
   return {
     name: definition.name,
@@ -38,7 +50,7 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
         definition.name,
         typeof definition.description === "string" ? definition.description : definition.description(subject),
         subject,
-        definition.inputs
+        definition.inputs as Schema
       ),
     // The loop has already checked the fixed subject, inputs and current availability.
     update: (model: M, call: Call) => definition.update(model, call.args as Inputs<S> & Inputs<I>, call),

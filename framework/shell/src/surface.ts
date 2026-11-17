@@ -184,7 +184,8 @@ export function shell(
 
   const open = action({
     name: "open",
-    description: ({ surface }) => (SINGLE.has(surface) ? `open the ${surface} tab, or show the one open` : `open a ${surface} tab`),
+    // One description for every surface, so the present says them in one line: what the name does not, that a tab is new.
+    description: "in a new tab, unless its surface keeps one",
     subject: { surface: "string" },
     inputs: {},
     update(model: ShellModel, { surface: name }): Update<ShellModel, ShellCommand> {
@@ -214,7 +215,7 @@ export function shell(
   })
   const close = action({
     name: "close",
-    description: ({ n }) => `close tab ${n}; ${ARCHIVED}`,
+    description: ARCHIVED,
     subject: { n: "number" },
     inputs: {},
     update(model: ShellModel, { n }, call): Update<ShellModel, ShellCommand> {
@@ -233,9 +234,9 @@ export function shell(
   // there again.
   const highlight = action({
     name: "highlight",
-    description: "mark a place in a tab for the person, why in one line; front=true also brings it forward",
+    description: "marks it for the person, why in one line; front also brings it forward",
     subject: {},
-    inputs: { at: "string", why: "string", front: "boolean" },
+    inputs: { at: { type: "string", kind: "path" }, why: { type: "string", kind: "line" }, front: "boolean" },
     update(model: ShellModel, { at, why, front }): Update<ShellModel, ShellCommand> {
       const place = addressed(at)
 
@@ -368,9 +369,9 @@ export function shell(
   const opened = action({
     name: "opened",
     quiet: true,
-    description: "the page's mark: the person opened the drawer highlight n is in, and every highlight there up to it is opened",
+    description: "the page's mark that the person opened the drawer it is in, and so every one there up to it",
     subject: {},
-    inputs: { n: "number" },
+    inputs: { n: { type: "number", kind: "highlight" } },
     update: (model: ShellModel, { n }): Update<ShellModel, ShellCommand> => ({
       model: { ...model, opened: openUpto(model.opened ?? {}, model.activity ?? [], n) },
     }),
@@ -383,13 +384,6 @@ export function shell(
       return tab && addressOf(tab)
     },
   })
-  /** A tab's close, naming what runs in it beside its number, so a menu of several tabs tells them apart: "close tab 3, Queue". */
-  const closing = (tab: ShellModel["tabs"][number]) => {
-    const title = attempt(tab, (s) => s.view(tab.model, "/")?.title)?.ok
-    const name = typeof title === "string" && title ? title : tab.surface
-
-    return { ...close.bind({ n: tab.n }), description: `close tab ${tab.n}, ${name}; ${ARCHIVED}` }
-  }
   const desktop = view([open, close, highlight, opened], {
     "/": (model) => ({
       title,
@@ -398,7 +392,7 @@ export function shell(
         ...[...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
         ...[...unloaded.keys()].map((name) => ({ name, broken: unloadable(name) })),
       ],
-      tabs: model.tabs.map((tab) => ({ at: addressOf(tab), n: tab.n, surface: tab.surface, close: closing(tab) })),
+      tabs: model.tabs.map((tab) => ({ at: addressOf(tab), n: tab.n, surface: tab.surface, close: close.bind({ n: tab.n }) })),
       ...(model.tabs.length > 0 && { highlight: highlight.bind({}) }),
       ...(model.pointed && { pointed: { ...model.pointed, at: stable(model, model.pointed.at) } }),
       activity: { at: "/activity" },

@@ -2,7 +2,7 @@
 // grouped by a view's menu fact; the places a view names and the tree the search reads; the tab's menu and the dots on
 // the way to what waits on the person; what a form's fields make of their inputs, and every menu entry as a command.
 import { describe, expect, it } from "bun:test"
-import { handle, type View } from "../../framework/core/surface/view.ts"
+import { handle, type Schema, type View } from "../../framework/core/surface/view.ts"
 import {
   aboveOf,
   actionItems,
@@ -36,7 +36,7 @@ describe("a tab's actions", () => {
     expect(offered("/", undefined)).toEqual([])
   })
 
-  it("names an action by its name, in the view's order, with … where it asks for input; by its description where names repeat", () => {
+  it("names an action by its name, in the view's order, with … where it asks for input; by its row's title or its subject where names repeat", () => {
     const ran: string[] = []
     const items = actionItems(offered("/issues/3", { note_: note, approve }), (a) => ran.push(a.handle.name))
 
@@ -45,14 +45,24 @@ describe("a tab's actions", () => {
     items[0]!.run()
     expect(ran).toEqual(["note"])
 
-    const open = (n: number) => handle("open", `Open issue ${n}`, { n })
+    const open = (n: number) => handle("open", "in a new tab", { n })
+    const labels = (view: View) => actionItems(offered("/", view), () => {}).map((i) => [i.label, i.hint])
 
-    expect(actionItems(offered("/", { a: open(1), b: open(2) }), () => {}).map((i) => i.label)).toEqual(["Open issue 1", "Open issue 2"])
+    expect(labels({ a: open(1), b: open(2) })).toEqual([
+      ["Open 1", "in a new tab"],
+      ["Open 2", "in a new tab"],
+    ])
+    expect(labels({ tabs: [1, 2, 3].map((n) => ({ n, title: n === 3 ? "Notes" : "Queue", open: open(n) })) }).map(([label]) => label)).toEqual([
+      "Open Queue (1)",
+      "Open Queue (2)",
+      "Open Notes",
+    ])
+    expect(labels({ surfaces: [{ name: "queue", open: open(1) }, { name: "lab", open: open(2) }], title: "Desk" }).map(([label]) => label)).toEqual(["Open queue", "Open lab"])
     expect(named("end_move")).toBe("End move")
   })
 
-  it("makes a prompt's fields the action's arguments, of their types, and none while a number is not one", () => {
-    const open = { title: "string", lane: "number", urgent: "boolean" } as const
+  it("makes a prompt's fields the action's arguments, of their base types, and none while a number is not one", () => {
+    const open: Schema = { title: { type: "string", kind: "line" }, lane: { type: "number", range: [1, 5] }, urgent: "boolean" }
 
     expect(argsOf(open, { title: "Fix", lane: "2" })).toEqual({ title: "Fix", lane: 2, urgent: false })
     expect(argsOf(open, { title: "Fix", lane: "two" })).toBeUndefined()

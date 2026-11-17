@@ -24,11 +24,28 @@ Everything an agent learns of a surface, it learns from the surface. There is no
 
 - `description` is how the shell lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
 - How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what comes next; that the person's word is waited for is a highlight, below. Keep it short, since it is read each time.
-- What is mechanical needs no words: what an input may be is in the handle's description, and an action that may not be taken now is not offered.
+- What is mechanical needs no words: what an input may be is declared with it, and an action that may not be taken now is not offered.
 
 Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and marks it for the person with the shell's `highlight`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
 
 The agent and the person are offered the same handles: the agent does the work through them, and the person may take any of them on the page. Where a decision is the person's, the view says so, in `how` or where it stands, and the agent raises it in the conversation: it acts on their word there, or they take the same handle on the page. The conversation is where the person steers; the page shows what the surface says and offers them their decisions, and anything else they want changed, they tell the agent.
+
+## A handle
+
+The agent reads a view's handles in one block: the command once, with `ACTION` for the name and the arguments they all share, then a line per handle, its name, its own arguments and its description. Its name says what it does; the rest says what the name does not.
+
+- A description is one clause that adds what the name does not say: the effect, or when to use it. It never repeats the handle's name, its subject or the command; lower case, no full stop; empty where the name says it all. `done`: "its work is merged into main"; `start`: "when a subagent begins on it"; `describe`: "".
+- An input declares its base type, `"string"`, `"number"` or `"boolean"`, and beside it what it means where the type alone does not say: `kind`, a word, `line`, `markdown` and `path` being the text the page's form knows, any other the surface's own and said with its type, as `id(string)`; `choices`, the values it may take, said `light|dark|system`; or `range`, whole numbers, said `1..5`. One declaration serves the agent, the form, a picker or a box of several lines, and admission, which refuses a value outside the choices or the range, saying what is allowed.
+
+```ts
+const start = action({
+  name: "start",
+  description: "when a subagent begins on it",
+  subject: { n: "number" },
+  inputs: { lane: { type: "number", range: [1, 5] } },
+  update: (w: Work, { n, lane }) => …,
+})
+```
 
 ## Speaking to the shell
 
@@ -87,13 +104,13 @@ A tab is the home of one instance of a surface, with its own state. The page's r
 - The shell's own: close the tab, close the others, copy its link, reload its views.
 - A highlight the person has not opened carries one dot: on the tab, until they open its drawer; and in the menu then, on Go and every step of the way to the place it is about. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, the shell's own entries, and under them the closed tabs, each opening its log read only; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
 
-So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
+So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. An entry is its handle's name, the description its hint; where several entries bind one handle to different subjects, each is the name and the `title` or `name` of the row it stands in, as home's "Close Queue" for each tab, else its subject's values. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
 
 ```ts
 menu: [{ label: "Move", actions: ["start", "done", "back"] }, { label: "Edit", actions: ["describe", "note"] }],
 ```
 
-An action with inputs opens a modal. The shell makes a form of its inputs, one field each, under its description. Where the page module exports a drawer for the action by its name, the modal shows that instead: `export const drawers = { add: AddIssue }`, each a component given `{ handle, path, view, submit, close }`. `submit(args)` makes the call with the inputs and resolves with the reason where it is refused; the modal then shows the reason and stays open, and closes once the call is admitted. `close` gives up. A drawer is drawn outside the tab, so the surface's `ui/styles.css` does not reach it.
+An action with inputs opens a modal. The shell makes a form of its inputs, one field each as it is declared, a picker for choices or a narrow range and a box of several lines for markdown, under its description. Where the page module exports a drawer for the action by its name, the modal shows that instead: `export const drawers = { add: AddIssue }`, each a component given `{ handle, path, view, submit, close }`. `submit(args)` makes the call with the inputs and resolves with the reason where it is refused; the modal then shows the reason and stays open, and closes once the call is admitted. `close` gives up. A drawer is drawn outside the tab, so the surface's `ui/styles.css` does not reach it.
 
 What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. The kit's parts of a content, a toolbar with its segments and a page, are there for a page that wants them.
 
