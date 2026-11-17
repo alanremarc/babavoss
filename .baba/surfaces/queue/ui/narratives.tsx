@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react"
 import { Button, WorkbenchEmpty, WorkbenchPage, WorkbenchSegments, WorkbenchSpacer, WorkbenchToolbar } from "babavoss/kit/index.ts"
-import { useLive } from "babavoss/shell/ui/index.tsx"
+import { useConventions, useLive } from "babavoss/shell/ui/index.tsx"
 import { branches, fold } from "../src/outline.ts"
 import { Mark, across, type Listed, type Outline, type Placed, type Root } from "./parts.tsx"
 
@@ -218,14 +218,15 @@ export function Narrative({
       return { ...all, [id]: next }
     })
   const lit = target?.id === id ? target.n : undefined
+  const { motion } = useConventions()
 
   // A link to an issue here shows it: what is folded opens, the whole outline where it is not open, and it is scrolled to.
   useEffect(() => {
     if (lit === undefined || !shown) return
     if (folded.size) return setFolds(({ [id]: _opened, ...rest }) => rest)
     if (!shown.outline.some((place) => place.n === lit)) return only ? go(`/narratives/${id}`) : undefined
-    list.current?.querySelector(`[data-n="${lit}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })
-  }, [lit, shown, folded.size, id, only])
+    list.current?.querySelector(`[data-n="${lit}"]`)?.scrollIntoView({ block: "center", behavior: motion === "reduced" ? "auto" : "smooth" })
+  }, [lit, shown, folded.size, id, only, motion])
 
   const bar = (
     <WorkbenchToolbar label="Narrative">

@@ -1,5 +1,5 @@
 // The lab's page: a header with the run's identity and its lifecycle, the run as a conversation with a composer at its
-// foot, and the page under test beside it, live, where the person acts as the person. The model the next run takes, the
+// foot, and the page under test beside it, at the side the person prefers for a sidebar, live, where the person acts as the person. The model the next run takes, the
 // split and which side is shown are the page's own; the entry in the tab's route, /entries/N, is open and scrolled to,
 // and /runs opens the runs kept.
 import { useEffect, useRef, useState, type ReactNode } from "react"
@@ -47,7 +47,7 @@ import {
   ResizablePanelGroup,
   useNarrow,
 } from "babavoss/kit/index.ts"
-import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+import { useConventions, useLive, useTab } from "babavoss/shell/ui/index.tsx"
 import { breakdown, k, MODELS, money, total, type Past, type Root, type Row, type Status } from "./parts.tsx"
 import { RunThread } from "./thread.tsx"
 
@@ -206,16 +206,23 @@ export default function Lab() {
 
 function Split({ thread, page }: { thread: ReactNode; page: ReactNode }) {
   const layout = useDefaultLayout({ id: "babavoss.lab.split", panelIds: ["thread", "page"], storage, onlySaveAfterUserInteractions: true })
+  // The page under test is the split's sidebar: it stands at the side the person prefers for one.
+  const { side } = useConventions()
+  const pagePanel = (
+    <ResizablePanel id="page" defaultSize="44" minSize={320} className="flex min-w-0 flex-col">
+      {page}
+    </ResizablePanel>
+  )
 
   return (
     <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
+      {side === "left" && pagePanel}
+      {side === "left" && <ResizableHandle />}
       <ResizablePanel id="thread" defaultSize="56" minSize={360} className="flex min-w-0 flex-col">
         {thread}
       </ResizablePanel>
-      <ResizableHandle />
-      <ResizablePanel id="page" defaultSize="44" minSize={320} className="flex min-w-0 flex-col">
-        {page}
-      </ResizablePanel>
+      {side === "right" && <ResizableHandle />}
+      {side === "right" && pagePanel}
     </ResizablePanelGroup>
   )
 }
@@ -436,7 +443,7 @@ function Header({
             title={side === "thread" ? "Show the page under test" : narrow ? "Show the thread" : "Hide the page under test"}
             onClick={() => show(side === "thread" ? (narrow ? "page" : "split") : "thread")}
           >
-            {side === "thread" ? <PanelRightOpenIcon /> : <PanelRightCloseIcon />}
+            {side === "thread" ? <PanelRightOpenIcon className="side-left:-scale-x-100" /> : <PanelRightCloseIcon className="side-left:-scale-x-100" />}
           </Button>
         </>
       )}

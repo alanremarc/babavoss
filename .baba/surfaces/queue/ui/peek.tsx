@@ -1,7 +1,8 @@
-// A glance at an issue from the sidebar: a small card of fixed size that stands at the sidebar's left, level with the line
+// A glance at an issue from the sidebar: a small card of fixed size that stands beside the sidebar, toward the content, level with the line
 // the cursor is on. It comes a second after the cursor rests on a line; once it is there, moving to another line moves
 // it and changes what it says at once, and it stays while the cursor is on it, so its links can be followed.
 import { useEffect, useRef, useState } from "react"
+import { useConventions } from "babavoss/shell/ui/index.tsx"
 import { Lane, Mark, NAMES, type Root, type Row } from "./parts.tsx"
 
 /** How long the cursor rests on a line before the card comes, and how long it stays once the cursor has left both. */
@@ -17,10 +18,11 @@ export function usePeek() {
   const [shown, setShown] = useState<Shown>()
   const warm = useRef(false)
   const timer = useRef(0)
+  const { side } = useConventions()
   const over = (n: number, line: HTMLElement) => {
     const box = line.getBoundingClientRect()
     const list = line.closest("aside")?.getBoundingClientRect() ?? box
-    const next = { n, left: list.left - WIDTH - 6, top: Math.max(52, Math.min(box.top - 8, window.innerHeight - HEIGHT - 8)) }
+    const next = { n, left: side === "left" ? list.right + 6 : list.left - WIDTH - 6, top: Math.max(52, Math.min(box.top - 8, window.innerHeight - HEIGHT - 8)) }
 
     clearTimeout(timer.current)
     if (warm.current) return setShown(next)

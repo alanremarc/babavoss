@@ -38,7 +38,7 @@ export const GROUPS = [
   {
     id: "foundations",
     title: "Foundations",
-    about: "The tokens every page is drawn with",
+    about: "The tokens every page is drawn with, and the conventions it follows",
     sections: [
       {
         title: "Tokens",
@@ -47,6 +47,17 @@ export const GROUPS = [
           { id: "type", title: "Type", files: [`${KIT}/defaults.css`], states: ["badge", "meta", "body", "large", "sm", "base", "lg", "xl", "sans", "mono"] },
           { id: "radius", title: "Radius", files: [`${KIT}/defaults.css`], states: ["sm", "md", "lg", "xl", "2xl", "3xl", "4xl"] },
           { id: "frame", title: "Frame", files: [`${KIT}/defaults.css`], states: ["menubar", "bar", "row", "icon", "rail-icon", "glyph"] },
+        ],
+      },
+      {
+        title: "Conventions",
+        entries: [
+          {
+            id: "conventions",
+            title: "Conventions",
+            files: ["framework/shell/src/conventions.ts", `${KIT}/defaults.css`],
+            states: ["motion", "scale", "side", "rail", "mode", "a page that follows them"],
+          },
         ],
       },
     ],
