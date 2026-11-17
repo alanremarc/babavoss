@@ -1,9 +1,11 @@
 // A drawer's thread, worked out without a page: a tab's entries, read from the shell's activity, as a thread reads them.
-// An entry the surface said lines about is a notice, its words, with what was done under it, standing out where it is a
-// highlight; one refused, a quiet line with why; one that said nothing, mechanical, a run of them in a row by one author,
-// or one hearer of the world, folded into one line; or a tab entry, the shell's opening or closing of a tab. A tab's
-// thread is what is in it and the shell's lines about it; home's is the shell's own, each naming its surface. That a tab
-// is broken is pinned at the thread's foot with its one action, as is what of the person's waits for the agent on home's.
+// What it shows is its highlights; every other entry is folded between them where it happened, one line that says how
+// many and by whom, opened in place. Opened, an entry the surface said lines about is a notice, its words, with what was
+// done under it; one refused, a quiet line with why; one that said nothing, mechanical, a run of them in a row by one
+// author, or one hearer of the world, folded into one line; entries of one batch, the calls of one command, one line that
+// says where it stopped where one was refused; or a tab entry, the shell's opening or closing of a tab. A tab's thread is
+// what is in it and the shell's lines about it; home's is the shell's own, each naming its surface. That a tab is broken
+// is pinned at the thread's foot with its one action, as is what of the person's waits for the agent on home's.
 // Each time the session's hooks were found not heard is kept in home's thread as the page's own highlight, saying what to
 // do. Pure: drawer.tsx draws it.
 import type { Unheard } from "./client.ts"
@@ -14,7 +16,8 @@ export type Who = "person" | "agent" | "world"
  * An entry as /activity gives it (activity.ts): `when` UTC to the second; `by` the world's hearer; `surface` absent where
  * `at` names it; `at` null in the shell's
  * line about a tab now closed; `own` the shell's line about a tab; `did` the call, or the event heard, `times` in a row;
- * `refused` why; `said` the surface's lines, `saidAt` their place; `highlight` where one of them is a highlight.
+ * `refused` why; `said` the surface's lines, `saidAt` their place; `highlight` where one of them is a highlight; `id` the
+ * caller's name for its call, which the calls of one command share.
  */
 export type Row = {
   n: number
@@ -35,20 +38,17 @@ export type Row = {
 /** What an entry is: a notice, the surface's lines; a refusal; a call or an event that said nothing; or the shell's own line about a tab. */
 export type Kind = "notice" | "refused" | "call" | "tab"
 /**
- * One line of a thread: a notice, a refusal, a tab entry, or calls in a row by one author, newest first, one or more;
- * `program` where they are one program's, every call of it, its refusal and its lines among them.
+ * One line of an opened fold: a notice, a refusal, a tab entry; calls in a row by one author, newest first, one or more;
+ * or the entries of one batch, newest first, two or more.
  */
 export type Item =
   | { kind: "notice"; row: Row }
   | { kind: "refused"; row: Row }
   | { kind: "tab"; row: Row }
-  | { kind: "calls"; who: Who; by?: string; rows: Row[]; program?: string }
-
-/** The name a program gives each of its calls, as its client sends it (bv.ts): its entries share it. */
-const PROGRAM = "program:"
-
-/** The program an entry's call was one of, by the name its calls share; none for a call made alone. */
-export const programOf = (row: Row): string | undefined => (row.id?.startsWith(PROGRAM) ? row.id : undefined)
+  | { kind: "calls"; who: Who; by?: string; rows: Row[] }
+  | { kind: "batch"; who: Who; rows: Row[] }
+/** What a thread shows: a highlight, or a fold of the ordinary entries between two, newest first, one or more. */
+export type Part = { kind: "highlight"; row: Row } | { kind: "fold"; rows: Row[] }
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -79,30 +79,112 @@ export const entriesIn = (rows: readonly Row[], address: string): Row[] => rows.
 /** The shell's own entries, home's thread: those in no tab. */
 export const shellEntries = (rows: readonly Row[]): Row[] => rows.filter((r) => tabOfRow(r) === undefined)
 
-/** The entries as a thread's lines, newest first as given: calls in a row by one author are one line. */
-export function itemsOf(rows: readonly Row[]): Item[] {
-  const items: Item[] = []
+/** The name a program gives each of its calls, as its client sends it (bv.ts): its entries share it. */
+const PROGRAM = "program:"
+
+/**
+ * The batch an entry is of: the program its call was one of, by the name the program's calls share; none for a call made
+ * alone. Entries in a row of the same are one batch.
+ */
+export const batchOf = (row: Row): string | undefined => (row.id?.startsWith(PROGRAM) ? row.id : undefined)
+
+/** The thread's parts, newest first as given: each highlight, and the ordinary entries between two folded into one. */
+export function partsOf(rows: readonly Row[]): Part[] {
+  const parts: Part[] = []
 
   for (const row of rows) {
+    const last = parts.at(-1)
+
+    if (row.highlight) parts.push({ kind: "highlight", row })
+    else if (last?.kind === "fold") last.rows.push(row)
+    else parts.push({ kind: "fold", rows: [row] })
+  }
+
+  return parts
+}
+
+/**
+ * The entries as an opened fold's lines, newest first as given: two or more in a row of one batch are one line, unless
+ * `batches` is false, as inside one; else calls in a row by one author are one line.
+ */
+export function itemsOf(rows: readonly Row[], batches = true): Item[] {
+  const items: Item[] = []
+
+  for (let i = 0; i < rows.length; ) {
+    const row = rows[i]!
+    // A highlight, which is the person's to see, stands as its own even in a batch.
+    const batch = batches && !row.highlight ? batchOf(row) : undefined
+    let end = i + 1
+
+    while (batch !== undefined && end < rows.length && !rows[end]!.highlight && batchOf(rows[end]!) === batch) end++
+    if (end - i > 1) {
+      items.push({ kind: "batch", who: row.who, rows: rows.slice(i, end) })
+      i = end
+      continue
+    }
+
     const kind = kindOf(row)
     const last = items.at(-1)
-    const program = programOf(row)
 
-    // One program's entries in a row are one move, whatever each is: a call, a refusal, the lines a call gave; but a
-    // highlight, which a surface marked for the person, stands as its own.
-    if (program && !row.highlight) {
-      if (last?.kind === "calls" && last.program === program) last.rows.push(row)
-      else items.push({ kind: "calls", who: row.who, rows: [row], program })
-    } else if (kind !== "call") items.push({ kind, row })
-    else if (last?.kind === "calls" && !last.program && last.who === row.who && last.by === row.by) last.rows.push(row)
+    if (kind !== "call") items.push({ kind, row })
+    else if (last?.kind === "calls" && last.who === row.who && last.by === row.by) last.rows.push(row)
     else items.push({ kind: "calls", who: row.who, ...(row.by !== undefined && { by: row.by }), rows: [row] })
+    i++
   }
 
   return items
 }
 
-/** A line's key, steady as entries arrive: its newest entry's number. */
-export const keyOf = (item: Item): number => (item.kind === "calls" ? item.rows[0]!.n : item.row.n)
+/** A line's key, steady as newer entries arrive: its oldest entry's number. */
+export const keyOf = (item: Item | Part): number => ("rows" in item ? item.rows.at(-1)!.n : item.row.n)
+
+/** How many actions entries are: each one, the world's events as many as it heard in a row. */
+const countOf = (rows: readonly Row[]): number => rows.reduce((sum, row) => sum + (row.who === "world" ? (row.times ?? 1) : 1), 0)
+const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? "" : "s"}`
+/** Who did a share of a fold, as its line says it. */
+const SHARE: Record<Who, string> = { agent: "by the agent", person: "by you", world: "heard" }
+
+/** A fold as its one line says it: "14 actions: 9 by the agent, 3 by you, 2 heard"; of one author, "3 actions by the agent"; of the world, "4 events heard". */
+export function foldLine(rows: readonly Row[]): string {
+  const shares = (["agent", "person", "world"] as const)
+    .map((who) => ({ who, count: countOf(rows.filter((r) => r.who === who)) }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count)
+  const total = shares.reduce((sum, s) => sum + s.count, 0)
+
+  if (shares.length === 1 && shares[0]!.who === "world") return `${plural(total, "event")} heard`
+  if (shares.length === 1) return `${plural(total, "action")} ${SHARE[shares[0]!.who]}`
+
+  return `${plural(total, "action")}: ${shares.map((s) => `${s.count} ${SHARE[s.who]}`).join(", ")}`
+}
+
+/**
+ * A batch as its one line says it, in two parts: "12 calls by the agent, one command"; and where a call of it was refused,
+ * where it stopped, "stopped at start n=4: lane 2 is busy".
+ */
+export function batchParts(item: Extract<Item, { kind: "batch" }>): { head: string; stop?: string } {
+  const head = `${plural(item.rows.length, "call")} ${BY[item.who]}, one command`
+  const stop = item.rows.findLast((r) => r.refused !== undefined)
+
+  return stop ? { head, stop: `stopped at ${didOf(stop)}: ${stop.refused}` } : { head }
+}
+
+/** A batch as its one line says it: "4 calls by the agent, one command, stopped at start n=4: lane 2 is busy". */
+export const batchLine = (item: Extract<Item, { kind: "batch" }>): string => {
+  const { head, stop } = batchParts(item)
+
+  return stop ? `${head}, ${stop}` : head
+}
+
+/** The newest ordinary entry as the one line a fold's face shows of it: who, and what it says, as its line would. */
+export function glanceOf(row: Row, home = false): string {
+  const kind = kindOf(row)
+
+  if (kind === "tab") return tabLine(row, home)
+  if (kind === "refused") return refusedLine(row)
+
+  return `${authorOf(row.who, row.by, home ? named(row.surface ?? "") : "World")}: ${lineOf(row)}`
+}
 
 /** Who did it, as a notice is headed: the person, the agent, or the world, named by what heard it; where nothing is named, the surface that tells it. */
 export const authorOf = (who: Who, by?: string, surface = "World"): string => (who === "person" ? "You" : who === "agent" ? "Agent" : by ? `World · ${by}` : surface)
@@ -131,31 +213,13 @@ export function tabLine(row: Row, home = false): string {
   return home ? `${named(row.surface ?? "")} ${done}` : done.charAt(0).toUpperCase() + done.slice(1)
 }
 
-/**
- * Calls folded into one line: "Agent made 4 calls", "You made 1 call"; the world's events, "World · watch heard 7 events";
- * a program's, "Agent made 12 calls in one command", and where one was refused, which: "…, the 12th refused", where it stopped.
- */
+/** Calls folded into one line: "Agent made 4 calls", "You made 1 call"; the world's events, "World · watch heard 7 events". */
 export function callsLine(item: Extract<Item, { kind: "calls" }>): string {
-  if (item.program) {
-    const count = item.rows.length
-    const refused = [...item.rows].reverse().flatMap((row, i) => (row.refused === undefined ? [] : [i + 1]))
-    const at = !refused.length ? "" : refused.length === 1 ? `, the ${ordinal(refused[0]!)} refused` : `, ${refused.length} refused`
-
-    return `${authorOf(item.who)} made ${count} call${count === 1 ? "" : "s"} in one command${at}`
-  }
-
   const count = item.who === "world" ? item.rows.reduce((sum, row) => sum + (row.times ?? 1), 0) : item.rows.length
   const what = item.who === "world" ? ["heard", "event"] : ["made", "call"]
 
   return `${authorOf(item.who, item.by)} ${what[0]} ${count} ${what[1]}${count === 1 ? "" : "s"}`
 }
-
-/** A number as a place in a row: 1st, 2nd, 3rd, 11th, 22nd. */
-const ordinal = (n: number): string => `${n}${[11, 12, 13].includes(n % 100) ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`
-
-/** One entry of a program as its folded line lists it: the call, and why it was refused or what the surface said of it. */
-export const programRowOf = (row: Row): string =>
-  [didOf(row), row.refused !== undefined ? `refused, ${row.refused}` : row.said?.length ? row.said.join(" ") : ""].filter(Boolean).join(": ")
 
 /** Where an entry happened, within its tab, as a click on it goes: "/tabs/2/issues/12" in /tabs/2 is /issues/12; none outside the tab. */
 export function placeIn(row: Row, address: string): string | undefined {
@@ -212,3 +276,19 @@ export function withUnheard(rows: readonly Row[], known: readonly Unheard[]): Ro
 /** The highlights of `rows` the person has not opened, by number, of those the shell names. */
 export const unopenedOf = (rows: readonly Row[], unopened: readonly number[]): number[] =>
   rows.filter((r) => r.highlight && unopened.includes(r.n)).map((r) => r.n)
+
+/** A closed tab as /activity/closed lists it (surface.ts): its surface, the title it had, when it closed and who closed it, and where its log is read. */
+export type ClosedTab = { n: number; surface: string; title?: string; opened?: string; closed: string; by: "person" | "agent" | "shell"; entries?: number; at: string }
+
+const CLOSER: Record<ClosedTab["by"], string> = { person: "by you", agent: "by the agent", shell: "by the shell" }
+
+/** A closed tab's name: the title it had, or its surface's and its number. */
+export const closedName = (tab: ClosedTab): string => tab.title ?? `${named(tab.surface)} ${tab.n}`
+
+/** When a tab closed and who closed it, as its line says it: "Closed 2h ago by you", "Closed just now by the agent", "Closed at 9:14 by the shell". */
+export function closedLine(tab: ClosedTab, now: Date): string {
+  const ago = agoOf(new Date(tab.closed), now)
+  const when = ago === "now" ? "just now" : /^\d+[mh]$/.test(ago) ? `${ago} ago` : `at ${ago}`
+
+  return `Closed ${when} ${CLOSER[tab.by]}`
+}

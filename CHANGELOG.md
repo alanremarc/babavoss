@@ -2,6 +2,15 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.74.0
+
+**The drawer shows highlights; the rest is folded.** A tab's drawer shows its highlights, each with who raised it, when and where it goes. Every other entry, a surface's ordinary notice lines among them, sits in a fold between the highlights, one line saying how many and by whom ("14 actions: 9 by the agent, 3 by you, 2 heard"), opened in place. Only the newest ordinary entry shows unasked, as one faint line under the fold at the foot.
+
+- So a line the person must see is a highlight, `notices: [{ text, highlight: true }]`; an ordinary notice is found only by opening the fold.
+- The calls of one `-e` program fold into one line, "12 calls by the agent, one command", saying where a refusal stopped it.
+- Home's drawer lists the closed tabs under its thread, newest first, each opening its log read only.
+- A custom `.baba/home.tsx` changes nothing: the drawer is the shell's, and `HomeProps` is as it was.
+
 ## 0.73.0
 
 **The program door.** `COMMAND [PATH] -e - <<'EOF' … EOF` runs the JavaScript or TypeScript that follows. In scope: `await read(path)`, a view as data with each action as `{ handle, args, inputs }` and each input as `{ type }`; `await call(path, handle, {name: value})`, which returns what the call changed and throws on a refusal; and `print(…)`.

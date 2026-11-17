@@ -79,7 +79,8 @@ ui         A surface's part of the page: its views, shown to the person.
 shell      The root surface, from the framework: the desktop. It holds every other surface as a tab.
 tab        An open surface; the same surface may be open in several.
 rail       The tabs, at a side of the page the person chooses; home's mark first, the newest beside it.
-drawer     A tab's panel, home's too: its menu drawn from its views, over its activity as a thread.
+drawer     A tab's panel, home's too: its menu drawn from its views, over its activity as a thread: its highlights,
+           everything else folded between them; home's also opens the closed tabs, read only.
 kit        What pages are built with: primitives and theming tokens; it follows the conventions unasked.
 conventions  How the person wants pages to be, from their settings and the machine: motion, text scale, a sidebar's side,
            where the rail stands, the mode. Handed to every page, which follows them by its own code; expected, never enforced.
@@ -91,7 +92,7 @@ present    The shell at /: every open tab's facts.
 What the shell offers, it offers twice: on the page for the person, in the present for the agent.
 
 ```text
-home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's own
+home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's own, with the closed tabs under its thread
 highlights      what the person should see, raised by a surface or by the agent: a bubble beside the tab for a moment, a
                 dot on it until its drawer is opened, standing out in its thread
 turn            whose move it is, said by the mark: its eyes look about while the agent works
