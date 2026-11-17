@@ -1,5 +1,7 @@
 <!doctype html>
-<!-- The site's one page, babavoss.org: what Baba is, and the line a person copies to their agent. It says what the README says. -->
+<!-- The site's one page, babavoss.org, for a person who has an agent and has not heard of Baba Voss: what it is in a line,
+     a picture of it, built of markup, with the person, the chat they ask in and the page they see, and the line they copy to
+     their agent. It says what the README says, without the parts for someone who installs by hand. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -9,19 +11,29 @@
     <style>
       :root {
         color-scheme: light dark;
-        --bg: #fbfaf8;
-        --fg: #1c1b1a;
-        --muted: #6f6b66;
-        --line: #e4e0da;
-        --box: #f3f0eb;
+        --bg: #faf9f7;
+        --fg: #1b1a19;
+        --muted: #716c66;
+        --line: #e3dfd8;
+        --card: #ffffff;
+        --soft: #f1eee9;
+        --accent: #8a4a7d;
+        --accent-soft: #f3e6f0;
+        --good: #2f7d57;
+        --good-soft: #e2f2ea;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #161514;
-          --fg: #ecebe8;
-          --muted: #9a958e;
-          --line: #2e2c29;
-          --box: #1f1e1c;
+          --bg: #151413;
+          --fg: #eceae6;
+          --muted: #9b958d;
+          --line: #2f2c29;
+          --card: #1d1c1a;
+          --soft: #252321;
+          --accent: #d39bc8;
+          --accent-soft: #3a2a37;
+          --good: #7fcfa5;
+          --good-soft: #1f3329;
         }
       }
       * {
@@ -32,75 +44,388 @@
         background: var(--bg);
         color: var(--fg);
         font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
       main {
-        max-width: 40rem;
+        max-width: 46rem;
         margin: 0 auto;
         padding: 4rem 1rem 3rem;
       }
       h1 {
-        margin: 0 0 0.5rem;
-        font-size: 1.75rem;
-        font-weight: 600;
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .lede {
+        margin: 0.5rem 0 0;
+        font-size: 1.25rem;
+        color: var(--muted);
       }
       h2 {
-        margin: 2.5rem 0 0.5rem;
-        font-size: 1rem;
-        font-weight: 600;
+        margin: 3.5rem 0 0.75rem;
+        font-size: 1.125rem;
+        font-weight: 650;
       }
       p {
         margin: 0 0 1rem;
       }
-      ul {
-        margin: 0 0 1rem;
-        padding-left: 1.25rem;
+      .muted {
+        color: var(--muted);
       }
-      h2 + ul {
-        margin-top: 0;
+      a {
+        color: inherit;
       }
-      .lede {
-        font-size: 1.125rem;
+
+      /* The picture: the agent and the surface above, joined by the state; the chat and the page, two screens; the person below. */
+      .picture {
+        margin: 2.5rem 0 0;
       }
-      pre {
-        margin: 0 0 1rem;
-        padding: 1rem;
-        overflow-x: auto;
-        background: var(--box);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-      }
-      pre.wrap {
-        white-space: pre-wrap;
-      }
-      .copy {
+      .top {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: center;
         position: relative;
       }
-      .copy button {
+      .top::before {
+        content: "";
         position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        padding: 0.25rem 0.625rem;
-        background: var(--bg);
-        color: var(--fg);
+        left: 25%;
+        right: 25%;
+        top: 50%;
+        border-top: 1.5px dashed var(--line);
+      }
+      .node {
+        justify-self: center;
+        position: relative;
+        padding: 0.25rem 0.875rem;
         border: 1px solid var(--line);
-        border-radius: 6px;
-        font: inherit;
+        border-radius: 999px;
+        background: var(--card);
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+      .state {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        padding: 0 0.5rem;
+        background: var(--bg);
+        color: var(--muted);
         font-size: 0.8125rem;
+      }
+      .stems {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: 1.25rem;
+      }
+      .stems span {
+        justify-self: center;
+        border-left: 1.5px dashed var(--line);
+      }
+      .screens {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      .screen {
+        display: flex;
+        flex-direction: column;
+        min-height: 15rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--card);
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .bar b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .dots {
+        display: flex;
+        gap: 4px;
+      }
+      .dots i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--line);
+      }
+
+      /* The chat: what the person asks, what the agent says. */
+      .chat {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        font-size: 0.875rem;
+      }
+      .say {
+        max-width: 88%;
+        padding: 0.5rem 0.75rem;
+        border-radius: 12px;
+        background: var(--soft);
+      }
+      .say.you {
+        align-self: flex-end;
+        background: var(--accent-soft);
+      }
+      .ask {
+        margin-top: auto;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+
+      /* The page: the tabs at its side, one with a dot, and the surface: three invoices, one just paid. */
+      .page {
+        display: flex;
+        flex: 1;
+      }
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem 0.5rem;
+        border-right: 1px solid var(--line);
+      }
+      .tab {
+        position: relative;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--soft);
+      }
+      .tab.on {
+        background: var(--accent-soft);
+        outline: 1.5px solid var(--accent);
+      }
+      .tab.on::after {
+        content: "";
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--card);
+      }
+      .surface {
+        flex: 1;
+        min-width: 0;
+        padding: 0.75rem;
+        font-size: 0.875rem;
+      }
+      .surface h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.4375rem 0.5rem;
+        border-radius: 8px;
+      }
+      .row + .row {
+        margin-top: 2px;
+      }
+      .row span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pill {
+        flex: none;
+        padding: 0.0625rem 0.5rem;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .row.done {
+        background: var(--good-soft);
+      }
+      .row.done .pill {
+        background: transparent;
+        color: var(--good);
+        font-weight: 600;
+      }
+      .note {
+        margin-top: 0.625rem;
+        padding: 0.4375rem 0.625rem;
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+
+      /* The person, below both screens: they ask in one and see the other. */
+      .feet {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .feet span {
+        justify-self: center;
+        padding: 0.375rem 0 0;
+      }
+      .bracket {
+        margin: 0.25rem 25% 0;
+        height: 0.875rem;
+        border: 1.5px dashed var(--line);
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+      }
+      .you {
+        display: flex;
+        justify-content: center;
+        margin-top: -0.125rem;
+      }
+      .you span {
+        padding: 0.25rem 0.875rem;
+        border-radius: 999px;
+        background: var(--fg);
+        color: var(--bg);
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+
+      /* The picture plays once through as it is first seen: the ask, the answer, the invoice paid, the note. Still where motion is reduced. */
+      @media (prefers-reduced-motion: no-preference) {
+        .step {
+          opacity: 0;
+          transform: translateY(4px);
+          animation: arrive 0.4s ease-out forwards;
+        }
+        .step.s1 {
+          animation-delay: 0.6s;
+        }
+        .step.s2 {
+          animation-delay: 1.8s;
+        }
+        .step.s3 {
+          animation-delay: 2.6s;
+        }
+        .step.s4 {
+          animation-delay: 3.2s;
+        }
+        @keyframes arrive {
+          to {
+            opacity: 1;
+            transform: none;
+          }
+        }
+      }
+
+      /* The line to copy. */
+      .copy {
+        display: flex;
+        align-items: stretch;
+        gap: 0.5rem;
+        padding: 0.5rem 0.5rem 0.5rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--card);
+      }
+      .copy p {
+        flex: 1;
+        margin: 0;
+        padding: 0.375rem 0;
+        font-size: 0.9375rem;
+        overflow-wrap: anywhere;
+      }
+      .copy button {
+        flex: none;
+        align-self: center;
+        padding: 0.4375rem 0.875rem;
+        border: 0;
+        border-radius: 8px;
+        background: var(--fg);
+        color: var(--bg);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
         cursor: pointer;
       }
-      .copy pre {
-        padding-right: 4.5rem;
+
+      /* What to ask for. */
+      .wishes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
       }
+      .wishes section {
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--card);
+      }
+      .wishes h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 650;
+      }
+      .wishes ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .wishes li + li {
+        margin-top: 0.5rem;
+      }
+
       footer {
-        margin-top: 3rem;
+        margin-top: 4rem;
         padding-top: 1rem;
         border-top: 1px solid var(--line);
         color: var(--muted);
         font-size: 0.875rem;
       }
-      a {
-        color: inherit;
+
+      @media (max-width: 40rem) {
+        main {
+          padding-top: 2.5rem;
+        }
+        .screens,
+        .wishes {
+          grid-template-columns: 1fr;
+        }
+        .top,
+        .stems,
+        .feet,
+        .bracket {
+          display: none;
+        }
+        .you {
+          margin-top: 0.75rem;
+        }
+        .copy {
+          flex-direction: column;
+          padding: 0.75rem;
+        }
+        .copy button {
+          align-self: stretch;
+        }
       }
     </style>
   </head>
@@ -109,46 +434,92 @@
       <h1>Baba Voss</h1>
       <p class="lede">Baba is a work surface you share with your agent.</p>
 
-      <pre aria-label="You ask in the chat, the input. The agent works on the state directly. The surface draws its page, its face, which you see.">
-           agent ◄───── state ─────► surface
-             ▲                          │ ui
-   ┌─────────┴─────────┐      ┌─────────▼─────────┐
-   │ chat: the input   │      │ page: the face    │
-   └─────────▲─────────┘      └─────────┬─────────┘
-             │ ask                      │ see
-             └────────── you ───────────┘</pre>
+      <div class="picture" role="img" aria-label="You ask your agent in the chat. The agent works on the surface directly. You see the surface on a page: here, three invoices, one just marked paid.">
+        <div class="top" aria-hidden="true">
+          <span class="node">agent</span>
+          <span class="state">works on it directly</span>
+          <span class="node">surface</span>
+        </div>
+        <div class="stems" aria-hidden="true"><span></span><span></span></div>
+
+        <div class="screens" aria-hidden="true">
+          <div class="screen">
+            <div class="bar">
+              <span class="dots"><i></i><i></i><i></i></span><b>Chat</b>
+            </div>
+            <div class="chat">
+              <div class="say you step s1">Acme paid yesterday. Which invoices are still open?</div>
+              <div class="say step s2">I marked Acme as paid. Two are still open: Birch and Cedar.</div>
+              <div class="ask">Ask your agent…</div>
+            </div>
+          </div>
+
+          <div class="screen">
+            <div class="bar">
+              <span class="dots"><i></i><i></i><i></i></span><b>Page</b>
+            </div>
+            <div class="page">
+              <div class="rail"><span class="tab on"></span><span class="tab"></span><span class="tab"></span></div>
+              <div class="surface">
+                <h3>Invoices</h3>
+                <div class="row done step s3"><span>Acme, March</span><span class="pill">Paid</span></div>
+                <div class="row"><span>Birch, March</span><span class="pill">Open</span></div>
+                <div class="row"><span>Cedar, March</span><span class="pill">Open</span></div>
+                <div class="note step s4">Acme matched yesterday's payment.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="feet" aria-hidden="true"><span>you ask here</span><span>you see it here</span></div>
+        <div class="bracket" aria-hidden="true"></div>
+        <div class="you" aria-hidden="true"><span>you</span></div>
+      </div>
+
+      <h2>How it works</h2>
+      <p>You keep talking to your agent as you do now. Baba gives the work a place of its own: a page where you see what the agent sees, as it changes.</p>
+      <p class="muted">You can act on the page too. The agent is told what you did, and builds on it.</p>
 
       <h2>Getting started</h2>
-      <p>Copy this to your agent:</p>
+      <p>You need a coding agent, such as Claude Code. Copy this to it, in the project you want Baba in:</p>
       <div class="copy">
-        <pre class="wrap" id="prompt">Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.</pre>
+        <p id="prompt">Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.</p>
         <button type="button" id="copy">Copy</button>
       </div>
 
-      <p>Then say what you want. “I want a surface…”</p>
-      <h2>Software development</h2>
-      <ul>
-        <li>…that tracks what still blocks the next release.</li>
-        <li>…that lists every failing test with the commit that broke it.</li>
-        <li>…where I approve your database migrations one by one.</li>
-      </ul>
-      <h2>Running a business</h2>
-      <ul>
-        <li>…that matches each month's payments to our invoices.</li>
-        <li>…that shows which subscriptions we pay for and when each renews.</li>
-        <li>…that keeps every open customer request with who answers it.</li>
-      </ul>
-      <h2>Research and writing</h2>
-      <ul>
-        <li>…that collects the papers we read, with your summary and my verdict.</li>
-        <li>…that compares five interviews answer by answer.</li>
-        <li>…that tracks each chapter's draft, its open questions and its sources.</li>
-      </ul>
-      <p>The agent writes it in <code>.baba/surfaces/</code>, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up.</p>
+      <h2>Then say what you want</h2>
+      <p>In your own words. “I want a surface…”</p>
+      <div class="wishes">
+        <section>
+          <h3>Software development</h3>
+          <ul>
+            <li>…that tracks what still blocks the next release.</li>
+            <li>…that lists every failing test with the change that broke it.</li>
+            <li>…where I approve your database changes one by one.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Running a business</h3>
+          <ul>
+            <li>…that matches each month's payments to our invoices.</li>
+            <li>…that shows which subscriptions we pay for and when each renews.</li>
+            <li>…that keeps every open customer request with who answers it.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Research and writing</h3>
+          <ul>
+            <li>…that collects the papers we read, with your summary and my verdict.</li>
+            <li>…that compares five interviews answer by answer.</li>
+            <li>…that tracks each chapter's draft, its open questions and its sources.</li>
+          </ul>
+        </section>
+      </div>
+      <p class="muted" style="margin-top: 1rem">Your agent builds it and opens it on your page.</p>
 
       <footer>
-        Early, and being reshaped. <a href="https://github.com/alanremarc/babavoss">Source</a> · <a href="https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md">Design</a> ·
-        <a href="/llms.txt">llms.txt</a> · Apache 2.0
+        Early, and still changing. <a href="https://github.com/alanremarc/babavoss">Source</a> · <a href="https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md">Design</a> ·
+        <a href="/llms.txt">For agents</a> · Apache 2.0
       </footer>
     </main>
     <script>
@@ -159,7 +530,7 @@
           await navigator.clipboard.writeText(document.getElementById("prompt").textContent)
           button.textContent = "Copied"
         } catch {
-          button.textContent = "Select and copy"
+          button.textContent = "Select the line"
         }
         setTimeout(() => (button.textContent = "Copy"), 2000)
       })
