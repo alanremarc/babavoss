@@ -51,6 +51,13 @@
       p {
         margin: 0 0 1rem;
       }
+      ul {
+        margin: 0 0 1rem;
+        padding-left: 1.25rem;
+      }
+      h2 + ul {
+        margin-top: 0;
+      }
       .lede {
         font-size: 1.125rem;
       }
@@ -118,8 +125,25 @@
         <button type="button" id="copy">Copy</button>
       </div>
 
-      <p>Then ask for a surface:</p>
-      <pre class="wrap">I want a surface that matches each month's payments to our invoices.</pre>
+      <p>Then say what you want. “I want a surface…”</p>
+      <h2>Software development</h2>
+      <ul>
+        <li>…that tracks what still blocks the next release.</li>
+        <li>…that lists every failing test with the commit that broke it.</li>
+        <li>…where I approve your database migrations one by one.</li>
+      </ul>
+      <h2>Running a business</h2>
+      <ul>
+        <li>…that matches each month's payments to our invoices.</li>
+        <li>…that shows which subscriptions we pay for and when each renews.</li>
+        <li>…that keeps every open customer request with who answers it.</li>
+      </ul>
+      <h2>Research and writing</h2>
+      <ul>
+        <li>…that collects the papers we read, with your summary and my verdict.</li>
+        <li>…that compares five interviews answer by answer.</li>
+        <li>…that tracks each chapter's draft, its open questions and its sources.</li>
+      </ul>
       <p>The agent writes it in <code>.baba/surfaces/</code>, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up.</p>
 
       <footer>
