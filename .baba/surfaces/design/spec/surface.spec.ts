@@ -113,7 +113,7 @@ test("a scenario's path lists its steps with sizes and an at each; a step's path
   const step = agent.sees("/scenarios/work/3") as Step
 
   expect(step).toMatchObject({ who: "agent", did: `${WORD} / open surface=tasks` })
-  expect(step.changed).toContain("activity: agent · tasks /tasks · opened")
+  expect(step.changed).toContain("activity: agent · tasks /tasks · open surface=tasks")
   expect(agent.sees("/scenarios/work/99")).toBeUndefined()
   expect(agent.sees("/scenarios/none")).toBeUndefined()
 })

@@ -257,6 +257,25 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
       enqueue((): Answer => {
         if (stopped) return refused(failure ?? "surface stopped")
 
+        const t = Date.now()
+        // A refusal the surface keeps is committed as bookkeeping: a surface that fails to keep it fails as on any commit.
+        const refuse = (reason: string): Answer => {
+          if (surface.refused && !stopped) {
+            try {
+              const kept = surface.refused(model, { kind: "call", path, handle: name, args, actor, t, ...(id && { id }) }, reason)
+
+              if (kept !== undefined) {
+                commit(kept, { actor, call: true, path, quiet: true })
+                tell()
+              }
+            } catch (e) {
+              fail(e)
+            }
+          }
+
+          return { outcome: "refused", reason }
+        }
+
         let view: View | undefined
 
         try {
@@ -264,23 +283,23 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
         } catch (e) {
           fail(e)
 
-          return refused(failure!)
+          return refuse(failure!)
         }
-        if (!view) return refused(absent(path))
+        if (!view) return refuse(absent(path))
 
         const admitted = admit(view, path, name, args)
 
-        if (typeof admitted === "string") return refused(admitted)
+        if (typeof admitted === "string") return refuse(admitted)
 
-        const call: Call = { kind: "call", path, handle: name, args, actor, t: Date.now(), ...(id && { id }) }
+        const call: Call = { kind: "call", path, handle: name, args, actor, t, ...(id && { id }) }
         let r: ReturnType<typeof surface.update>
 
         try {
           r = surface.update(model, call)
         } catch (e) {
-          return refused(message(e))
+          return refuse(message(e))
         }
-        if ("refused" in r) return refused(r.refused)
+        if ("refused" in r) return refuse(r.refused)
 
         const by: Cause = { actor, call: true, path, ...(r.quiet && { quiet: true as const }) }
 
@@ -292,7 +311,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
         } catch (e) {
           fail(e)
 
-          return refused(failure!)
+          return refuse(failure!)
         }
         notify(r.notices, by)
         for (const c of r.commands ?? []) start(c, actor)

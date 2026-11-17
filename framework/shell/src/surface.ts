@@ -23,7 +23,7 @@
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
 import { action, handles, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
-import { activityView, linesOf, lookAt, NOTICES, record, restored, seenFrom, seeUpto, unseenIn, without, type Entry, type Seen, type Tabs } from "./activity.ts"
+import { activityView, entryOf, lookAt, NOTICES, record, refusalOf, restored, seenFrom, seeUpto, unseenIn, without, type Entry, type Seen, type Tabs } from "./activity.ts"
 
 /**
  * `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved.
@@ -39,9 +39,13 @@ export type Pointed = { at: string; n: number }
  * the person has seen of its notices (activity.ts); absent in state kept before it.
  */
 export type ShellModel = { tabs: Tab[]; next: number; pointed?: Pointed; activity?: Entry[]; seen?: Seen; closed?: Closed[] }
-/** `t`: when the shell's run heard the event, in ms since the epoch, for its activity. */
-export type ShellEvent = { kind: "tab"; n: number; event: { kind: string }; t?: number }
-export type ShellCommand = { n: number; surface: string; command: unknown }
+/**
+ * `t`: when the shell's run heard the event, in ms since the epoch, for its activity. Whose it is, for the activity too:
+ * `actor`, who called what started the work it reports; else the world's, `heard` naming what heard it.
+ */
+export type ShellEvent = { kind: "tab"; n: number; event: { kind: string }; t?: number; actor?: string; heard?: string }
+/** A tab's command, and whose its events are: `actor`, the caller whose call started it, else `heard`, the world's hearer that did. */
+export type ShellCommand = { n: number; surface: string; command: unknown; actor?: string; heard?: string }
 
 /** What the desktop says when there is no surface to open: how one is made. */
 export const EMPTY = "no surfaces yet: ask the agent for one, which it makes with `bun run baba new NAME` in .baba/"
@@ -66,6 +70,11 @@ export const PATHS = ["tabs", "activity"]
 export const LOOK = { views: 60, depth: 4 }
 /** How many closed tabs are remembered, so a path into one says where its surface went. */
 const REMEMBERED = 20
+
+/** Whose a command's events are: the caller's, or the world's, by what heard it. */
+type Origin = { actor?: string; heard?: string }
+/** Whose an event is, as it arrives: as its command said, the world's where it says nothing. */
+const originOf = (e: ShellEvent): Origin => (e.actor !== undefined ? { actor: e.actor } : e.heard !== undefined ? { heard: e.heard } : {})
 
 const TAB = /^\/tabs\/(\d+)(\/.*)?$/
 const NAMED = /^\/([a-z][a-z0-9-]*)(\/.*)?$/
@@ -437,7 +446,7 @@ export function shell(
 
     if ("broken" in seen) return { refused: seen.broken }
     try {
-      return wrapped(tab, held.get(tab.surface)!.update(tab.model, call), model)
+      return wrapped(tab, held.get(tab.surface)!.update(tab.model, call), model, { actor: call.actor })
     } catch (error) {
       return { refused: `tab ${tab.n} is unchanged: its ${tab.surface} surface fails on ${call.handle} (${message(error)}); fix the surface's code` }
     }
@@ -449,15 +458,27 @@ export function shell(
 
     return { text, at: typeof at === "string" && at.startsWith("/") && at !== "/" ? address + at : address, from: tab.surface }
   }
-  const wrapped = (tab: Tab, result: Update<unknown, unknown>, model: ShellModel): Update<ShellModel, ShellCommand> =>
+  /** A tab's update as the shell's; its commands are `from` whoever caused it, the caller or the world's hearer. */
+  const wrapped = (tab: Tab, result: Update<unknown, unknown>, model: ShellModel, from: Origin): Update<ShellModel, ShellCommand> =>
     "refused" in result
       ? result
       : {
           model: { ...model, tabs: model.tabs.map((t) => (t.n === tab.n ? { ...t, model: result.model } : t)) },
-          commands: (result.commands ?? []).map((command) => ({ n: tab.n, surface: tab.surface, command })),
+          commands: (result.commands ?? []).map((command) => ({ n: tab.n, surface: tab.surface, command, ...from })),
           ...(result.notices?.length && { notices: result.notices.map((notice) => noticed(tab, notice)) }),
           ...(result.quiet && { quiet: true as const }),
         }
+  /** Whose a command's events are: the caller's who started it, unless it is a session command, whose are the world's, heard by it. */
+  const origin = (c: ShellCommand): Origin => {
+    const kind = (c.command as { kind?: unknown } | undefined)?.kind
+    let session = false
+
+    try {
+      session = held.get(c.surface)?.session?.(c.command) ?? false
+    } catch {}
+
+    return c.actor !== undefined && !session ? { actor: c.actor } : { heard: c.heard ?? (typeof kind === "string" ? kind : "command") }
+  }
   /** A message's next model and what it gives, before its activity is kept. */
   const step = (model: ShellModel, message: Call | ShellEvent): Update<ShellModel, ShellCommand> => {
     if (message.kind === "call") {
@@ -480,7 +501,7 @@ export function shell(
     const result = attempt(tab, (s) => s.update(tab.model, message.event))
 
     // An event for a broken tab, or one its surface fails on, lands nowhere, as for a closed one.
-    return !result ? { model } : wrapped(tab, result.ok, model)
+    return !result ? { model } : wrapped(tab, result.ok, model, originOf(message))
   }
 
   return surface<ShellModel, ShellEvent, ShellCommand>({
@@ -540,8 +561,9 @@ export function shell(
     update(model, message) {
       const result = step(model, message)
 
-      // A quiet commit is the page's own bookkeeping, no activity: as what waits for the agent, it is no one's doing.
-      if ("refused" in result || result.quiet) return result
+      // A quiet commit is the page's own bookkeeping, no activity: as what waits for the agent, it is no one's doing. An
+      // event that landed nowhere, for a closed or broken tab, is none either.
+      if ("refused" in result || result.quiet || (message.kind !== "call" && result.model === model)) return result
 
       const log = model.activity ?? []
       const numbered: Call | ShellEvent =
@@ -553,12 +575,19 @@ export function shell(
               ...(message.handle === "show" && typeof message.args.at === "string" && { args: { ...message.args, at: kept(model, message.args.at) } }),
             }
       const notices = result.notices?.map((n) => (typeof n === "string" || typeof n.at !== "string" ? n : { ...n, at: kept(model, n.at) }))
-      const lines = linesOf(model, numbered, message.t ?? log.at(-1)?.when ?? 0, notices)
+      const line = entryOf(model, numbered, message.t ?? log.at(-1)?.when ?? 0, notices)
       // A closed tab's entries go with it, once its own line is kept: that line is the newest, so numbers never repeat.
       const gone = (n: number) => model.tabs.some((t) => t.n === n) && !result.model.tabs.some((t) => t.n === n)
-      const activity = without(record(log, lines), gone)
+      const activity = without(record(log, line), gone)
 
-      return !lines.length && activity.length === log.length ? result : { ...result, model: { ...result.model, activity } }
+      return !line && activity.length === log.length ? result : { ...result, model: { ...result.model, activity } }
+    },
+    // A refused call is kept as activity too, with why; nothing else of the model changes.
+    refused(model, call, reason) {
+      const log = model.activity ?? []
+      const line = refusalOf(model, { ...call, path: kept(model, call.path) }, call.t ?? log.at(-1)?.when ?? 0, reason)
+
+      return line && { ...model, activity: record(log, line) }
     },
     absent: (model, path) => gone(model, path),
     view(model, path, actor): View | undefined {
@@ -601,7 +630,11 @@ export function shell(
       // At its own path a tab is read whole, its detail as ordinary values.
       return "broken" in seen ? { at: `${addressOf(tab)}${at.path === "/" ? "" : at.path}`, broken: seen.broken } : revealed(whole(seen.ok, addressOf(tab)))
     },
-    run: (c, send, signal) => held.get(c.surface)!.run(c.command, (event: { kind: string }) => send({ kind: "tab", n: c.n, event, t: Date.now() }), signal),
-    failed: (c, error) => ({ kind: "tab", n: c.n, event: held.get(c.surface)!.failed(c.command, error), t: Date.now() }),
+    run: (c, send, signal) => {
+      const from = origin(c)
+
+      return held.get(c.surface)!.run(c.command, (event: { kind: string }) => send({ kind: "tab", n: c.n, event, t: Date.now(), ...from }), signal)
+    },
+    failed: (c, error) => ({ kind: "tab", n: c.n, event: held.get(c.surface)!.failed(c.command, error), t: Date.now(), ...origin(c) }),
   })
 }

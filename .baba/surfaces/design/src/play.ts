@@ -305,13 +305,21 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
   let seen = 0
   const look = async () => {
     const root = await page("/")
-    const activity = (await page("/activity")) as { entries?: { n: number; who: string; surface: string; at: string | null; what: string }[] | string } | undefined
+    type Entry = { n: number; who: string; by?: string; surface: string; at: string | null; did?: string; times?: number; refused?: string; said?: string[] }
+    const activity = (await page("/activity")) as { entries?: Entry[] | string } | undefined
     const fresh = Array.isArray(activity?.entries) ? activity.entries.filter((e) => e.n > seen).reverse() : []
     const tabs = await Promise.all(tabsOf(root).map(async (t): Promise<Drawn> => ({ at: t.at, surface: t.surface, view: drawn(await page(t.at), t.at) })))
 
     seen = Math.max(seen, ...fresh.map((e) => e.n))
 
-    return { root, tabs, activity: fresh.map((e) => `activity: ${e.who} · ${e.surface} ${e.at ?? ""} · ${e.what}`) }
+    const line = (e: Entry) =>
+      [
+        `activity: ${e.who}${e.by ? ` ${e.by}` : ""} · ${e.surface} ${e.at ?? ""} · ${e.did ?? ""}${e.times ? ` ×${e.times}` : ""}`,
+        ...(e.refused !== undefined ? [`refused: ${e.refused}`] : []),
+        ...(e.said ?? []).map((s) => `said: ${s}`),
+      ].join(" · ")
+
+    return { root, tabs, activity: fresh.map(line) }
   }
   const tabOf = (root: Json | undefined, surface: string) => tabsOf(root).find((t) => t.surface === surface)?.at
   /**

@@ -291,11 +291,11 @@ it("carries the name a call's caller gave it, in the header, into the activity, 
   expect((await named("/tabs/1", { handle: "note", args: { text: "mine" } }, "lab:act-2")).status).toBe(200)
   await request("/tabs/1", { handle: "note", args: { text: "theirs" } }, true)
 
-  const rows = JSON.parse(await request("/activity", undefined, true)) as { entries: { what: string; who: string; id?: string }[] }
+  const rows = JSON.parse(await request("/activity", undefined, true)) as { entries: { did: string; said?: string[]; who: string; id?: string }[] }
 
-  expect(rows.entries.slice(0, 2).map(({ what, who, id }) => ({ what, who, id }))).toEqual([
-    { what: "noted theirs", who: "person", id: undefined },
-    { what: "noted mine", who: "person", id: "lab:act-2" },
+  expect(rows.entries.slice(0, 2).map(({ did, said, who, id }) => ({ did, said, who, id }))).toEqual([
+    { did: "note text=theirs", said: ["noted theirs"], who: "person", id: undefined },
+    { did: "note text=mine", said: ["noted mine"], who: "person", id: "lab:act-2" },
   ])
 })
 

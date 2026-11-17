@@ -529,12 +529,12 @@ describe("the shell surface", () => {
     await s.agent.call("/counter", "bump", { by: 1 })
     await s.person.call("/", "close", { n: 1 })
     await s.restart()
-    expect((s.agent.sees("/activity")!.entries as { what: string }[]).map((r) => r.what)).toEqual(["closed", "opened"])
+    expect((s.agent.sees("/activity")!.entries as { did: string }[]).map((r) => r.did)).toEqual(["close n=1", "open surface=counter"])
 
     const old = { n: 1, when: 0, who: "agent", surface: "counter", at: "/tabs/4", what: "bump by=1" }
     const kept = shell({ counter }, BABA).restore!({ tabs: [], next: 5, activity: [old, { ...old, n: 2, what: "closed", own: true }] })
 
-    expect(kept.activity!.map((e) => e.what)).toEqual(["closed"])
+    expect(kept.activity!.map((e) => e.did)).toEqual(["close"])
   })
 
   it("names tabs and paths, and refuses bad surface names", () => {
