@@ -2,6 +2,23 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.65.0
+
+Breaking: the kit is shadcn's primitives with one layer of opinions, and nothing else. What it no longer holds, and what to use instead:
+
+- `Workbench`, `Plain`, `Welcome` and their types: draw the page in the surface's own `ui/`, with the kit's `WorkbenchToolbar`, `WorkbenchSpacer`, `WorkbenchSegments`, `WorkbenchPage` and `WorkbenchEmpty` where they fit; `useNarrow` stays too.
+- `WorkbenchButton`, `WorkbenchProperties`, `WorkbenchCode`, `WorkbenchInfo`, `WorkbenchPicker`, `WorkbenchMark`, `WorkbenchMeter`, `WorkbenchNotice`, `WorkbenchSection`, `WorkbenchFold`, `WorkbenchSetting`, `WorkbenchList`, `WorkbenchTree`, `WorkbenchSplitter`, `Dismiss`, and the types `WorkbenchAction`, `WorkbenchChoice`, `WorkbenchIcon`, `WorkbenchFacts`, `WorkbenchOption`, `WorkbenchRow`, `WorkbenchGroup`, `WorkbenchNode`: write what you use in the surface's own folder. For a fold, `bunx shadcn@latest add collapsible` in `.baba/`; for a splitter, the kit's `ResizableHandle`; for a picker, the kit's `DropdownMenu`.
+- From `babavoss/kit/layouts/menu.tsx`: `MenuItems`, `SearchMenu`, `MenuDropdown`, `MenuTriggers`, `ContextKit`, `DropdownKit`, `menuContent`, `menuRow`, the `Menu` type and `muted`. A menu of actions in a page is the kit's `DropdownMenu`. `MenuItem`, `filtered`, `matches` and `quietScroll` stay.
+- From `babavoss/kit/layouts/parts.tsx`: `SearchField` and the class constants `muted`, `ring`, `iconButton` and `bar`.
+- `Command…`: `bunx shadcn@latest add command` in `.baba/`. `Sheet`, `SheetContent`, `SheetTitle`: `bunx shadcn@latest add sheet`.
+- `Toasts`, `TOAST_MS`, `ToastItem`: `useShell().toast(text, at?)`, a bubble beside the tab.
+- The conversation set, `Thread…`, `useThreadDetail`, `Composer`, `ComposerCompletion`, `Message…`, `Bubble…`, `MessageScroller…`, `useMessageScroller`, `Trace…`, `Marker…`, `CodeBlock…`, `InputGroup…`, `Collapsible…`: it is the lab's own now. Copy what you use from this repository's `.baba/surfaces/lab/ui/components/` into the surface's own `ui/`, or add shadcn's own with its CLI. A copied message scroller needs `bun add @shadcn/react` in `.baba/`.
+- The files `babavoss/kit/components/{command,sheet,toast,thread,composer,bubble,message,message-scroller,trace,marker,code-block,collapsible,input-group}.tsx`, `babavoss/kit/layouts/{workbench,plain,welcome}.tsx` and `babavoss/kit/layouts/arrange.ts` are gone.
+- `cmdk` and `@shadcn/react` are no longer the package's dependencies: a project that imports either adds it to `.baba/`.
+- The `.markdown-body` styles are gone from the kit's CSS: a page that renders markdown with that class styles it itself.
+
+To adapt: run `bun check` in `.baba/`; each import it cannot find is in the list above.
+
 ## 0.64.1
 
 - A tab's close, offered at `/`, names what runs in the tab beside its number: "close tab 3, Queue; its state is dropped". Home's menu, drawn from it, tells several tabs apart. The command is unchanged: `close n=3`.
