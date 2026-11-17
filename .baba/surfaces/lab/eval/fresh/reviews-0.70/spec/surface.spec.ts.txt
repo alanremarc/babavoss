@@ -1,0 +1,22 @@
+// The reviews surface's rules, as stories.
+import { expect, test } from "bun:test"
+import { story } from "babavoss/core/index.ts"
+import reviews from "../src/surface.ts"
+
+test("the agent drafts a review, and only the person may approve it", async () => {
+  const { agent, person } = story(reviews)
+
+  expect(await agent.call("/", "draft", { change: "#12", text: "Reads well.", verdict: "ship" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees()).toMatchObject({ attention: { who: "person" } })
+  expect(agent.offered("/reviews/1")).toEqual([])
+  expect(person.offered("/reviews/1")).toEqual(["approve", "reject"])
+  expect(await agent.call("/reviews/1", "approve", { id: 1 })).toMatchObject({ outcome: "refused" })
+  await person.call("/reviews/1", "approve", { id: 1 })
+  expect(agent.noticed()).toEqual(["Review 1 approved"])
+})
+
+test("a verdict that is none of ship, fix or drop is refused", async () => {
+  const { agent } = story(reviews)
+
+  expect(await agent.call("/", "draft", { change: "#12", text: "?", verdict: "maybe" })).toEqual({ outcome: "refused", reason: "verdict is ship, fix or drop" })
+})

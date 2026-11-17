@@ -6,14 +6,17 @@
 // read from the root's model as the run began and as it left it, and the task's check settles pass or fail. Each run is a
 // line of results.jsonl, its stream a transcript beside it; a table compares the variants. The scratch project, its home
 // and its root are ended and deleted whatever happens. A dry run plays each task's script in the agent's place through the
-// fake harness, against the same projects and roots, and spends nothing.
+// fake harness, against the same projects and roots, and spends nothing. A task that starts `fresh` has no fixture: its
+// project is one that only ran `baba init` from the variant, with the task's files, and what the agent left there is
+// looked at before it is deleted: the surfaces' files, their checks and specs, each surface opened and its page built,
+// and what the log heard once the rig, as the person, touched the files the task names.
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { fakeHarness, sessionEnv, serviceClient, NONE, type Harness, type HarnessEvent, type HarnessSession, type Tokens } from "babavoss/core/index.ts"
 import type { Work } from "./fixture/queue/src/surface.ts"
-import { COMPACT, type Act, type Call, type Dry, type Kind, type Shell, type Task } from "./tasks.ts"
+import { COMPACT, type Act, type Call, type Dry, type Fresh, type Kind, type Look, type Ran, type Shell, type Task } from "./tasks.ts"
 
 /** The checkout running the rig: the default variant, and where campaigns are written. */
 export const REPO = realpathSync(fileURLToPath(new URL("../../../../", import.meta.url)))
@@ -169,8 +172,144 @@ export function makePlace(variant: Variant, session: string, files: Record<strin
   return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
+/** Commits everything in `project` as one commit with `message`. */
+const commit = (project: string, message: string) => {
+  sh(["git", "add", "-A"], project)
+  sh(["git", "-c", "user.name=eval", "-c", "user.email=eval@lab.invalid", "commit", "-qm", message], project)
+}
+
+/**
+ * Makes a scratch project as a person would: a repository with a README, `baba init` run in it from the variant, then the
+ * task's files and its own; where they were written for an older release, they are committed first with `.baba/package.json` naming
+ * it, and the dependency set back to the variant in a commit after, as taking a release does. Its root is started.
+ */
+export function makeFresh(variant: Variant, session: string, fresh: Fresh, files: Record<string, string> = {}): Place {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-eval-")))
+  const project = join(dir, "project")
+  const home = join(dir, "home")
+  const baba = join(project, ".baba")
+  const env = envOf(project, home)
+
+  try {
+    mkdirSync(project, { recursive: true })
+    mkdirSync(join(home, ".babavoss"), { recursive: true })
+    writeFileSync(join(project, "README.md"), "# App\n\nA small app.\n")
+    sh(["git", "init", "-q"], project)
+    commit(project, "the project")
+    // The person's own package cache, read and filled by the install, so a run does not download the framework's dependencies.
+    sh(["bun", join(variant.path, "bin/baba.ts"), "init", "--from", `file:${variant.path}`], project, { ...env, BUN_INSTALL_CACHE_DIR: join(homedir(), ".bun/install/cache") })
+    // A release is a copy of the package, its dependencies beside it in .baba/node_modules; installed from a checkout, its
+    // files link back into it, where the checkout's own dependencies would be a second copy of every type. So it is copied.
+    rmSync(join(baba, "node_modules/babavoss"), { recursive: true, force: true })
+    sh(["rsync", "-a", "--exclude", "node_modules", "--exclude", ".git", "--exclude", ".babavoss", `${variant.path}/`, join(baba, "node_modules/babavoss/")], project)
+    mkdirSync(join(project, ".babavoss"), { recursive: true })
+    writeFileSync(join(project, ".babavoss/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
+    for (const [path, text] of Object.entries({ ...files, ...fresh.files })) {
+      mkdirSync(join(project, path, ".."), { recursive: true })
+      writeFileSync(join(project, path), text)
+    }
+    sh(["bun", "run", "baba", "provision"], baba, env)
+    if (fresh.was) {
+      const file = join(baba, "package.json")
+      const now = readFileSync(file, "utf8")
+
+      writeFileSync(file, now.replace(/"babavoss": "[^"]*"/, `"babavoss": "github:alanremarc/babavoss#v${fresh.was}"`))
+      commit(project, `surfaces on babavoss ${fresh.was}`)
+      writeFileSync(file, now)
+      commit(project, `take babavoss ${variant.version}`)
+    } else commit(project, "baba init")
+    sh(["bun", "run", "baba", "start", "--session", session], baba, env)
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true })
+    throw error
+  }
+
+  return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
+}
+
+/** A command's exit code and the end of what it said. */
+const ran = (cmd: string[], cwd: string, env: Record<string, string>, timeout = 120_000): Ran => {
+  const done = Bun.spawnSync(cmd, { cwd, env, stdout: "pipe", stderr: "pipe", timeout })
+
+  return { code: done.exitCode ?? -1, out: (done.stdout.toString() + done.stderr.toString()).trim().slice(-3000) }
+}
+
+/** Every file under `dir` but node_modules, by its path from `from`. */
+const filesUnder = (dir: string, from: string): Record<string, string> => {
+  const found: Record<string, string> = {}
+  const walk = (at: string) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const path = join(at, entry.name)
+
+      if (entry.name === "node_modules") continue
+      if (entry.isDirectory()) walk(path)
+      else if (entry.isFile()) found[path.slice(from.length + 1)] = readFileSync(path, "utf8")
+    }
+  }
+
+  try {
+    walk(dir)
+  } catch {}
+
+  return found
+}
+
+/**
+ * What the agent left in a fresh project, looked at with its root up: the surfaces' files and the task's own; `bun check`
+ * and the specs in .baba/; each surface opened after a restart, and the root's page built; then the files the task names
+ * touched as the person would by hand, and what the log heard of it, the world's entries.
+ */
+async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
+  const baba = join(place.project, ".baba")
+  const env = { ...place.env, TMPDIR: mkdtempSync(join(place.dir, "tmp-")) }
+  const word = (...args: string[]) => ran([".babavoss/bin/baba", "--session", place.session, ...args], place.project, place.env)
+  const surfaces = (() => {
+    try {
+      return readdirSync(join(baba, "surfaces"), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+    } catch {
+      return []
+    }
+  })()
+  const stale = /changed on disk/.test(word("/").out)
+  const check = ran(["bun", "check"], baba, env)
+  const test = ran(["bun", "test"], baba, env, 180_000)
+  const restart = word("restart")
+
+  if (/drains|restarts$/m.test(restart.out)) {
+    const id = /instance (\w+)/.exec(restart.out)?.[1]
+
+    if (id) word("follow", id, "30")
+  }
+
+  const opened = Object.fromEntries(surfaces.map((name) => [name, word("/", "open", `surface=${name}`).out]))
+  const page = ran(["bun", "node_modules/babavoss/framework/shell/scripts/build.ts", ".root", join(place.dir, "page")], baba, env)
+  const touched = Date.now()
+
+  for (const [path, change] of Object.entries(fresh.touch ?? {})) {
+    const file = join(place.project, path)
+
+    writeFileSync(file, change(readFileSync(file, "utf8")))
+    await Bun.sleep(1500)
+  }
+  if (fresh.touch) word("/")
+
+  const heard = (saved(place).model?.activity ?? []).filter((e) => e.who === "world" && (e.when ?? 0) >= touched)
+  const own = [".baba/baba.config.ts", ...Object.keys(task.files ?? {})].flatMap((p) => {
+    try {
+      return [[p, readFileSync(join(place.project, p), "utf8")] as const]
+    } catch {
+      return []
+    }
+  })
+  const files = { ...filesUnder(join(baba, "surfaces"), place.project), ...Object.fromEntries(own) }
+
+  return { surfaces, files, stale, check, test, opened, page, heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })) }
+}
+
 type Entry = {
+  when?: number
   who?: string
+  by?: string
   surface?: string
   own?: boolean
   refused?: string
@@ -224,6 +363,8 @@ const saved = (place: Place): Saved => {
     return {}
   }
 }
+/** The work a fresh project's check is given in place of the fixture's, which it has none of. */
+const BLANK: Work = { issues: [], narratives: [], next: 1, clock: 0 }
 /** The fixture's work in the root's model: its tab by its name. */
 const workOf = (s: Saved): Work | undefined => (s.model?.tabs?.find((t) => t.surface === SURFACE && t.named) ?? s.model?.tabs?.find((t) => t.surface === SURFACE))?.model as Work | undefined
 
@@ -529,8 +670,9 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   const session = crypto.randomUUID()
   const name = `${task.name}.${variant.label}.${n}.jsonl`
   const transcript = join(dir, "transcripts", name)
-  const place = makePlace(variant, session, task.files)
+  const place = task.fresh ? makeFresh(variant, session, task.fresh, task.files) : makePlace(variant, session, task.files)
   let ending: Ending = { events: [] }
+  let look: Look | undefined
   let seed: Work | undefined
   let final: Work | undefined
   let activity: Saved = {}
@@ -538,7 +680,7 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   const files: Record<string, string> = {}
 
   try {
-    seed = await openFixture(place, task.before)
+    seed = task.fresh ? BLANK : await openFixture(place, task.before)
     harness.home(place.home)
 
     const agent = harness.start({ project: place.project, home: place.home, session, model: options.model, budget: options.cap })
@@ -559,18 +701,19 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   } catch (error) {
     ending = { ...ending, ended: `the run failed: ${error instanceof Error ? error.message : String(error)}` }
   } finally {
+    if (task.fresh) look = await lookAt(place, task.fresh, task).catch(() => undefined)
     await closeRoot(place).catch(() => {})
     activity = saved(place)
     for (const path of Object.keys(task.files ?? {}))
       try {
         files[path] = readFileSync(join(place.project, path), "utf8")
       } catch {}
-    final = workOf(activity)
+    final = task.fresh ? BLANK : workOf(activity)
     clear(place, harness)
   }
 
   const m = measure(ending.events)
-  const verdict = seed && final ? task.check({ seed, final, answer: m.answer, shell: shellOf(activity), calls: m.calls, files }) : { pass: false, reason: "the fixture's work could not be read" }
+  const verdict = seed && final ? task.check({ seed, final, answer: m.answer, shell: shellOf(activity), calls: m.calls, files, ...(look && { look }) }) : { pass: false, reason: "the fixture's work could not be read" }
   const { answer, calls: _calls, ...measured } = m
 
   return {
