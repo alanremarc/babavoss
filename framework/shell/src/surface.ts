@@ -199,9 +199,7 @@ export function shell(
   // there again.
   const highlight = action({
     name: "highlight",
-    description:
-      "mark a place important to the person, why in one line: its tab is marked until they open its drawer; at is a tab's address, " +
-      "/NAME or /tabs/N, or a path below it; front=true also brings it to the front of their page",
+    description: "mark a place in a tab for the person, why in one line; front=true also brings it forward",
     subject: {},
     inputs: { at: "string", why: "string", front: "boolean" },
     update(model: ShellModel, { at, why, front }): Update<ShellModel, ShellCommand> {
