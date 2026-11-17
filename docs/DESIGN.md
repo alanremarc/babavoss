@@ -39,7 +39,8 @@ page       Shows the same surfaces to the person, at one address per session, op
               │  view at /         view at /a/1 │
    agent ─────┤    facts             facts      ├───── ui ───── person
    reads,     │    actions           actions    │      shows,
-   calls      │    whose decision: said in the view, raised in the conversation
+   calls      │                                 │      acts
+   world ─────┤  event: what it heard outside   │
               │                                 │
               │  update ──► notice ─────────────┼──► the log; the agent, once
               │              highlight ─────────┼──► the person: a bubble, a dot
@@ -49,8 +50,11 @@ page       Shows the same surfaces to the person, at one address per session, op
 ```text
 surface    What is true now and what can be done now, as a program. Shared and live.
 view       What a surface says at a path: facts, and the actions offered there.
-action     Something that can be done now, offered alike to the agent and the person.
+action     Something that can be done now, offered alike to the agent and the person: a name, a clause on what the name
+           does not say, and inputs that each say what they mean.
 fact       What stands: true until the surface says otherwise.
+world      What changes outside a surface: a file, a process, a service. A surface hears it by a command that lives with
+           the session, and the log names it as the one who acted.
 notice     What happened: one line an update gives, kept in its entry of the log and told once to the agent; in no view.
 highlight  A notice marked important to the person, by its surface or by the agent: a bubble, and a dot on its tab
            until they open its drawer.
@@ -92,7 +96,8 @@ present    The shell at /: every open tab's facts and actions, each with its com
 What the shell offers, it offers twice: on the page for the person, in the present for the agent.
 
 ```text
-home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's own, with the closed tabs under its thread
+home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's
+                own, with the closed tabs under its thread
 highlights      what the person should see, raised by a surface or by the agent: a bubble beside the tab for a moment, a
                 dot on it until its drawer is opened, standing out in its thread
 turn            whose move it is, said by the mark: its eyes look about while the agent works
@@ -104,7 +109,7 @@ frame           title, menus and a surface's actions, in the same place for ever
 theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
 settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
                 follow by convention, shortcuts, the mark's motion, how long closed tabs are kept; and clearing them
-health          what is broken, and why; a page that lost its runtime says so and finds it again
+health          what is broken, and why; a page whose runtime sleeps or is lost says so and finds it again
 ```
 
 ### A turn
@@ -122,9 +127,9 @@ health          what is broken, and why; a page that lost its runtime says so an
 State at boundaries, events in the flow.
 
 ```text
-             session start   on demand   the person's message   during work
-present      whole           whole       what changed           nothing
-notices      none yet        yes         yes                    yes
+             a start, a compaction   on demand   the agent's own call   the person's message   during work
+present      whole                   whole       what it changed        what changed           nothing
+notices      none yet                yes         yes                    yes                    yes
 ```
 
 ```text
@@ -163,6 +168,8 @@ framework  One version, named in .baba/. The agent is told of a later one, takes
 
 ```text
 shared    both act on the surface, at any time. A change by the person is a move to take up, never to undo
+held      the agent holds the state: it is given whole once, and every change after as a change. It reads again only
+          what it was never shown, so an action is one call
 learned   a surface is all an agent learns of how it works: its description to choose it, its views to work it; never
           what to do, which the person and their instructions say
 dynamic   a surface made, changed or removed runs once the shell restarts: at once in dev mode, else when the agent
@@ -175,10 +182,11 @@ soft      hooks add context and never block; a surface offers both sides the sam
 
 A surface of this repository. An agent that built something drives an agent that uses it, on a copy of the project as it is now, and reads everything that entered its context. The person watches both.
 
+Beside it, the rig: the same tasks given to a real agent on two checkouts, several times each, scored on whether the surface ended as asked, on what the agent was told and on what it did. A change to how a surface is shown is decided by it.
+
 ## Later
 
 ```text
-evals      scripted scenarios in the lab, scored on tokens and on what the agent did
 wrapper    a harness the page can start a turn in, through the adapter
 codex      its adapter is written from Codex's documents; run it against the real one
 systems    the mode of the machine is read on macOS only; an adapter each for the others
