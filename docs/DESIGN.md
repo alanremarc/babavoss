@@ -28,7 +28,8 @@ agent      Does the work.
 harness    Hosts the agent: Claude Code, Codex.
 session    One conversation of the harness.
 runtime    Holds the surfaces of a session: one state, changed by either side.
-page       Shows the same surfaces to the person, at one address per session.
+page       Shows the same surfaces to the person, at one address per session, opened by the link the agent gives:
+           the session's key, kept by the browser, so it outlives a restart.
 ```
 
 ### A surface

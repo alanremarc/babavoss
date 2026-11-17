@@ -2,6 +2,19 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.68.0
+
+Breaking: the page is opened only by its link.
+
+- The shell's answer names the page as `page: http://127.0.0.1:PORT/?key=…`: give the person that link whole. It opens the page in any browser, which then keeps a cookie for 30 days, so reloads and runtime restarts need nothing more. `localhost` and `127.0.0.1` each need the link once.
+- Opened without the key, the page says only that it is opened by the link its agent gives. A tab open before this release shows that once: give the person the link again.
+- The key is the session's, kept in its state directory as `page.key`, readable by its owner alone. Never write it into files, commits or notices.
+- A program that fetches the page or its `/_/` files sends the service token from `service.json` in the `babavoss-service` header, as it already does for reads and calls.
+- The runtime no longer sends the token back in answers, except to a request that carried it, and no longer replaces `%TOKEN%` in a root's `index.html`.
+- The client's `VERSION` is 16 and replaces itself.
+
+No surface code needs to change.
+
 ## 0.67.0
 
 Breaking: the shell no longer reloads its code under running work. There are two modes, each simple.
