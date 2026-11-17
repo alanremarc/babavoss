@@ -693,7 +693,9 @@ export function tally(out: string, runs: Run[], mode: "real" | "dry"): string {
 
 /** Runs a campaign: every task on every variant, `runs` times each, interleaved so drift falls on all variants alike. */
 export async function campaign(options: Options, harness: Harness, stop: AbortSignal): Promise<{ dir: string; runs: Run[]; skipped: string[] }> {
-  const id = new Date().toISOString().replace(/\.\d+Z$/, "").replaceAll(":", "-")
+  // Two campaigns begun in the same second each take a directory of their own.
+  const stamp = new Date().toISOString().replace(/\.\d+Z$/, "").replaceAll(":", "-")
+  const id = [stamp, ...Array.from({ length: 99 }, (_, i) => `${stamp}-${i + 2}`)].find((name) => !existsSync(join(options.out, name)))!
   const dir = join(options.out, id)
   const plan = Array.from({ length: options.runs }, (_, i) => i + 1).flatMap((n) => options.tasks.flatMap((task) => options.variants.map((variant) => ({ n, task, variant }))))
   const runs: Run[] = []
