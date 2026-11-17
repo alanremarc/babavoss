@@ -255,7 +255,7 @@ test("the fake harness is driven by the story: its stream is what is emitted, an
   ])
 })
 
-test("the plugin the package carries is of its version, has the skill baba's own words and their reminder, and the framework's hook for each of Claude Code's events", () => {
+test("the plugin the package carries is of its version, has the skill baba's own words, and the framework's hook for each of Claude Code's events", () => {
   const read = (path: string) => readFileSync(join(PLUGIN, path), "utf8")
   const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string; skills: string[] }
   const hooks = (JSON.parse(read("hooks/hooks.json")) as { hooks: Record<string, { hooks: { type: string; command: string }[] }[]> }).hooks
@@ -266,7 +266,6 @@ test("the plugin the package carries is of its version, has the skill baba's own
   // Its SKILL.md is the skill folder's, loaded as a skill of its own: loaded as a plugin by --plugin-dir, it is not a second skill.
   expect(manifest.skills).toEqual([])
   expect(read("SKILL.md")).toBe(readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8"))
-  expect(read("reminder.md")).toBe(readFileSync(new URL("../../skill/reminder.md", import.meta.url), "utf8"))
   expect(Object.keys(hooks)).toEqual([...CLAUDE_EVENTS])
   for (const groups of Object.values(hooks)) expect(groups).toEqual([{ hooks: [{ type: "command", command }] }])
 

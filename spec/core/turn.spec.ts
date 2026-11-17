@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "bun:test"
-import { hookContext, wordsFor } from "../../framework/core/hook.ts"
+import { hookContext, returning } from "../../framework/core/hook.ts"
 import type { HookEvent } from "../../framework/core/harness/harness.ts"
 import {
   answered,
@@ -66,34 +66,33 @@ test("no harness can be driven yet, so starting a turn says why it cannot", asyn
   expect(await startTurn("S", "take them up")).toEqual({ cannot: expect.stringContaining("send the agent a message") })
 })
 
-test("the words a start is given: whole where the agent has not had them, their reminder where it has", () => {
-  expect(wordsFor("startup")).toBe("whole")
-  expect(wordsFor("clear")).toBe("whole")
-  // Codex and Claude Code say the source; where a harness does not, the whole words.
-  expect(wordsFor(undefined)).toBe("whole")
-  expect(wordsFor("compact")).toBe("reminder")
-  expect(wordsFor("resume")).toBe("reminder")
-  expect(wordsFor("fork")).toBe("reminder")
+test("a start returns to a session that had the words where it was compacted, resumed or forked; a new or cleared one does not", () => {
+  expect(returning("startup")).toBe(false)
+  expect(returning("clear")).toBe(false)
+  // Codex and Claude Code say the source; where a harness does not, a start like any.
+  expect(returning(undefined)).toBe(false)
+  expect(returning("compact")).toBe(true)
+  expect(returning("resume")).toBe(true)
+  expect(returning("fork")).toBe(true)
 })
 
 test("a boundary is told once: a start that follows another with nothing heard between is given nothing again, as a compaction at once after a resume", async () => {
   const home = mkdtempSync(join(tmpdir(), "boundary-"))
   const was = { home: process.env.BABAVOSS_HOME, cwd: process.cwd() }
   const at = (moment: HookEvent["moment"], source?: HookEvent["source"]): HookEvent => ({ session: "B", event: moment, moment, ...(source && { source }) })
-  const reminder = readFileSync(new URL("../../skill/reminder.md", import.meta.url), "utf8").trim()
   const whole = readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
   // The words a start is given, before the shell's answer; or nothing.
   const told = async (event: HookEvent) => {
     const context = await hookContext(event, join(home, ".baba"))
 
-    return context && [reminder, whole].find((words) => context.startsWith(words))
+    return context && [whole].find((words) => context.startsWith(words))
   }
 
   process.env.BABAVOSS_HOME = home
   process.chdir(home)
   try {
-    // A resume, then a compaction at once and another, as Claude Code plays them: the reminder once.
-    expect(await told(at("SessionStart", "resume"))).toBe(reminder)
+    // A resume, then a compaction at once and another, as Claude Code plays them: the words again, once.
+    expect(await told(at("SessionStart", "resume"))).toBe(whole)
     expect(await told(at("SessionStart", "compact"))).toBeUndefined()
     expect(await told(at("SessionStart", "compact"))).toBeUndefined()
     // The session's end opens nothing: a resume after it is the same boundary still.
@@ -104,10 +103,10 @@ test("a boundary is told once: a start that follows another with nothing heard b
     expect(existsSync(join(home, "sessions/B/ended"))).toBe(false)
     // A message is heard: the next compaction is a boundary of its own; so after a tool call, or a stop.
     await told(at("UserPromptSubmit"))
-    expect(await told(at("SessionStart", "compact"))).toBe(reminder)
+    expect(await told(at("SessionStart", "compact"))).toBe(whole)
     for (const moment of ["PostToolUse", "Stop"] as const) {
       await told(at(moment))
-      expect(await told(at("SessionStart", "compact"))).toBe(reminder)
+      expect(await told(at("SessionStart", "compact"))).toBe(whole)
     }
     // A cleared context has nothing of them: it is given the words whole, whatever came before.
     expect(await told(at("SessionStart", "clear"))).toBe(whole)
