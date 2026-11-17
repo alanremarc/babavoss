@@ -22,7 +22,8 @@
 //   --turns     the most tool calls a run may make before it is ended, 40 by default
 //   --minutes   the most minutes a run may take, 10 by default
 //   --out       the campaigns' directory, .babavoss/eval in this checkout by default: each campaign a directory in it with
-//               results.jsonl, transcripts/ and table.txt, and tally.json counting the runs of every campaign
+//               results.jsonl, transcripts/ (with what the agent left in a fresh project, NAME.files.json) and table.txt,
+//               and tally.json counting the runs of every campaign
 //   --instruction  the install task's instruction, a file's text: fresh/install.md by default, the README's block when
 //               pointed at a file that holds it
 //   --dry       play each task's script through the fake harness instead of an agent: everything but the agent, for free

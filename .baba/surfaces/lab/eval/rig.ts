@@ -778,6 +778,8 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     ending = { ...ending, ended: `the run failed: ${error instanceof Error ? error.message : String(error)}` }
   } finally {
     if (task.fresh) look = await lookAt(place, task.fresh, task).catch(() => undefined)
+    // What the agent left, kept beside its transcript, so a verdict can be read against the files it judged.
+    if (look) writeFileSync(transcript.replace(/\.jsonl$/, ".files.json"), `${JSON.stringify(look.files, null, 2)}\n`)
     await closeRoot(place).catch(() => {})
     activity = saved(place)
     for (const path of Object.keys(task.files ?? {}))
