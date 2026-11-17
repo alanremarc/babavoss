@@ -1,6 +1,6 @@
 # Baba Voss
 
-Baba is a desk you share with your agent. Everything on it is a surface: a tool you both work with.
+Baba is a work surface you share with your agent.
 
 ```text
            agent ◄───── state ─────► surface
