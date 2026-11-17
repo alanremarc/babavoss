@@ -36,6 +36,8 @@ spec/border.spec.ts         the border: the package exports only its entries, an
                             internals this repository's own surfaces may reach, and why
 docs/DESIGN.md              the design
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
+.baba/surfaces/lab/eval/    the eval: a campaign of tasks run by headless agents on variants, checkouts, of a fixture surface; tokens and
+                            what the agent did, tabled; eval.ts is its command, --dry plays scripts through the fake harness for free
 .claude/skills/baba        provisioned from .baba/: a link to the plugin, which is this checkout's, so a harness started here runs it
 .agents/  .codex/hooks.json provisioned from .baba/: baba's skill and the framework's hook for Codex
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
