@@ -1,1269 +1,1177 @@
 <!doctype html>
-<!-- The site's one page, babavoss.org, for a person who has an agent and has not heard of Baba Voss: what it is in a line,
-     a picture of it, built of markup, one window with the chat they ask in and the surface they see, and the line they copy to
-     their agent. It says what the README says, without the parts for someone who installs by hand. -->
+<!-- The site's one page, babavoss.org: what Baba is in a line; a demo of it, built of markup and played by a script, a
+     harness's window with its chat and its browser; the line a person copies to their agent; and where the source is. -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Baba Voss</title>
-    <meta name="description" content="Baba is a work surface you share with your agent." />
-    <style>
-      :root {
-        color-scheme: light dark;
-        --bg: #faf9f7;
-        --fg: #1b1a19;
-        --muted: #6a655f;
-        --line: #e3dfd8;
-        --card: #ffffff;
-        --soft: #f1eee9;
-        --accent: #8a4a7d;
-        --accent-soft: #f3e6f0;
-        --good: #2f7d57;
-        --good-soft: #e2f2ea;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #151413;
-          --fg: #eceae6;
-          --muted: #9b958d;
-          --line: #2f2c29;
-          --card: #1d1c1a;
-          --soft: #252321;
-          --accent: #d39bc8;
-          --accent-soft: #3a2a37;
-          --good: #7fcfa5;
-          --good-soft: #1f3329;
-        }
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--fg);
-        font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-        -webkit-font-smoothing: antialiased;
-      }
-      main {
-        max-width: 54rem;
-        margin: 0 auto;
-        padding: 4rem 1rem 3rem;
-      }
-      h1 {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: 650;
-        letter-spacing: -0.01em;
-      }
-      .lede {
-        margin: 0.5rem 0 0;
-        font-size: 1.25rem;
-        color: var(--muted);
-      }
-      h2 {
-        margin: 3.5rem 0 0.75rem;
-        font-size: 1.125rem;
-        font-weight: 650;
-      }
-      p {
-        margin: 0 0 1rem;
-      }
-      .muted {
-        color: var(--muted);
-      }
-      a {
-        color: inherit;
-      }
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#231D1A">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ECE4D8">
+<title>Baba Voss</title>
+<meta name="description" content="Baba is a work surface you share with your agent.">
+<meta property="og:title" content="Baba Voss">
+<meta property="og:description" content="Baba is a work surface you share with your agent.">
+<meta property="og:url" content="https://babavoss.org/">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+  /* The Alan Remarc palette, walnut and linen, as on alanremarc.com: one family, told apart by the symbol. */
+  :root{
+    color-scheme: dark light;
+    --surface:#231D1A; --ink:#C2A47C; --text:#E3DACF; --muted:#A09485; --soft:#2E2723;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --surface:#ECE4D8; --ink:#634A38; --text:#332922; --muted:#6F6356; --soft:#E0D5C5; color-scheme:light }
+  }
+  :root[data-theme="light"]{ --surface:#ECE4D8; --ink:#634A38; --text:#332922; --muted:#6F6356; --soft:#E0D5C5; color-scheme:light }
+  :root[data-theme="dark"]{ --surface:#231D1A; --ink:#C2A47C; --text:#E3DACF; --muted:#A09485; --soft:#2E2723; color-scheme:dark }
+  /* The demo's colours, each from the palette, so it follows the theme. */
+  :root{
+    --bg:var(--surface); --fg:var(--text); --card:color-mix(in srgb, var(--surface), var(--soft) 55%);
+    --line:color-mix(in srgb, var(--text) 13%, var(--surface)); --accent:var(--ink); --accent-soft:color-mix(in srgb, var(--ink) 22%, var(--surface));
+  }
 
-      /* The demo: one window of two columns, the chat the person asks in and the surface they see, a video being cut. A
-         script plays it in three steps; without it, or where motion is reduced, it stands in its last state. */
-      .picture {
-        position: relative;
-        margin: 2.5rem 0 0;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--card);
-        overflow: hidden;
-        box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -16px rgb(0 0 0 / 0.18);
-      }
-      .bar {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid var(--line);
-      }
-      .bar i {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--line);
-      }
-      .bar b {
-        margin-left: 0.5rem;
-        font-size: 0.8125rem;
-        font-weight: 600;
-      }
-      .bar span {
-        overflow: hidden;
-        color: var(--muted);
-        font-size: 0.8125rem;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .cols {
-        display: grid;
-        grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
-      }
-      /* The chat: what the person asks, what the agent says. */
-      /* Each column has a head of one height: the chat's says the project it is in, the browser's its address. */
-      .pane-head {
-        display: flex;
-        flex: none;
-        align-items: center;
-        gap: 0.5rem;
-        height: 2.25rem;
-        padding: 0 0.75rem;
-        border-bottom: 1px solid var(--line);
-        color: var(--muted);
-        font: 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-        white-space: nowrap;
-      }
-      .pane-head > span:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .chat {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        border-right: 1px solid var(--line);
-        font-size: 0.875rem;
-      }
-      .talk {
-        display: flex;
-        flex: 1 1 0;
-        flex-direction: column;
-        min-height: 0;
-        padding: 1rem;
-      }
-      /* What was said, the newest at the foot: as more is said the oldest leaves at the top, and the window keeps its height. */
-      .log {
-        display: flex;
-        flex: 1 1 0;
-        flex-direction: column;
-        justify-content: flex-end;
-        gap: 0.5rem;
-        min-height: 0;
-        overflow: hidden;
-        mask-image: linear-gradient(to bottom, transparent, #000 1.5rem);
-      }
-      .say,
-      .used {
-        flex: none;
-      }
-      .say {
-        max-width: 92%;
-        padding: 0.5rem 0.75rem;
-        border-radius: 12px;
-        background: var(--soft);
-        animation: arrive 0.3s ease-out;
-      }
-      .say.you {
-        align-self: flex-end;
-        background: var(--accent-soft);
-      }
-      /* What the agent ran: one line each, as a harness shows a tool's use, cut where it is longer than the chat. */
-      .used {
-        overflow: hidden;
-        padding: 0 0.25rem;
-        color: var(--muted);
-        font: 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        animation: arrive 0.3s ease-out;
-      }
-      .ask {
-        display: flex;
-        flex: none;
-        justify-content: flex-end;
-        height: 2.25rem;
-        margin-top: 0.75rem;
-        padding: 0 0.75rem;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        font-size: 0.8125rem;
-        line-height: 2.125rem;
-        white-space: nowrap;
-        transition: border-color 0.2s;
-      }
-      .ask > span {
-        flex: none;
-        min-width: 100%;
-      }
-      .ask.on {
-        border-color: var(--accent);
-      }
-      .ask .hint {
-        color: var(--muted);
-      }
-      .ask.on .hint {
-        display: none;
-      }
-      .ask.on #typed::after {
-        content: "";
-        display: inline-block;
-        width: 1px;
-        height: 0.9em;
-        margin-left: 1px;
-        vertical-align: -0.1em;
-        background: var(--fg);
-        animation: blink 1s steps(2) infinite;
-      }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--surface); color:var(--text);
+    font-family:'IBM Plex Serif',Georgia,serif; font-size:18px; line-height:1.65;
+    min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+    padding:48px 0;
+    transition:background-color .2s ease,color .2s ease;
+  }
+  .wrap{width:100%; max-width:38rem; margin:0 auto; padding:0 24px}
+  /* The demo is wider than the words: its window needs the room. */
+  .wide{width:100%; max-width:56rem; margin:36px auto 0; padding:0 24px}
 
-      /* The surface: the video, its few controls, and two tracks: the music, and the video with its cuts. */
-      /* The right column: the harness's own browser, showing Baba's page: its rail of tabs, and the surface. */
-      .browser {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-      }
-      .browser .pane-head {
-        font-size: 0.875rem;
-      }
-      .url {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        padding: 0.25rem 0.625rem;
-        border-radius: 999px;
-        background: var(--soft);
-        font: 0.75rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
-        text-overflow: ellipsis;
-      }
-      .page {
-        display: flex;
-        flex: 1;
-        min-width: 0;
-      }
-      .rail {
-        display: flex;
-        flex: none;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5rem;
-        width: 2.25rem;
-        padding: 0.625rem 0;
-        border-right: 1px solid var(--line);
-      }
-      .rail span {
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-      }
-      /* Baba's mark: two eyes. */
-      .mark {
-        background:
-          radial-gradient(circle at 36% 50%, var(--bg) 0 2.2px, transparent 2.6px),
-          radial-gradient(circle at 64% 50%, var(--bg) 0 2.2px, transparent 2.6px), var(--fg);
-      }
-      .tab {
-        background: var(--accent-soft);
-        outline: 1.5px solid var(--accent);
-        opacity: 0;
-        transform: scale(0.6);
-        transition: opacity 0.3s, transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1);
-      }
-      .tab.on {
-        opacity: 1;
-        transform: none;
-      }
-      .surface {
-        position: relative;
-        flex: 1;
-        min-width: 0;
-        padding: 0.75rem;
-      }
-      /* Its stages: 0, no surface yet; 1, the first version the agent makes; 2, with what it adds when more is asked of it.
-         What a later stage adds keeps its room from the start, so the window never changes its height. */
-      .empty {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-content: center;
-        gap: 0.25rem;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.875rem;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.4s;
-      }
-      .empty b {
-        color: var(--fg);
-        font-size: 1rem;
-        font-weight: 600;
-      }
-      .built {
-        transition: opacity 0.5s;
-      }
-      .more {
-        opacity: 0;
-        transition: opacity 0.5s;
-      }
-      .surface[data-stage="0"] .empty {
-        opacity: 1;
-      }
-      .surface[data-stage="0"] .built {
-        opacity: 0;
-      }
-      .surface[data-stage="2"] .more {
-        opacity: 1;
-      }
-      /* What the fuller version has more: its tools, and a track of the effects. */
-      .tools {
-        display: flex;
-        gap: 0.375rem;
-        margin: 0 0 0.75rem;
-      }
-      .tools span {
-        padding: 0.125rem 0.5rem;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        color: var(--muted);
-        font-size: 0.75rem;
-      }
-      .lane.effects {
-        height: 1.25rem;
-      }
-      .effect {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        border-radius: 5px;
-        background: color-mix(in srgb, var(--accent) 55%, var(--accent-soft));
-        color: var(--card);
-        font-size: 0.6875rem;
-        font-weight: 650;
-        white-space: nowrap;
-        opacity: 0;
-        transform: scaleX(0.6);
-        transition: opacity 0.3s, transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
-      }
-      .effect.on {
-        opacity: 1;
-        transform: none;
-      }
-      .video {
-        position: relative;
-        aspect-ratio: 16 / 7;
-        border-radius: 10px;
-        overflow: hidden;
-        background: #111;
-      }
-      /* The photo shown: a sky over a hill, in the colours of its shot. */
-      .shot {
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, var(--a, #2b2440), var(--b, #5a3b63) 55%, var(--c, #c9826b));
-      }
-      .shot::before {
-        content: "";
-        position: absolute;
-        inset: auto -10% -45% -10%;
-        height: 80%;
-        border-radius: 50%;
-        background: rgb(20 16 30 / 0.5);
-      }
-      .video[data-shot="1"] .shot { --a: #17324a; --b: #2f6f86; --c: #9fd0c8; }
-      .video[data-shot="2"] .shot { --a: #4a2a17; --b: #a55f2c; --c: #f0c27a; }
-      .video[data-shot="3"] .shot { --a: #1d3a24; --b: #4f8a4a; --c: #d3e08e; }
-      .video[data-shot="4"] .shot { --a: #3d1836; --b: #9a3f78; --c: #f0a3b4; }
-      .video[data-shot="5"] .shot { --a: #12263f; --b: #3f5fa8; --c: #b9c8f2; }
-      .video[data-shot="6"] .shot { --a: #40201c; --b: #b0483c; --c: #f3b08f; }
-      .video[data-shot="7"] .shot { --a: #1f2f33; --b: #4d8a8f; --c: #e6d39a; }
-      .video[data-shot="8"] .shot { --a: #2f1d47; --b: #6f4bb3; --c: #e1b7f0; }
-      /* A collage: four photos at once. */
-      .tiles {
-        position: absolute;
-        inset: 0;
-        display: none;
-        grid-template-columns: 1.4fr 1fr;
-        grid-template-rows: 1fr 1fr;
-        gap: 3px;
-        background: #111;
-      }
-      .tiles i:nth-child(1) { grid-row: span 2; background: linear-gradient(135deg, #17324a, #2f6f86 55%, #9fd0c8); }
-      .tiles i:nth-child(2) { background: linear-gradient(135deg, #4a2a17, #a55f2c 55%, #f0c27a); }
-      .tiles i:nth-child(3) { background: linear-gradient(135deg, #1d3a24, #4f8a4a 55%, #d3e08e); }
-      .video.collage .tiles {
-        display: grid;
-      }
-      /* A slow zoom in, for as long as its photo shows. */
-      .video.zoom .shot {
-        animation: zoom 1.1s ease-in forwards;
-      }
-      .video.flash::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: #fff;
-        animation: flash 0.22s ease-out forwards;
-      }
-      .play {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 44px;
-        height: 44px;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: rgb(255 255 255 / 0.9);
-        transition: opacity 0.25s, transform 0.15s;
-      }
-      .play::after {
-        content: "";
-        position: absolute;
-        left: 18px;
-        top: 13px;
-        border: 9px solid transparent;
-        border-left: 14px solid #2b2440;
-        border-right: 0;
-      }
-      .play.down {
-        transform: translate(-50%, -50%) scale(0.88);
-      }
-      .playing .play {
-        opacity: 0;
-      }
-      .controls {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin: 0.625rem 0 0.5rem;
-        color: var(--muted);
-        font-size: 0.8125rem;
-        font-variant-numeric: tabular-nums;
-      }
-      .controls .push {
-        margin-left: auto;
-      }
-      .track {
-        display: grid;
-        grid-template-columns: 3rem minmax(0, 1fr);
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--muted);
-        font-size: 0.75rem;
-      }
-      .track + .track {
-        margin-top: 0.375rem;
-      }
-      .lane {
-        position: relative;
-        height: 1.75rem;
-      }
-      /* The music: a bar a sixteenth, tall on a beat. At rest only the beats show, as ticks; while it plays, the wave. */
-      .wave {
-        display: flex;
-        align-items: center;
-        gap: 1px;
-        height: 2rem;
-      }
-      .wave i {
-        flex: 1;
-        height: 2px;
-        border-radius: 1px;
-        background: var(--muted);
-        opacity: 0;
-        transition: height 0.35s ease-out, opacity 0.35s, background 0.1s;
-      }
-      .wave i.beat {
-        height: 40%;
-        opacity: 0.5;
-      }
-      .playing .wave i {
-        height: var(--h);
-        opacity: 0.4;
-      }
-      .playing .wave i.on {
-        background: var(--accent);
-        opacity: 1;
-      }
-      .wave i.hit {
-        animation: hit 0.3s ease-out;
-      }
-      /* The video's track: the photos, a cut where one gives way to the next; the parts the person selects, each lettered;
-         and what the agent makes of each: a collage, a cut on every beat, a zoom. */
-      .lane.video-lane {
-        margin-top: 0.875rem;
-      }
-      .clip {
-        position: absolute;
-        inset: 0;
-        border-radius: 6px;
-        background: var(--accent-soft);
-        border: 1px solid var(--accent);
-      }
-      .sel {
-        position: absolute;
-        top: -3px;
-        bottom: -3px;
-        width: 0;
-        border-radius: 6px;
-        outline: 1.5px solid transparent;
-        transition: background 0.3s, outline-color 0.3s;
-      }
-      .sel.on {
-        background: color-mix(in srgb, var(--accent) 28%, transparent);
-        outline-color: var(--accent);
-      }
-      .sel::before {
-        content: attr(data-letter);
-        position: absolute;
-        left: 0;
-        top: -1.0625rem;
-        min-width: 1rem;
-        padding: 0 0.25rem;
-        border-radius: 4px;
-        background: var(--accent);
-        color: var(--card);
-        font-size: 0.6875rem;
-        font-weight: 700;
-        line-height: 1rem;
-        text-align: center;
-        opacity: 0;
-        transition: opacity 0.2s;
-      }
-      .sel.named::before {
-        opacity: 1;
-      }
-      .split {
-        position: absolute;
-        top: -4px;
-        bottom: -4px;
-        width: 3px;
-        margin-left: -1.5px;
-        border-radius: 2px;
-        background: var(--fg);
-        opacity: 0;
-        transform: scaleY(0.2);
-        transition: opacity 0.2s, transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
-      }
-      .split.on {
-        opacity: 1;
-        transform: none;
-      }
-      .fx {
-        position: absolute;
-        top: 1px;
-        bottom: 1px;
-        border-radius: 5px;
-        opacity: 0;
-        transition: opacity 0.35s;
-      }
-      .fx.on {
-        opacity: 1;
-      }
-      /* A collage, drawn as its tiles. */
-      .fx.tiled {
-        background:
-          linear-gradient(var(--card), var(--card)) 58% 0 / 2px 100% no-repeat,
-          linear-gradient(var(--card), var(--card)) 100% 50% / 42% 2px no-repeat,
-          color-mix(in srgb, var(--accent) 45%, var(--accent-soft));
-      }
-      /* A zoom, drawn as a wedge that grows. */
-      .fx.grows {
-        background: color-mix(in srgb, var(--accent) 45%, var(--accent-soft));
-        clip-path: polygon(0 50%, 100% 0, 100% 100%);
-      }
-      .head {
-        position: absolute;
-        top: -3px;
-        bottom: -3px;
-        left: 0;
-        width: 2px;
-        margin-left: -1px;
-        background: var(--fg);
-        opacity: 0;
-      }
-      .playing .head {
-        opacity: 1;
-      }
-      .note {
-        min-height: 2rem;
-        margin-top: 0.75rem;
-        padding: 0.375rem 0.625rem;
-        border-left: 2px solid transparent;
-        color: var(--muted);
-        font-size: 0.8125rem;
-        transition: border-color 0.3s;
-      }
-      .note.on {
-        border-left-color: var(--accent);
-      }
+  header{padding:0 0 28px}
+  header .wrap{display:flex; align-items:center; justify-content:space-between}
+  .brand{display:flex; align-items:center; gap:9px; color:var(--ink); text-decoration:none; font:600 20px/1 'IBM Plex Mono',monospace}
+  .brand svg{height:20px; width:20px; display:block}
 
-      /* The person's cursor, played. */
-      .cursor {
-        position: absolute;
-        left: 0;
-        top: 0;
-        z-index: 2;
-        width: 18px;
-        height: 22px;
-        opacity: 0;
-        pointer-events: none;
-        transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s;
-        filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
-      }
-      .cursor.on {
-        opacity: 1;
-      }
-      .cursor.drag {
-        transition: transform 1s linear, opacity 0.3s;
-      }
+  .theme{width:28px; height:28px; border:0; background:transparent; color:var(--muted); cursor:pointer; display:grid; place-items:center; padding:0; border-radius:6px; margin-right:-6px}
+  .theme:hover{color:var(--ink)}
+  .theme:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+  .theme svg{width:16px; height:16px; display:none}
+  .theme .sun{display:block}
+  :root[data-theme="light"] .theme .sun{display:none}
+  :root[data-theme="light"] .theme .moon{display:block}
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]) .theme .sun{display:none}
+    :root:not([data-theme="dark"]) .theme .moon{display:block}
+  }
 
-      /* Under the window: the demo's sections, each played from when chosen, the one playing marked; and, once it has played
-         through, a way to play it all again. None changes its width, so nothing beside it moves. */
-      .steps {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.25rem;
-        min-height: 2rem;
-        margin: 0.75rem 0 0;
-      }
-      .steps button {
-        padding: 0.25rem 0.625rem;
-        border: 0;
-        border-radius: 999px;
-        background: none;
-        color: var(--muted);
-        font: inherit;
-        font-size: 0.8125rem;
-        cursor: pointer;
-        transition: background 0.2s, color 0.2s;
-      }
-      .steps button:hover {
-        color: var(--fg);
-      }
-      .steps button.on {
-        background: var(--soft);
-        color: var(--fg);
-      }
-      .steps #replay {
-        margin-left: auto;
-        text-decoration: underline;
-        text-underline-offset: 3px;
-        visibility: hidden;
-      }
-      .steps #replay.on {
-        background: none;
-        visibility: visible;
-        animation: arrive 0.4s ease-out;
-      }
-      @keyframes arrive {
-        from {
-          opacity: 0;
-          transform: translateY(4px);
-        }
-      }
-      @keyframes blink {
-        50% {
-          opacity: 0;
-        }
-      }
-      @keyframes flash {
-        from {
-          opacity: 0.55;
-        }
-        to {
-          opacity: 0;
-        }
-      }
-      @keyframes hit {
-        from {
-          transform: scaleY(1.6);
-        }
-      }
-      @keyframes zoom {
-        to {
-          transform: scale(1.35);
-        }
-      }
+  main{padding:0}
+  article p{margin:0; font-size:20px; line-height:1.7}
 
-      /* The line to copy. */
-      .copy {
-        display: flex;
-        align-items: stretch;
-        gap: 0.5rem;
-        padding: 0.5rem 0.5rem 0.5rem 1rem;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--card);
-      }
-      .copy p {
-        flex: 1;
-        margin: 0;
-        padding: 0.375rem 0;
-        font-size: 0.9375rem;
-        overflow-wrap: anywhere;
-      }
-      .copy button {
-        flex: none;
-        align-self: center;
-        padding: 0.4375rem 0.875rem;
-        border: 0;
-        border-radius: 8px;
-        background: var(--fg);
-        color: var(--bg);
-        font: inherit;
-        font-size: 0.875rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
+  .links{margin-top:36px; display:flex; flex-direction:column; gap:8px}
+  .links h2{margin:0 0 4px; font:600 14px/1.4 'IBM Plex Mono',monospace; color:var(--muted)}
+  .card{display:block; font-family:'IBM Plex Mono',monospace; background:var(--soft); border-radius:8px; padding:14px 16px; margin:0 -16px; color:inherit; text-decoration:none; transition:background-color .15s ease}
+  a.card:hover{background:color-mix(in srgb, var(--soft), var(--muted) 12%)}
+  .card-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; font-size:14px; margin:0 0 4px}
+  .card-head b{font-weight:600}
+  .card-head .go{margin-left:auto; color:var(--ink); font-size:13px}
+  .card-head button.go{border:0; background:none; padding:0; font-family:inherit; cursor:pointer}
+  .card-head button.go:hover{text-decoration:underline; text-underline-offset:3px}
+  .card p{margin:0; font-size:13px; line-height:1.6; color:var(--muted); overflow-wrap:anywhere}
+  .card p.quote{color:var(--text); font-size:14px}
 
-      /* What to ask for. */
-      .wishes {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-      }
-      .wishes section {
-        padding: 0.875rem 1rem;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--card);
-      }
-      .wishes h3 {
-        margin: 0 0 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 650;
-      }
-      .wishes ul {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-        font-size: 0.875rem;
-        color: var(--muted);
-      }
-      .wishes li + li {
-        margin-top: 0.5rem;
-      }
+  footer{padding:36px 0 0}
+  footer .wrap{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted)}
+  footer a{color:inherit; text-decoration:none}
+  footer a:hover{color:var(--ink)}
 
-      footer {
-        margin-top: 4rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--line);
-        color: var(--muted);
-        font-size: 0.875rem;
-      }
+  /* The demo is a picture of an app: it is set in the system's own face, not the page's. */
+  .picture, .steps{font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; line-height:1.55}
 
-      @media (max-width: 40rem) {
-        main {
-          padding-top: 2.5rem;
-        }
-        .cols,
-        .wishes {
-          grid-template-columns: 1fr;
-        }
-        .chat {
-          height: 15rem;
-          border-right: 0;
-          border-bottom: 1px solid var(--line);
-        }
-        .steps #replay {
-          margin-left: 0;
-        }
-        .copy {
-          flex-direction: column;
-          padding: 0.75rem;
-        }
-        .copy button {
-          align-self: stretch;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Baba Voss</h1>
-      <p class="lede">Baba is a work surface you share with your agent.</p>
+  /* The demo: one window of two columns, the chat the person asks in and the surface they see, a video being cut. A
+     script plays it in three steps; without it, or where motion is reduced, it stands in its last state. */
+  .picture {
+    position: relative;
+    margin: 2.5rem 0 0;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -16px rgb(0 0 0 / 0.18);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .bar i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line);
+  }
+  .bar b {
+    margin-left: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .bar span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+  }
+  /* The chat: what the person asks, what the agent says. */
+  /* Each column has a head of one height: the chat's says the project it is in, the browser's its address. */
+  .pane-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding: 0 0.75rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font: 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: nowrap;
+  }
+  .pane-head > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--line);
+    font-size: 0.875rem;
+  }
+  .talk {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    padding: 1rem;
+  }
+  /* What was said, the newest at the foot: as more is said the oldest leaves at the top, and the window keeps its height. */
+  .log {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    min-height: 0;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, transparent, #000 1.5rem);
+  }
+  .say,
+  .used {
+    flex: none;
+  }
+  .say {
+    max-width: 92%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    background: var(--soft);
+    animation: arrive 0.3s ease-out;
+  }
+  .say.you {
+    align-self: flex-end;
+    background: var(--accent-soft);
+  }
+  /* What the agent ran: one line each, as a harness shows a tool's use, cut where it is longer than the chat. */
+  .used {
+    overflow: hidden;
+    padding: 0 0.25rem;
+    color: var(--muted);
+    font: 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    animation: arrive 0.3s ease-out;
+  }
+  .ask {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    height: 2.25rem;
+    margin-top: 0.75rem;
+    padding: 0 0.75rem;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    line-height: 2.125rem;
+    white-space: nowrap;
+    transition: border-color 0.2s;
+  }
+  .ask > span {
+    flex: none;
+    min-width: 100%;
+  }
+  .ask.on {
+    border-color: var(--accent);
+  }
+  .ask .hint {
+    color: var(--muted);
+  }
+  .ask.on .hint {
+    display: none;
+  }
+  .ask.on #typed::after {
+    content: "";
+    display: inline-block;
+    width: 1px;
+    height: 0.9em;
+    margin-left: 1px;
+    vertical-align: -0.1em;
+    background: var(--fg);
+    animation: blink 1s steps(2) infinite;
+  }
 
-      <div class="picture" id="demo" role="img" aria-label="A demo, in your harness: a chat, and beside it a browser showing Baba, empty at first. You say you make slideshows with music and want the photos to change on the beat. Your agent makes a first surface for it: a video, the music, and a track of photos that change every two beats. You select three parts of the track, A, B and C, and ask for A as a collage, B with a cut on every beat, and C zooming in. The agent says the surface cannot do those yet, adds them to it, does each, and says so. Then you play it.">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><b>Your harness</b><span>Claude Code, Codex, OpenCode…</span></div>
-        <div class="cols" aria-hidden="true">
-          <div class="chat">
-            <div class="pane-head"><span>~/Projects/travel-videos</span></div>
-            <div class="talk">
-            <div class="log" id="log">
-              <div class="say you">I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”.</div>
-              <div class="used">baba new slideshow</div>
-              <div class="used">Write .baba/surfaces/slideshow/src/surface.ts</div>
-              <div class="used">baba / open surface=slideshow</div>
-              <div class="used">baba /slideshow new photos=Pictures/Lisbon track="Sunday Drive"</div>
-              <div class="say">Made a slideshow surface, and “Lisbon” on it: 8 photos, one every two beats.</div>
-              <div class="say you">A as a collage. B with a cut on every beat. C zooming in.</div>
-              <div class="say">The surface can't do those yet. I'll add layouts, cuts by beat and motion to it.</div>
-              <div class="used">Edit .baba/surfaces/slideshow/src/surface.ts</div>
-              <div class="used">Edit .baba/surfaces/slideshow/ui/index.tsx</div>
-              <div class="used">baba restart</div>
-              <div class="used">baba /slideshow/parts/A layout kind=collage</div>
-              <div class="used">baba /slideshow/parts/B cut every=beat</div>
-              <div class="used">baba /slideshow/parts/C motion kind=zoom-in</div>
-              <div class="say">Done. A is a collage, B changes on every beat, and C zooms in.</div>
-            </div>
-            <div class="ask" id="ask"><span><span id="typed"></span><span class="hint">Ask your agent…</span></span></div>
-            </div>
-          </div>
-          <div class="browser">
-            <div class="pane-head"><span>‹</span><span>›</span><span>↻</span><span class="url" id="url">localhost:57171/slideshow</span></div>
-            <div class="page">
-              <div class="rail"><span class="mark"></span><span class="tab on" id="tab"></span></div>
-              <div class="surface" id="surface" data-stage="2">
-                <div class="empty"><b>Nothing here yet</b><span>What your agent makes for you shows here.</span></div>
-                <div class="built">
-                  <div class="video" id="video">
-                    <span class="shot"></span><span class="tiles"><i></i><i></i><i></i></span><span class="play" id="play"></span>
-                  </div>
-                  <div class="controls"><span id="time">0:00 / 0:32</span><span class="push">Sunday Drive · 120 beats a minute</span></div>
-                  <div class="tools more"><span>Layout</span><span>Cuts</span><span>Motion</span></div>
-                  <div class="track">
-                    <span>Music</span>
-                    <div class="lane wave" id="wave"></div>
-                  </div>
-                  <div class="track">
-                    <span>Photos</span>
-                    <div class="lane video-lane" id="lane">
-                      <span class="clip"></span><span class="fx tiled on" id="fx-a" style="left: 12.5%; width: 25%"></span>
-                      <span class="sel named" id="sel-a" data-letter="A" style="left: 12.5%; width: 25%"></span><span class="sel named" id="sel-b" data-letter="B" style="left: 50%; width: 25%"></span
-                      ><span class="sel named" id="sel-c" data-letter="C" style="left: 87.5%; width: 12.5%"></span><span class="head" id="head"></span>
-                    </div>
-                  </div>
-                  <div class="track more">
-                    <span>Effects</span>
-                    <div class="lane effects">
-                      <span class="effect on" id="effect-a" style="left: 12.5%; width: 25%">Collage</span><span class="effect on" id="effect-b" style="left: 50%; width: 25%">Every beat</span
-                      ><span class="effect on" id="effect-c" style="left: 87.5%; width: 12.5%">Zoom</span>
-                    </div>
-                  </div>
-                  <div class="note on" id="note">A a collage, B on every beat, C zooming in.</div>
+  /* The surface: the video, its few controls, and two tracks: the music, and the video with its cuts. */
+  /* The right column: the harness's own browser, showing Baba's page: its rail of tabs, and the surface. */
+  .browser {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .browser .pane-head {
+    font-size: 0.875rem;
+  }
+  .url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+    background: var(--soft);
+    font: 0.75rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-overflow: ellipsis;
+  }
+  .page {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+  .rail {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 2.25rem;
+    padding: 0.625rem 0;
+    border-right: 1px solid var(--line);
+  }
+  .rail span {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+  }
+  /* Baba's mark: two eyes. */
+  .mark {
+    background:
+      radial-gradient(circle at 36% 50%, var(--bg) 0 2.2px, transparent 2.6px),
+      radial-gradient(circle at 64% 50%, var(--bg) 0 2.2px, transparent 2.6px), var(--fg);
+  }
+  .tab {
+    background: var(--accent-soft);
+    outline: 1.5px solid var(--accent);
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 0.3s, transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1);
+  }
+  .tab.on {
+    opacity: 1;
+    transform: none;
+  }
+  .surface {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    padding: 0.75rem;
+  }
+  /* Its stages: 0, no surface yet; 1, the first version the agent makes; 2, with what it adds when more is asked of it.
+     What a later stage adds keeps its room from the start, so the window never changes its height. */
+  .empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    gap: 0.25rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.875rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  .empty b {
+    color: var(--fg);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .built {
+    transition: opacity 0.5s;
+  }
+  .more {
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .surface[data-stage="0"] .empty {
+    opacity: 1;
+  }
+  .surface[data-stage="0"] .built {
+    opacity: 0;
+  }
+  .surface[data-stage="2"] .more {
+    opacity: 1;
+  }
+  /* What the fuller version has more: its tools, and a track of the effects. */
+  .tools {
+    display: flex;
+    gap: 0.375rem;
+    margin: 0 0 0.75rem;
+  }
+  .tools span {
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .lane.effects {
+    height: 1.25rem;
+  }
+  .effect {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--accent) 55%, var(--accent-soft));
+    color: var(--card);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    white-space: nowrap;
+    opacity: 0;
+    transform: scaleX(0.6);
+    transition: opacity 0.3s, transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+  }
+  .effect.on {
+    opacity: 1;
+    transform: none;
+  }
+  .video {
+    position: relative;
+    aspect-ratio: 16 / 7;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #111;
+  }
+  /* The photo shown: a sky over a hill, in the colours of its shot. */
+  .shot {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--a, #2b2440), var(--b, #5a3b63) 55%, var(--c, #c9826b));
+  }
+  .shot::before {
+    content: "";
+    position: absolute;
+    inset: auto -10% -45% -10%;
+    height: 80%;
+    border-radius: 50%;
+    background: rgb(20 16 30 / 0.5);
+  }
+  .video[data-shot="1"] .shot { --a: #17324a; --b: #2f6f86; --c: #9fd0c8; }
+  .video[data-shot="2"] .shot { --a: #4a2a17; --b: #a55f2c; --c: #f0c27a; }
+  .video[data-shot="3"] .shot { --a: #1d3a24; --b: #4f8a4a; --c: #d3e08e; }
+  .video[data-shot="4"] .shot { --a: #3d1836; --b: #9a3f78; --c: #f0a3b4; }
+  .video[data-shot="5"] .shot { --a: #12263f; --b: #3f5fa8; --c: #b9c8f2; }
+  .video[data-shot="6"] .shot { --a: #40201c; --b: #b0483c; --c: #f3b08f; }
+  .video[data-shot="7"] .shot { --a: #1f2f33; --b: #4d8a8f; --c: #e6d39a; }
+  .video[data-shot="8"] .shot { --a: #2f1d47; --b: #6f4bb3; --c: #e1b7f0; }
+  /* A collage: four photos at once. */
+  .tiles {
+    position: absolute;
+    inset: 0;
+    display: none;
+    grid-template-columns: 1.4fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 3px;
+    background: #111;
+  }
+  .tiles i:nth-child(1) { grid-row: span 2; background: linear-gradient(135deg, #17324a, #2f6f86 55%, #9fd0c8); }
+  .tiles i:nth-child(2) { background: linear-gradient(135deg, #4a2a17, #a55f2c 55%, #f0c27a); }
+  .tiles i:nth-child(3) { background: linear-gradient(135deg, #1d3a24, #4f8a4a 55%, #d3e08e); }
+  .video.collage .tiles {
+    display: grid;
+  }
+  /* A slow zoom in, for as long as its photo shows. */
+  .video.zoom .shot {
+    animation: zoom 1.1s ease-in forwards;
+  }
+  .video.flash::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    animation: flash 0.22s ease-out forwards;
+  }
+  .play {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: rgb(255 255 255 / 0.9);
+    transition: opacity 0.25s, transform 0.15s;
+  }
+  .play::after {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: 13px;
+    border: 9px solid transparent;
+    border-left: 14px solid #2b2440;
+    border-right: 0;
+  }
+  .play.down {
+    transform: translate(-50%, -50%) scale(0.88);
+  }
+  .playing .play {
+    opacity: 0;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.625rem 0 0.5rem;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .controls .push {
+    margin-left: auto;
+  }
+  .track {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .track + .track {
+    margin-top: 0.375rem;
+  }
+  .lane {
+    position: relative;
+    height: 1.75rem;
+  }
+  /* The music: a bar a sixteenth, tall on a beat. At rest only the beats show, as ticks; while it plays, the wave. */
+  .wave {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    height: 2rem;
+  }
+  .wave i {
+    flex: 1;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--muted);
+    opacity: 0;
+    transition: height 0.35s ease-out, opacity 0.35s, background 0.1s;
+  }
+  .wave i.beat {
+    height: 40%;
+    opacity: 0.5;
+  }
+  .playing .wave i {
+    height: var(--h);
+    opacity: 0.4;
+  }
+  .playing .wave i.on {
+    background: var(--accent);
+    opacity: 1;
+  }
+  .wave i.hit {
+    animation: hit 0.3s ease-out;
+  }
+  /* The video's track: the photos, a cut where one gives way to the next; the parts the person selects, each lettered;
+     and what the agent makes of each: a collage, a cut on every beat, a zoom. */
+  .lane.video-lane {
+    margin-top: 0.875rem;
+  }
+  .clip {
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+  }
+  .sel {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 0;
+    border-radius: 6px;
+    outline: 1.5px solid transparent;
+    transition: background 0.3s, outline-color 0.3s;
+  }
+  .sel.on {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+    outline-color: var(--accent);
+  }
+  .sel::before {
+    content: attr(data-letter);
+    position: absolute;
+    left: 0;
+    top: -1.0625rem;
+    min-width: 1rem;
+    padding: 0 0.25rem;
+    border-radius: 4px;
+    background: var(--accent);
+    color: var(--card);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1rem;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .sel.named::before {
+    opacity: 1;
+  }
+  .split {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 3px;
+    margin-left: -1.5px;
+    border-radius: 2px;
+    background: var(--fg);
+    opacity: 0;
+    transform: scaleY(0.2);
+    transition: opacity 0.2s, transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .split.on {
+    opacity: 1;
+    transform: none;
+  }
+  .fx {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    border-radius: 5px;
+    opacity: 0;
+    transition: opacity 0.35s;
+  }
+  .fx.on {
+    opacity: 1;
+  }
+  /* A collage, drawn as its tiles. */
+  .fx.tiled {
+    background:
+      linear-gradient(var(--card), var(--card)) 58% 0 / 2px 100% no-repeat,
+      linear-gradient(var(--card), var(--card)) 100% 50% / 42% 2px no-repeat,
+      color-mix(in srgb, var(--accent) 45%, var(--accent-soft));
+  }
+  /* A zoom, drawn as a wedge that grows. */
+  .fx.grows {
+    background: color-mix(in srgb, var(--accent) 45%, var(--accent-soft));
+    clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  }
+  .head {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    left: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--fg);
+    opacity: 0;
+  }
+  .playing .head {
+    opacity: 1;
+  }
+  /* The person's cursor, played. */
+  .cursor {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    width: 18px;
+    height: 22px;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s;
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+  }
+  .cursor.on {
+    opacity: 1;
+  }
+  .cursor.drag {
+    transition: transform 1s linear, opacity 0.3s;
+  }
+
+  /* Under the window: the demo's sections, each played from when chosen, the one playing marked; and, once it has played
+     through, a way to play it all again. None changes its width, so nothing beside it moves. */
+  .steps {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    min-height: 2rem;
+    margin: 0.75rem 0 0;
+  }
+  .steps button {
+    padding: 0.25rem 0.625rem;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .steps button:hover {
+    color: var(--fg);
+  }
+  .steps button.on {
+    background: var(--soft);
+    color: var(--fg);
+  }
+  .steps #replay {
+    margin-left: auto;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    visibility: hidden;
+  }
+  .steps #replay.on {
+    background: none;
+    visibility: visible;
+    animation: arrive 0.4s ease-out;
+  }
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes flash {
+    from {
+      opacity: 0.55;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes hit {
+    from {
+      transform: scaleY(1.6);
+    }
+  }
+  @keyframes zoom {
+    to {
+      transform: scale(1.35);
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .cols {
+      grid-template-columns: 1fr;
+    }
+    .chat {
+      height: 15rem;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .steps #replay {
+      margin-left: 0;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Baba Voss">
+      <!-- The symbol: two eyes, one larger, glancing right, knocked out of a circle of ink. -->
+      <svg viewBox="0 0 100 100" aria-hidden="true"><mask id="eyes"><rect width="100" height="100" fill="#fff"/><circle cx="39.772" cy="50" r="18" fill="#000"/><circle cx="77.5" cy="50" r="12.728" fill="#000"/></mask><circle cx="50" cy="50" r="50" fill="currentColor" mask="url(#eyes)"/></svg>
+      <span>Baba Voss</span>
+    </a>
+    <button class="theme" id="theme" type="button" aria-label="Switch to light theme" title="Theme">
+      <svg class="sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      <svg class="moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <article class="wrap">
+    <p><strong>Baba</strong> is a work surface you share with your agent.</p>
+  </article>
+
+  <div class="wide">
+  <div class="picture" id="demo" role="img" aria-label="A demo, in your harness: a chat, and beside it a browser showing Baba, empty at first. You say you make slideshows with music and want the photos to change on the beat. Your agent makes a first surface for it: a video, the music, and a track of photos that change every two beats. You select three parts of the track, A, B and C, and ask for A as a collage, B with a cut on every beat, and C zooming in. The agent says the surface cannot do those yet, adds them to it, does each, and says so. Then you play it.">
+    <div class="bar" aria-hidden="true"><i></i><i></i><i></i><b>Your harness</b><span>Claude Code, Codex, OpenCode…</span></div>
+    <div class="cols" aria-hidden="true">
+      <div class="chat">
+        <div class="pane-head"><span>~/Projects/travel-videos</span></div>
+        <div class="talk">
+        <div class="log" id="log">
+          <div class="say you">I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”.</div>
+          <div class="used">baba new slideshow</div>
+          <div class="used">Write .baba/surfaces/slideshow/src/surface.ts</div>
+          <div class="used">baba / open surface=slideshow</div>
+          <div class="used">baba /slideshow new photos=Pictures/Lisbon track="Sunday Drive"</div>
+          <div class="say">Made a slideshow surface, and “Lisbon” on it: 8 photos, one every two beats.</div>
+          <div class="say you">A as a collage. B with a cut on every beat. C zooming in.</div>
+          <div class="say">The surface can't do those yet. I'll add layouts, cuts by beat and motion to it.</div>
+          <div class="used">Edit .baba/surfaces/slideshow/src/surface.ts</div>
+          <div class="used">Edit .baba/surfaces/slideshow/ui/index.tsx</div>
+          <div class="used">baba restart</div>
+          <div class="used">baba /slideshow/parts/A layout kind=collage</div>
+          <div class="used">baba /slideshow/parts/B cut every=beat</div>
+          <div class="used">baba /slideshow/parts/C motion kind=zoom-in</div>
+          <div class="say">Done. A is a collage, B changes on every beat, and C zooms in.</div>
+        </div>
+        <div class="ask" id="ask"><span><span id="typed"></span><span class="hint">Ask your agent…</span></span></div>
+        </div>
+      </div>
+      <div class="browser">
+        <div class="pane-head"><span>‹</span><span>›</span><span>↻</span><span class="url" id="url">localhost:57171/slideshow</span></div>
+        <div class="page">
+          <div class="rail"><span class="mark"></span><span class="tab on" id="tab"></span></div>
+          <div class="surface" id="surface" data-stage="2">
+            <div class="empty"><b>Nothing here yet</b><span>What your agent makes for you shows here.</span></div>
+            <div class="built">
+              <div class="video" id="video">
+                <span class="shot"></span><span class="tiles"><i></i><i></i><i></i></span><span class="play" id="play"></span>
+              </div>
+              <div class="controls"><span id="time">0:00 / 0:32</span><span class="push">Sunday Drive · 120 beats a minute</span></div>
+              <div class="tools more"><span>Layout</span><span>Cuts</span><span>Motion</span></div>
+              <div class="track">
+                <span>Music</span>
+                <div class="lane wave" id="wave"></div>
+              </div>
+              <div class="track">
+                <span>Photos</span>
+                <div class="lane video-lane" id="lane">
+                  <span class="clip"></span><span class="fx tiled on" id="fx-a" style="left: 12.5%; width: 25%"></span>
+                  <span class="sel named" id="sel-a" data-letter="A" style="left: 12.5%; width: 25%"></span><span class="sel named" id="sel-b" data-letter="B" style="left: 50%; width: 25%"></span
+                  ><span class="sel named" id="sel-c" data-letter="C" style="left: 87.5%; width: 12.5%"></span><span class="head" id="head"></span>
+                </div>
+              </div>
+              <div class="track more">
+                <span>Effects</span>
+                <div class="lane effects">
+                  <span class="effect on" id="effect-a" style="left: 12.5%; width: 25%">Collage</span><span class="effect on" id="effect-b" style="left: 50%; width: 25%">Every beat</span
+                  ><span class="effect on" id="effect-c" style="left: 87.5%; width: 12.5%">Zoom</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <svg class="cursor" id="cursor" viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 7 2.8-1.2-3-6.9H15z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round" /></svg>
       </div>
-      <p class="steps" id="steps">
-        <button type="button" data-step="1">1 · Say what you need</button><button type="button" data-step="2">2 · Your agent makes it</button
-        ><button type="button" data-step="3">3 · Ask for more</button><button type="button" data-step="4">4 · It grows</button><button type="button" data-step="5">5 · Play</button
-        ><button type="button" id="replay">Replay demo</button>
-      </p>
+    </div>
+    <svg class="cursor" id="cursor" viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 7 2.8-1.2-3-6.9H15z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round" /></svg>
+  </div>
+  <p class="steps" id="steps">
+    <button type="button" data-step="1">1 · Say what you need</button><button type="button" data-step="2">2 · Your agent makes it</button
+    ><button type="button" data-step="3">3 · Ask for more</button><button type="button" data-step="4">4 · It grows</button><button type="button" data-step="5">5 · Play</button
+    ><button type="button" id="replay">Replay demo</button>
+  </p>
+  </div>
 
-      <h2>How it works</h2>
-      <p>You keep talking to your agent as you do now. Baba gives the work a place of its own: a page where you see what the agent sees, as it changes.</p>
-      <p class="muted">You can act on the page too. The agent is told what you did, and builds on it.</p>
+  <section class="wrap links">
+    <h2>Getting started</h2>
+    <div class="card">
+      <div class="card-head"><b>Copy this to your agent</b><button class="go" id="copy" type="button" aria-live="polite">Copy</button></div>
+      <p class="quote" id="prompt">Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.</p>
+    </div>
+    <a class="card" href="https://github.com/alanremarc/babavoss">
+      <div class="card-head"><b>Source</b><span class="go">github.com/alanremarc/babavoss →</span></div>
+      <p>Open source, Apache 2.0. Built and measured with Claude Code; set up for Codex too.</p>
+    </a>
+  </section>
+</main>
 
-      <h2>Getting started</h2>
-      <p>You need a coding agent, such as Claude Code. Copy this to it, in the project you want Baba in:</p>
-      <div class="copy">
-        <p id="prompt">Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.</p>
-        <button type="button" id="copy" aria-live="polite">Copy</button>
-      </div>
+<footer>
+  <div class="wrap"><a href="https://alanremarc.com">alanremarc.com</a></div>
+</footer>
 
-      <h2>Then say what you want</h2>
-      <p>In your own words. “I want a surface…”</p>
-      <div class="wishes">
-        <section>
-          <h3>Software development</h3>
-          <ul>
-            <li>…that tracks what still blocks the next release.</li>
-            <li>…that lists every failing test with the change that broke it.</li>
-            <li>…where I approve your database changes one by one.</li>
-          </ul>
-        </section>
-        <section>
-          <h3>Running a business</h3>
-          <ul>
-            <li>…that matches each month's payments to our invoices.</li>
-            <li>…that shows which subscriptions we pay for and when each renews.</li>
-            <li>…that keeps every open customer request with who answers it.</li>
-          </ul>
-        </section>
-        <section>
-          <h3>Research and writing</h3>
-          <ul>
-            <li>…that collects the papers we read, with your summary and my verdict.</li>
-            <li>…that compares five interviews answer by answer.</li>
-            <li>…that tracks each chapter's draft, its open questions and its sources.</li>
-          </ul>
-        </section>
-      </div>
-      <p class="muted" style="margin-top: 1rem">Your agent builds it and opens it on your page.</p>
+<script>
+(function(){
+  var btn=document.getElementById("theme"), root=document.documentElement, mq=matchMedia("(prefers-color-scheme: light)");
+  function current(){ return root.dataset.theme || (mq.matches?"light":"dark"); }
+  function label(){ btn.setAttribute("aria-label", current()==="dark" ? "Switch to light theme" : "Switch to dark theme"); }
+  btn.addEventListener("click", function(){
+    var next = current()==="dark" ? "light" : "dark";
+    if ((next==="light")===mq.matches) { delete root.dataset.theme; try{localStorage.removeItem("theme")}catch(e){} }
+    else { root.dataset.theme = next; try{localStorage.setItem("theme", next)}catch(e){} }
+    label();
+  });
+  mq.addEventListener("change", label);
+  label();
+})();
+</script>
+<script>
+  // The line to copy.
+  const button = document.getElementById("copy")
 
-      <footer>
-        Early, and still changing. <a href="https://github.com/alanremarc/babavoss">Source</a> · <a href="https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md">Design</a> ·
-        <a href="/llms.txt">For agents</a> · Apache 2.0
-      </footer>
-    </main>
-    <script>
-      // The line to copy.
-      const button = document.getElementById("copy")
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById("prompt").textContent)
+      button.textContent = "Copied"
+    } catch {
+      button.textContent = "Select the line"
+    }
+    setTimeout(() => (button.textContent = "Copy"), 2000)
+  })
 
-      button.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(document.getElementById("prompt").textContent)
-          button.textContent = "Copied"
-        } catch {
-          button.textContent = "Select the line"
-        }
-        setTimeout(() => (button.textContent = "Copy"), 2000)
-      })
+  // The demo, played. The page as served is its last state. It plays from an empty Baba, in five sections: the person
+  // says what they need; the agent makes a first surface; the person selects three parts and asks for more; the agent
+  // adds to the surface what it lacked and does each; the person plays it. It plays once as it comes into view, and
+  // from any section when that section is chosen under the window.
+  const $ = (id) => document.getElementById(id)
+  const demo = $("demo")
+  const cursor = $("cursor")
+  const [log, ask, typed, url, tab, surface, video, play, time, wave, lane, head, steps, replay] = [
+    "log", "ask", "typed", "url", "tab", "surface", "video", "play", "time", "wave", "lane", "head", "steps", "replay",
+  ].map($)
+  const BARS = 64
+  // What is said and what is run, in order, by section.
+  const NEED = "I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”."
+  const MADE = ["baba new slideshow", "Write .baba/surfaces/slideshow/src/surface.ts", "baba / open surface=slideshow"]
+  const BEGUN = 'baba /slideshow new photos=Pictures/Lisbon track="Sunday Drive"'
+  const FIRST = "Made a slideshow surface, and “Lisbon” on it: 8 photos, one every two beats."
+  const MORE = "A as a collage. B with a cut on every beat. C zooming in."
+  const LACKS = "The surface can't do those yet. I'll add layouts, cuts by beat and motion to it."
+  const GROWN = ["Edit .baba/surfaces/slideshow/src/surface.ts", "Edit .baba/surfaces/slideshow/ui/index.tsx", "baba restart"]
+  const DONE = "Done. A is a collage, B changes on every beat, and C zooms in."
+  // The parts the person selects, by where they start and end on the track, from 0 to 1; and what the agent does to each.
+  const PARTS = [
+    { letter: "A", from: 0.125, to: 0.375, ran: "baba /slideshow/parts/A layout kind=collage", is: "A is a collage." },
+    { letter: "B", from: 0.5, to: 0.75, ran: "baba /slideshow/parts/B cut every=beat", is: "B changes on every beat." },
+    { letter: "C", from: 0.875, to: 1, ran: "baba /slideshow/parts/C motion kind=zoom-in", is: "C zooms in." },
+  ].map((part) => ({ ...part, sel: $(`sel-${part.letter.toLowerCase()}`), effect: $(`effect-${part.letter.toLowerCase()}`) }))
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches
+  let run = 0
 
-      // The demo, played. The page as served is its last state. It plays from an empty Baba, in five sections: the person
-      // says what they need; the agent makes a first surface; the person selects three parts and asks for more; the agent
-      // adds to the surface what it lacked and does each; the person plays it. It plays once as it comes into view, and
-      // from any section when that section is chosen under the window.
-      const $ = (id) => document.getElementById(id)
-      const demo = $("demo")
-      const cursor = $("cursor")
-      const [log, ask, typed, url, tab, surface, video, play, time, wave, lane, head, note, steps, replay] = [
-        "log", "ask", "typed", "url", "tab", "surface", "video", "play", "time", "wave", "lane", "head", "note", "steps", "replay",
-      ].map($)
-      const BARS = 64
-      // What is said and what is run, in order, by section.
-      const NEED = "I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”."
-      const MADE = ["baba new slideshow", "Write .baba/surfaces/slideshow/src/surface.ts", "baba / open surface=slideshow"]
-      const BEGUN = 'baba /slideshow new photos=Pictures/Lisbon track="Sunday Drive"'
-      const FIRST = "Made a slideshow surface, and “Lisbon” on it: 8 photos, one every two beats."
-      const MORE = "A as a collage. B with a cut on every beat. C zooming in."
-      const LACKS = "The surface can't do those yet. I'll add layouts, cuts by beat and motion to it."
-      const GROWN = ["Edit .baba/surfaces/slideshow/src/surface.ts", "Edit .baba/surfaces/slideshow/ui/index.tsx", "baba restart"]
-      const DONE = "Done. A is a collage, B changes on every beat, and C zooms in."
-      // The parts the person selects, by where they start and end on the track, from 0 to 1; and what the agent does to each.
-      const PARTS = [
-        { letter: "A", from: 0.125, to: 0.375, ran: "baba /slideshow/parts/A layout kind=collage", is: "A is a collage." },
-        { letter: "B", from: 0.5, to: 0.75, ran: "baba /slideshow/parts/B cut every=beat", is: "B changes on every beat." },
-        { letter: "C", from: 0.875, to: 1, ran: "baba /slideshow/parts/C motion kind=zoom-in", is: "C zooms in." },
-      ].map((part) => ({ ...part, sel: $(`sel-${part.letter.toLowerCase()}`), effect: $(`effect-${part.letter.toLowerCase()}`) }))
-      const still = matchMedia("(prefers-reduced-motion: reduce)").matches
-      let run = 0
+  // The music's wave: a bar a sixteenth, tall on a beat and falling after it.
+  for (let i = 0; i < BARS; i++) {
+    const bar = document.createElement("i")
+    const after = i % 4
+    const height = [100, 46, 64, 30][after] - ((i * 7) % 5) * 4
 
-      // The music's wave: a bar a sixteenth, tall on a beat and falling after it.
-      for (let i = 0; i < BARS; i++) {
-        const bar = document.createElement("i")
-        const after = i % 4
-        const height = [100, 46, 64, 30][after] - ((i * 7) % 5) * 4
+    if (after === 0) bar.className = "beat"
+    bar.style.setProperty("--h", `${height}%`)
+    wave.append(bar)
+  }
 
-        if (after === 0) bar.className = "beat"
-        bar.style.setProperty("--h", `${height}%`)
-        wave.append(bar)
-      }
+  // The cuts: one where each photo gives way to the next, every two beats, in the first version; and those added in B.
+  const cutAt = (at) => {
+    const cut = document.createElement("span")
 
-      // The cuts: one where each photo gives way to the next, every two beats, in the first version; and those added in B.
-      const cutAt = (at) => {
-        const cut = document.createElement("span")
+    cut.className = "split on"
+    cut.style.left = `${at * 100}%`
+    lane.insertBefore(cut, head)
 
-        cut.className = "split on"
-        cut.style.left = `${at * 100}%`
-        lane.insertBefore(cut, head)
+    return cut
+  }
+  const first = [1, 2, 3, 4, 5, 6, 7].map((n) => cutAt(n / 8))
+  const added = [0.5625, 0.6875].map(cutAt)
+  const inCollage = first[1]
+  const bars = [...wave.children]
+  const buttons = [...steps.querySelectorAll("[data-step]")]
+  const wait = (ms, id) => new Promise((done, stop) => setTimeout(() => (id === run ? done() : stop(new Error("replayed"))), ms))
+  const step = (n) => buttons.forEach((b) => b.classList.toggle("on", Number(b.dataset.step) === n))
+  const stage = (n) => {
+    surface.dataset.stage = String(n)
+    url.textContent = n ? "localhost:57171/slideshow" : "localhost:57171"
+    tab.classList.toggle("on", n > 0)
+  }
+  // A point of an element, as the cursor's place in the window: fx and fy from 0 to 1 across it.
+  const to = (el, fx = 0.5, fy = 0.5) => {
+    const box = el.getBoundingClientRect()
+    const frame = demo.getBoundingClientRect()
 
-        return cut
-      }
-      const first = [1, 2, 3, 4, 5, 6, 7].map((n) => cutAt(n / 8))
-      const added = [0.5625, 0.6875].map(cutAt)
-      const inCollage = first[1]
-      const bars = [...wave.children]
-      const buttons = [...steps.querySelectorAll("[data-step]")]
-      const wait = (ms, id) => new Promise((done, stop) => setTimeout(() => (id === run ? done() : stop(new Error("replayed"))), ms))
-      const step = (n) => buttons.forEach((b) => b.classList.toggle("on", Number(b.dataset.step) === n))
-      const stage = (n) => {
-        surface.dataset.stage = String(n)
-        url.textContent = n ? "localhost:57171/slideshow" : "localhost:57171"
-        tab.classList.toggle("on", n > 0)
-      }
-      const says = (text) => {
-        note.textContent = text
-        note.classList.toggle("on", !!text)
-      }
-      // A point of an element, as the cursor's place in the window: fx and fy from 0 to 1 across it.
-      const to = (el, fx = 0.5, fy = 0.5) => {
-        const box = el.getBoundingClientRect()
-        const frame = demo.getBoundingClientRect()
+    cursor.style.transform = `translate(${box.left - frame.left + box.width * fx}px, ${box.top - frame.top + box.height * fy}px)`
+  }
+  const line = (text, kind) => {
+    const said = document.createElement("div")
 
-        cursor.style.transform = `translate(${box.left - frame.left + box.width * fx}px, ${box.top - frame.top + box.height * fy}px)`
-      }
-      const line = (text, kind) => {
-        const said = document.createElement("div")
-
-        said.className = kind
-        said.textContent = text
-        log.append(said)
-      }
-      // The person writes in the chat's field, and sends it.
-      const write = async (text, id) => {
-        to(ask, 0.3, 0.5)
-        await wait(800, id)
-        ask.classList.add("on")
-        for (const letter of text) {
-          typed.textContent += letter
-          await wait(16, id)
-        }
-        await wait(350, id)
-        typed.textContent = ""
-        ask.classList.remove("on")
-        line(text, "say you")
-      }
-      const select = (part) => {
-        part.sel.classList.add("on", "named")
-        part.sel.style.width = `${(part.to - part.from) * 100}%`
-      }
-      // What the agent does to a part: A becomes one collage, B gets a cut on every beat, C a zoom.
-      const made = (part) => {
-        if (part.letter === "A") {
-          inCollage.classList.remove("on")
-          $("fx-a").classList.add("on")
-        }
-        if (part.letter === "B") for (const cut of added) cut.classList.add("on")
-        part.effect.classList.add("on")
-        part.sel.classList.remove("on")
-      }
-      const clock = (p) => `0:${String(Math.floor(p * 32)).padStart(2, "0")} / 0:32`
-      // What shows at a moment of the play: which photo, and whether as a collage or zooming in.
-      const showing = (p) => {
-        if (p >= 0.125 && p < 0.375) return { shot: 1, collage: true }
-        if (p >= 0.5 && p < 0.75) return { shot: 4 + Math.floor((p - 0.5) / 0.0625) }
-        if (p >= 0.875) return { shot: 8, zoom: true }
-
-        return { shot: Math.floor(p * 8) % 4 }
-      }
-      const show = ({ shot, collage, zoom }) => {
-        video.dataset.shot = String(shot)
-        video.classList.toggle("collage", !!collage)
-        video.classList.toggle("zoom", !!zoom)
-      }
-
-      function reset() {
-        log.replaceChildren()
-        typed.textContent = ""
-        ask.classList.remove("on")
-        demo.classList.remove("playing")
-        stage(0)
-        show({ shot: 0 })
-        video.classList.remove("flash")
-        time.textContent = clock(0)
-        for (const { sel, effect } of PARTS) {
-          sel.classList.remove("on", "named")
-          sel.style.transition = "none"
-          sel.style.width = "0"
-          effect.classList.remove("on")
-        }
-        for (const cut of [...first, ...added]) cut.classList.remove("on")
-        $("fx-a").classList.remove("on")
-        for (const bar of bars) bar.classList.remove("on", "hit")
-        head.style.left = "0"
-        says("")
-        cursor.classList.remove("drag")
-        replay.classList.remove("on")
-        step(0)
-      }
-
-      // Each section as it ends, at once: what a later section starts from when it is the one chosen.
-      const ENDS = [
-        () => line(NEED, "say you"),
-        () => {
-          for (const ran of [...MADE, BEGUN]) line(ran, "used")
-          stage(1)
-          for (const cut of first) cut.classList.add("on")
-          says("8 photos, one every two beats.")
-          line(FIRST, "say")
-        },
-        () => {
-          for (const part of PARTS) select(part)
-          says("A, B and C selected.")
-          line(MORE, "say you")
-        },
-        () => {
-          line(LACKS, "say")
-          for (const ran of GROWN) line(ran, "used")
-          stage(2)
-          for (const part of PARTS) {
-            line(part.ran, "used")
-            made(part)
-          }
-          says("A a collage, B on every beat, C zooming in.")
-          line(DONE, "say")
-        },
-      ]
-
-      // Each section, played.
-      const SECTIONS = [
-        // 1. The person says what they need.
-        async (id) => {
-          await write(NEED, id)
-          to(ask, 0.85, 1.7)
-          await wait(700, id)
-        },
-        // 2. The agent makes a first surface for it, and the slideshow on it.
-        async (id) => {
-          for (const ran of MADE) {
-            line(ran, "used")
-            await wait(450, id)
-          }
-          stage(1)
-          await wait(700, id)
-          line(BEGUN, "used")
-          for (const cut of first) {
-            cut.classList.add("on")
-            await wait(70, id)
-          }
-          says("8 photos, one every two beats.")
-          await wait(300, id)
-          line(FIRST, "say")
-          await wait(1500, id)
-        },
-        // 3. The person selects three parts of the track, A, B and C, and asks for more of each.
-        async (id) => {
-          for (const part of PARTS) {
-            to(lane, part.from, 0.55)
-            await wait(650, id)
-            part.sel.style.transition = "background 0.3s, outline-color 0.3s, width 0.55s linear"
-            cursor.classList.add("drag")
-            to(lane, part.to, 0.55)
-            select(part)
-            await wait(650, id)
-            cursor.classList.remove("drag")
-            says(`${part.letter} selected.`)
-            await wait(120, id)
-          }
-          says("A, B and C selected.")
-          await wait(250, id)
-          await write(MORE, id)
-          to(ask, 0.85, 1.7)
-          await wait(700, id)
-        },
-        // 4. The surface cannot do those yet: the agent adds them to it, then does each.
-        async (id) => {
-          line(LACKS, "say")
-          await wait(1300, id)
-          for (const ran of GROWN) {
-            line(ran, "used")
-            await wait(450, id)
-          }
-          stage(2)
-          says("Layouts, cuts by beat and motion added.")
-          await wait(1300, id)
-          for (const part of PARTS) {
-            line(part.ran, "used")
-            made(part)
-            says(part.is)
-            await wait(800, id)
-          }
-          line(DONE, "say")
-          says("A a collage, B on every beat, C zooming in.")
-          await wait(1000, id)
-        },
-        // 5. The person plays it: the music as a wave, each photo changing on a beat.
-        async (id) => {
-          to(play, 0.5, 0.5)
-          await wait(800, id)
-          play.classList.add("down")
-          await wait(160, id)
-          play.classList.remove("down")
-          demo.classList.add("playing")
-          to(video, 0.88, 1.1)
-          await wait(300, id)
-          await new Promise((done, stop) => {
-            const length = 8000
-            const began = performance.now()
-            let now = showing(0)
-            let beat = -1
-
-            const frame = (t) => {
-              if (id !== run) return stop(new Error("replayed"))
-
-              const p = Math.min(0.9999, (t - began) / length)
-              const at = Math.floor(p * BARS)
-              const next = showing(p)
-
-              head.style.left = `${p * 100}%`
-              time.textContent = clock(p)
-              bars.forEach((bar, i) => bar.classList.toggle("on", i <= at))
-              if (at % 4 === 0 && at !== beat) {
-                beat = at
-                bars[at].classList.remove("hit")
-                void bars[at].offsetWidth
-                bars[at].classList.add("hit")
-              }
-              if (next.shot !== now.shot || !!next.collage !== !!now.collage) {
-                now = next
-                show(now)
-                video.classList.remove("flash")
-                void video.offsetWidth
-                video.classList.add("flash")
-              }
-              if (t - began < length) requestAnimationFrame(frame)
-              else done()
-            }
-
-            requestAnimationFrame(frame)
-          })
-          await wait(600, id)
-          demo.classList.remove("playing")
-          video.classList.remove("flash")
-        },
-      ]
-
-      // Plays from a section, as the ones before it left things, to the end.
-      async function playFrom(from) {
-        const id = ++run
-
-        reset()
-        for (const end of ENDS.slice(0, from - 1)) end()
-        if (from === 1) to(surface, 0.3, 0.6)
-        else to(ask, 0.85, 1.7)
-        cursor.classList.add("on")
-        try {
-          await wait(from === 1 ? 900 : 500, id)
-          for (let n = from; n <= SECTIONS.length; n++) {
-            step(n)
-            await SECTIONS[n - 1](id)
-          }
-          cursor.classList.remove("on")
-          step(0)
-          await wait(400, id)
-          replay.classList.add("on")
-        } catch {
-          // Another section was chosen: this run ends where it was.
-        }
-      }
-
-      for (const button of buttons) button.addEventListener("click", () => playFrom(Number(button.dataset.step)))
-      replay.addEventListener("click", () => playFrom(1))
-      // As served, the track shows what the agent made: the collage has no cut in it.
+    said.className = kind
+    said.textContent = text
+    log.append(said)
+  }
+  // The person writes in the chat's field, and sends it.
+  const write = async (text, id) => {
+    to(ask, 0.3, 0.5)
+    await wait(800, id)
+    ask.classList.add("on")
+    for (const letter of text) {
+      typed.textContent += letter
+      await wait(16, id)
+    }
+    await wait(350, id)
+    typed.textContent = ""
+    ask.classList.remove("on")
+    line(text, "say you")
+  }
+  const select = (part) => {
+    part.sel.classList.add("on", "named")
+    part.sel.style.width = `${(part.to - part.from) * 100}%`
+  }
+  // What the agent does to a part: A becomes one collage, B gets a cut on every beat, C a zoom.
+  const made = (part) => {
+    if (part.letter === "A") {
       inCollage.classList.remove("on")
-      show({ shot: 8 })
-      if (still) {
-        // Where motion is reduced the demo stands in its last state, and plays only when asked.
-        replay.textContent = "Play demo"
-        replay.classList.add("on")
-      } else {
-        new IntersectionObserver(
-          (seen, watch) => {
-            if (!seen.some((entry) => entry.isIntersecting)) return
-            watch.disconnect()
-            playFrom(1)
-          },
-          { threshold: 0.4 }
-        ).observe(demo)
+      $("fx-a").classList.add("on")
+    }
+    if (part.letter === "B") for (const cut of added) cut.classList.add("on")
+    part.effect.classList.add("on")
+    part.sel.classList.remove("on")
+  }
+  const clock = (p) => `0:${String(Math.floor(p * 32)).padStart(2, "0")} / 0:32`
+  // What shows at a moment of the play: which photo, and whether as a collage or zooming in.
+  const showing = (p) => {
+    if (p >= 0.125 && p < 0.375) return { shot: 1, collage: true }
+    if (p >= 0.5 && p < 0.75) return { shot: 4 + Math.floor((p - 0.5) / 0.0625) }
+    if (p >= 0.875) return { shot: 8, zoom: true }
+
+    return { shot: Math.floor(p * 8) % 4 }
+  }
+  const show = ({ shot, collage, zoom }) => {
+    video.dataset.shot = String(shot)
+    video.classList.toggle("collage", !!collage)
+    video.classList.toggle("zoom", !!zoom)
+  }
+
+  function reset() {
+    log.replaceChildren()
+    typed.textContent = ""
+    ask.classList.remove("on")
+    demo.classList.remove("playing")
+    stage(0)
+    show({ shot: 0 })
+    video.classList.remove("flash")
+    time.textContent = clock(0)
+    for (const { sel, effect } of PARTS) {
+      sel.classList.remove("on", "named")
+      sel.style.transition = "none"
+      sel.style.width = "0"
+      effect.classList.remove("on")
+    }
+    for (const cut of [...first, ...added]) cut.classList.remove("on")
+    $("fx-a").classList.remove("on")
+    for (const bar of bars) bar.classList.remove("on", "hit")
+    head.style.left = "0"
+    cursor.classList.remove("drag")
+    replay.classList.remove("on")
+    step(0)
+  }
+
+  // Each section as it ends, at once: what a later section starts from when it is the one chosen.
+  const ENDS = [
+    () => line(NEED, "say you"),
+    () => {
+      for (const ran of [...MADE, BEGUN]) line(ran, "used")
+      stage(1)
+      for (const cut of first) cut.classList.add("on")
+      line(FIRST, "say")
+    },
+    () => {
+      for (const part of PARTS) select(part)
+      line(MORE, "say you")
+    },
+    () => {
+      line(LACKS, "say")
+      for (const ran of GROWN) line(ran, "used")
+      stage(2)
+      for (const part of PARTS) {
+        line(part.ran, "used")
+        made(part)
       }
-    </script>
-  </body>
+      line(DONE, "say")
+    },
+  ]
+
+  // Each section, played.
+  const SECTIONS = [
+    // 1. The person says what they need.
+    async (id) => {
+      await write(NEED, id)
+      to(ask, 0.85, 1.7)
+      await wait(700, id)
+    },
+    // 2. The agent makes a first surface for it, and the slideshow on it.
+    async (id) => {
+      for (const ran of MADE) {
+        line(ran, "used")
+        await wait(450, id)
+      }
+      stage(1)
+      await wait(700, id)
+      line(BEGUN, "used")
+      for (const cut of first) {
+        cut.classList.add("on")
+        await wait(70, id)
+      }
+      await wait(300, id)
+      line(FIRST, "say")
+      await wait(1500, id)
+    },
+    // 3. The person selects three parts of the track, A, B and C, and asks for more of each.
+    async (id) => {
+      for (const part of PARTS) {
+        to(lane, part.from, 0.55)
+        await wait(650, id)
+        part.sel.style.transition = "background 0.3s, outline-color 0.3s, width 0.55s linear"
+        cursor.classList.add("drag")
+        to(lane, part.to, 0.55)
+        select(part)
+        await wait(650, id)
+        cursor.classList.remove("drag")
+        await wait(120, id)
+      }
+      await wait(250, id)
+      await write(MORE, id)
+      to(ask, 0.85, 1.7)
+      await wait(700, id)
+    },
+    // 4. The surface cannot do those yet: the agent adds them to it, then does each.
+    async (id) => {
+      line(LACKS, "say")
+      await wait(1300, id)
+      for (const ran of GROWN) {
+        line(ran, "used")
+        await wait(450, id)
+      }
+      stage(2)
+      await wait(1300, id)
+      for (const part of PARTS) {
+        line(part.ran, "used")
+        made(part)
+        await wait(800, id)
+      }
+      line(DONE, "say")
+      await wait(1000, id)
+    },
+    // 5. The person plays it: the music as a wave, each photo changing on a beat.
+    async (id) => {
+      to(play, 0.5, 0.5)
+      await wait(800, id)
+      play.classList.add("down")
+      await wait(160, id)
+      play.classList.remove("down")
+      demo.classList.add("playing")
+      to(video, 0.88, 1.1)
+      await wait(300, id)
+      await new Promise((done, stop) => {
+        const length = 8000
+        const began = performance.now()
+        let now = showing(0)
+        let beat = -1
+
+        const frame = (t) => {
+          if (id !== run) return stop(new Error("replayed"))
+
+          const p = Math.min(0.9999, (t - began) / length)
+          const at = Math.floor(p * BARS)
+          const next = showing(p)
+
+          head.style.left = `${p * 100}%`
+          time.textContent = clock(p)
+          bars.forEach((bar, i) => bar.classList.toggle("on", i <= at))
+          if (at % 4 === 0 && at !== beat) {
+            beat = at
+            bars[at].classList.remove("hit")
+            void bars[at].offsetWidth
+            bars[at].classList.add("hit")
+          }
+          if (next.shot !== now.shot || !!next.collage !== !!now.collage) {
+            now = next
+            show(now)
+            video.classList.remove("flash")
+            void video.offsetWidth
+            video.classList.add("flash")
+          }
+          if (t - began < length) requestAnimationFrame(frame)
+          else done()
+        }
+
+        requestAnimationFrame(frame)
+      })
+      await wait(600, id)
+      demo.classList.remove("playing")
+      video.classList.remove("flash")
+    },
+  ]
+
+  // Plays from a section, as the ones before it left things, to the end.
+  async function playFrom(from) {
+    const id = ++run
+
+    reset()
+    for (const end of ENDS.slice(0, from - 1)) end()
+    if (from === 1) to(surface, 0.3, 0.6)
+    else to(ask, 0.85, 1.7)
+    cursor.classList.add("on")
+    try {
+      await wait(from === 1 ? 900 : 500, id)
+      for (let n = from; n <= SECTIONS.length; n++) {
+        step(n)
+        await SECTIONS[n - 1](id)
+      }
+      cursor.classList.remove("on")
+      step(0)
+      await wait(400, id)
+      replay.classList.add("on")
+    } catch {
+      // Another section was chosen: this run ends where it was.
+    }
+  }
+
+  for (const button of buttons) button.addEventListener("click", () => playFrom(Number(button.dataset.step)))
+  replay.addEventListener("click", () => playFrom(1))
+  // As served, the track shows what the agent made: the collage has no cut in it.
+  inCollage.classList.remove("on")
+  show({ shot: 8 })
+  if (still) {
+    // Where motion is reduced the demo stands in its last state, and plays only when asked.
+    replay.textContent = "Play demo"
+    replay.classList.add("on")
+  } else {
+    new IntersectionObserver(
+      (seen, watch) => {
+        if (!seen.some((entry) => entry.isIntersecting)) return
+        watch.disconnect()
+        playFrom(1)
+      },
+      { threshold: 0.4 }
+    ).observe(demo)
+  }
+</script>
+</body>
 </html>
