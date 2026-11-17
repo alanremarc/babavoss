@@ -41,7 +41,7 @@ const rows: Row[] = [
   [25, "draft", "lab", [23], "Replay a run against a new version", "A recorded run's messages are said again to an agent on another checkout."],
   [26, "backlog", "lab", [23], "Show a run's cost in its header", "The run's dollars and tokens so far stand in its header."],
   [27, "lane", "shell", [18], "Keep a tab's route in its address", "The route within a tab is part of the page's address.", { lane: 4 }],
-  [28, "done", "told", [9], "Point the person to a place", "show brings a path to the front of the person's page."],
+  [28, "done", "told", [9], "Point the person to a place", "highlight marks a place for the person and may bring it to the front."],
   [29, "draft", "shell", [27], "Open a tab beside another", "Two tabs shown side by side, split by a handle."],
   [30, "done", "lab", [23], "Fold a run's injections", "Injected context is folded in the timeline, its size shown."],
 ]

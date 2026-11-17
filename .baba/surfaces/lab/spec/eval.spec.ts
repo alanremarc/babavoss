@@ -5,9 +5,9 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, expect, test } from "bun:test"
-import { babaIn, campaign, dryHarness, mask, measure, MODEL, programs, REPO, table, tally, variantOf, type Options } from "../eval/rig.ts"
+import { babaIn, campaign, dryHarness, goesAround, mask, measure, MODEL, programs, REPO, table, tally, variantOf, type Options } from "../eval/rig.ts"
 import type { Harness } from "babavoss/core/index.ts"
-import { TASKS, tasksNamed, touched } from "../eval/tasks.ts"
+import { scriptFor, TASKS, tasksNamed, touched } from "../eval/tasks.ts"
 import { seed } from "../eval/fixture/queue/src/seed.ts"
 
 const out = mkdtempSync(join(tmpdir(), "babavoss-eval-spec-"))
@@ -31,7 +31,7 @@ afterAll(() => rmSync(out, { recursive: true, force: true }))
 
 test("a dry campaign runs each task on each variant in a project of its own, checks it, records it, tables it and leaves nothing behind", async () => {
   const o = options("done-one,note-backlog,lanes-read")
-  const harness = dryHarness((prompt) => o.tasks.find((t) => t.prompt === prompt)!.dry)
+  const harness = dryHarness(scriptFor(o.tasks))
   const done = await campaign(o, harness, new AbortController().signal)
 
   expect(done.runs.map((r) => `${r.task} ${r.variant} ${r.pass} ${r.reason}`)).toEqual(
@@ -45,9 +45,9 @@ test("a dry campaign runs each task on each variant in a project of its own, che
   const batch = done.runs.find((r) => r.task === "note-backlog")!
 
   // The program wrote twelve notes, which the root counts though the stream shows one call.
-  expect(batch).toMatchObject({ commit: v1.commit, program: ["-e"], baba: { reads: 1, actions: 0, programs: 1, other: 0 }, root_calls: 12, mode: "dry" })
-  // Everything baba told: the session's start, which carries the present with the fixture's tab, and each answer.
-  expect(batch.told.hooks).toBeGreaterThan(1000)
+  expect(batch).toMatchObject({ commit: v1.commit, program: ["-e"], baba: { reads: 1, full: 1, actions: 0, programs: 1, other: 0 }, root_calls: 12, mode: "dry" })
+  // Everything baba told: the session's start, which carries the present with the fixture's tab, and each answer after it.
+  expect(batch.told.start).toBeGreaterThan(1000)
   expect(batch.told.answers).toBeGreaterThan(0)
   expect(existsSync(join(done.dir, batch.transcript))).toBe(true)
   expect(readFileSync(join(done.dir, batch.transcript), "utf8")).toContain('"kind":"injected"')
@@ -62,6 +62,28 @@ test("a dry campaign runs each task on each variant in a project of its own, che
   // Every scratch project and home is deleted, and its root is gone.
   expect(scratch()).toEqual(before)
 }, 120_000)
+
+test("the probes pass by their dry scripts: a surface opened, the person's acts before the agent and between two messages, a place highlighted, the root put to sleep", async () => {
+  const o = options("open-release,retitle,busy-lane,about-26,highlight-13,second-turn,done-then-lanes,link-cycle,release-ready,done-sleep", { variants: [v1] })
+  const done = await campaign(o, dryHarness(scriptFor(o.tasks)), new AbortController().signal)
+
+  expect(done.runs.map((r) => `${r.task} ${r.pass} ${r.reason}`)).toEqual(o.tasks.map((t) => `${t.name} true as asked`))
+
+  const second = readFileSync(join(done.dir, done.runs.find((r) => r.task === "second-turn")!.transcript), "utf8")
+
+  // The second message is told what the person changed between the two.
+  expect(second).toContain('"event":"UserPromptSubmit"')
+  expect(second).toContain("(by the person)")
+  expect(done.runs.find((r) => r.task === "busy-lane")!.refusals).toBe(1)
+  expect(scratch()).toEqual(before)
+}, 120_000)
+
+test("knows a call that goes around the surfaces, to their code or the root's state on disk", () => {
+  expect(goesAround({ tool: "Read", input: JSON.stringify({ file_path: "/p/.baba/surfaces/queue/src/seed.ts" }) })).toBe(true)
+  expect(goesAround({ tool: "Bash", input: "cat .babavoss/sessions/s/baba/model.json" })).toBe(true)
+  expect(goesAround({ tool: "Bash", input: ".babavoss/bin/baba /queue/issues/26" })).toBe(false)
+  expect(goesAround({ tool: "Read", input: JSON.stringify({ file_path: "/p/.baba/node_modules/babavoss/skill/SKILL.md" }) })).toBe(false)
+})
 
 test("a run that does not do what was asked fails with the check's reason, and a stopped campaign says what it did not run", async () => {
   const o = options("done-one,add-one")
@@ -82,7 +104,7 @@ test("a run that does not do what was asked fails with the check's reason, and a
 
 test("a campaign with a budget stops once the harness says it is spent, and says what it did not run", async () => {
   const o = options("done-one", { budget: 1 })
-  const fake = dryHarness((prompt) => o.tasks.find((t) => t.prompt === prompt)!.dry)
+  const fake = dryHarness(scriptFor(o.tasks))
   // Each run costs a dollar, as the harness reports it at the turn's end.
   const costly: Harness = {
     ...fake,
@@ -105,24 +127,29 @@ test("a campaign with a budget stops once the harness says it is spent, and says
 
 test("every task passes on the fixture by its own dry script, and fails on the fixture untouched where it asks for a change", () => {
   const w = seed()
+  // What the right answer leaves as it was, and says nothing of: an action no surface offers.
+  const unchanged = ["retitle"]
 
   for (const task of TASKS) {
-    const untouched = task.check({ seed: w, final: w, answer: "" })
+    const untouched = task.check({ seed: w, final: w, answer: "", shell: { highlights: [], tabs: [] }, calls: [] })
 
-    expect(untouched.pass, task.name).toBe(false)
+    expect(untouched.pass, task.name).toBe(unchanged.includes(task.name))
   }
   expect(touched(w, { ...w, issues: w.issues.map((i) => (i.n === 3 ? { ...i, order: 99 } : i)) })).toEqual([])
   expect(() => tasksNamed("done-one,nothing")).toThrow("no task nothing")
 })
 
 test("counts the root's command in a shell line by what follows it: a read, an action, a program", () => {
-  expect(babaIn(".babavoss/bin/baba /queue")).toEqual({ reads: 1, actions: 0, programs: 0, other: 0 })
-  expect(babaIn(".babavoss/bin/baba /queue/issues/3 done n=3 && .babavoss/bin/baba /queue | head")).toEqual({ reads: 1, actions: 1, programs: 0, other: 0 })
-  expect(babaIn(".babavoss/bin/baba --session x /queue/issues/3 note n=3 text='a b'")).toEqual({ reads: 0, actions: 1, programs: 0, other: 0 })
-  expect(babaIn(`.babavoss/bin/baba -e 'await root.read("/")'`)).toEqual({ reads: 0, actions: 0, programs: 1, other: 0 })
-  expect(babaIn(`.babavoss/bin/baba / -e 'await root.read("/")'`)).toEqual({ reads: 0, actions: 0, programs: 1, other: 0 })
-  expect(babaIn(".babavoss/bin/baba sleep; ls")).toEqual({ reads: 0, actions: 0, programs: 0, other: 1 })
-  expect(babaIn("ls .babavoss")).toEqual({ reads: 0, actions: 0, programs: 0, other: 0 })
+  expect(babaIn(".babavoss/bin/baba /queue")).toEqual({ reads: 1, full: 1, actions: 0, programs: 0, other: 0 })
+  expect(babaIn(".babavoss/bin/baba /queue/issues/3 done n=3 && .babavoss/bin/baba /queue | head")).toEqual({ reads: 1, full: 1, actions: 1, programs: 0, other: 0 })
+  expect(babaIn(".babavoss/bin/baba --session x /queue/issues/3 note n=3 text='a b'")).toEqual({ reads: 0, full: 0, actions: 1, programs: 0, other: 0 })
+  expect(babaIn(`.babavoss/bin/baba -e 'await root.read("/")'`)).toEqual({ reads: 0, full: 0, actions: 0, programs: 1, other: 0 })
+  expect(babaIn(`.babavoss/bin/baba / -e 'await root.read("/")'`)).toEqual({ reads: 0, full: 0, actions: 0, programs: 1, other: 0 })
+  expect(babaIn(".babavoss/bin/baba sleep; ls")).toEqual({ reads: 0, full: 0, actions: 0, programs: 0, other: 1 })
+  // A row's own path is a read, but not of a whole view.
+  expect(babaIn(".babavoss/bin/baba /queue/issues/3")).toEqual({ reads: 1, full: 0, actions: 0, programs: 0, other: 0 })
+  expect(babaIn(".babavoss/bin/baba /tabs/2")).toEqual({ reads: 1, full: 1, actions: 0, programs: 0, other: 0 })
+  expect(babaIn("ls .babavoss")).toEqual({ reads: 0, full: 0, actions: 0, programs: 0, other: 0 })
 })
 
 test("knows a program when the agent runs one: a loop, a pipeline, a script file", () => {
@@ -144,18 +171,27 @@ test("measures a stream: the harness's tokens and cost, calls and refusals, what
     { kind: "result", id: "b", text: "missing", error: true },
     { kind: "reply", text: "Lanes 2 and 5." },
     { kind: "turn", ok: true, text: "", tokens: { input: 10, cache_write: 20, cache_read: 30, output: 5 }, total: 0.25, ms: 1, calls: 3 },
+    // A second message, its hook and one read in its turn.
+    { kind: "injected", event: "UserPromptSubmit", text: "123" },
+    { kind: "call", id: "c", tool: "Bash", input: ".babavoss/bin/baba /queue", word: true },
+    { kind: "result", id: "c", text: "1234" },
+    { kind: "reply", text: "Lane 3." },
+    { kind: "turn", ok: true, text: "", tokens: { input: 1, cache_write: 0, cache_read: 0, output: 1 }, total: 0.3, ms: 1, calls: 1 },
   ])
 
   expect(m).toMatchObject({
     reported_model: "claude-sonnet-5-5",
-    tokens: { input: 10, cache_write: 20, cache_read: 30, output: 5 },
-    cost: 0.25,
-    tool_calls: 2,
+    tokens: { input: 11, cache_write: 20, cache_read: 30, output: 6 },
+    cost: 0.3,
+    tool_calls: 3,
     refusals: 1,
     failed: 1,
-    told: { hooks: 5, answers: 11 },
-    answer: "Lanes 2 and 5.",
+    baba: { reads: 1, full: 1, actions: 1 },
+    later_reads: 1,
+    told: { start: 5, hooks: 3, answers: 15 },
+    answer: "Lane 3.",
   })
+  expect(m.calls.map((c) => c.turn)).toEqual([0, 0, 1])
 })
 
 test("masks what looks like a credential", () => {

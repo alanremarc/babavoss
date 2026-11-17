@@ -13,16 +13,22 @@ import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { fakeHarness, sessionEnv, serviceClient, NONE, type Harness, type HarnessEvent, type HarnessSession, type Tokens } from "babavoss/core/index.ts"
 import type { Work } from "./fixture/queue/src/surface.ts"
-import type { Kind, Task } from "./tasks.ts"
+import type { Act, Call, Dry, Kind, Shell, Task } from "./tasks.ts"
 
 /** The checkout running the rig: the default variant, and where campaigns are written. */
 export const REPO = realpathSync(fileURLToPath(new URL("../../../../", import.meta.url)))
-/** The fixture, as each variant carries it, and the name it takes in a run's project. */
-export const FIXTURE = ".baba/surfaces/lab/eval/fixture/queue"
+/**
+ * The fixtures, each a surface by its folder's name, taken from the rig's own checkout so every variant is run on the same
+ * ones: `queue`, open as a run begins, and `release`, listed but not open.
+ */
+export const FIXTURES = join(REPO, ".baba/surfaces/lab/eval/fixture")
+/** Other words for the fixture queue, each a words.ts a variant may run with in place of its own. */
+export const WORDS = join(REPO, ".baba/surfaces/lab/eval/words")
 const SURFACE = "queue"
 export const MODEL = "claude-sonnet-5-5"
 
-export type Variant = { label: string; path: string; commit: string; dirty: boolean; version: string }
+/** A checkout to run, and `words`, where given, the fixture queue's words it runs with in place of its own: words/NAME.ts. */
+export type Variant = { label: string; path: string; commit: string; dirty: boolean; version: string; words?: string }
 export type Options = {
   variants: Variant[]
   tasks: Task[]
@@ -40,7 +46,8 @@ export type Options = {
   out: string
   dry: boolean
 }
-export type Baba = { reads: number; actions: number; programs: number; other: number }
+/** The command's runs by what they did; `full`, the reads of a whole view with its tables: `/`, or a tab's own path. */
+export type Baba = { reads: number; full: number; actions: number; programs: number; other: number }
 /** One run, as results.jsonl keeps it. */
 export type Run = {
   campaign: string
@@ -61,10 +68,15 @@ export type Run = {
   tool_calls: number
   baba: Baba
   root_calls: number
+  /** Tool calls that went around the surfaces: read or wrote a surface's code or what the root keeps on disk. */
+  around: number
   refusals: number
   failed: number
   program: string[]
-  told: { hooks: number; answers: number }
+  /** Characters told: at the session's start, by hooks after it, and in the command's answers. */
+  told: { start: number; hooks: number; answers: number }
+  /** The command's reads after the first turn, where a task has a second message. */
+  later_reads: number
   wall_ms: number
   ended?: string
   answer: string
@@ -89,18 +101,20 @@ const sh = (cmd: string[], cwd: string, env?: Record<string, string>): string =>
 }
 
 /** The variant at `path`: a babavoss checkout with its dependencies installed and the fixture; its commit, and whether it differs from it. */
-export function variantOf(path: string, label: string): Variant {
+export function variantOf(given: string, label: string): Variant {
+  const [path, words] = given.split("#") as [string, string?]
   const dir = realpathSync(resolve(path))
 
+  if (words !== undefined && !existsSync(join(WORDS, `${words}.ts`))) throw new Error(`no words ${words}: they are ${readdirSync(WORDS).map((f) => f.replace(/\.ts$/, "")).join(", ")}`)
+
   if (!existsSync(join(dir, "framework/core/index.ts"))) throw new Error(`${dir} is not a babavoss checkout`)
-  if (!existsSync(join(dir, FIXTURE, "src/surface.ts"))) throw new Error(`${dir} has no fixture at ${FIXTURE}`)
   if (!existsSync(join(dir, "node_modules/react"))) throw new Error(`${dir} has no dependencies: run bun install there`)
 
   const commit = sh(["git", "rev-parse", "HEAD"], dir).trim()
   const dirty = sh(["git", "status", "--porcelain"], dir).trim() !== ""
   const version = (JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { version: string }).version
 
-  return { label, path: dir, commit, dirty, version }
+  return { label, path: dir, commit, dirty, version, ...(words && { words }) }
 }
 
 /** A run's place: the scratch directory, its project and the agent's home, and the root's state for the session. */
@@ -134,7 +148,8 @@ export function makePlace(variant: Variant, session: string): Place {
       join(baba, "baba.config.ts"),
       `import { config } from "babavoss/core/config.ts"\n\nexport default config({ title: "Eval", harnesses: { claude: { enable: true }, codex: { enable: false } } })\n`,
     )
-    cpSync(join(variant.path, FIXTURE), join(baba, "surfaces", SURFACE), { recursive: true })
+    for (const name of readdirSync(FIXTURES)) cpSync(join(FIXTURES, name), join(baba, "surfaces", name), { recursive: true })
+    if (variant.words) cpSync(join(WORDS, `${variant.words}.ts`), join(baba, "surfaces", SURFACE, "src/words.ts"))
     // The release the variant runs is the latest heard: no lookup, and no word of an update in what the agent is told.
     mkdirSync(join(project, ".babavoss"), { recursive: true })
     writeFileSync(join(project, ".babavoss/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
@@ -153,7 +168,16 @@ export function makePlace(variant: Variant, session: string): Place {
   return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
-type Entry = { who?: string; surface?: string; own?: boolean; refused?: string }
+type Entry = {
+  who?: string
+  surface?: string
+  own?: boolean
+  refused?: string
+  at?: string
+  did?: string
+  args?: Record<string, unknown>
+  said?: { text: string; at?: string; highlight?: true }[]
+}
 type Saved = { model?: { tabs?: { n?: number; surface: string; named?: boolean; model: unknown }[]; activity?: Entry[] } }
 /** A log's entries, one a line, each read as its last line. */
 const logOf = (file: string): Entry[] => {
@@ -202,12 +226,30 @@ const saved = (place: Place): Saved => {
 /** The fixture's work in the root's model: its tab by its name. */
 const workOf = (s: Saved): Work | undefined => (s.model?.tabs?.find((t) => t.surface === SURFACE && t.named) ?? s.model?.tabs?.find((t) => t.surface === SURFACE))?.model as Work | undefined
 
-/** Opens the fixture's tab as the person, and answers with its work as the run begins. */
-async function openFixture(place: Place): Promise<Work> {
-  const client = serviceClient(place.state, place.session, place.entry, place.env)
-  const answer = await client.request("/", { method: "POST", body: JSON.stringify({ handle: "open", args: { surface: SURFACE } }) })
+/** The shell as a check reads it: the highlights the agent raised, each place and why, and each tab's surface and model. */
+const shellOf = (s: Saved): Shell => ({
+  highlights: (s.model?.activity ?? []).flatMap((e) =>
+    e.who === "agent" && e.did === "highlight" && !e.refused ? [{ at: typeof e.args?.at === "string" ? e.args.at : (e.said?.[0]?.at ?? e.at ?? ""), text: e.said?.[0]?.text ?? "" }] : [],
+  ),
+  tabs: (s.model?.tabs ?? []).map((t) => ({ surface: t.surface, model: t.model })),
+})
 
-  await answer.body?.cancel()
+/** Takes actions on the root as the person, on the page: each a handle called at a path; a refusal throws. */
+async function actAsPerson(place: Place, acts: Act[]) {
+  const client = serviceClient(place.state, place.session, place.entry, place.env)
+
+  for (const act of acts) {
+    // The page's door, JSON with no actor, which the runtime takes as the person's; the agent's plain door would make it the agent's.
+    const answer = await client.request(act.path, { method: "POST", body: JSON.stringify({ handle: act.handle, args: act.args }) })
+    const text = await answer.text()
+
+    if (!answer.ok) throw new Error(`the person's ${act.handle} at ${act.path} was refused: ${text.trim().slice(0, 200)}`)
+  }
+}
+
+/** Opens the fixture's tab as the person, takes the task's acts before the agent starts, and answers with its work as the run begins. */
+async function openFixture(place: Place, before: Act[] = []): Promise<Work> {
+  await actAsPerson(place, [{ path: "/", handle: "open", args: { surface: SURFACE } }, ...before])
   for (const until = Date.now() + 5000; Date.now() < until; await Bun.sleep(50)) {
     const work = workOf(saved(place))
 
@@ -256,10 +298,12 @@ function clear(place: Place, harness: Harness) {
 const WORD = /(?:^|[\s;&|(`"'])(?:\S*\.babavoss\/bin\/(?:baba|bv)|bv|bun run baba)(?=\s|$)/g
 const OPERATOR = /^(\||\|\||&&|;|>|>>|2>&1|<|&)$/
 const SCRIPT = /\.(ts|js|mjs|cjs|sh|py)$/
+/** A path read whole, with its tables: the root's, or a tab's own, by its name or its number. */
+const WHOLE = /^\/(?:[\w-]+|tabs\/\d+)?\/?$/
 
 /** What one shell line did with the root's command: each invocation, by the word after it, a read, an action, a program or other. */
 export function babaIn(line: string): Baba {
-  const seen: Baba = { reads: 0, actions: 0, programs: 0, other: 0 }
+  const seen: Baba = { reads: 0, full: 0, actions: 0, programs: 0, other: 0 }
 
   for (const match of line.matchAll(WORD)) {
     const [first, second] = line
@@ -271,8 +315,11 @@ export function babaIn(line: string): Baba {
 
     // A program may follow a path, as `baba / -e CODE`, which the command refuses: it is counted as the program it was meant to be.
     if (first === "-e" || second === "-e") seen.programs++
-    else if (first?.startsWith("/")) second && !OPERATOR.test(second) && !second.startsWith(">") ? seen.actions++ : seen.reads++
-    else seen.other++
+    else if (first?.startsWith("/") && second && !OPERATOR.test(second) && !second.startsWith(">")) seen.actions++
+    else if (first?.startsWith("/")) {
+      seen.reads++
+      if (WHOLE.test(first)) seen.full++
+    } else seen.other++
   }
 
   return seen
@@ -308,6 +355,14 @@ export function programs(calls: { tool: string; input: string }[]): string[] {
   return [...kinds]
 }
 
+/** A path into a surface's code or what the root keeps on disk: what the words say never to look in or change. */
+const BEHIND = /\.baba\/(?!node_modules\/babavoss\/skill\/)(surfaces|\.root)\b|\.babavoss\/sessions|model\.json|seed\.ts|surface\.ts/
+
+/** Whether a tool call went around the surfaces, to their code or the root's state on disk, rather than through the command. */
+export const goesAround = ({ tool, input }: Call): boolean =>
+  (tool === "Bash" ? babaIn(input).reads + babaIn(input).actions + babaIn(input).programs + babaIn(input).other === 0 || /\b(cat|grep|rg|sed|head|tail|ls|find|jq)\b/.test(input) : true) &&
+  BEHIND.test(input)
+
 /** What a run's stream says: the harness's own figures, and what the rig counts in it. */
 export function measure(events: HarnessEvent[]) {
   const calls = events.flatMap((e) => (e.kind === "call" ? [e] : []))
@@ -315,12 +370,20 @@ export function measure(events: HarnessEvent[]) {
   const turns = events.flatMap((e) => (e.kind === "turn" ? [e] : []))
   const words = calls.filter((c) => c.tool === "Bash" && babaIn(c.input).reads + babaIn(c.input).actions + babaIn(c.input).programs + babaIn(c.input).other > 0)
   const refused = (text: string) => /^refused:/m.test(text)
-  const baba = words.map((c) => babaIn(c.input)).reduce((a, b) => ({ reads: a.reads + b.reads, actions: a.actions + b.actions, programs: a.programs + b.programs, other: a.other + b.other }), {
-    reads: 0,
-    actions: 0,
-    programs: 0,
-    other: 0,
-  })
+  const sum = (of: typeof calls) =>
+    of
+      .map((c) => babaIn(c.input))
+      .reduce((a, b) => ({ reads: a.reads + b.reads, full: a.full + b.full, actions: a.actions + b.actions, programs: a.programs + b.programs, other: a.other + b.other }), {
+        reads: 0,
+        full: 0,
+        actions: 0,
+        programs: 0,
+        other: 0,
+      })
+  const baba = sum(words)
+  // Which turn each call is in: how many turns ended before it.
+  const turnOf = new Map(events.flatMap((e, i) => (e.kind === "call" ? [[e.id, events.slice(0, i).filter((x) => x.kind === "turn").length] as const] : [])))
+  const start = events.find((e) => e.kind === "injected" && e.event === "SessionStart")
   const lastResult = events.findLastIndex((e) => e.kind === "result")
   const replies = events.slice(lastResult + 1).flatMap((e) => (e.kind === "reply" ? [e.text] : []))
   const started = events.find((e) => e.kind === "started")
@@ -337,8 +400,12 @@ export function measure(events: HarnessEvent[]) {
     refusals: words.filter((c) => refused(results.get(c.id)?.text ?? "")).length,
     failed: calls.filter((c) => results.get(c.id)?.error && !refused(results.get(c.id)?.text ?? "")).length,
     program: programs(calls),
+    around: calls.filter(goesAround).length,
+    calls: calls.map(({ id, tool, input }) => ({ tool, input, turn: turnOf.get(id) ?? 0, result: results.get(id)?.text.slice(0, 1000) ?? "" })),
+    later_reads: sum(words.filter((c) => (turnOf.get(c.id) ?? 0) > 0)).reads,
     told: {
-      hooks: events.reduce((n, e) => n + (e.kind === "injected" ? e.text.length : 0), 0),
+      start: start?.kind === "injected" ? start.text.length : 0,
+      hooks: events.reduce((n, e) => n + (e.kind === "injected" && e !== start ? e.text.length : 0), 0),
       answers: words.reduce((n, c) => n + (results.get(c.id)?.text.length ?? 0), 0),
     },
     answer: (replies.length ? replies : events.flatMap((e) => (e.kind === "reply" ? [e.text] : [])).slice(-1)).join("\n"),
@@ -346,10 +413,11 @@ export function measure(events: HarnessEvent[]) {
 }
 
 /**
- * The fake harness, playing in the agent's place the script of the task whose prompt it is told: the project's own
- * session-start hook, then each call of the root's command, then the script's answer.
+ * The fake harness, playing in the agent's place the script of the task whose prompt it is told: the project's own hook,
+ * at the session's start for the first prompt and with the message for a later one, then each call of the root's command,
+ * then the script's answer.
  */
-export function dryHarness(script: (prompt: string) => Task["dry"]): Harness {
+export function dryHarness(script: (prompt: string) => Dry): Harness {
   const fake = fakeHarness()
 
   return {
@@ -358,20 +426,31 @@ export function dryHarness(script: (prompt: string) => Task["dry"]): Harness {
     start(options): HarnessSession {
       const session = fake.harness.start(options)
       const env = envOf(options.project, options.home)
-      const play = async (prompt: string) => {
-        const hook = Bun.spawnSync(["bun", ".baba/node_modules/babavoss/bin/baba.ts", "hook", "claude"], {
+      let said = 0
+      const hook = (event: "SessionStart" | "UserPromptSubmit", more: Record<string, string>) =>
+        Bun.spawnSync(["bun", ".baba/node_modules/babavoss/bin/baba.ts", "hook", "claude"], {
           cwd: options.project,
           env,
-          stdin: new TextEncoder().encode(JSON.stringify({ session_id: options.session, hook_event_name: "SessionStart", source: "startup", cwd: options.project })),
+          stdin: new TextEncoder().encode(JSON.stringify({ session_id: options.session, hook_event_name: event, cwd: options.project, ...more })),
           stdout: "pipe",
           stderr: "ignore",
         })
+          .stdout.toString()
+          .trim()
+      const play = async (prompt: string) => {
+        const first = said++ === 0
 
-        fake.emit(
-          { kind: "started", session: options.session, loaded: { model: "dry", cwd: options.project, tools: ["Bash"], skills: [], plugins: [], mcp: [], commands: [] } },
-          { kind: "injected", event: "SessionStart", text: hook.stdout.toString().trim() },
-          { kind: "message", text: prompt },
-        )
+        if (first) {
+          fake.emit(
+            { kind: "started", session: options.session, loaded: { model: "dry", cwd: options.project, tools: ["Bash"], skills: [], plugins: [], mcp: [], commands: [] } },
+            { kind: "injected", event: "SessionStart", text: hook("SessionStart", { source: "startup" }) },
+          )
+        } else {
+          const told = hook("UserPromptSubmit", { prompt })
+
+          if (told) fake.emit({ kind: "injected", event: "UserPromptSubmit", text: told })
+        }
+        fake.emit({ kind: "message", text: prompt })
 
         const { calls, answer } = script(prompt)
 
@@ -380,12 +459,11 @@ export function dryHarness(script: (prompt: string) => Task["dry"]): Harness {
           const quoted = args.map((a) => (/^[\w/.=-]+$/.test(a) ? a : `'${a.replaceAll("'", "'\\''")}'`)).join(" ")
 
           fake.emit(
-            { kind: "call", id: `dry-${i}`, tool: "Bash", input: `.babavoss/bin/baba ${quoted}`, word: true },
-            { kind: "result", id: `dry-${i}`, text: (done.stdout.toString() + done.stderr.toString()).trim(), ...(done.exitCode !== 0 && { error: true }) },
+            { kind: "call", id: `dry-${said}-${i}`, tool: "Bash", input: `.babavoss/bin/baba ${quoted}`, word: true },
+            { kind: "result", id: `dry-${said}-${i}`, text: (done.stdout.toString() + done.stderr.toString()).trim(), ...(done.exitCode !== 0 && { error: true }) },
           )
         }
         fake.emit({ kind: "reply", text: answer ?? "Done." }, { kind: "turn", ok: true, text: "", tokens: { ...NONE }, total: 0, ms: 0, calls: calls.length + 1 })
-        fake.exit(0)
       }
 
       return { ...session, say: (text) => void play(text) }
@@ -395,12 +473,14 @@ export function dryHarness(script: (prompt: string) => Task["dry"]): Harness {
 
 type Ending = { events: HarnessEvent[]; ended?: string }
 
-/** Says the prompt and reads the stream until the turn ends, the run makes more than `turns` tool calls, its time is out, or the campaign is stopped. */
-async function converse(agent: HarnessSession, prompt: string, options: Options, stop: AbortSignal, transcript: string): Promise<Ending> {
-  const events: HarnessEvent[] = []
-  const timeout = AbortSignal.timeout(options.minutes * 60_000)
+/**
+ * Says the prompt and reads the stream until the turn ends, the run makes more than `turns` tool calls, its time is out, or
+ * the campaign is stopped; `events` are the run's so far, and the time and calls count over the whole run.
+ */
+async function converse(agent: HarnessSession, prompt: string, options: Options, stop: AbortSignal, transcript: string, events: HarnessEvent[], timeout: AbortSignal): Promise<string | undefined> {
   let ended: string | undefined
   const out = (event: HarnessEvent) => appendFileSync(transcript, `${mask(JSON.stringify({ t: Date.now(), ...event }))}\n`)
+  const from = events.length
 
   agent.say(prompt)
 
@@ -425,14 +505,13 @@ async function converse(agent: HarnessSession, prompt: string, options: Options,
       break
     }
   }
-  await agent.end()
-  if (events.at(-1)?.kind === "ended" && !events.some((e) => e.kind === "turn")) {
+  if (events.at(-1)?.kind === "ended" && !events.slice(from).some((e) => e.kind === "turn")) {
     const last = events.at(-1) as Extract<HarnessEvent, { kind: "ended" }>
 
     ended ??= `the harness ended with ${last.code}: ${last.stderr.split("\n").slice(-2).join(" ")}`
   }
 
-  return { events, ...(ended && { ended }) }
+  return ended
 }
 
 /** One run of `task` on `variant`: a project made, the agent run, the fixture checked, everything ended and deleted. */
@@ -448,12 +527,23 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   let activity: Saved = {}
 
   try {
-    seed = await openFixture(place)
+    seed = await openFixture(place, task.before)
     harness.home(place.home)
 
     const agent = harness.start({ project: place.project, home: place.home, session, model: options.model, budget: options.cap })
+    const timeout = AbortSignal.timeout(options.minutes * 60_000)
 
-    ending = await converse(agent, task.prompt, options, stop, transcript)
+    try {
+      ending.ended = await converse(agent, task.prompt, options, stop, transcript, ending.events, timeout)
+      // A second message in the same session, after the person acted on the root between the two.
+      if (task.then && !ending.ended) {
+        await actAsPerson(place, task.then.acts)
+        ending.ended = await converse(agent, task.then.prompt, options, stop, transcript, ending.events, timeout)
+      }
+    } finally {
+      await agent.end()
+    }
+    if (!ending.ended) delete ending.ended
   } catch (error) {
     ending = { ...ending, ended: `the run failed: ${error instanceof Error ? error.message : String(error)}` }
   } finally {
@@ -464,8 +554,8 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   }
 
   const m = measure(ending.events)
-  const verdict = seed && final ? task.check({ seed, final, answer: m.answer }) : { pass: false, reason: "the fixture's work could not be read" }
-  const { answer, ...measured } = m
+  const verdict = seed && final ? task.check({ seed, final, answer: m.answer, shell: shellOf(activity), calls: m.calls }) : { pass: false, reason: "the fixture's work could not be read" }
+  const { answer, calls: _calls, ...measured } = m
 
   return {
     campaign,
@@ -496,18 +586,21 @@ const median = (xs: number[]) => {
 }
 /** What a table shows of a run, column by column: new input (uncached and cache-written), cache read, output, dollars, and what the rig counts. */
 const COLUMNS: [string, (r: Run) => number, (x: number) => string][] = [
+  ["after", (r) => r.told.hooks + r.told.answers, (x) => Math.round(x).toString()],
+  ["reads", (r) => r.baba.reads, (x) => x.toString()],
+  ["full", (r) => r.baba.full ?? 0, (x) => x.toString()],
+  ["start", (r) => r.told.start ?? 0, (x) => Math.round(x).toString()],
   ["in.new", (r) => r.tokens.input + r.tokens.cache_write, (x) => Math.round(x).toString()],
   ["in.cache", (r) => r.tokens.cache_read, (x) => Math.round(x).toString()],
   ["out", (r) => r.tokens.output, (x) => Math.round(x).toString()],
   ["usd", (r) => r.cost, (x) => x.toFixed(3)],
   ["calls", (r) => r.tool_calls, (x) => x.toString()],
-  ["reads", (r) => r.baba.reads, (x) => x.toString()],
   ["acts", (r) => r.baba.actions, (x) => x.toString()],
   ["progs", (r) => r.baba.programs, (x) => x.toString()],
   ["root", (r) => r.root_calls, (x) => x.toString()],
   ["refused", (r) => r.refusals, (x) => x.toString()],
+  ["around", (r) => r.around ?? 0, (x) => x.toString()],
   ["failed", (r) => r.failed, (x) => x.toString()],
-  ["told", (r) => r.told.hooks + r.told.answers, (x) => Math.round(x).toString()],
   ["sec", (r) => r.wall_ms / 1000, (x) => x.toFixed(0)],
 ]
 const grid = (rows: string[][]) => {
@@ -544,9 +637,11 @@ export function table(runs: Run[], variants: Variant[]): string {
 
     return [line, ...diff]
   })
-  const legend = variants.map((v) => `${v.label}  ${v.path} @ ${v.commit.slice(0, 10)}${v.dirty ? " with uncommitted changes" : ""}`).join("\n")
+  const legend = variants
+    .map((v) => `${v.label}  ${v.path} @ ${v.commit.slice(0, 10)}${v.dirty ? " with uncommitted changes" : ""}${v.words ? `, the queue's words ${v.words}` : ""}`)
+    .join("\n")
 
-  return `${legend}\n\nmedians per run; prog: runs that ran a program\n${grid([head, ...rows])}\n\ntotals over all runs\n${grid([head, ...totalRows])}`
+  return `${legend}\n\nmedians per run; after: characters told after the session's start; full: reads of a whole view; prog: runs that ran a program\n${grid([head, ...rows])}\n\ntotals over all runs\n${grid([head, ...totalRows])}`
 }
 
 type Count = { runs: number; input: number; cache_read: number; cache_write: number; output: number; cost: number }
