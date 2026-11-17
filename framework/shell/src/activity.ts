@@ -1,27 +1,50 @@
-// The activity of a session: who did what across the tabs, kept by the shell with its state and read on demand at
-// /activity. An entry is a notice, in the words its surface chose, and marked so: what the person reads in a tab's drawer;
-// or, for a call that committed and gave none, one mechanical line, the handle and its arguments, so nothing done goes
-// unrecorded; or the shell's own opening, closing and pointing. A command's event gives entries only by its notices: what
-// a surface does on its own is told where it chose to tell it. /activity/notices is the notices alone. Time is the
-// message's own, stamped as it enters, a call by the run loop and a tab's event by the shell's run, so the update that
-// keeps it stays pure. The last KEPT entries are kept; the agent is never fed them. An entry lives with the tab it is in:
-// when the tab closes its entries go with it, and the shell's own line that it closed stays. What the person has seen of the
-// notices is kept beside them, a mark the page sets, so a page opened later counts what is new from the log itself, and
-// sees a tab's notices alone, one by one.
+// The activity of a session: its log of actions, for auditing, never replayed, since the surfaces hear a world that
+// changes on its own. One entry per action: when, who, where, what was done and what came of it. Who is the person, an
+// agent, or the world: an event a session command sent, named by what heard it, the command's kind; a run of them in a
+// row from one hearer in one tab, silent, is one entry with a count. What a call started is the caller's, and an event of
+// it is kept only where its surface said a line about it: the call is already in the log. What was done is the handle
+// with its inputs, each whole up to BOUND and cut past it, saying how long it was; a value that reads as a credential is
+// never kept. What came of it is done, or refused with why; and the surface's own lines about it where it gave any, which
+// is what a notice was: /activity/notices is the entries that carry them. A quiet commit, the page's own bookkeeping, is
+// none, and the person marking what they have seen neither. Time is the message's own, stamped as it enters, a call by
+// the run loop and a tab's event by the shell's run, so the update that keeps it stays pure. The last KEPT entries are kept,
+// in the shell's model; `record` is the one place an entry is added, `activityView` the one where they are read. An entry
+// lives with the tab it is in: when the tab closes its entries go with it, and the shell's own line that it closed stays.
+// What the person has seen of the lines is kept beside them, a mark the page sets, so a page opened later counts what is
+// new from the log itself, and sees a tab's lines alone, one by one.
 import { isPerson, type Args, type Call, type Json, type Notice, type View } from "../../core/index.ts"
 
-/** Who did it: the person, an agent of the session, or a surface by a command's event. */
-export type Who = "person" | "agent" | "surface"
+/** Who did it: the person, an agent of the session, or the world, heard by a session command. */
+export type Who = "person" | "agent" | "world"
+/** A line the surface said about an action: its text, and the place it is about where that is not the action's own. */
+export type Said = { text: string; at?: string }
 /**
- * One line of activity: its number in the session, when in ms since the epoch, who, the surface and the place it is about,
- * and what; `notice` where a surface said it, absent where it is the mechanical line for a call or the shell's own; `own`
- * where it is the shell's own opening, closing or showing of a tab, which is about the tab but not in it; `id` the name
- * its call was given by its caller, where it was given one.
+ * One action: its number in the session; `when`, in ms since the epoch, the last where it folds several; `who`, and `by`,
+ * the world's hearer, the kind of the session command that heard it; the surface and `at`, the tab and the path, by tab
+ * number; `did`, the handle called, or the kind of the event heard; `args`, its inputs, each whole or cut, and `cut`, the
+ * whole length of each one cut; `refused`, why it was refused, where it was; `said`, the surface's own lines about it;
+ * `times`, how many it folds, where more than one; `own` where it is the shell's opening, closing or showing of a tab,
+ * which is about the tab but not in it; `id` the name its call was given by its caller, where it was given one.
  */
-export type Entry = { n: number; when: number; who: Who; surface: string; at: string; what: string; notice?: true; own?: true; id?: string }
+export type Entry = {
+  n: number
+  when: number
+  who: Who
+  by?: string
+  surface: string
+  at: string
+  did: string
+  args?: Args
+  cut?: Record<string, number>
+  refused?: string
+  said?: Said[]
+  times?: number
+  own?: true
+  id?: string
+}
 /** An entry before it is numbered. */
 export type Line = Omit<Entry, "n">
-/** What the person has seen of the notices: every one up to `upto`, and those after it they looked at one by one, by opening a tab's drawer. */
+/** What the person has seen of the lines: every one up to `upto`, and those after it they looked at one by one, by opening a tab's drawer. */
 export type Seen = { upto: number; looked: number[] }
 
 /** The tabs an entry can be in: the address the open tab numbered n stands at. */
@@ -31,37 +54,91 @@ export type Tabs = { at: (n: number) => string | undefined }
 export const KEPT = 200
 /** How many entries /activity shows at a time. */
 export const PAGE = 50
+/** How long an input is kept whole, in characters of its text; a longer one keeps this much, and says how long it was. */
+export const BOUND = 200
 /** Where the activity stands; the person's seen marks are called there, and are no activity themselves. */
 export const ACTIVITY = "/activity"
-/** Where the notices alone stand. */
+/** Where the entries that carry a surface's lines stand. */
 export const NOTICES = `${ACTIVITY}/notices`
+/** What a credential is kept as. */
+export const HIDDEN = "(hidden)"
 /** What the shell calls itself where an entry is its own and about no tab. */
 const SHELL = "baba"
-const CLIP = 60
 
 export const whoOf = (actor: string): Who => (isPerson(actor) ? "person" : "agent")
 
-/** A value as an argument is written: a plain word as is, anything else as JSON, clipped. */
-const arg = (value: Json): string => {
-  const text = typeof value === "string" && /^[\w.:/@-]+$/.test(value) ? value : JSON.stringify(value)
+/** The words of an input's name that say it holds a credential: api_key, apiKey, token, password. */
+const SECRET = new Set(["key", "apikey", "token", "secret", "password", "passwd", "passphrase", "credential", "credentials", "auth", "cookie", "bearer"])
+/** A run of letters and digits, both, 32 or longer: the shape of a key or a token, and of a hash, which goes with them. */
+const TOKEN = /(?=[A-Za-z0-9+_]*\d)(?=[A-Za-z0-9+_]*[A-Za-z])[A-Za-z0-9+_]{32,}={0,2}/g
 
-  return text.length > CLIP ? `${text.slice(0, CLIP - 1)}…` : text
+const secretName = (name: string) => name.split(/[_\-\s.]+|(?<=[a-z])(?=[A-Z])/).some((word) => SECRET.has(word.toLowerCase()))
+/** A value with every credential in it hidden: each string, and the strings within. */
+const unsecret = (value: Json): Json => {
+  if (typeof value === "string") return value.replace(TOKEN, HIDDEN)
+  if (Array.isArray(value)) return value.map(unsecret)
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, v === undefined ? v : secretName(k) ? HIDDEN : unsecret(v)]))
+
+  return value
 }
 
-/** A call as one readable line: its handle, then each argument as `name=value`. */
-export const said = (handle: string, args: Args): string => [handle, ...Object.entries(args).map(([k, v]) => `${k}=${arg(v)}`)].join(" ")
+/** A call's inputs as kept: a credential hidden, each whole up to BOUND, a longer one cut to its first BOUND characters. */
+export function inputsOf(args: Args): { args?: Args; cut?: Record<string, number> } {
+  const kept: Args = {}
+  const cut: Record<string, number> = {}
 
-/** The entries kept after `lines`: numbered on from the last, the newest KEPT. */
-export function record(kept: Entry[], lines: Line[]): Entry[] {
-  if (!lines.length) return kept
+  for (const [name, value] of Object.entries(args)) {
+    const clean = secretName(name) ? HIDDEN : unsecret(value)
+    const text = typeof clean === "string" ? clean : JSON.stringify(clean)
 
-  const next = (kept.at(-1)?.n ?? 0) + 1
+    if (text.length <= BOUND) kept[name] = clean
+    else {
+      kept[name] = text.slice(0, BOUND)
+      cut[name] = text.length
+    }
+  }
 
-  return [...kept, ...lines.map((line, i) => ({ n: next + i, ...line }))].slice(-KEPT)
+  return { ...(Object.keys(kept).length && { args: kept }), ...(Object.keys(cut).length && { cut }) }
+}
+
+/** A value as an input is written: a plain word as is, anything else as JSON. */
+const arg = (value: Json): string => (typeof value === "string" && /^[\w.:/@-]+$/.test(value) ? value : JSON.stringify(value))
+
+/** What was done, as one line: the handle, then each input as `name=value`, one cut saying how long it was; or the event heard. */
+export const didLine = (e: Pick<Entry, "did" | "args" | "cut">): string =>
+  [
+    e.did,
+    ...Object.entries(e.args ?? {}).map(([k, v]) => (e.cut?.[k] === undefined ? `${k}=${arg(v)}` : `${k}=${JSON.stringify(`${String(v)}…`)}(${e.cut[k]} chars)`)),
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+/** The entries kept after `line`, the one place an entry is added: numbered on from the last, the newest KEPT; the world's in a row folded. */
+export function record(kept: Entry[], line: Line | undefined): Entry[] {
+  if (!line) return kept
+
+  const into = folds(kept, line)
+
+  if (into) return kept.map((e) => (e === into ? { ...e, when: line.when, times: (e.times ?? 1) + 1 } : e))
+
+  return [...kept, { n: (kept.at(-1)?.n ?? 0) + 1, ...line }].slice(-KEPT)
+}
+
+/**
+ * The entry a silent event of the world folds into: the last of its tab, where the same hearer heard the same kind and
+ * nothing was refused. It stays where it is, its number kept, so what the person has seen of it stays seen.
+ */
+function folds(kept: Entry[], line: Line): Entry | undefined {
+  if (line.who !== "world" || line.said || line.refused !== undefined) return undefined
+
+  const tab = tabOfEntry(line)
+  const last = tab === undefined ? undefined : kept.findLast((e) => tabOfEntry(e) === tab)
+
+  return last && last.who === "world" && last.by === line.by && last.did === line.did && last.refused === undefined ? last : undefined
 }
 
 /** The tab an entry is in, by its number: none for the shell's own, which is about a tab but not in it. */
-export const tabOfEntry = (e: Entry): number | undefined => {
+export const tabOfEntry = (e: Pick<Entry, "own" | "at">): number | undefined => {
   const m = e.own ? undefined : /^\/tabs\/(\d+)/.exec(e.at)
 
   return m ? Number(m[1]) : undefined
@@ -77,93 +154,116 @@ export const without = (entries: Entry[], gone: (n: number) => boolean): Entry[]
 
 /** What the shell held before a message: its tabs, by number and surface, and the number the next one opened takes. */
 type Held = { tabs: { n: number; surface: string }[]; next: number }
-/** A notice as the shell gives it: its path whole, its surface named. */
-type Given = { text: string; at?: string }
+/** A tab's event as the shell keeps it: who started the work it reports, or what of the world heard it. */
+export type Heard = { kind: "tab"; n: number; event: { kind: string }; actor?: string; heard?: string }
 
-const given = (notice: Notice): Given => (typeof notice === "string" ? { text: notice } : notice)
 const tabOf = (path: string) => /^\/tabs\/(\d+)(\/.*)?$/.exec(path)
+const trimmed = (path: string) => (path === "/" ? path : path.replace(/\/$/, ""))
+const isActivity = (path: string) => path === ACTIVITY || path.startsWith(`${ACTIVITY}/`)
 
-/**
- * The lines of one committed message, from what the shell held before it and the notices the commit gave, already whole:
- * a tab's notices, or the call that gave none; the shell's own open, close and show. `when` is the message's time. A call
- * at /activity, the person marking what they have seen, gives none: it is how they read the log, not something done.
- */
-export function linesOf(before: Held, message: Call | { kind: "tab"; n: number }, when: number, notices: Notice[] = []): Line[] {
-  const lines = linesFor(before, message, when, notices)
-  const id = message.kind === "call" ? message.id : undefined
+/** The lines a commit gave, each with its place where that is not `at`. */
+const saidOf = (notices: Notice[], at: string): Said[] | undefined => {
+  const said = notices
+    .map((n) => (typeof n === "string" ? { text: n } : n))
+    .filter((n) => typeof n.text === "string" && n.text.trim())
+    .map(({ text, at: there }): Said => ({ text: text.trim(), ...(typeof there === "string" && trimmed(there) !== at && { at: trimmed(there) }) }))
 
-  return id ? lines.map((line) => ({ ...line, id })) : lines
+  return said.length ? said : undefined
 }
 
-function linesFor(before: Held, message: Call | { kind: "tab"; n: number }, when: number, notices: Notice[]): Line[] {
-  const told = notices.map(given)
-  const tell = (who: Who, tab: { n: number; surface: string }) =>
-    told.map((t): Line => ({ when, who, surface: tab.surface, at: t.at ?? `/tabs/${tab.n}`, what: t.text, notice: true }))
+/** A call as an entry, before what came of it: who, where, the handle and its inputs; none for a read of the activity itself. */
+function called(before: Held, call: Call, when: number): Line | undefined {
+  if (isActivity(call.path)) return undefined
 
-  if (message.kind !== "call") {
-    const tab = before.tabs.find((t) => t.n === message.n)
-
-    return tab ? tell("surface", tab) : []
-  }
-  if (message.path === ACTIVITY || message.path.startsWith(`${ACTIVITY}/`)) return []
-
-  const who = whoOf(message.actor)
-  const into = tabOf(message.path)
+  const who = whoOf(call.actor)
+  const base = { when, who, did: call.handle, ...inputsOf(call.args), ...(call.id && { id: call.id }) }
+  const into = tabOf(call.path)
 
   if (into) {
     const tab = before.tabs.find((t) => t.n === Number(into[1]))
 
-    if (!tab) return []
-
-    return told.length ? tell(who, tab) : [{ when, who, surface: tab.surface, at: message.path.replace(/\/$/, ""), what: said(message.handle, message.args) }]
+    // A call into a tab not open was refused before it reached one: the shell's, about where it was aimed.
+    return tab ? { ...base, surface: tab.surface, at: trimmed(call.path) } : { ...base, surface: SHELL, at: trimmed(call.path), own: true }
   }
 
-  const { handle, args } = message
+  const { handle, args } = call
 
-  if (handle === "open" && typeof args.surface === "string") return [{ when, who, surface: args.surface, at: `/tabs/${before.next}`, what: "opened", own: true }]
+  if (handle === "open" && typeof args.surface === "string")
+    return { ...base, surface: args.surface, at: `/tabs/${before.next}`, own: true }
 
   const closed = handle === "close" ? before.tabs.find((t) => t.n === args.n) : undefined
 
-  if (closed) return [{ when, who, surface: closed.surface, at: `/tabs/${closed.n}`, what: "closed", own: true }]
+  if (closed) return { ...base, surface: closed.surface, at: `/tabs/${closed.n}`, own: true }
 
   const shown = handle === "show" && typeof args.at === "string" ? tabOf(args.at) : undefined
   const pointed = shown && before.tabs.find((t) => t.n === Number(shown[1]))
 
-  if (pointed) return [{ when, who, surface: pointed.surface, at: (args.at as string).replace(/\/$/, ""), what: "shown to the person", own: true }]
+  if (pointed) return { ...base, surface: pointed.surface, at: trimmed(args.at as string), own: true }
 
-  return [{ when, who, surface: SHELL, at: "/", what: said(handle, args) }]
-}
-
-const isEntry = (e: unknown): e is Entry => {
-  const x = e as Partial<Entry> | null
-
-  return (
-    !!x &&
-    typeof x.n === "number" &&
-    typeof x.when === "number" &&
-    (x.who === "person" || x.who === "agent" || x.who === "surface") &&
-    typeof x.surface === "string" &&
-    typeof x.at === "string" &&
-    typeof x.what === "string"
-  )
+  return { ...base, surface: SHELL, at: "/" }
 }
 
 /**
- * The entries kept from before: none where state kept before activity has none, and only what reads as an entry. One kept
- * before entries were marked is a notice where a surface did it, since a command's event gives entries only by its
- * notices; one by the person or an agent reads as the line for a call, since which of those were notices was not kept.
+ * The entry of one committed message, from what the shell held before it and the notices the commit gave, their places
+ * already whole: a call, with the lines it gave; a tab's event, the world's, or the caller's where its surface said a line
+ * about it. `when` is the message's time.
  */
-export const restored = (kept: unknown): Entry[] =>
-  Array.isArray(kept)
-    ? kept
-        .filter(isEntry)
-        .slice(-KEPT)
-        .map(({ notice, own, ...e }): Entry => ({
-          ...e,
-          ...((notice === true || (notice === undefined && e.who === "surface")) && { notice: true as const }),
-          ...(own === true && { own: true as const }),
-        }))
-    : []
+export function entryOf(before: Held, message: Call | Heard, when: number, notices: Notice[] = []): Line | undefined {
+  if (message.kind === "call") {
+    const line = called(before, message, when)
+    const said = line && saidOf(notices, line.at)
+
+    return line && { ...line, ...(said && { said }) }
+  }
+
+  const tab = before.tabs.find((t) => t.n === message.n)
+
+  if (!tab) return undefined
+
+  const at = `/tabs/${tab.n}`
+  const said = saidOf(notices, at)
+  const base = { when, surface: tab.surface, at, did: message.event.kind, ...(said && { said }) }
+
+  if (message.actor !== undefined) return said && { ...base, who: whoOf(message.actor) }
+
+  return { ...base, who: "world", ...(message.heard && { by: message.heard }) }
+}
+
+/** The entry of a call refused, with why: none for the activity's own. */
+export function refusalOf(before: Held, call: Call, when: number, reason: string): Line | undefined {
+  const line = called(before, call, when)
+
+  // A refused open makes no tab: it is the shell's, at its /.
+  return line && (line.own && call.handle === "open" ? { ...line, surface: SHELL, at: "/", own: undefined, refused: reason } : { ...line, refused: reason })
+}
+
+const WHO = new Set(["person", "agent", "world", "surface"])
+const OWN: Record<string, string> = { opened: "open", closed: "close", "shown to the person": "show" }
+
+/** An entry kept in this shape, or in the one before, where an entry was a line of text: what read as neither is dropped. */
+function entryFrom(e: unknown): Entry | undefined {
+  const x = e as (Omit<Partial<Entry>, "who"> & { what?: unknown; notice?: unknown; who?: unknown }) | null
+
+  if (!x || typeof x.n !== "number" || typeof x.when !== "number" || !WHO.has(x.who as string) || typeof x.surface !== "string" || typeof x.at !== "string") return undefined
+
+  const who: Who = x.who === "surface" ? "world" : (x.who as Who)
+  const own = x.own === true ? { own: true as const } : {}
+  const id = typeof x.id === "string" ? { id: x.id } : {}
+
+  if (typeof x.did === "string") {
+    const { what: _, notice: __, ...rest } = x
+
+    return { ...(rest as Omit<Entry, "who">), who, ...own }
+  }
+  if (typeof x.what !== "string") return undefined
+  // Before, a notice stood in place of its call, which was not kept; a call's line was its handle and inputs; the shell's own, a word.
+  if (x.notice === true || (x.notice === undefined && x.who === "surface")) return { n: x.n, when: x.when, who, surface: x.surface, at: x.at, did: "", said: [{ text: x.what }], ...own, ...id }
+
+  return { n: x.n, when: x.when, who, surface: x.surface, at: x.at, did: (own.own && OWN[x.what]) || x.what, ...own, ...id }
+}
+
+/** The entries kept from before: none where state kept before activity has none, and only what reads as an entry, in either shape. */
+export const restored = (kept: unknown): Entry[] => (Array.isArray(kept) ? kept.map(entryFrom).filter((e): e is Entry => !!e).slice(-KEPT) : [])
 
 /** The seen mark kept from before; where there is none, as in state kept before it, everything kept so far counts as seen. */
 export function seenFrom(kept: unknown, entries: Entry[]): Seen {
@@ -176,38 +276,37 @@ export function seenFrom(kept: unknown, entries: Entry[]): Seen {
   return { upto, looked: x.looked.filter((n): n is number => typeof n === "number" && n > upto) }
 }
 
-/** The mark after the person saw every notice up to `n`. */
+/** The mark after the person saw every line up to `n`. */
 export function seeUpto(seen: Seen, n: number): Seen {
   const upto = Math.max(seen.upto, n)
 
   return { upto, looked: seen.looked.filter((m) => m > upto) }
 }
 
-/** The mark after the person looked at notice `n` alone, as by opening the drawer of the tab it is in. */
+/** The mark after the person looked at entry `n` alone, as by opening the drawer of the tab it is in. */
 export const lookAt = (seen: Seen, n: number): Seen => (n <= seen.upto || seen.looked.includes(n) ? seen : { ...seen, looked: [...seen.looked, n] })
 
-/** The notices `who` has not seen, by number, oldest first: newer than the mark, not looked at one by one, and caused by someone else. */
+/** The entries with a surface's lines `who` has not seen, by number, oldest first: newer than the mark, not looked at one by one, and caused by someone else. */
 export const unseenIn = (entries: Entry[], seen: Seen, who: Who = "person"): number[] =>
-  entries.filter((e) => e.notice && e.who !== who && e.n > seen.upto && !seen.looked.includes(e.n)).map((e) => e.n)
+  entries.filter((e) => e.said && e.who !== who && e.n > seen.upto && !seen.looked.includes(e.n)).map((e) => e.n)
 
-/** How many notices `who` has not seen. */
+/** How many entries with a surface's lines `who` has not seen. */
 export const unseenOf = (entries: Entry[], seen: Seen, who: Who = "person"): number => unseenIn(entries, seen, who).length
 
 /** A time as /activity gives it: UTC to the second. */
 export const stamp = (when: number): string => new Date(when).toISOString().replace(/\.\d{3}Z$/, "Z")
 
 /**
- * /activity, newest first, PAGE at a time, or with `notices` the notices alone, at /activity/notices: `upto` the number
- * of the newest entry shown, the newest by default; `earlier` names the page before where there is one. `kind` is notice
- * where a surface said it, call for the mechanical line; `tab` is the tab an entry is in, absent for the shell's own; `at`
- * is null in the shell's own line about a tab now closed, whose entries went with it. An entry keeps its place by tab
- * number; `tabs` gives the address an open tab stands at now, which the entry's place and tab are said by.
+ * /activity, newest first, PAGE at a time, or with `notices` only the entries that carry a surface's lines, at
+ * /activity/notices: `upto` the number of the newest entry shown, the newest by default; `earlier` names the page before
+ * where there is one. An entry keeps its place by tab number; `tabs` gives the address an open tab stands at now, which
+ * its place is said by; `at` is null in the shell's own line about a tab now closed, whose entries went with it.
  */
 export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = false): View | undefined {
   if (upto !== undefined && (!Number.isInteger(upto) || upto < 1)) return undefined
 
   const base = notices ? NOTICES : ACTIVITY
-  const entries = notices ? all.filter((e) => e.notice) : all
+  const entries = notices ? all.filter((e) => e.said) : all
   const shown = entries.filter((e) => upto === undefined || e.n <= upto).slice(-PAGE).reverse()
   const oldest = shown.at(-1)
   const more = !!oldest && entries[0]!.n < oldest.n
@@ -217,30 +316,37 @@ export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = 
 
     return !m ? at : address ? address + m[2] : null
   }
-  const tab = (e: Entry): { tab: string } | undefined => {
-    const n = tabOfEntry(e)
+  const row = (e: Entry) => {
+    const did = didLine(e)
+    const there = e.said?.find((s) => s.at !== undefined)?.at
+    const at = live(e.at)
+    // A tab's address names its surface, where it holds its name: the surface is said only where it does not.
+    const named = !e.own && at !== null && (at === `/${e.surface}` || at.startsWith(`/${e.surface}/`))
 
-    return n === undefined ? undefined : { tab: tabs.at(n) ?? `/tabs/${n}` }
+    return {
+      n: e.n,
+      when: stamp(e.when),
+      who: e.who,
+      ...(e.by && { by: e.by }),
+      ...(!named && { surface: e.surface }),
+      at,
+      ...(e.own && { own: true }),
+      ...(did && { did }),
+      ...(e.times && { times: e.times }),
+      ...(e.refused !== undefined && { refused: e.refused }),
+      ...(e.said && { said: e.said.map((s) => s.text) }),
+      ...(there && { saidAt: live(there) }),
+      ...(e.id && { id: e.id }),
+    }
   }
-  const row = (e: Entry) => ({
-    n: e.n,
-    when: stamp(e.when),
-    who: e.who,
-    ...(!notices && { kind: e.notice ? "notice" : "call" }),
-    surface: e.surface,
-    at: live(e.at),
-    ...tab(e),
-    what: e.what,
-    ...(e.id && { id: e.id }),
-  })
 
   return {
     at: upto === undefined ? base : `${base}/${upto}`,
     about: notices
-      ? "what the surfaces chose to say in this session's open tabs, newest first, by who caused it; tab is the tab it is in"
-      : "who did what in this session, newest first: the person, an agent, or a surface by itself; kind is notice where a surface said it, " +
-        "call where a call said nothing; tab is the tab it is in, absent for the shell's own; a closed tab's entries go with it, " +
-        "and the shell's line that it closed has at null; id is the name a call's caller gave it, where it gave one",
+      ? "what the surfaces said of what was done in this session's open tabs, newest first, by who did it"
+      : "what was done in this session, newest first: who, the person, an agent, or the world heard by the command in by; did, a call with its " +
+        "inputs or the event heard, times in a row; refused, why; said, the surface's lines, saidAt their place; surface, where at does not name it; " +
+        "own, the shell's line about a tab, at null once it closed with its entries; id, the caller's name for a call",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),

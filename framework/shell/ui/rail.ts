@@ -72,7 +72,7 @@ export const MARK = {
 export type Mark = keyof typeof MARK
 
 /**
- * A tab's mark: broken; waiting on the person, where they are needed, an ask or a notice they have not seen waits in it,
+ * A tab's mark: broken; waiting on the person, where they are needed, a notice they have not seen waits in it,
  * or it is a tab the agent opened that they have not looked at; needing the agent; or none.
  */
 export const markOf = ({ needs = [], broken, unseen, waits }: { needs?: TabNeed[]; broken?: string; unseen?: boolean; waits?: boolean }): Mark | undefined =>
@@ -83,12 +83,11 @@ export const homeMarkOf = (unheard: Unheard | undefined): Mark | undefined => (u
 
 /**
  * Why a tab is marked, one line each, as its tooltip says it under its title: broken; who it needs and why; what waits on
- * the person in it, asks and notices they have not seen; and that the agent opened it while they have not looked at it.
+ * the person in it, notices they have not seen; and that the agent opened it while they have not looked at it.
  */
-export const standing = ({ needs = [], broken, asks = 0, notices = 0, unseen }: { needs?: TabNeed[]; broken?: string; asks?: number; notices?: number; unseen?: boolean }): string[] => [
+export const standing = ({ needs = [], broken, notices = 0, unseen }: { needs?: TabNeed[]; broken?: string; notices?: number; unseen?: boolean }): string[] => [
   ...(broken !== undefined ? ["Broken"] : []),
   ...needs.filter((n) => n.who === "person").map((n) => `Needs you: ${n.why}`),
-  ...(asks > 0 && !needs.some((n) => n.who === "person") ? [`${asks === 1 ? "Something waits" : `${asks} things wait`} for you`] : []),
   ...(notices > 0 ? [`${notices} new ${notices === 1 ? "notice" : "notices"}`] : []),
   ...(unseen ? ["Opened by the agent"] : []),
   ...needs.filter((n) => n.who === "agent").map((n) => `Needs the agent: ${n.why}`),

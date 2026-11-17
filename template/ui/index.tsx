@@ -1,5 +1,5 @@
-// The surface's page, shown in its tab: what the surface says, and the person's decision. Anything else the person wants
-// changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's. The shell gives its tab a menu
+// The surface's page, shown in its tab: what the surface says, and the decision that is the person's, which they may take
+// here as well as in the conversation. Anything else the person wants changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's. The shell gives its tab a menu
 // made from the surface: its actions, the places and a search; so the page is its content alone. `drawers`, where
 // exported, ask an action's inputs in the page's own way; without one the shell makes a form of them.
 import { useState } from "react"
@@ -36,7 +36,7 @@ export default function Greeting() {
           </div>
         </section>
       ) : (
-        <p className="text-muted-foreground">Ask the agent for another greeting. What it proposes shows here, for you to accept or decline.</p>
+        <p className="text-muted-foreground">Ask the agent for another greeting. What it proposes shows here, for you to accept or decline, here or in the conversation.</p>
       )}
       {(refused || error) && (
         <p role="alert" className="text-destructive">

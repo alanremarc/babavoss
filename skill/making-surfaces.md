@@ -4,7 +4,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 
 ## The loop
 
-1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and what they decide there.
+1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and which decisions are theirs.
 2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
@@ -28,7 +28,7 @@ Everything an agent learns of a surface, it learns from the surface. There is no
 
 Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and points the person there with the shell's `show`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
 
-The agent does the work through handles. What only the person may decide is an ask, offered to them alone on the page. The page shows what the surface says and offers the person their decisions; anything else they want changed, they tell the agent.
+The agent and the person are offered the same handles: the agent does the work through them, and the person may take any of them on the page. Where a decision is the person's, the view says so, in `how` or where it stands, and the agent raises it in the conversation: it acts on their word there, or they take the same handle on the page. The conversation is where the person steers; the page shows what the surface says and offers them their decisions, and anything else they want changed, they tell the agent.
 
 ## Speaking to the shell
 
@@ -37,9 +37,9 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 | Kind | What | Written as |
 |---|---|---|
 | a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
-| a notice from `update` | what just happened, told once and kept nowhere | `notices`, beside `model` and `commands` |
+| a notice from `update` | what just happened, told once, kept in no view: the line of its action in the log | `notices`, beside `model` and `commands` |
 
-`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where an ask is offered, say it: the ask is how the person decides, `attention` is that they are waited for.
+`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where a decision is the person's, say it: `attention` is that their word is waited for, in the conversation or on the page.
 
 ```ts
 ...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
@@ -51,7 +51,7 @@ A notice is one short line on what just happened, in answer to a call or to a co
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
-A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and in its tab's drawer, where calls in a row are one folded line, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person as words. A tab's entries go with it when it closes.
+A surface's activity comes by itself: the shell keeps a log of every action in a tab, for auditing rather than replay, at `/activity` and in its tab's drawer. An entry says when; who, the person, the agent or the world; where; the handle and its inputs, one past 200 characters cut and a credential never kept; and what came of it, done, or refused with why. An event of a session command is the world's, named by the command's `kind`, so name a command for what it hears, `watch-work-file`; its silent events in a row are one entry with a count. An event of work a call started is the caller's, kept only where the surface says a line about it. A notice is how a surface adds its own line to an entry, for a call or for an event, and the only way it reaches the person as words: the drawer shows it as a message, the call under it, and calls in a row with no line as one folded line. A tab's entries go with it when it closes.
 
 The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
 
@@ -61,7 +61,7 @@ What is there to be looked up rather than followed, rows that are finished or co
 issues: [...open.map(row), ...done.map((issue) => detail(row(issue)))],
 ```
 
-An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way. An update may return `quiet: true` for an event of the same kind.
+An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way, and kept in no log. An update may return `quiet: true` for an event of the same kind.
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
@@ -85,7 +85,7 @@ A tab is the home of one instance of a surface, with its own state. The page's r
 - Where the tab's route is below `/`, the actions offered there, under the place's view's `title` or `name`, or its row's.
 - Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. Go of more than 8 places opens on a field that filters it.
 - The shell's own: close the tab, close the others, copy its link, reload its views.
-- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask stands first in its group, dotted; an ask at another place, or a notice they have not seen about one, dots Go and that place. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
+- What waits on the person carries one dot: on the tab, where its `attention` names them or a notice they have not seen is in it; and in the menu, on Go and every step of the way to the place such a notice is about. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
 
 So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
 

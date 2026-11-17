@@ -9,8 +9,6 @@ export {
   wakeService,
   endpointFile,
   logFile,
-  pageKeyFile,
-  pageLink,
   ACTOR_HEADER,
   CALL_ID_HEADER,
   SERVICE_HEADER,

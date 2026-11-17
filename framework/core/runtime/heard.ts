@@ -37,7 +37,7 @@ const restored = (file: string): Kept => {
 export function heardRecord(dir: string) {
   const file = join(dir, "presented", "heard.json")
   let kept = restored(file)
-  const save = () => writeJsonFile(file, kept)
+  const save = () => writeJsonFile(file, kept, { own: true })
 
   return {
     /** A notice heard: kept as a line, and the oldest counted once more than FOLD wait. */

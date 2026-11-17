@@ -1,7 +1,8 @@
-// The demo project's tasks, for the design document's scenarios: rows by identity, actions for both sides, an ask that is
-// the person's alone, attention while they are waited for, a notice when a task moves, and a path per task. A task in
-// review carries its asks in the list too, so the person decides from the list; the agent is never offered them. The
-// list is ordered by what is to be done: in review first, then to do, then done, so an approval moves a row.
+// The demo project's tasks, for the design document's scenarios: rows by identity, the same actions for both sides, a
+// decision that is the person's, raised by the agent in the conversation and taken by either side, attention while their
+// word is waited for, a notice when a task moves, and a path per task. A task in review carries its approve and reopen in
+// the list too, so it is decided from the list. The list is ordered by what is to be done: in review first, then to do,
+// then done, so an approval moves a row.
 import { action, detail, surface, view, type Update } from "babavoss/core/index.ts"
 
 export type Task = { n: number; title: string; status: "todo" | "review" | "done"; note?: string }
@@ -45,7 +46,6 @@ const approve = action({
   description: ({ n }) => `Approve task ${n}`,
   subject: { n: "number" },
   inputs: {},
-  ask: true,
   update: (m: Model, { n }): Result => moved(m, n, "done", "is approved"),
 })
 const reopen = action({
@@ -53,7 +53,6 @@ const reopen = action({
   description: ({ n }) => `Reopen task ${n}: it is not done`,
   subject: { n: "number" },
   inputs: {},
-  ask: true,
   update: (m: Model, { n }): Result => moved(m, n, "todo", "is reopened"),
 })
 const annotate = action({
@@ -69,7 +68,7 @@ const pages = view([add, done, approve, reopen, annotate], {
 
     return {
       title: "Tasks",
-      how: "Add what the person asks for and mark a task done when it is; they approve it on the page.",
+      how: "Add what the person asks for and mark a task done when it is. Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead.",
       tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
       ...(review.length && { attention: { who: "person", why: `to review ${review.length === 1 ? `task ${review[0]!.n}` : `${review.length} tasks`}` } }),
       add: add.bind({}),

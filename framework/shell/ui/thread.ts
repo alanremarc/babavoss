@@ -1,6 +1,7 @@
 // A drawer's thread, worked out without a page: a tab's entries, read from the shell's activity, as a thread reads them.
-// An entry is a notice, the surface's own words; a call that said nothing, mechanical, a run of them in a row by one
-// author folded into one line; or a tab entry, the shell's opening, closing or showing of a tab. A tab's thread is what
+// An entry the surface said lines about is a notice, its words, with what was done under it; one refused, a quiet line
+// with why; one that said nothing, mechanical, a run of them in a row by one author, or one hearer of the world, folded
+// into one line; or a tab entry, the shell's opening, closing or showing of a tab. A tab's thread is what
 // is in it and the shell's lines about it; home's is the shell's own, each naming its surface. What a tab needs, or that
 // it is broken, is pinned at the thread's foot with its one action, as is what of the person's waits for the agent on
 // home's, and that the session's hooks are not heard, with what to do, while that lasts; each time it began is kept in
@@ -8,16 +9,31 @@
 import type { Unheard } from "./client.ts"
 import { named } from "./commands.ts"
 
-export type Who = "person" | "agent" | "surface"
+export type Who = "person" | "agent" | "world"
 /**
- * An entry as /activity gives it: `when` UTC to the second, `at` null in the shell's line about a tab now closed, `tab` the
- * tab it is in, absent for the shell's own; `kind` absent at /activity/notices, all notices.
+ * An entry as /activity gives it (activity.ts): `when` UTC to the second; `by` the world's hearer; `surface` absent where
+ * `at` names it; `at` null in the shell's
+ * line about a tab now closed; `own` the shell's line about a tab; `did` the call, or the event heard, `times` in a row;
+ * `refused` why; `said` the surface's lines, `saidAt` their place.
  */
-export type Row = { n: number; when: string; who: Who; kind?: "notice" | "call"; surface: string; at: string | null; tab?: string; what: string }
-/** What an entry is: a notice, a call that said nothing, or the shell's own line about a tab. */
-export type Kind = "notice" | "call" | "tab"
-/** One line of a thread: a notice, a tab entry, or calls in a row by one author, newest first, one or more. */
-export type Item = { kind: "notice"; row: Row } | { kind: "tab"; row: Row } | { kind: "calls"; who: Who; rows: Row[] }
+export type Row = {
+  n: number
+  when: string
+  who: Who
+  by?: string
+  surface?: string
+  at: string | null
+  own?: true
+  did?: string
+  times?: number
+  refused?: string
+  said?: string[]
+  saidAt?: string | null
+}
+/** What an entry is: a notice, the surface's lines; a refusal; a call or an event that said nothing; or the shell's own line about a tab. */
+export type Kind = "notice" | "refused" | "call" | "tab"
+/** One line of a thread: a notice, a refusal, a tab entry, or calls in a row by one author, newest first, one or more. */
+export type Item = { kind: "notice"; row: Row } | { kind: "refused"; row: Row } | { kind: "tab"; row: Row } | { kind: "calls"; who: Who; by?: string; rows: Row[] }
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -33,21 +49,20 @@ export function agoOf(when: Date, now: Date): string {
   return when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
 }
 
-/**
- * What an entry is: in a tab, a notice where it is marked so, else a call; in none, the shell's line about a tab, or a call
- * made on the shell itself, at its /.
- */
-export const kindOf = (row: Row): Kind =>
-  row.tab === undefined ? (row.kind === "notice" ? "notice" : row.at === "/" ? "call" : "tab") : row.kind === "call" ? "call" : "notice"
+/** What an entry is: the shell's line about a tab; a notice where the surface said lines; a refusal; else a call or an event. */
+export const kindOf = (row: Row): Kind => (row.own ? "tab" : row.said?.length ? "notice" : row.refused !== undefined ? "refused" : "call")
 
 /** Whether `at` is the tab at `address`, or a place in it. */
 const inside = (at: string | null, address: string): boolean => at !== null && (at === address || at.startsWith(`${address}/`))
 
+/** The tab an entry is in: none for the shell's own, about a tab or at its /. */
+const tabOfRow = (row: Row): string | undefined => (row.own ? undefined : tabIn(row.at ?? undefined))
+
 /** The entries of the tab at `address`, as given, newest first: those in it, and the shell's own lines about it. */
-export const entriesIn = (rows: readonly Row[], address: string): Row[] => rows.filter((r) => r.tab === address || (r.tab === undefined && inside(r.at, address)))
+export const entriesIn = (rows: readonly Row[], address: string): Row[] => rows.filter((r) => (r.own ? inside(r.at, address) : tabOfRow(r) === address))
 
 /** The shell's own entries, home's thread: those in no tab. */
-export const shellEntries = (rows: readonly Row[]): Row[] => rows.filter((r) => r.tab === undefined)
+export const shellEntries = (rows: readonly Row[]): Row[] => rows.filter((r) => tabOfRow(r) === undefined)
 
 /** The entries as a thread's lines, newest first as given: calls in a row by one author are one line. */
 export function itemsOf(rows: readonly Row[]): Item[] {
@@ -58,8 +73,8 @@ export function itemsOf(rows: readonly Row[]): Item[] {
     const last = items.at(-1)
 
     if (kind !== "call") items.push({ kind, row })
-    else if (last?.kind === "calls" && last.who === row.who) last.rows.push(row)
-    else items.push({ kind: "calls", who: row.who, rows: [row] })
+    else if (last?.kind === "calls" && last.who === row.who && last.by === row.by) last.rows.push(row)
+    else items.push({ kind: "calls", who: row.who, ...(row.by !== undefined && { by: row.by }), rows: [row] })
   }
 
   return items
@@ -68,26 +83,40 @@ export function itemsOf(rows: readonly Row[]): Item[] {
 /** A line's key, steady as entries arrive: its newest entry's number. */
 export const keyOf = (item: Item): number => (item.kind === "calls" ? item.rows[0]!.n : item.row.n)
 
-/** Who said or did it, as a notice is headed: the person, the agent, or the surface by the tab's name. */
-export const authorOf = (who: Who, surface: string): string => (who === "person" ? "You" : who === "agent" ? "Agent" : surface)
+/** Who did it, as a notice is headed: the person, the agent, or the world, named by what heard it; where nothing is named, the surface that tells it. */
+export const authorOf = (who: Who, by?: string, surface = "World"): string => (who === "person" ? "You" : who === "agent" ? "Agent" : by ? `World · ${by}` : surface)
+
+/** What was done, as one line: the call or the event, and how many in a row. */
+export const didOf = (row: Row): string => `${row.did ?? ""}${(row.times ?? 1) > 1 ? ` ×${row.times}` : ""}`.trim()
+
+/** What an entry says in one line: the surface's lines where it said any, else what was done. */
+export const lineOf = (row: Row): string => (row.said?.length ? row.said.join(" ") : didOf(row))
+
+/** A refusal as its quiet line: "Agent: draft n=3 refused, not offered here". */
+export const refusedLine = (row: Row): string => `${authorOf(row.who, row.by)}: ${didOf(row)} refused, ${row.refused}`
 
 /** Who did it, after a tab entry's verb. */
-const BY: Record<Who, string> = { person: "by you", agent: "by the agent", surface: "by the surface" }
-const DONE: Record<string, string> = { opened: "opened", closed: "closed", "shown to the person": "shown to you" }
+const BY: Record<Who, string> = { person: "by you", agent: "by the agent", world: "by the world" }
+const DONE: Record<string, string> = { open: "opened", close: "closed", show: "shown to you" }
 
 /**
  * A tab entry as its line says it: "Opened by the agent" in the tab's own thread; in home's, naming its surface, "Queue
  * opened by the agent".
  */
 export function tabLine(row: Row, home = false): string {
-  const done = `${DONE[row.what] ?? row.what} ${BY[row.who]}`
+  const handle = row.did?.split(" ")[0] ?? ""
+  const done = `${DONE[handle] ?? didOf(row)} ${BY[row.who]}`
 
-  return home ? `${named(row.surface)} ${done}` : done.charAt(0).toUpperCase() + done.slice(1)
+  return home ? `${named(row.surface ?? "")} ${done}` : done.charAt(0).toUpperCase() + done.slice(1)
 }
 
-/** Calls folded into one line: "Agent made 4 calls", "You made 1 call". */
-export const callsLine = (item: Extract<Item, { kind: "calls" }>, surface: string): string =>
-  `${authorOf(item.who, surface)} made ${item.rows.length} ${item.rows.length === 1 ? "call" : "calls"}`
+/** Calls folded into one line: "Agent made 4 calls", "You made 1 call"; the world's events, "World · watch heard 7 events". */
+export function callsLine(item: Extract<Item, { kind: "calls" }>): string {
+  const count = item.who === "world" ? item.rows.reduce((sum, row) => sum + (row.times ?? 1), 0) : item.rows.length
+  const what = item.who === "world" ? ["heard", "event"] : ["made", "call"]
+
+  return `${authorOf(item.who, item.by)} ${what[0]} ${count} ${what[1]}${count === 1 ? "" : "s"}`
+}
 
 /** Where an entry happened, within its tab, as a click on it goes: "/tabs/2/issues/12" in /tabs/2 is /issues/12; none outside the tab. */
 export function placeIn(row: Row, address: string): string | undefined {
@@ -108,18 +137,16 @@ export const needLine = (why: string): string => {
 
 /**
  * What is pinned at a thread's foot, the one thing that explains the tab's mark, the strongest first: that it is broken,
- * with Reload; that the person is needed, or an ask waits for them, with Go there; that it needs the agent, with nothing to
- * do; else nothing. `ask` is the first ask the tab offers, by its label and where it is.
+ * with Reload; that the person is needed, with Go there; that it needs the agent, with nothing to do; else nothing.
  */
 export type Pinned = { tone: "broken" | "person" | "agent"; text: string; detail?: string; does?: { label: "Reload" } | { label: "Go there"; at: string } }
 
-export function pinnedOf({ broken, needs = [], ask }: { broken?: string; needs?: { who: "person" | "agent"; why: string }[]; ask?: { label: string; at: string } }): Pinned | undefined {
+export function pinnedOf({ broken, needs = [] }: { broken?: string; needs?: { who: "person" | "agent"; why: string }[] }): Pinned | undefined {
   const person = needs.find((n) => n.who === "person")
   const agent = needs.find((n) => n.who === "agent")
 
   if (broken !== undefined) return { tone: "broken", text: "This tab is broken", detail: broken, does: { label: "Reload" } }
-  if (person) return { tone: "person", text: needLine(person.why), does: { label: "Go there", at: ask?.at ?? "/" } }
-  if (ask) return { tone: "person", text: `${ask.label.replace(/…$/, "")} waits for you`, does: { label: "Go there", at: ask.at } }
+  if (person) return { tone: "person", text: needLine(person.why), does: { label: "Go there", at: "/" } }
   if (agent) return { tone: "agent", text: `Waits for the agent: ${needLine(agent.why).replace(/^./, (c) => c.toLowerCase())}` }
 
   return undefined
@@ -127,9 +154,9 @@ export function pinnedOf({ broken, needs = [], ask }: { broken?: string; needs?:
 
 /**
  * The person's latest calls, as many as the agent has not been told of: what it is told with their next message, newest
- * first; a call that gave a notice is that notice. Read from all activity, where every row has its kind.
+ * first; a refusal changed nothing, and is none of them.
  */
-export const waitingRows = (rows: readonly Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.kind !== undefined).slice(0, Math.max(0, waiting))
+export const waitingRows = (rows: readonly Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.refused === undefined).slice(0, Math.max(0, waiting))
 
 /** What the person is told as the session's hooks are found not heard: never heard, or heard and gone quiet. */
 export const UNHEARD = "This session's agent is not told of changes; it sees them only when it reads"
@@ -165,7 +192,7 @@ export function withUnheard(rows: readonly Row[], known: readonly Unheard[]): Ro
   for (const unheard of [...known].sort((a, b) => a.since - b.since)) {
     const when = new Date(unheard.since).toISOString().replace(/\.\d{3}Z$/, "Z")
     const older = all.findIndex((r) => Date.parse(r.when) < Date.parse(when))
-    const row: Row = { n: -unheard.since, when, who: "surface", kind: "notice", surface: "baba", at: null, what: unheardLine(unheard) }
+    const row: Row = { n: -unheard.since, when, who: "world", surface: "baba", at: null, said: [unheardLine(unheard)] }
 
     all.splice(older < 0 ? all.length : older, 0, row)
   }

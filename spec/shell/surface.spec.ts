@@ -59,10 +59,10 @@ const fragile: typeof counter = {
 
     return counter.update(m, msg)
   },
-  view: (m: Model, path, actor) => {
+  view: (m: Model, path) => {
     if (m.n < 0) throw new Error("negative")
 
-    return pages.view(m, path, actor)
+    return pages.view(m, path)
   },
 }
 /** The .baba/ the shell's surfaces are from, in these specs. */
@@ -319,10 +319,10 @@ describe("the shell surface", () => {
     const split: typeof counter = {
       ...counter,
       start: undefined,
-      view: (m: Model, path, actor) => {
+      view: (m: Model, path) => {
         if (path === "/n") throw new Error("n is not shown yet")
 
-        return pages.view(m, path, actor)
+        return pages.view(m, path)
       },
     }
     const { agent } = story(shell({ counter: split }, BABA))
@@ -390,24 +390,24 @@ describe("the shell surface", () => {
   })
 
   it("gathers who each tab needs first at /, as needs, and no longer among the tab's facts", async () => {
-    type Ask = { asking?: "person" | "agent" | "both" | "bad" }
-    const ask = action({
-      name: "ask",
-      description: "ask",
+    type Calling = { calling?: "person" | "agent" | "both" | "bad" }
+    const call = action({
+      name: "call",
+      description: "call for someone",
       subject: {},
       inputs: { who: "string" },
-      update: (_m: Ask, { who }): Update<Ask, never> => ({ model: who ? { asking: who as Ask["asking"] } : {} }),
+      update: (_m: Calling, { who }): Update<Calling, never> => ({ model: who ? { calling: who as Calling["calling"] } : {} }),
     })
-    const needing = view([ask], {
+    const needing = view([call], {
       "/": (m) => ({
         title: "Asker",
-        ...(m.asking === "person" && { attention: { who: "person", why: "to decide" } }),
-        ...(m.asking === "both" && { attention: [{ who: "person", why: "to decide" }, { who: "agent", why: "to draft" }] }),
-        ...(m.asking === "bad" && { attention: "someone" }),
-        ask: ask.bind({}),
+        ...(m.calling === "person" && { attention: { who: "person", why: "to decide" } }),
+        ...(m.calling === "both" && { attention: [{ who: "person", why: "to decide" }, { who: "agent", why: "to draft" }] }),
+        ...(m.calling === "bad" && { attention: "someone" }),
+        call: call.bind({}),
       }),
     })
-    const asker = surface<Ask, { kind: "none" }, never>({
+    const asker = surface<Calling, { kind: "none" }, never>({
       description: "asks",
       init: () => ({}),
       update: (m, msg) => (msg.kind === "call" ? needing.update(m, msg) : { model: m }),
@@ -420,40 +420,39 @@ describe("the shell surface", () => {
     await agent.call("/", "open", { surface: "counter" })
     await agent.call("/", "open", { surface: "asker" })
     expect(agent.sees()).not.toHaveProperty("needs")
-    await agent.call("/tabs/2", "ask", { who: "person" })
+    await agent.call("/tabs/2", "call", { who: "person" })
     expect(Object.keys(agent.sees()!)).toEqual(["title", "needs", "surfaces", "tabs", "show", "activity"])
     expect(agent.sees()).toMatchObject({ needs: [{ at: "/asker", surface: "asker", who: "person", why: "to decide" }] })
     expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({})
     // The tab's own path still says it.
     expect(agent.sees("/tabs/2")).toMatchObject({ attention: { who: "person", why: "to decide" } })
-    await agent.call("/tabs/2", "ask", { who: "both" })
+    await agent.call("/tabs/2", "call", { who: "both" })
     expect(agent.sees()!.needs).toEqual([
       { at: "/asker", surface: "asker", who: "person", why: "to decide" },
       { at: "/asker", surface: "asker", who: "agent", why: "to draft" },
     ])
     // What is not attention is not gathered, and stays a fact of its tab.
-    await agent.call("/tabs/2", "ask", { who: "bad" })
+    await agent.call("/tabs/2", "call", { who: "bad" })
     expect(agent.sees()).not.toHaveProperty("needs")
     expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({ attention: "someone" })
-    await agent.call("/tabs/2", "ask", { who: "" })
+    await agent.call("/tabs/2", "call", { who: "" })
     agent.told()
-    await agent.call("/tabs/2", "ask", { who: "person" })
+    await agent.call("/tabs/2", "call", { who: "person" })
     // A need is told as an event on it: who is needed, where and why, one line each.
     expect(agent.told()).toEqual(["+ need: the person, at /asker, to decide"])
-    await agent.call("/tabs/2", "ask", { who: "both" })
+    await agent.call("/tabs/2", "call", { who: "both" })
     expect(agent.told()).toEqual(["+ need: you, at /asker, to draft"])
-    await agent.call("/tabs/2", "ask", { who: "" })
+    await agent.call("/tabs/2", "call", { who: "" })
     expect(agent.told()).toEqual(["- need: the person, at /asker, to decide", "- need: you, at /asker, to draft"])
   })
 
-  it("counts to the person at / the asks each tab offers anywhere in its tree, so a tab not shown is dotted; the agent is told none", async () => {
+  it("reads a tab the same for the agent and the person: its surface is never told who reads, and either may call what it offers", async () => {
     type Deep = { open: number[] }
     const answer = action({
       name: "answer",
       description: "answer",
       subject: { n: "number" },
       inputs: {},
-      ask: true,
       update: (m: Deep, { n }): Update<Deep, never> => ({ model: { open: m.open.filter((o) => o !== n) } }),
     })
     const pose = action({
@@ -463,32 +462,32 @@ describe("the shell surface", () => {
       inputs: { n: "number" },
       update: (m: Deep, { n }): Update<Deep, never> => ({ model: { open: [...m.open, n] } }),
     })
-    // An ask two places below /, where the tab's first screen does not offer it, and listed again in its group.
     const deep = view([answer, pose], {
       "/": () => ({ title: "Deep", groups: [{ at: "/group" }], pose: pose.bind({}) }),
       "/group": (m) => ({ items: m.open.map((n) => ({ at: `/group/${n}`, answer: answer.bind({ n }) })) }),
-      "/group/:n": (m, { n }) => ({ at: `/group/${n}`, ...(m.open.includes(Number(n)) && { answer: answer.bind({ n: Number(n) }) }) }),
     })
-    const asker = surface<Deep, { kind: "none" }, never>({
-      description: "asks deep",
+    const poser = surface<Deep, { kind: "none" }, never>({
+      description: "poses",
       init: () => ({ open: [] }),
       update: (m, msg) => (msg.kind === "call" ? deep.update(m, msg) : { model: m }),
-      view: deep.view,
+      // A surface that would tell its readers apart, were it told who reads.
+      view: (m, path, actor) => {
+        const shown = deep.view(m, path)
+
+        return shown && { ...shown, reader: actor ?? "anyone" }
+      },
       run: async () => {},
       failed: () => ({ kind: "none" }),
     })
-    const { agent, person } = story(shell({ asker, counter }, BABA))
-    const counted = () => (person.sees()!.tabs as { at: string; asks?: number }[]).map((t) => [t.at, t.asks])
+    const { agent, person } = story(shell({ poser }, BABA))
 
-    await agent.call("/", "open", { surface: "counter" })
-    await agent.call("/", "open", { surface: "asker" })
-    expect(counted()).toEqual([["/counter", undefined], ["/asker", undefined]])
-    await agent.call("/asker", "pose", { n: 1 })
-    await agent.call("/asker", "pose", { n: 2 })
-    expect(counted()).toEqual([["/counter", undefined], ["/asker", 2]])
-    expect((agent.sees()!.tabs as object[])[1]).not.toHaveProperty("asks")
-    await person.call("/asker/group/1", "answer", { n: 1 })
-    expect(counted()).toEqual([["/counter", undefined], ["/asker", 1]])
+    await agent.call("/", "open", { surface: "poser" })
+    await agent.call("/poser", "pose", { n: 1 })
+    await person.call("/poser", "pose", { n: 2 })
+    expect(agent.sees("/poser/group")).toEqual(person.sees("/poser/group"))
+    expect(agent.sees("/poser/group")).toMatchObject({ reader: "anyone" })
+    expect(await agent.call("/poser/group", "answer", { n: 1 })).toMatchObject({ outcome: "written" })
+    expect(await person.call("/poser/group", "answer", { n: 2 })).toMatchObject({ outcome: "written" })
   })
 
   it("gives a tab's notices with the tab's path whole and its surface named", async () => {
@@ -529,12 +528,12 @@ describe("the shell surface", () => {
     await s.agent.call("/counter", "bump", { by: 1 })
     await s.person.call("/", "close", { n: 1 })
     await s.restart()
-    expect((s.agent.sees("/activity")!.entries as { what: string }[]).map((r) => r.what)).toEqual(["closed", "opened"])
+    expect((s.agent.sees("/activity")!.entries as { did: string }[]).map((r) => r.did)).toEqual(["close n=1", "open surface=counter"])
 
     const old = { n: 1, when: 0, who: "agent", surface: "counter", at: "/tabs/4", what: "bump by=1" }
     const kept = shell({ counter }, BABA).restore!({ tabs: [], next: 5, activity: [old, { ...old, n: 2, what: "closed", own: true }] })
 
-    expect(kept.activity!.map((e) => e.what)).toEqual(["closed"])
+    expect(kept.activity!.map((e) => e.did)).toEqual(["close"])
   })
 
   it("names tabs and paths, and refuses bad surface names", () => {

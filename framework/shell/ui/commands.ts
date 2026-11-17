@@ -1,18 +1,18 @@
-// What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers and
-// which are asks, ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
+// What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers,
+// ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
 // below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
 // input form's fields make of the inputs.
 import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import { handles, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
 
-/** An action offered at a path: the handle, and whether it is an ask, the person's alone. */
-export type Offered = { path: string; handle: Handle; ask: boolean }
+/** An action offered at a path: the handle. */
+export type Offered = { path: string; handle: Handle }
 /** A place a view names: its path within the tab, and what it is called, by its row's `title` or `name`, else its path's last part. */
 export type Place = { at: string; label: string }
 
 const key = (h: Handle) => `${h.name} ${JSON.stringify(h.args)}`
 
-/** The actions offered at `path` in the view the person reads, once each, in the view's order; an ask is the handle marked one. */
+/** The actions offered at `path` in its view, once each, in the view's order. */
 export function offered(path: string, view: View | undefined): Offered[] {
   const seen = new Set<string>()
 
@@ -20,7 +20,7 @@ export function offered(path: string, view: View | undefined): Offered[] {
     if (seen.has(key(handle))) return []
     seen.add(key(handle))
 
-    return [{ path, handle, ask: handle.ask === true }]
+    return [{ path, handle }]
   })
 }
 
@@ -36,19 +36,18 @@ const capital = (text: string): string => text.charAt(0).toUpperCase() + text.sl
 
 /**
  * Offered actions as entries of a menu: each by its name, or by its description where several share
- * one, the same handle bound to different subjects; with "…" where it asks for input first. Asks first.
+ * one, the same handle bound to different subjects; with "…" where it asks for input first.
  */
-export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; ask: boolean; run: () => void }[] {
+export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; run: () => void }[] {
   const count = new Map<string, number>()
 
   for (const a of actions) count.set(a.handle.name, (count.get(a.handle.name) ?? 0) + 1)
 
-  return [...actions.filter((a) => a.ask), ...actions.filter((a) => !a.ask)].map((a) => ({
+  return actions.map((a) => ({
     id: `${a.path} ${key(a.handle)}`,
     name: a.handle.name,
     label: ((count.get(a.handle.name) ?? 0) > 1 ? capital(a.handle.description) : named(a.handle.name)) + (Object.keys(a.handle.open).length ? "…" : ""),
     hint: a.handle.description,
-    ask: a.ask,
     run: () => run(a),
   }))
 }
@@ -66,18 +65,17 @@ const menuFact = (value: Json | undefined): MenuFact =>
     : []
 
 /**
- * The actions offered at a place as a menu's entries: the asks first, marked as the person's; then the groups the view's
- * `menu` fact names, each under its label in its order; then the rest, in the view's order. A line between each.
+ * The actions offered at a place as a menu's entries: the groups the view's `menu` fact names, each under its label in its
+ * order; then the rest, in the view's order. A line between each.
  */
 export function grouped(actions: Offered[], menu: Json | undefined, run: (action: Offered) => void): MenuItem[] {
   const items = actionItems(actions, run)
   const groups = menuFact(menu)
   const grouped = new Set(groups.flatMap((g) => g.actions))
-  const entry = (i: (typeof items)[number]): MenuItem => ({ kind: "action", id: i.id, label: i.label, hint: i.hint, run: i.run, ...(i.ask && { mark: true }) })
+  const entry = (i: (typeof items)[number]): MenuItem => ({ kind: "action", id: i.id, label: i.label, hint: i.hint, run: i.run })
   const sections: { label?: string; list: typeof items }[] = [
-    { list: items.filter((i) => i.ask) },
-    ...groups.map((g) => ({ label: g.label, list: g.actions.flatMap((name) => items.filter((i) => !i.ask && i.name === name)) })),
-    { list: items.filter((i) => !i.ask && !grouped.has(i.name)) },
+    ...groups.map((g) => ({ label: g.label, list: g.actions.flatMap((name) => items.filter((i) => i.name === name)) })),
+    { list: items.filter((i) => !grouped.has(i.name)) },
   ].filter((s) => s.list.length)
 
   return sections.flatMap((s, n): MenuItem[] => [
@@ -217,8 +215,8 @@ function met(f: Found, word: string): number | undefined {
 
 /**
  * What the search finds for a query: the places and actions that meet every word of it, by their label, their way in
- * the menu or what else says them, the best met first; among equals what waits on the person, then the order they were
- * read in, nearest `/` first. At most `cap`.
+ * the menu or what else says them, the best met first; among equals the order they were read in, nearest `/` first. At
+ * most `cap`.
  */
 export function search(found: Found[], query: string, cap = 30): Found[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -229,9 +227,9 @@ export function search(found: Found[], query: string, cap = 30): Found[] {
     .flatMap((f, order) => {
       const scores = words.map((w) => met(f, w))
 
-      return scores.some((score) => score === undefined) ? [] : [{ f, order, score: scores.reduce<number>((sum, score) => sum + score!, 0), ask: f.kind === "action" && f.action.ask }]
+      return scores.some((score) => score === undefined) ? [] : [{ f, order, score: scores.reduce<number>((sum, score) => sum + score!, 0) }]
     })
-    .sort((a, b) => a.score - b.score || Number(b.ask) - Number(a.ask) || a.order - b.order)
+    .sort((a, b) => a.score - b.score || a.order - b.order)
     .slice(0, cap)
     .map(({ f }) => f)
 }
@@ -241,9 +239,9 @@ export const under = (path: string, place: string): boolean => place === "/" || 
 
 /**
  * Where the tab's menu puts a dot on the way to what waits on the person elsewhere in the tab: `targets` are the paths
- * of asks and of unseen notices, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
+ * of unseen notices, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
  * is dotted where a target is at it or below; a way back up, where a target is below it and not below the route. What
- * stands at the route or at `/` is in the menu's sections, dotted there, and needs no way; a notice about no place is `/`.
+ * stands at the route or at `/` is where the menu already is, and needs no way; a notice about no place is `/`.
  */
 export function dotted(targets: readonly string[], route: string, go: readonly { at: string; up?: boolean }[]): Set<string> {
   const away = targets.filter((t) => t !== route && t !== "/")
@@ -276,8 +274,7 @@ export const MANY = 8
 /**
  * The tab's menu, top to bottom: the surface's actions at `/`, with no title, the tab having it; where the tab is below `/`, the place's
  * actions under its name; Go, the places and the way back up, a submenu with a field where there are more than MANY;
- * then the shell's own controls. Asks stand first in their group, marked, and so does the label over them; Go and the
- * places in it carry a dot on the way to what waits elsewhere.
+ * then the shell's own controls. Go and the places in it carry a dot on the way to what waits elsewhere.
  */
 export function tabMenu({ surface, place, go, dots, start, navigate, controls }: TabMenuParts): MenuItem[] {
   // The surface's own actions stand without a heading: the tab the menu hangs from names it already.
@@ -286,7 +283,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
 
     if (!items.length || !titled) return items
 
-    return [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items]
+    return [{ kind: "label", id: `${id}-title`, label: s.label, strong: true }, ...items]
   }
   const ups = go.filter((g) => g.up)
   const places = go.filter((g) => !g.up)
@@ -311,7 +308,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
   return parts.flatMap((p, n): MenuItem[] => [...(n ? [{ kind: "separator" as const, id: `part-${n}` }] : []), ...p])
 }
 
-/** What the search finds as entries of the tab's menu: a place goes there, an action starts, an ask marked. */
+/** What the search finds as entries of the tab's menu: a place goes there, an action starts. */
 export function foundItems(found: Found[], navigate: (at: string) => void, start: (action: Offered) => void): MenuItem[] {
   return found.map((f) =>
     f.kind === "place"
@@ -323,7 +320,6 @@ export function foundItems(found: Found[], navigate: (at: string) => void, start
           note: f.where,
           hint: f.action.handle.description,
           run: () => start(f.action),
-          ...(f.action.ask && { mark: true }),
         }
   )
 }

@@ -2,33 +2,17 @@
 // discovery, never a lock. A client finds a live service or wakes one, and treats a lost response as an uncertain outcome.
 // A service whose process lives on with nothing listening at its port, longer than one takes to close, is deaf: its
 // client ends that process, once and only where it is this session's runtime, and wakes a fresh one, which takes the state.
-import {
-  appendFileSync,
-  chmodSync,
-  closeSync,
-  existsSync,
-  fstatSync,
-  linkSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { randomBytes, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
-import { sessionCwd } from "../state/state.ts"
+import { ownState, sessionCwd } from "../state/state.ts"
 
-// Two secrets, each for its own client. The token is one instance's: the command and the hooks send it as a header, read
-// from the endpoint file, and it changes as the runtime starts again. The page key is the session's: what opens its page
-// in a browser, given in the link its agent gives and kept by the browser as a cookie, so an open page outlives a restart.
-// Both are kept in the state directory readable by its owner alone; neither is ever given to a client that did not send it.
+// The token is one instance's secret: the command and the hooks send it as a header, read from the endpoint file, and it
+// changes as the runtime starts again. It is kept in the state directory, its owner's alone, and never given to a client
+// that did not send it.
 /** `instance` names this runtime's process to the agent, as the token, a secret, cannot: a restart is followed by it. */
 export type Identity = { dir: string; token: string; pid: number; instance: string }
 /** `closing`: since when the service has been closing its door, as it does before it lets go of the session. */
@@ -67,55 +51,6 @@ export const lastPort = (dir: string): number | undefined => {
   }
 }
 
-/** Where the session's page key is kept, across its runtimes. */
-export const pageKeyFile = (dir: string) => join(dir, "page.key")
-/** The query parameter of the link that opens the page in a browser that never saw the session. */
-export const PAGE_KEY_PARAM = "key"
-const readKey = (dir: string): string | undefined => {
-  try {
-    const key = readFileSync(pageKeyFile(dir), "utf8").trim()
-
-    return /^[\w-]{32,}$/.test(key) ? key : undefined
-  } catch {
-    return undefined
-  }
-}
-/** The session's page key: the one kept, or one made now, readable by its owner alone. */
-export function pageKey(dir: string): string {
-  mkdirSync(dir, { recursive: true })
-
-  const kept = readKey(dir)
-
-  if (kept) {
-    chmodSync(pageKeyFile(dir), 0o600)
-
-    return kept
-  }
-
-  const key = randomBytes(32).toString("base64url")
-  const temporary = `${pageKeyFile(dir)}.${randomUUID()}.tmp`
-
-  // One that cannot be read as a key is no key: made again.
-  rmSync(pageKeyFile(dir), { force: true })
-  try {
-    writeFileSync(temporary, key, { mode: 0o600 })
-    // Made by the runtime that owns the directory; linked, never renamed over, so a key kept is never replaced.
-    linkSync(temporary, pageKeyFile(dir))
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-  } finally {
-    rmSync(temporary, { force: true })
-  }
-
-  return readKey(dir) ?? key
-}
-/** The link that opens the session's page at `port`: its address with the key, or the address alone where there is no key yet. */
-export const pageLink = (dir: string, port: number): string => {
-  const key = readKey(dir)
-
-  return `http://127.0.0.1:${port}/${key ? `?${PAGE_KEY_PARAM}=${key}` : ""}`
-}
-
 /**
  * The environment refuses what a runtime requires: a resident process, a file lock, loopback. Not a fault to retry: the
  * root does not run here, and the message says why, for an agent to read.
@@ -137,7 +72,7 @@ const failedWith = (error: unknown, code: string) =>
 
 /** BSD flock locks follow the open descriptor across the short-lived locking utility and release on process death. */
 export function ownService(dir: string) {
-  mkdirSync(dir, { recursive: true })
+  ownState(dir, true)
 
   const file = join(dir, "service.lock")
   const fd = openSync(file, "a+", 0o600)
@@ -289,7 +224,7 @@ const deafSince = (endpoint: Endpoint, seen: number) => (typeof endpoint.closing
  * record, or when the recorded one is gone, in the waker's.
  */
 export function wakeService(dir: string, entry: string | URL, session: string, env: NodeJS.ProcessEnv = process.env): ChildProcess {
-  mkdirSync(dir, { recursive: true })
+  ownState(dir)
 
   const log = openSync(logFile(dir), "a", 0o600)
   const recorded = sessionCwd(dir)

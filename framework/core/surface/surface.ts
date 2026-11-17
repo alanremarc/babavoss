@@ -42,7 +42,15 @@ export interface Surface<M, E extends { kind: string }, C> {
   session?(command: C): boolean
   /** The one writer. A message is a call, or an event a command sent. Never awaits, never touches the outside. */
   update(model: M, message: Call | E): Update<M, C>
-  /** The view at `path` for an actor, `/` the whole; undefined when nothing stands at the path. An actor may receive different handles. */
+  /**
+   * The model once a call was refused, and why, where the surface keeps its refusals, as the shell keeps them in its
+   * activity: committed as bookkeeping, told to the agent in no way. Undefined, or absent, keeps the model as it is.
+   */
+  refused?(model: M, call: Call, reason: string): M | undefined
+  /**
+   * The view at `path`, `/` the whole; undefined when nothing stands at the path. It offers the agent and the person the same
+   * handles. `actor`, who reads, is given to a root alone, whose present for the agent is shaped as one; a tab's surface never has it.
+   */
   view(model: M, path: string, actor?: string): View | undefined
   /** Why nothing stands at a path, where the surface can say more than that: what stood there and where it went. */
   absent?(model: M, path: string): string | undefined

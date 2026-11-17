@@ -59,20 +59,14 @@ export const add = (a: Tokens, b: Tokens): Tokens => ({
 })
 
 /** The timeline with an entry appended, numbered from 1. */
-/**
- * A text as the timeline keeps it: the key in a link to the page under test masked at its own length, since a run's record
- * is kept on disk and the key opens a live page that can drive its agent; what the chunk cost stays true.
- */
-export const keyless = (text: string) => text.replace(/([?&]key=)([\w-]+)/g, (_, at: string, key: string) => at + "K".repeat(key.length))
-export const append = (tl: Timeline, t: number, entry: Omit<Entry, "i" | "t">): Timeline => {
-  const kept = { ...entry, text: keyless(entry.text), ...(entry.call !== undefined && { call: keyless(entry.call) }) }
-
-  return { ...tl, entries: [...tl.entries, { i: tl.entries.length + 1, t, ...kept }] }
-}
+export const append = (tl: Timeline, t: number, entry: Omit<Entry, "i" | "t">): Timeline => ({
+  ...tl,
+  entries: [...tl.entries, { i: tl.entries.length + 1, t, ...entry }],
+})
 /** The timeline with the pending entry `id` given its result. */
 export const resolve = (tl: Timeline, id: string, text: string, error = false): Timeline => ({
   ...tl,
-  entries: tl.entries.map((entry) => (entry.id === id ? { ...entry, text: keyless(text), pending: false, ...(error && { error: true }) } : entry)),
+  entries: tl.entries.map((entry) => (entry.id === id ? { ...entry, text, pending: false, ...(error && { error: true }) } : entry)),
 })
 
 /** The timeline after one event of the harness, `t` ms into the run. */

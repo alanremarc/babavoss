@@ -174,11 +174,11 @@ export function changes(before: Json | undefined, after: Json | undefined): stri
 const quoted = (s: string) => (/^[\w./=:@-]+$/.test(s) ? s : `'${s.replaceAll("'", "'\\''")}'`)
 const argsOf = (args: Record<string, string> = {}) => Object.entries(args).map(([k, v]) => `${k}=${v}`)
 
-/** A tab's view as its page draws it: its paths within the tab, as the shell gives them to a page, and a handle by its name, description, inputs and whether it is an ask. */
+/** A tab's view as its page draws it: its paths within the tab, as the shell gives them to a page, and a handle by its name, description and inputs. */
 function drawn(value: Json | undefined, address: string): Json {
   if (Array.isArray(value)) return value.map((v) => drawn(v, address))
   if (!value || typeof value !== "object") return value ?? null
-  if (value.kind === "handle") return { kind: "handle", name: value.name ?? "", description: value.description ?? "", open: value.open ?? {}, ...(value.ask === true && { ask: true }) }
+  if (value.kind === "handle") return { kind: "handle", name: value.name ?? "", description: value.description ?? "", open: value.open ?? {} }
 
   return Object.fromEntries(
     Object.entries(value).map(([k, v]) => [k, k === "at" && typeof v === "string" && (v === address || v.startsWith(`${address}/`)) ? v.slice(address.length) || "/" : drawn(v, address)]),
@@ -234,12 +234,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
     symlinkSync(join(FRAMEWORK, "node_modules"), join(dir, "node_modules"))
   } else symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
 
-  // The page's key is the demo session's secret, never recorded: masked at its own length, so what a telling costs stays true.
-  const own = (text: string) =>
-    text
-      .replaceAll(dir, PROJECT)
-      .replace(/([?&]key=)([\w-]+)/g, (_, at: string, key: string) => at + "K".repeat(key.length))
-      .trimEnd()
+  const own = (text: string) => text.replaceAll(dir, PROJECT).trimEnd()
   /** Time let pass within a step, cut short once the play is stopped. */
   const nap = (ms: number) => sleep(ms, undefined, signal && { signal })
   /** A process of the demo's, killed once the play is stopped, unless it is what tidies up after it. */
@@ -305,13 +300,21 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
   let seen = 0
   const look = async () => {
     const root = await page("/")
-    const activity = (await page("/activity")) as { entries?: { n: number; who: string; surface: string; at: string | null; what: string }[] | string } | undefined
+    type Entry = { n: number; who: string; by?: string; surface: string; at: string | null; did?: string; times?: number; refused?: string; said?: string[] }
+    const activity = (await page("/activity")) as { entries?: Entry[] | string } | undefined
     const fresh = Array.isArray(activity?.entries) ? activity.entries.filter((e) => e.n > seen).reverse() : []
     const tabs = await Promise.all(tabsOf(root).map(async (t): Promise<Drawn> => ({ at: t.at, surface: t.surface, view: drawn(await page(t.at), t.at) })))
 
     seen = Math.max(seen, ...fresh.map((e) => e.n))
 
-    return { root, tabs, activity: fresh.map((e) => `activity: ${e.who} · ${e.surface} ${e.at ?? ""} · ${e.what}`) }
+    const line = (e: Entry) =>
+      [
+        `activity: ${e.who}${e.by ? ` ${e.by}` : ""} · ${e.surface} ${e.at ?? ""} · ${e.did ?? ""}${e.times ? ` ×${e.times}` : ""}`,
+        ...(e.refused !== undefined ? [`refused: ${e.refused}`] : []),
+        ...(e.said ?? []).map((s) => `said: ${s}`),
+      ].join(" · ")
+
+    return { root, tabs, activity: fresh.map(line) }
   }
   const tabOf = (root: Json | undefined, surface: string) => tabsOf(root).find((t) => t.surface === surface)?.at
   /**
