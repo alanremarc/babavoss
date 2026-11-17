@@ -1,7 +1,7 @@
 // Whose move it is, from what the hooks tell: a message starts the agent's turn, tool calls are work, a stop ends it, the
 // session's end leaves it unknown, and a working turn unheard for long reads as unknown rather than stuck; whether the hooks
 // have gone quiet between the agent's calls; and which of baba's words a session's start is given, once a boundary.
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "bun:test"
@@ -97,8 +97,11 @@ test("a boundary is told once: a start that follows another with nothing heard b
     expect(await told(at("SessionStart", "compact"))).toBeUndefined()
     expect(await told(at("SessionStart", "compact"))).toBeUndefined()
     // The session's end opens nothing: a resume after it is the same boundary still.
+    // It is left in the session's folder, for the archive's sweep, until anything else is heard.
     await told(at("SessionEnd"))
+    expect(existsSync(join(home, "sessions/B/ended"))).toBe(true)
     expect(await told(at("SessionStart", "resume"))).toBeUndefined()
+    expect(existsSync(join(home, "sessions/B/ended"))).toBe(false)
     // A message is heard: the next compaction is a boundary of its own; so after a tool call, or a stop.
     await told(at("UserPromptSubmit"))
     expect(await told(at("SessionStart", "compact"))).toBe(reminder)

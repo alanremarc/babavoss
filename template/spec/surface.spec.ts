@@ -14,8 +14,9 @@ test("the agent proposes a greeting, both are offered the decision, and the agen
   // When the agent proposes
   expect(await agent.call("/", "propose", { text: "good morning" })).toMatchObject({ outcome: "written" })
 
-  // Then both see the proposal and that the person is needed, and both are offered the decision
-  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning", attention: { who: "person" } })
+  // Then both see the proposal, the person is shown it as a highlight, and both are offered the decision
+  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning" })
+  expect(person.noticed()).toEqual(['highlight: "good morning" is proposed, to accept or decline'])
   expect(agent.offered()).toEqual(["accept", "decline", "propose"])
   expect(person.offered()).toEqual(["accept", "decline", "propose"])
 
@@ -31,15 +32,15 @@ test("the agent is told what the person decided on the page, and both notice it"
   agent.told()
   expect(agent.noticed()).toEqual([])
   await person.call("/", "accept", {})
-  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- attention", "- action accept", "- action decline"])
+  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- action accept", "- action decline"])
   expect(agent.noticed()).toEqual(['The greeting is now "good morning"'])
-  expect(person.noticed()).toEqual(['The greeting is now "good morning"'])
+  expect(person.noticed()).toEqual(['highlight: "good morning" is proposed, to accept or decline', 'The greeting is now "good morning"'])
 
   await agent.call("/", "propose", { text: "hi" })
   agent.told()
   await person.call("/", "decline", {})
   expect(agent.sees()).toMatchObject({ greeting: "good morning" })
-  expect(agent.told()).toEqual(["- proposed", "- attention", "- action accept", "- action decline"])
+  expect(agent.told()).toEqual(["- proposed", "- action accept", "- action decline"])
   expect(agent.noticed()).toEqual(['"hi" was declined'])
 })
 

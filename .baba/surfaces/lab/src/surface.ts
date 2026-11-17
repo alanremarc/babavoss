@@ -432,15 +432,17 @@ function heardOf(run: Run, entries: Heard[]): Run {
   return next
 }
 
-/** What an event of the run's own command is worth noticing: a turn that ended, a run that could not go on. */
+/** What an event of the run's own command is worth noticing: a turn that ended, a highlight where it failed; a run that could not go on, a highlight. */
 function noticed(before: Run, after: Run): Notice[] {
   if (before.status === "working" && after.status === "idle") {
     const turn = after.entries.findLast((entry) => entry.kind === "turn")
 
-    return [{ text: `turn ${after.turns} ended${turn?.error ? `: ${turn.text}` : ""}`, ...(turn && { at: `/entries/${turn.i}` }) }]
+    const text = `turn ${after.turns} ended${turn?.error ? `: ${turn.text}` : ""}`
+
+    return [{ text, ...(turn && { at: `/entries/${turn.i}` }), ...(turn?.error && { highlight: true as const }) }]
   }
 
-  return after.status === "ended" && before.status !== "ended" && after.ended ? [after.ended] : []
+  return after.status === "ended" && before.status !== "ended" && after.ended ? [{ text: after.ended, highlight: true }] : []
 }
 
 /** A run from its record, as the lab shows one it did not start: if it was left live, its process is gone. */

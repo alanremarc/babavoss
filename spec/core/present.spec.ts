@@ -103,11 +103,9 @@ describe("whole", () => {
     ])
     expect(whole({ count: detail(3), name: "x" }, { ...say, path: "/tabs/1" })).toEqual(['name: "x"', "+count in detail; read /tabs/1"])
   })
-  it("says the root's own: one open for every surface, by the name column; who is needed, first; where the person was pointed, by its place", () => {
-    const need = { at: "/tabs/3", surface: "queue", who: "person", why: "to approve a draft" }
+  it("says the root's own: one open for every surface, by the name column; where the person was brought, by its place", () => {
     const view = {
       title: "baba",
-      needs: [need],
       surfaces: ["queue", "lab"].map((name) => ({ name, description: `the ${name}`, open: handle("open", "in a new tab", { surface: name }) })),
       pointed: { at: "/tabs/3", n: 2 },
       tabs: [],
@@ -115,18 +113,14 @@ describe("whole", () => {
 
     expect(whole(view, say)).toEqual([
       'title: "baba"',
-      'needs: at\tsurface\twho\twhy\n"/tabs/3"\t"queue"\t"person"\t"to approve a draft"',
       'surfaces: name\tdescription\n"queue"\t"the queue"\n"lab"\t"the lab"',
       'pointed: "/tabs/3"',
       "actions: baba / ACTION name=value…",
       "  open surface=NAME   in a new tab",
     ])
-    // A need is an event on it, one line: who, where, why; where the person was pointed changes by its place alone.
-    expect(told(view, { ...view, needs: [{ ...need, who: "agent", why: "to draft" }], pointed: { at: "/tabs/3", n: 3 } })).toEqual([
-      "- need: the person, at /tabs/3 queue, to approve a draft",
-      "+ need: you, at /tabs/3 queue, to draft",
-    ])
-    expect(told(view, { ...view, needs: [{ ...need, why: "to approve two drafts" }] })).toEqual(["need: the person, at /tabs/3 queue, now to approve two drafts"])
+    // Where the person was brought changes by its place alone.
+    expect(told(view, { ...view, pointed: { at: "/tabs/3", n: 3 } })).toEqual([])
+    expect(told(view, { ...view, pointed: { at: "/tabs/4", n: 3 } })).toEqual(['pointed: "/tabs/3" → "/tabs/4"'])
   })
 })
 

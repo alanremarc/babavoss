@@ -23,10 +23,10 @@ surfaces/NAME/
 Everything an agent learns of a surface, it learns from the surface. There is no file of instructions beside it.
 
 - `description` is how the shell lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
-- How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what comes next; who is waited for is `attention`, below. Keep it short, since it is read each time.
+- How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what comes next; that the person's word is waited for is a highlight, below. Keep it short, since it is read each time.
 - What is mechanical needs no words: what an input may be is declared with it, and an action that may not be taken now is not offered.
 
-Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and points the person there with the shell's `show`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
+Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and marks it for the person with the shell's `highlight`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
 
 The agent and the person are offered the same handles: the agent does the work through them, and the person may take any of them on the page. Where a decision is the person's, the view says so, in `how` or where it stands, and the agent raises it in the conversation: it acts on their word there, or they take the same handle on the page. The conversation is where the person steers; the page shows what the surface says and offers them their decisions, and anything else they want changed, they tell the agent.
 
@@ -53,24 +53,24 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 
 | Kind | What | Written as |
 |---|---|---|
-| a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
+| a fact at `/` | what stands, until the surface stops saying it | `title`; `broken` |
 | a notice from `update` | what just happened, told once, kept in no view: the line of its action in the log | `notices`, beside `model` and `commands` |
 
-`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where a decision is the person's, say it: `attention` is that their word is waited for, in the conversation or on the page.
-
-```ts
-...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
-```
-
-A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a bubble beside its tab for a moment, and keeps it in the tab's drawer, as a message in its thread; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
+A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page keeps it in the tab's drawer, as a message in its thread; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
 
 ```ts
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
-A surface's activity comes by itself: the shell keeps a log of every action in a tab, for auditing rather than replay, at `/activity` and in its tab's drawer. An entry says when; who, the person, the agent or the world; where; the handle and its inputs, one past 200 characters cut and a credential never kept; and what came of it, done, or refused with why. An event of a session command is the world's, named by the command's `kind`, so name a command for what it hears, `watch-work-file`; its silent events in a row are one entry with a count. An event of work a call started is the caller's, kept only where the surface says a line about it. A notice is how a surface adds its own line to an entry, for a call or for an event, and the only way it reaches the person as words: the drawer shows it as a message, the call under it, and calls in a row with no line as one folded line. A tab's entries go with it when it closes.
+A notice marked `highlight: true` is a highlight: what happened that the person should look at, such as a proposal that waits on their word, or a run that failed. Their page shows it as a bubble beside its tab for a moment and marks the tab with a dot until they open its drawer, where it stands out; the agent is told it first among what it hears. The agent raises one of its own with the shell's `highlight`. Mark only what deserves it: everything else is in the thread for whoever looks.
 
-The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
+```ts
+update: (m, { text }) => ({ model: { ...m, proposed: text }, notices: [{ text: `"${text}" is proposed, to accept or decline`, highlight: true }] }),
+```
+
+A surface's activity comes by itself: the shell keeps a log of every action in a tab, for auditing rather than replay, at `/activity` and in its tab's drawer. An entry says when; who, the person, the agent or the world; where; the handle and its inputs, one past 200 characters cut and a credential never kept; and what came of it, done, or refused with why. An event of a session command is the world's, named by the command's `kind`, so name a command for what it hears, `watch-work-file`; its silent events in a row are one entry with a count. An event of work a call started is the caller's, kept only where the surface says a line about it. A notice is how a surface adds its own line to an entry, for a call or for an event, and the only way it reaches the person as words: the drawer shows it as a message, the call under it, and calls in a row with no line as one folded line. The model holds a tab's newest 200 entries; its whole log is kept in the tab's own files. When the tab closes, its state and its log leave the session's present for the archive of closed tabs, read only at `/activity/closed`, where the agent reads them; it is never opened again with them. The archive clears itself after a window the person sets, and on their word.
+
+The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved.
 
 What is there to be looked up rather than followed, rows that are finished or counters, wrap in `detail(value)` from `babavoss/core/index.ts`, a fact or a row of a list. The page and a read of the tab see it as an ordinary value; the shell's present at `/` leaves it out and counts it in one line, `+19 more in issues; read /tabs/3`, and a change to it there is one line too.
 
@@ -78,7 +78,7 @@ What is there to be looked up rather than followed, rows that are finished or co
 issues: [...open.map(row), ...done.map((issue) => detail(row(issue)))],
 ```
 
-An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way, and kept in no log. An update may return `quiet: true` for an event of the same kind.
+An action that is the page's own bookkeeping, of no event in the work, such as a drawer the person opened, takes `quiet: true`: what it changes is told to the agent in no way, and kept in no log. An update may return `quiet: true` for an event of the same kind.
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
@@ -102,7 +102,7 @@ A tab is the home of one instance of a surface, with its own state. The page's r
 - Where the tab's route is below `/`, the actions offered there, under the place's view's `title` or `name`, or its row's.
 - Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. Go of more than 8 places opens on a field that filters it.
 - The shell's own: close the tab, close the others, copy its link, reload its views.
-- What waits on the person carries one dot: on the tab, where its `attention` names them or a notice they have not seen is in it; and in the menu, on Go and every step of the way to the place such a notice is about. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
+- A highlight the person has not opened carries one dot: on the tab, until they open its drawer; and in the menu then, on Go and every step of the way to the place it is about. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
 
 So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. An entry is its handle's name, the description its hint; where several entries bind one handle to different subjects, each is the name and the `title` or `name` of the row it stands in, as home's "Close Queue" for each tab, else its subject's values. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
 
@@ -127,7 +127,7 @@ A page is a React component the shell wraps in its tab. Inside the tab everythin
 
 ## Home
 
-A click on the mark shows home: by default a desktop, an icon a surface, with Open or how many tabs under it, marked where a tab of it waits on someone; a click goes to its newest tab or opens one. A project may draw its own: `.baba/home.tsx`, whose default export takes the desktop's place, given `HomeProps` from `babavoss/shell/ui/index.tsx`: the project's `title`, a `notice` where there are no surfaces, `surfaces` each with `name`, `label`, `description`, `icon`, and `open()` or why it is `broken`, the open `tabs` newest first each with `label`, `surface`, `icon`, `mark` and `go()`, and the `foot` that says the root, its version, the session and its harness, to place where it fits. It is a page like a surface's, drawn with the kit; it has no view, so its state is the surfaces'. Made or removed, the root's page is generated again with it.
+A click on the mark shows home: by default a desktop, an icon a surface, with Open or how many tabs under it, marked where a tab of it is broken or holds a highlight; a click goes to its newest tab or opens one. A project may draw its own: `.baba/home.tsx`, whose default export takes the desktop's place, given `HomeProps` from `babavoss/shell/ui/index.tsx`: the project's `title`, a `notice` where there are no surfaces, `surfaces` each with `name`, `label`, `description`, `icon`, and `open()` or why it is `broken`, the open `tabs` newest first each with `label`, `surface`, `icon`, `mark` and `go()`, and the `foot` that says the root, its version, the session and its harness, to place where it fits. It is a page like a surface's, drawn with the kit; it has no view, so its state is the surfaces'. Made or removed, the root's page is generated again with it.
 
 ```tsx
 import type { HomeProps } from "babavoss/shell/ui/index.tsx"

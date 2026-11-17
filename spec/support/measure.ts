@@ -9,8 +9,10 @@
 // Before an action was told by its name, a reorder by what moved and a notice let stand for its commit's changes: the
 // steps' diffs summed 29 lines and 1011 characters; the turn's call answers 11 and 359, the person's next message 12 and 405.
 // After: 29 and 884; 11 and 328; 9 and 324.
+// Before highlight took the place of show and attention, the session start's present was 22 lines and 1184 characters,
+// and the call answers 11 and 328; after, 22 and 1177, and 11 and 338, a highlight told first and marked so.
 // Before a view's handles were one block, the command said once, and a description one clause: the whole present 26 lines
-// and 1759 characters, the session's start 22 and 1184. After: 28 and 1759; 25 and 1145.
+// and 1823 characters, the session's start 22 and 1381. After: 28 and 1823; 25 and 1349.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -81,7 +83,7 @@ function view(m: Model): Json {
         at: "/tabs/3",
         n: 3,
         surface: "queue",
-        close: handle("close", "its state is dropped", { n: 3 }),
+        close: handle("close", "its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 3 }),
         title: "Queue",
         actions: ["add", "draft"],
         facts: {
@@ -218,7 +220,6 @@ const taskViews = routes<Tasks, { n: number }>([add, begin, finish, rename], {
     title: "Tasks",
     how: "Add what the person asks for, begin one at a time; checks run by themselves; finish a task only once its checks passed.",
     tasks: m.tasks.map(({ n, title, status, checks }) => ({ at: `/tasks/${n}`, n, title, status, ...(checks && { checks }) })),
-    ...(m.tasks.some((t) => t.checks === "passed" && t.status === "doing") && { attention: { who: "agent", why: "to finish what passed its checks" } }),
     add: add.bind({}),
   }),
   "/tasks/:n": (m, { n }) => {
@@ -243,7 +244,7 @@ const tasks = surface<Tasks, Checked | { kind: "none" }, { n: number }>({
       : msg.kind === "checked"
         ? {
             model: tasked(m, msg.n, (t) => ({ ...t, checks: msg.result })),
-            ...(msg.result === "passed" && { notices: [{ text: `Task ${msg.n}'s checks passed`, at: `/tasks/${msg.n}` }] }),
+            ...(msg.result === "passed" && { notices: [{ text: `Task ${msg.n}'s checks passed`, at: `/tasks/${msg.n}`, highlight: true as const }] }),
           }
         : { model: m },
   view: taskViews.view,

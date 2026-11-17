@@ -2,7 +2,8 @@
 // of what it does not know. Pure, for the surface that changes them and for the page that applies them alike: the
 // appearance, a mode and a theme for both modes or for each, a preset or the person's own numbers (the kit's theme.ts), and
 // where the rail of tabs stands; the preferences a page follows by convention (the shell's conventions); the shortcuts, the
-// person's bindings over the shell's commands (keys.ts); and whether the mark moves while the agent works.
+// person's bindings over the shell's commands (keys.ts); whether the mark moves while the agent works; and how long the
+// archive of closed tabs keeps them and how large it may grow (../../src/archive.ts).
 import { bounded, isPreset, presetOf, PRESETS, type Mode, type PresetId, type Theme } from "../../../kit/theme.ts"
 import { COMMANDS, isCommand, normal, RENAMED, same, type CommandId } from "./keys.ts"
 
@@ -32,8 +33,16 @@ export type Preferences = { -readonly [K in Preference]: (typeof PREFERENCES)[K]
 /** Each preference's name, in the order the settings' page shows them. */
 export const PREFERENCE_NAMES = Object.keys(PREFERENCES) as Preference[]
 
+/**
+ * How the archive of closed tabs clears itself, in every project: a closed tab, or a session over, goes `days` after it
+ * closed or ended, and the oldest first while a project's archive is past `megabytes`.
+ */
+export type Keep = { days: number; megabytes: number }
+/** What each number of the archive may be. */
+export const KEEP_BOUNDS = { days: [1, 3650], megabytes: [1, 100_000] } as const
+
 /** `keys`: the person's bindings, where they differ from a command's default. */
-export type Settings = { appearance: Appearance; preferences: Preferences; keys: Partial<Record<CommandId, string>>; logo: { animate: boolean } }
+export type Settings = { appearance: Appearance; preferences: Preferences; keys: Partial<Record<CommandId, string>>; logo: { animate: boolean }; archive: Keep }
 
 export const MODES = ["light", "dark", "system"] as const
 export const SIDES = ["left", "right", "top", "bottom"] as const
@@ -47,6 +56,7 @@ export const DEFAULTS: Settings = {
   preferences: Object.fromEntries(PREFERENCE_NAMES.map((name) => [name, PREFERENCES[name].default])) as Preferences,
   keys: {},
   logo: { animate: true },
+  archive: { days: 30, megabytes: 200 },
 }
 
 export const isMode = (value: unknown): value is Appearance["mode"] => value === "light" || value === "dark" || value === "system"
@@ -64,6 +74,18 @@ export function preferencesOf(value: unknown): Preferences {
   const kept = record(value)
 
   return Object.fromEntries(PREFERENCE_NAMES.map((name) => [name, isChoice(name, kept[name]) ? kept[name] : DEFAULTS.preferences[name]])) as Preferences
+}
+
+/** Whether a number may be the archive's `days` or `megabytes`: a whole number within its bounds. */
+export const keeps = (name: keyof Keep, value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= KEEP_BOUNDS[name][0] && (value as number) <= KEEP_BOUNDS[name][1]
+
+/** The archive's numbers a kept value says, each it does not say, or says wrongly, the default. */
+export function keepOf(value: unknown): Keep {
+  const kept = record(value)
+  const { days, megabytes } = DEFAULTS.archive
+
+  return { days: keeps("days", kept.days) ? kept.days : days, megabytes: keeps("megabytes", kept.megabytes) ? kept.megabytes : megabytes }
 }
 
 /** The choice a kept value says: a preset's id, or three numbers, bounded; anything else, none. Clay was once named claude. */
@@ -136,7 +158,13 @@ export function settingsOf(value: unknown): Settings {
 
   const logo = record(kept.logo)
 
-  return { appearance: appearanceOf(kept.appearance), preferences: preferencesOf(kept.preferences), keys, logo: { animate: logo.animate !== false } }
+  return {
+    appearance: appearanceOf(kept.appearance),
+    preferences: preferencesOf(kept.preferences),
+    keys,
+    logo: { animate: logo.animate !== false },
+    archive: keepOf(kept.archive),
+  }
 }
 
 /** A command whose own binding is the same as an earlier command's, the later of them that has one of its own; none where all differ. */
@@ -161,7 +189,7 @@ export type Told = string | ({ theme: "dynamic" } & Theme)
 /** The appearance as the view tells it: the mode, one theme for both or one each, and the rail. */
 export type ToldAppearance = ({ same: true; theme: Told } | { same: false; light: Told; dark: Told }) & { mode: Appearance["mode"]; rail: Rail }
 /** The settings as their view at / tells them, beside its actions: what the page takes the whole settings from. */
-export type SettingsView = { appearance: ToldAppearance; preferences: Preferences; shortcuts: Record<CommandId, string>; logo: Settings["logo"] }
+export type SettingsView = { appearance: ToldAppearance; preferences: Preferences; shortcuts: Record<CommandId, string>; logo: Settings["logo"]; archive: Keep }
 
 const told = (choice: Choice): Told => (typeof choice === "string" ? choice : { theme: "dynamic", ...choice })
 
@@ -175,6 +203,7 @@ export function viewOf(settings: Settings): SettingsView {
     preferences: { ...settings.preferences },
     shortcuts: keys,
     logo: { animate: settings.logo.animate },
+    archive: { ...settings.archive },
   }
 }
 
@@ -192,5 +221,6 @@ export function settingsFromView(view: SettingsView): Settings {
     preferences: preferencesOf(view.preferences),
     keys: settingsOf({ keys: Object.fromEntries(bound) }).keys,
     logo: { animate: view.logo.animate !== false },
+    archive: keepOf(view.archive),
   }
 }

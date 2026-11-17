@@ -444,20 +444,14 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     // The person proposes there: a call the agent did not make.
     expect((await person(tab, "propose", { text: "good morning" })).status).toBe(200)
 
-    // After a tool call, what was heard alone, one line; what it changed comes with the person's next message.
+    // After a tool call, what was heard alone, one line: the surface's highlight; it stands for what the call changed.
     expect(JSON.parse(hook("PostToolUse").stdout)).toEqual({
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
-        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nthe person acted on ${tab}`,
+        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nhighlight ${tab}: "good morning" is proposed, to accept or decline (by the person)`,
       },
     })
-
-    const told = hook("UserPromptSubmit").stdout
-
-    expect(told).toStartWith("In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
-    expect(told).toContain(`+ need: the person, at ${tab}, to accept or decline the proposed greeting`)
-    // The agent has not worked in the tab this turn or the last: it is told in one line, who changed it, and to read it.
-    expect(told).toMatch(new RegExp(`\\n\\${tab} "Greeting" \\(tab \\d+\\): changed by the person; read it`))
+    // With the person's message, nothing more: the highlight told what changed.
     expect(call(tab).stdout).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")

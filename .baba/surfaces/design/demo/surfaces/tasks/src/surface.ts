@@ -1,6 +1,6 @@
 // The demo project's tasks, for the design document's scenarios: rows by identity, the same actions for both sides, a
-// decision that is the person's, raised by the agent in the conversation and taken by either side, attention while their
-// word is waited for, a notice when a task moves, and a path per task. A task in review carries its approve and reopen in
+// decision that is the person's, raised by the agent in the conversation and taken by either side, a notice when a task
+// moves, a highlight where it waits for the person's word, and a path per task. A task in review carries its approve and reopen in
 // the list too, so it is decided from the list. The list is ordered by what is to be done: in review first, then to do,
 // then done, so an approval moves a row.
 import { action, detail, surface, view, type Update } from "babavoss/core/index.ts"
@@ -11,8 +11,9 @@ type Result = Update<Model, never>
 
 const moved = (m: Model, n: number, status: Task["status"], what: string): Result => {
   const task = m.tasks.find((t) => t.n === n)!
+  const notice = { text: `Task ${n}, ${task.title}, ${what}`, at: `/tasks/${n}`, ...(status === "review" && { highlight: true as const }) }
 
-  return { model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, status } : t)) }, notices: [{ text: `Task ${n}, ${task.title}, ${what}`, at: `/tasks/${n}` }] }
+  return { model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, status } : t)) }, notices: [notice] }
 }
 
 const ORDER: Record<Task["status"], number> = { review: 0, todo: 1, done: 2 }
@@ -63,17 +64,12 @@ const annotate = action({
   update: (m: Model, { n, text }): Result => ({ model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, note: text.trim() } : t)) } }),
 })
 const pages = view([add, done, approve, reopen, annotate], {
-  "/": (m) => {
-    const review = m.tasks.filter((t) => t.status === "review")
-
-    return {
-      title: "Tasks",
-      how: "Add what the person asks for and mark a task done when it is. Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead.",
-      tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
-      ...(review.length && { attention: { who: "person", why: `to review ${review.length === 1 ? `task ${review[0]!.n}` : `${review.length} tasks`}` } }),
-      add: add.bind({}),
-    }
-  },
+  "/": (m) => ({
+    title: "Tasks",
+    how: "Add what the person asks for and mark a task done when it is. Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead.",
+    tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
+    add: add.bind({}),
+  }),
   "/tasks/:n": (m, { n }) => {
     const t = m.tasks.find((t) => t.n === Number(n))
 

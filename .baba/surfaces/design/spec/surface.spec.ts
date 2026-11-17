@@ -102,7 +102,7 @@ test("the person's decision: the agent is told it is theirs, takes it on their w
   // The task in review: the agent is offered approve and reopen, as the person is; whose decision it is, its how says.
   expect(told(`${WORD} /tabs/1/tasks/1 done`)).toContain("+ action approve")
   expect(told(`${WORD} /tabs/1`)).toContain("Approving it is the person's decision")
-  expect(told(`${WORD} /tabs/1`)).toContain("to review task 1")
+  expect(told(`${WORD} /tabs/1`)).toContain('"/tasks/tasks/1"\t1\t"Write the notes"\t"review"')
   // On the person's word, said in the conversation, the agent approves.
   expect(told(`${WORD} /tabs/1/tasks/1 approve`)).not.toContain("refused")
   // Taken on the page, it is told with the person's next message, by them.
@@ -135,9 +135,8 @@ test("a step carries what the person's page showed after it: each open tab at /,
   // The agent opening a tab leaves the page on home, as the shell's page does until the person moves.
   expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toEqual({ tabs: [expect.objectContaining({ at: "/tasks", surface: "tasks" })] })
   expect(task(at(`${WORD} /tabs/1 add 'title=Write the notes'`))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "todo" })
-  // In review, the task carries approve and reopen, as the agent's view has them, and the tab says the person is waited for.
+  // In review, the task carries approve and reopen, as the agent's view has them.
   expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve" }, reopen: { name: "reopen" } })
-  expect(done.tabs[0]!.view).toMatchObject({ attention: { who: "person", why: "to review task 1" } })
   expect(task(at(`${WORD} /tabs/1/tasks/1 approve`))).toMatchObject({ at: "/tasks/2", n: 2, title: "Write the changelog", status: "todo" })
 
   // The step lists the page in a line.
@@ -153,10 +152,10 @@ test("a step carries what the person's page showed after it: each open tab at /,
 
   expect(beside.slice(0, acted).map((s) => s.page.shown)).toEqual(Array(acted).fill(undefined))
   expect(beside.slice(acted).every((s) => s.page.shown === "/tasks")).toBe(true)
-  // The agent's show is gone to; a tab the person opens from home is gone to; one closed in front leaves the next, or home.
+  // The agent's highlight brought to the front is gone to; a tab the person opens from home is gone to; one closed in front leaves the next, or home.
   const shownAt = (name: string, did: string) => plays.find((p) => p.name === name)!.steps[stepOf(name, did).n - 1]!.page.shown
 
-  expect(shownAt("housekeeping", `${WORD} / show at=/tabs/1/tasks/1`)).toBe("/tasks")
+  expect(shownAt("housekeeping", `${WORD} / highlight at=/tabs/1/tasks/1 'why=the notes are next' front=true`)).toBe("/tasks")
   expect(shownAt("housekeeping", 'on the page: open surface="settings" at /')).toBe("/settings")
   expect(shownAt("moved", "on the page: close n=1 at /")).toBeUndefined()
   expect(shownAt("moved", 'on the page: open surface="tasks" at /')).toBe("/tasks")
@@ -173,7 +172,7 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
   expect(surfaces.map((s) => s.name)).toEqual(["build", "tasks"])
   expect(tasks.description).toBe((await import("../demo/surfaces/tasks/src/surface.ts")).default.description)
   expect(tasks.views.map((v) => v.path)).toEqual(["/", "/tasks/:n"])
-  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status note", "attention"]), actions: [{ name: "add", inputs: ["title"] }] })
+  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status note"]), actions: [{ name: "add", inputs: ["title"] }] })
   expect(tasks.views[0]!.actions[0]).not.toHaveProperty("notice")
   expect(tasks.views[1]!.actions.map((a) => [a.name, a.notice ?? false])).toEqual([
     ["annotate", false],
@@ -190,7 +189,7 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
   ])
   // What the build's own command brings is in its facts too, as the plays saw it.
   expect(build).toMatchObject({ description: own.description, itself: ["watch"], views: [{ path: "/", actions: [{ name: "rerun", inputs: [] }] }] })
-  expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why", "attention"]))
+  expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why"]))
 })
 
 test("pinned, every telling is the same as the pin; one that changed shows its delta, and its pinned text", async () => {
@@ -311,7 +310,7 @@ test("the code changing plays again, and what then tells the agent otherwise is 
   const shorter = plays.map((p) => (p.name === "work" ? { ...p, steps: p.steps.slice(0, -2) } : p))
 
   await world.settle((c) => c.kind === "play", { kind: "played", plays: shorter })
-  expect(agent.noticed()).toEqual(["Played again: what work tells the agent changed"])
+  expect(agent.noticed()).toEqual(["highlight: Played again: what work tells the agent changed"])
   expect(agent.sees()).not.toHaveProperty("playing")
 })
 

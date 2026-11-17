@@ -1,7 +1,7 @@
 // Present: a view as the agent reads it, whole or as what changed, as pure functions of views. Whole, a view is relative
 // facts, lists of objects as tables, and its handles in one block, the command said once and a line per handle; the root's
-// tabs are each one heading with its facts under it. A change is told as an event on a thing: a row of a list by its identity, not its index; a
-// tab once, as its heading; a need once, as who is needed, where and why; standing prose and long texts by where to read
+// tabs are each one heading with its facts under it. A change is told as an event on a thing: a row of a list by its
+// identity, not its index; a tab once, as its heading; standing prose and long texts by where to read
 // them; a reorder by what moved; detail by how much of it there is, and where to read it. Who made a change is the
 // caller's to say.
 import { isDetail, meant, revealed, type Handle, type Json } from "../surface/view.ts"
@@ -21,9 +21,9 @@ const CUT = 100
 export type Say = { command?: string; path?: string }
 /**
  * One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; and its tab's
- * heading. `waits`: it is of what waits on the agent, which is told however else the change is explained.
+ * heading.
  */
-export type Change = { line: string; keys: string[]; where: string; tab?: string; waits?: true }
+export type Change = { line: string; keys: string[]; where: string; tab?: string }
 
 type Row = { [key: string]: Json | undefined }
 
@@ -192,47 +192,11 @@ const own = (root: Row): Row => {
   return { ...rest, ...(isRow(pointed) && typeof pointed.at === "string" ? { pointed: pointed.at } : pointed !== undefined && { pointed }) }
 }
 
-/** Who is needed, gathered at / under this name: rows of a tab's path, its surface, who and why. */
-export const NEEDS = "needs"
-
-type Need = { at: string; surface?: string; who: string; why: string }
-
-const needsOf = (v: Json | undefined): Need[] | undefined => {
-  const rows = rowsOf(v)
-
-  return rows?.every((r) => typeof r.at === "string" && typeof r.who === "string" && typeof r.why === "string") ? (rows as Need[]) : undefined
-}
-/** A need's identity: its tab and who; a tab may need both. */
-const needKey = (n: Need) => keyOf(NEEDS, `${n.at} ${n.who}`)
-const needed = (n: Need) => `${n.who === "agent" ? "you" : `the ${n.who}`}, at ${[n.at, n.at !== `/${n.surface}` && n.surface].filter(Boolean).join(" ")}`
-
-/** Needs changed, each as an event on one need: added or gone, who, where and why; a why changed, the new one. */
-function needsChanged(a: Need[], b: Need[]): Change[] {
-  const before = new Map(a.map((n) => [needKey(n), n]))
-  const now = new Map(b.map((n) => [needKey(n), n]))
-  const out: Change[] = []
-
-  const waits = (n: Need) => (n.who === "agent" ? { waits: true as const } : {})
-
-  for (const [key, n] of before) if (!now.has(key)) out.push({ line: `- need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at, ...waits(n) })
-  for (const [key, n] of now) {
-    const old = before.get(key)
-
-    if (!old) out.push({ line: `+ need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at, ...waits(n) })
-    else if (old.why !== n.why) out.push({ line: `need: ${needed(n)}, now ${n.why}`, keys: [key], where: n.at, ...waits(n) })
-  }
-
-  return out
-}
-
-/** A list's rows by what names them across versions: their identity, else, for needs, their tab and who; undefined where neither holds. */
+/** A list's rows by what names them across versions: their identity; undefined where it holds none. */
 function namer(lists: Row[][]): ((row: Row) => string) | undefined {
   const id = identity(lists.filter((rows) => rows.length))
 
-  if (id) return (row) => JSON.stringify(inner(row)[id])
-  if (lists.every((rows) => needsOf(rows))) return (row) => needKey(row as Need)
-
-  return undefined
+  return id ? (row) => JSON.stringify(inner(row)[id]) : undefined
 }
 
 /**
@@ -399,10 +363,7 @@ export function entries(value: Json | undefined, key = "", out = new Map<string,
   const rows = rowsOf(value)
   const id = rows?.length ? identity([rows]) : undefined
 
-  const needs = key === NEEDS ? needsOf(value) : undefined
-
   if (isHandle(value)) out.set(key, call(value, {}))
-  else if (needs?.length) for (const n of needs) out.set(needKey(n), JSON.stringify(n))
   else if (rows?.length && id) {
     out.set(`${key}#order`, rows.map((r) => JSON.stringify(r[id])).join(","))
     for (const row of rows) entries(row, keyOf(key, row[id]), out)
@@ -682,13 +643,7 @@ export function diff(before: Json | undefined, now: Json | undefined, say: Say =
 
   // The root's own actions are the shell's standing ones, told whole: one offered once a tab is open is no event.
   const unhandled = (row: Row) => Object.fromEntries(Object.entries(row).filter(([, v]) => !isHandle(v))) as Row
-  const { [NEEDS]: na, ...a } = unhandled(own(before as Row))
-  const { [NEEDS]: nb, ...b } = unhandled(own(now as Row))
-  const ma = needsOf(na ?? [])
-  const mb = needsOf(nb ?? [])
-  const out = ma && mb ? needsChanged(ma, mb) : walk(na, nb, { label: NEEDS, key: NEEDS, where: "/", say }, [])
-
-  walk(a, b, { label: "", key: "", where: "/", say }, out)
+  const out = walk(unhandled(own(before as Row)), unhandled(own(now as Row)), { label: "", key: "", where: "/", say }, [])
 
   return tabsChanged(ta, tb, say, out)
 }

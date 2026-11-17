@@ -8,12 +8,13 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 18
+export const VERSION = 19
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
 export const STALE_HEADER = "babavoss-stale"
 export const CALL_HEADER = "babavoss-call"
+export const CALL_ID_HEADER = "babavoss-call-id"
 export const ENDPOINT_FILE = "service.json"
 /** How long a live runtime may refuse connections before it is taken for deaf: longer than one takes to close its door. */
 export const DEAF_MS = 10_000
@@ -67,6 +68,110 @@ const fileArg = (path: string) => {
   throw new SyntaxError(`no file at ${file}: a value @PATH is read from that file; give text that begins with @ by name=@- on standard input`)
 }
 
+/**
+ * The name every call of one program carries, as CALL_ID_HEADER: a caller's own name for its calls, here `program:` and the
+ * run's, so the log keeps the program's calls as one move. The shell's activity reads the same prefix (thread.ts).
+ */
+export const PROGRAM = "program:"
+
+/** One call of a program as it was answered: done with what it changed, or refused with why. */
+export type Answered = { path: string; handle: string; args: Record<string, string>; changed?: string; refused?: string }
+
+/** How many places of one group are named before the rest are elided; the count says how many in all. */
+const NAMED = 10
+
+/** Paths that differ only in their last part, as one: /q/issues/{3,5,6}; past NAMED, the first of them and an ellipsis. */
+const together = (paths: string[]) => {
+  const parts = paths.map((p) => [p.slice(0, p.lastIndexOf("/") + 1), p.slice(p.lastIndexOf("/") + 1)] as const)
+  const head = parts[0]![0]
+  const tails = parts.map(([, t]) => t)
+  const listed = tails.length > NAMED ? [...tails.slice(0, NAMED - 2), "…"] : tails
+
+  return paths.length > 1 && parts.every(([h]) => h === head) ? `${head}{${listed.join(",")}}` : paths.join(" ")
+}
+
+/** An answer of the text door split: its own lines, and what was heard meanwhile, under `notices:`. */
+const split = (text: string): [string, string[]] => {
+  const [own = "", ...rest] = text.split(/^notices:$/m)
+
+  return [own.trim(), rest.join("\n").split("\n").filter((line) => line.trim())]
+}
+
+/** A call's argument as the summary writes it: a plain word as is, anything else quoted, a long one cut. */
+const argument = (value: string) => (/^[\w.,:/@+-]+$/.test(value) ? value : JSON.stringify(value.length > 40 ? `${value.slice(0, 39)}…` : value))
+
+/**
+ * The answer to a program's calls, after what it printed: how many were done and refused; the calls done, grouped where
+ * the same handle changed the same, each change as the present tells it; each refusal with its inputs and its reason;
+ * where the program ended at a refusal, that no call after it was made; and what was heard meanwhile, once.
+ */
+export function summed(calls: Answered[], stopped = false): string {
+  const groups = new Map<string, { handle: string; changed: string; paths: string[] }>()
+  const heard: string[] = []
+  const refusals: string[] = []
+
+  for (const call of calls) {
+    const [said, notices] = split(call.refused ?? call.changed ?? "")
+
+    for (const line of notices) if (!heard.includes(line)) heard.push(line)
+    if (call.refused !== undefined) {
+      refusals.push(`refused: ${call.path} ${[call.handle, ...Object.entries(call.args).map(([k, v]) => `${k}=${argument(v)}`)].join(" ")}: ${said.replace(/^refused: /, "")}`)
+      continue
+    }
+
+    const changed = said.split("\n").filter(Boolean).join("; ") || "nothing changed"
+    const key = `${call.handle}\0${changed}`
+
+    groups.get(key)?.paths.push(call.path) ?? groups.set(key, { handle: call.handle, changed, paths: [call.path] })
+  }
+
+  const done = calls.length - refusals.length
+
+  return [
+    `${done} call${done === 1 ? "" : "s"} done${refusals.length ? `, ${refusals.length} refused` : ""}`,
+    ...[...groups.values()].map((g) => `${together(g.paths)} ${g.handle}${g.paths.length > 1 ? ` ×${g.paths.length}` : ""}: ${g.changed}`),
+    ...refusals,
+    ...(stopped ? ["the refusal ended the program: no call after it was made"] : []),
+    ...(heard.length ? ["notices:", ...heard] : []),
+  ].join("\n")
+}
+
+/**
+ * A view as a program reads it: its facts as they are, each offered action as `{ handle, args, inputs }`, the handle to
+ * call, its fixed args and its open inputs, each input an object, `{ type }` now, so what more an input says of itself
+ * later, as a kind or its choices, is a field beside its type and no break.
+ */
+export function shaped(view: unknown): unknown {
+  if (Array.isArray(view)) return view.map(shaped)
+  if (!view || typeof view !== "object") return view
+
+  const value = view as Record<string, unknown>
+
+  if (value.kind === "handle" && typeof value.name === "string") {
+    const open = (value.open ?? {}) as Record<string, unknown>
+
+    return {
+      handle: value.name,
+      args: value.args ?? {},
+      inputs: Object.fromEntries(Object.entries(open).map(([k, v]) => [k, typeof v === "string" ? { type: v } : v])),
+    }
+  }
+
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shaped(v)]))
+}
+
+/** A program's path: one that begins with / as it is, any other under `base`, the path given before -e; `.` and `..` worked out. */
+export function under(base: string, path = ""): string {
+  const parts: string[] = []
+
+  for (const part of (path.startsWith("/") ? path : `${base}/${path}`).split("/")) {
+    if (part === "..") parts.pop()
+    else if (part && part !== ".") parts.push(part)
+  }
+
+  return `/${parts.join("/")}`
+}
+
 const guide = `bv — the roots open in this session
 NAME PATH or bv NAME PATH — each root has its own command when its name is free
 bv                         list open roots and their commands
@@ -77,14 +182,19 @@ bv wait [SECONDS]          wait for the person: until something is heard or who 
 bv sleep                   put the root to sleep once your work with it is over: its state is kept, the next call wakes it
 bv restart                 restart, to run changed code: at once, or once the work under way ended, naming the instance
 bv follow INSTANCE [SECONDS]  wait until that instance restarted, and say which one answers: bv follow 3f2a9c1b
-bv -e CODE                 async program: bv -e 'for (let i=0;i<3;i++) console.log(await root.call("/", "add", {text:String(i)}))'
-bv -e -                    code from standard input: echo 'console.log(await root.read("/"))' | bv -e -
+bv [PATH] -e - <<'EOF'     a program, JavaScript or TypeScript, on standard input until EOF; a path before -e is the base
+                           its relative paths are under: bv /notes -e - <<'EOF'
+                           for (const note of (await read()).notes) await call(note.at, "remind", {seconds: 60})
+                           EOF
+bv -e CODE                 a one-line program as one word; a quote inside it ends the shell's, so prefer standard input
 bv --session ID PATH       explicit session: bv --session work /notes
 bv help                    this guide
-Programs have root.read(path), root.call(path, handle, args), root.wait(seconds), and root.page.
-Write a program for more than a few calls of one kind, or a decision depending on a view.
-Print each call's result as it goes: failure halfway leaves earlier calls done.
-Stop at the first refusal unless calls are independent. Refusals include their reason as data.
+For more than a few calls, run one program. In it: await read(path), a view as data, each action offered as
+{ handle, args, inputs }; await call(path, handle, {name: value}), what the call changed, a refusal thrown; print(...).
+A refusal ends the program unless it catches it; the calls before it stay done. The answer is what the program printed,
+then one summary of its calls: how many were done, the same change once with its count, each refusal with why.
+root.read(path) and root.call(path, handle, args), a view and an answer as JSON, root.wait(seconds) and root.page remain.
+The program runs in this command's process, with the files and network the agent's shell has: no more, no less.
 Stay under the harness's command run time limit.
 Use wait for the person; use a timer only for what the root does not report.`
 
@@ -134,13 +244,21 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
 
     if (!root) throw new SyntaxError(`root ${name} is not open in this session`)
     command = root.command ?? `bv ${name}`
+    // A path before -e is the base the program's relative paths are under: `baba /queue -e -`.
+    const base = args[1] === "-e" && args[0]?.startsWith("/") ? under("/", args.shift()) : "/"
     const [path, handle, ...values] = args
     let route = path ?? "/?open"
     let method = "GET"
     let body: string | undefined
     const program = path === "-e"
 
-    if (program && (args.length !== 2 || !handle)) throw new SyntaxError(`${command} -e CODE | ${command} -e -`)
+    // A program split into words was cut by the shell where a quote inside it ended the shell's quote: run, it would be a
+    // program other than the one written.
+    if (program && args.length > 2)
+      throw new SyntaxError(
+        `the program came as ${args.length - 1} words, not one: a quote inside it ended the shell's. Give it on standard input: ${command} -e - <<'EOF'`,
+      )
+    if (program && !handle) throw new SyntaxError(`${command} [PATH] -e - <<'EOF' with the program on standard input, or ${command} -e CODE`)
     // `close` is the word's old name, kept.
     if (path === "sleep" || path === "close") {
       if (args.length !== 1) throw new SyntaxError(`${command} sleep`)
@@ -161,6 +279,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     } else if (!program && path !== undefined) {
       if (!path.startsWith("/") || path.startsWith("//")) throw new SyntaxError(`${command} PATH [HANDLE name=value…]`)
       route = path.split("/").map(encodeURIComponent).join("/")
+      // A program comes after a path alone: one after a handle, as `/queue add -e -`, is neither a call nor a program.
+      if (handle === "-e" || values.includes("-e")) throw new SyntaxError(`-e follows a path alone: ${command} ${path} -e - <<'EOF' with the program`)
       if (handle) {
         const inputs: Record<string, string> = {}
         let stdin: string | undefined
@@ -327,6 +447,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     // Only a run from the session's own harness session is one: another session's agent naming it by --session, or a
     // script with none, runs in its name but is no call of its agent's, so it carries none.
     const call = ownRun(session) ? randomUUID() : undefined
+    // A program names its calls, each by the same name, so the log keeps them as one move.
+    const named = path === "-e" ? `${PROGRAM}${randomUUID().slice(0, 8)}` : undefined
     const request = async (url: string, method = "GET", body?: string, accept = "text/plain") => {
       const send = () =>
         fetch(`${page}${url}`, {
@@ -338,6 +460,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
             [SERVICE_HEADER]: endpoint.token,
             [ACTOR_HEADER]: `agent:${session}`,
             ...(call && { [CALL_HEADER]: call }),
+            ...(named && method === "POST" && { [CALL_ID_HEADER]: named }),
           },
         })
       const until = Date.now() + 30_000
@@ -371,8 +494,14 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       } else if (!path) console.log(`page: ${page}`)
     }
 
+    /**
+     * The program door: the code given runs here, in this command's process, with `read`, `call` and `print` in scope, and
+     * `root` as before. It is arbitrary code with this process's file and network access, which is what the agent's own
+     * shell, which runs this command, already has: the door adds no reach, and no sandbox. Its answer is what it printed,
+     * then one summary of its calls; a refusal is thrown, and ends it unless it catches it, the calls before it done.
+     */
     if (program) {
-      const code = handle === "-" ? readFileSync(0, "utf8") : handle!
+      const given = handle === "-" ? readFileSync(0, "utf8") : handle!
       const data = async (path: string, method = "GET", body?: string) => {
         const response = await request(path, method, body, "application/json")
 
@@ -387,8 +516,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       }
       const connected = {
         page,
-        read: (path: string) => data(path),
-        call: (path: string, handle: string, args: Record<string, unknown>) => data(path, "POST", JSON.stringify({ handle, args })),
+        read: (path: string) => data(under(base, path)),
+        call: (path: string, handle: string, args: Record<string, unknown>) => data(under(base, path), "POST", JSON.stringify({ handle, args })),
         wait: async (seconds = 600) => {
           const response = await request(`/_/wait?seconds=${seconds}`)
           const text = await response.text()
@@ -398,10 +527,60 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
           return text
         },
       }
+      const calls: Answered[] = []
 
-      await new (Object.getPrototypeOf(async function () {}).constructor)("root", code)(connected)
+      class Refused extends Error {}
 
-      return 0
+      const scope = {
+        root: connected,
+        read: async (path?: string) => {
+          const view = await connected.read(path ?? "")
+
+          return view === undefined ? undefined : shaped(view)
+        },
+        // As the command's own call: through the text door, values as text the view's types read, answered with what it changed.
+        call: async (path: string, handle: string, args: Record<string, unknown> = {}) => {
+          const at = under(base, path)
+          const inputs = Object.fromEntries(Object.entries(args).map(([k, v]) => [k, typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)]))
+          const response = await request(at.split("/").map(encodeURIComponent).join("/"), "POST", JSON.stringify({ handle, args: inputs }))
+          const text = await response.text()
+          const said = text.split(/^notices:$/m)[0]!.trim()
+
+          announce()
+          calls.push(response.ok ? { path: at, handle, args: inputs, changed: text } : { path: at, handle, args: inputs, refused: text })
+          if (!response.ok) throw new Refused(`refused: ${at} ${handle}: ${said.replace(/^refused: /, "")}`)
+
+          return said || "nothing changed"
+        },
+        print: (...values: unknown[]) => console.log(values.map((v) => (typeof v === "string" ? v : v === undefined ? "undefined" : JSON.stringify(v))).join(" ")),
+      }
+      let source = given
+
+      // TypeScript too, its types erased; code the transpiler takes for no module, as one with a return at its top, runs as written.
+      try {
+        source = new Bun.Transpiler({ loader: "ts", trimUnusedImports: false }).transformSync(given)
+      } catch {}
+
+      let failed: unknown
+
+      try {
+        await new (Object.getPrototypeOf(async function () {}).constructor)(...Object.keys(scope), source)(...Object.values(scope))
+      } catch (error) {
+        failed = error
+      }
+
+      const stopped = failed instanceof Refused
+
+      if (calls.length) console.log(summed(calls, stopped))
+      if (failed !== undefined && !stopped) {
+        const why = failed instanceof Error ? failed.message : String(failed)
+        // A program given as a word that does not parse was likely cut by a quote inside it, the shell's taking it.
+        const cut = failed instanceof SyntaxError && handle !== "-" ? `; given as one word, a quote inside it may have ended the shell's: give it on standard input, ${command} -e - <<'EOF'` : ""
+
+        console.error(`the program failed: ${why}${cut}`)
+      }
+
+      return failed === undefined ? 0 : 1
     }
 
     /**

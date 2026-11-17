@@ -1,6 +1,6 @@
 // What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers,
 // ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
-// below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
+// below a tab as its menu's search reads it; the tab's menu, and the dots on the way to a highlight; what an
 // input form's fields make of the inputs.
 import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import { typeOf, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
@@ -261,10 +261,10 @@ export function search(found: Found[], query: string, cap = 30): Found[] {
 export const under = (path: string, place: string): boolean => place === "/" || path === place || path.startsWith(`${place}/`)
 
 /**
- * Where the tab's menu puts a dot on the way to what waits on the person elsewhere in the tab: `targets` are the paths
- * of unseen notices, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
+ * Where the tab's menu puts a dot on the way to a highlight elsewhere in the tab: `targets` are the paths of the
+ * highlights the person had not opened, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
  * is dotted where a target is at it or below; a way back up, where a target is below it and not below the route. What
- * stands at the route or at `/` is where the menu already is, and needs no way; a notice about no place is `/`.
+ * stands at the route or at `/` is where the menu already is, and needs no way; a highlight about no place is `/`.
  */
 export function dotted(targets: readonly string[], route: string, go: readonly { at: string; up?: boolean }[]): Set<string> {
   const away = targets.filter((t) => t !== route && t !== "/")
@@ -272,9 +272,9 @@ export function dotted(targets: readonly string[], route: string, go: readonly {
   return new Set(go.filter((g) => away.some((t) => (g.up ? under(t, g.at) && !under(t, route) : under(t, g.at)))).map((g) => g.at))
 }
 
-/** The unseen notices a tab is about, as paths within it: its own address, a notice about no place, as `/`. */
-export function noticesIn(address: string, notices: readonly { at: string | null }[]): string[] {
-  return notices.flatMap((n) => (n.at && (n.at === address || n.at.startsWith(`${address}/`)) ? [n.at.slice(address.length) || "/"] : []))
+/** The places highlights are about in a tab, as paths within it: its own address, a highlight about no place, as `/`. */
+export function highlightsIn(address: string, highlights: readonly { at: string | null }[]): string[] {
+  return highlights.flatMap((n) => (n.at && (n.at === address || n.at.startsWith(`${address}/`)) ? [n.at.slice(address.length) || "/"] : []))
 }
 
 /** A tab's menu as its parts make it: what the shell's own controls for every tab are, after a line. */
@@ -353,7 +353,7 @@ export function foundItems(found: Found[], navigate: (at: string) => void, start
  */
 export function controlsOf({ close, others, link, reload }: { close?: { hint: string; run: () => void }; others?: () => void; link: string; reload: () => void }): MenuItem[] {
   return [
-    { kind: "action", id: "close", label: "Close tab", note: "its state is dropped", hint: close?.hint, disabled: !close, run: () => close?.run() },
+    { kind: "action", id: "close", label: "Close tab", note: "kept read only in the archive", hint: close?.hint, disabled: !close, run: () => close?.run() },
     { kind: "action", id: "close-others", label: "Close other tabs", disabled: !others, run: () => others?.() },
     { kind: "action", id: "copy", label: "Copy link", hint: link, run: () => void navigator.clipboard?.writeText(link) },
     { kind: "action", id: "reload", label: "Reload", hint: "Read the tab's views again", run: reload },

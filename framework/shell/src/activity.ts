@@ -4,27 +4,32 @@
 // row from one hearer in one tab, silent, is one entry with a count. What a call started is the caller's, and an event of
 // it is kept only where its surface said a line about it: the call is already in the log. What was done is the handle
 // with its inputs, each whole up to BOUND and cut past it, saying how long it was; a value that reads as a credential is
-// never kept. What came of it is done, or refused with why; and the surface's own lines about it where it gave any, which
-// is what a notice was: /activity/notices is the entries that carry them. A quiet commit, the page's own bookkeeping, is
-// none, and the person marking what they have seen neither. Time is the message's own, stamped as it enters, a call by
-// the run loop and a tab's event by the shell's run, so the update that keeps it stays pure. The last KEPT entries are kept,
-// in the shell's model; `record` is the one place an entry is added, `activityView` the one where they are read. An entry
-// lives with the tab it is in: when the tab closes its entries go with it, and the shell's own line that it closed stays.
-// What the person has seen of the lines is kept beside them, a mark the page sets, so a page opened later counts what is
-// new from the log itself, and sees a tab's lines alone, one by one.
+// never kept. What came of it is done, or refused with why; and the surface's own lines about it where it gave any, its
+// notices. A line may be a highlight, the one class of important entry: one the surface marked, or the agent's call of the
+// shell's `highlight`; /activity/highlights is the entries that carry one. A quiet commit, the page's own bookkeeping, is
+// none, and the person opening a drawer neither. Time is the message's own, stamped as it enters, a call by
+// the run loop and a tab's event by the shell's run, so the update that keeps it stays pure. The model holds the last KEPT
+// entries of each tab, and of the shell's own; on disk each tab's log is kept whole in its own file, up to a bound (keep.ts).
+// `record` is the one place an entry is added, `activityView` the one where the held ones are read. An entry lives with the
+// tab it is in: when the tab closes its entries leave the model with it, kept read only in the archive of closed tabs
+// (archive.ts), and the shell's own line that it closed stays.
+// Which highlights the person has opened is kept beside them, a mark per drawer the page sets as it opens one: a highlight
+// is unopened until the drawer of the tab it is in, or home's, is opened after it, so a page opened later knows from the
+// log itself which tabs to mark.
 import { isPerson, type Args, type Call, type Json, type Notice, type View } from "../../core/index.ts"
 
 /** Who did it: the person, an agent of the session, or the world, heard by a session command. */
 export type Who = "person" | "agent" | "world"
-/** A line the surface said about an action: its text, and the place it is about where that is not the action's own. */
-export type Said = { text: string; at?: string }
+/** A line the surface said about an action: its text, the place it is about where that is not the action's own, and whether it is a highlight. */
+export type Said = { text: string; at?: string; highlight?: true }
 /**
  * One action: its number in the session; `when`, in ms since the epoch, the last where it folds several; `who`, and `by`,
  * the world's hearer, the kind of the session command that heard it; the surface and `at`, the tab and the path, by tab
  * number; `did`, the handle called, or the kind of the event heard; `args`, its inputs, each whole or cut, and `cut`, the
  * whole length of each one cut; `refused`, why it was refused, where it was; `said`, the surface's own lines about it;
- * `times`, how many it folds, where more than one; `own` where it is the shell's opening, closing or showing of a tab,
- * which is about the tab but not in it; `id` the name its call was given by its caller, where it was given one.
+ * `times`, how many it folds, where more than one; `own` where it is the shell's opening or closing of a tab,
+ * which is about the tab but not in it; `id` the name its call was given by its caller, where it was given one: the
+ * calls of one program share theirs, `program:` and the run's, so they read as one move.
  */
 export type Entry = {
   n: number
@@ -44,22 +49,24 @@ export type Entry = {
 }
 /** An entry before it is numbered. */
 export type Line = Omit<Entry, "n">
-/** What the person has seen of the lines: every one up to `upto`, and those after it they looked at one by one, by opening a tab's drawer. */
-export type Seen = { upto: number; looked: number[] }
+/** The highlights the person has opened: by drawer, a tab's number or HOME, the newest entry in it they opened it after. */
+export type Opened = Record<string, number>
 
 /** The tabs an entry can be in: the address the open tab numbered n stands at. */
 export type Tabs = { at: (n: number) => string | undefined }
 
-/** How many entries are kept; an older one goes first. */
+/** How many entries of each tab, and of the shell's own, the model holds; an older one of the same goes first. */
 export const KEPT = 200
 /** How many entries /activity shows at a time. */
 export const PAGE = 50
 /** How long an input is kept whole, in characters of its text; a longer one keeps this much, and says how long it was. */
 export const BOUND = 200
-/** Where the activity stands; the person's seen marks are called there, and are no activity themselves. */
+/** Where the activity stands. */
 export const ACTIVITY = "/activity"
-/** Where the entries that carry a surface's lines stand. */
-export const NOTICES = `${ACTIVITY}/notices`
+/** Where the entries that carry a highlight stand; the person's opening of a drawer is called there, and is no activity itself. */
+export const HIGHLIGHTS = `${ACTIVITY}/highlights`
+/** The drawer of the entries in no tab, home's. */
+export const HOME = "home"
 /** What a credential is kept as. */
 export const HIDDEN = "(hidden)"
 /** What the shell calls itself where an entry is its own and about no tab. */
@@ -113,7 +120,10 @@ export const didLine = (e: Pick<Entry, "did" | "args" | "cut">): string =>
     .filter(Boolean)
     .join(" ")
 
-/** The entries kept after `line`, the one place an entry is added: numbered on from the last, the newest KEPT; the world's in a row folded. */
+/**
+ * The entries kept after `line`, the one place an entry is added: numbered on from the last, the newest KEPT of its tab, or
+ * of the shell's own; the world's in a row folded.
+ */
 export function record(kept: Entry[], line: Line | undefined): Entry[] {
   if (!line) return kept
 
@@ -121,7 +131,28 @@ export function record(kept: Entry[], line: Line | undefined): Entry[] {
 
   if (into) return kept.map((e) => (e === into ? { ...e, when: line.when, times: (e.times ?? 1) + 1 } : e))
 
-  return [...kept, { n: (kept.at(-1)?.n ?? 0) + 1, ...line }].slice(-KEPT)
+  const tab = tabOfEntry(line)
+  const next = [...kept, { n: (kept.at(-1)?.n ?? 0) + 1, ...line }]
+  const same = next.filter((e) => tabOfEntry(e) === tab)
+
+  return same.length > KEPT ? next.filter((e) => e !== same[0]) : next
+}
+
+/** The newest KEPT of each tab's entries, and of the shell's own, in order. */
+export function held(entries: Entry[]): Entry[] {
+  const count = new Map<number | undefined, number>()
+
+  return entries
+    .toReversed()
+    .filter((e) => {
+      const tab = tabOfEntry(e)
+      const seen = (count.get(tab) ?? 0) + 1
+
+      count.set(tab, seen)
+
+      return seen <= KEPT
+    })
+    .reverse()
 }
 
 /**
@@ -166,7 +197,13 @@ const saidOf = (notices: Notice[], at: string): Said[] | undefined => {
   const said = notices
     .map((n) => (typeof n === "string" ? { text: n } : n))
     .filter((n) => typeof n.text === "string" && n.text.trim())
-    .map(({ text, at: there }): Said => ({ text: text.trim(), ...(typeof there === "string" && trimmed(there) !== at && { at: trimmed(there) }) }))
+    .map(
+      ({ text, at: there, highlight }): Said => ({
+        text: text.trim(),
+        ...(typeof there === "string" && trimmed(there) !== at && { at: trimmed(there) }),
+        ...(highlight === true && { highlight: true as const }),
+      })
+    )
 
   return said.length ? said : undefined
 }
@@ -195,10 +232,11 @@ function called(before: Held, call: Call, when: number): Line | undefined {
 
   if (closed) return { ...base, surface: closed.surface, at: `/tabs/${closed.n}`, own: true }
 
-  const shown = handle === "show" && typeof args.at === "string" ? tabOf(args.at) : undefined
-  const pointed = shown && before.tabs.find((t) => t.n === Number(shown[1]))
+  // The agent's highlight is in the tab of the place it marks, as a surface's own would be.
+  const marked = handle === "highlight" && typeof args.at === "string" ? tabOf(args.at) : undefined
+  const there = marked && before.tabs.find((t) => t.n === Number(marked[1]))
 
-  if (pointed) return { ...base, surface: pointed.surface, at: trimmed(args.at as string), own: true }
+  if (there) return { ...base, surface: there.surface, at: trimmed(args.at as string) }
 
   return { ...base, surface: SHELL, at: "/" }
 }
@@ -262,51 +300,54 @@ function entryFrom(e: unknown): Entry | undefined {
   return { n: x.n, when: x.when, who, surface: x.surface, at: x.at, did: (own.own && OWN[x.what]) || x.what, ...own, ...id }
 }
 
-/** The entries kept from before: none where state kept before activity has none, and only what reads as an entry, in either shape. */
-export const restored = (kept: unknown): Entry[] => (Array.isArray(kept) ? kept.map(entryFrom).filter((e): e is Entry => !!e).slice(-KEPT) : [])
+/** What reads as an entry of those kept, in either shape, all of them: as a closed tab's log is read whole. */
+export const entriesFrom = (kept: unknown): Entry[] => (Array.isArray(kept) ? kept.map(entryFrom).filter((e): e is Entry => !!e) : [])
 
-/** The seen mark kept from before; where there is none, as in state kept before it, everything kept so far counts as seen. */
-export function seenFrom(kept: unknown, entries: Entry[]): Seen {
-  const x = kept as Partial<Seen> | null | undefined
+/** The entries kept from before: none where state kept before activity has none, and only what reads as an entry, the newest KEPT of each tab. */
+export const restored = (kept: unknown): Entry[] => held(entriesFrom(kept))
 
-  if (!x || typeof x.upto !== "number" || !Array.isArray(x.looked)) return { upto: entries.at(-1)?.n ?? 0, looked: [] }
+/** Whether an entry carries a highlight. */
+export const highlighted = (e: Pick<Entry, "said">): boolean => !!e.said?.some((s) => s.highlight)
 
-  const upto = x.upto
+/** The drawer an entry is in: its tab's number, or HOME for the shell's own. */
+export const drawerOf = (e: Pick<Entry, "own" | "at">): string => String(tabOfEntry(e) ?? HOME)
 
-  return { upto, looked: x.looked.filter((n): n is number => typeof n === "number" && n > upto) }
+/** The opened marks kept from before, each a drawer and a number; none where there are none, as in state kept before them. */
+export function openedFrom(kept: unknown): Opened {
+  if (!kept || typeof kept !== "object" || Array.isArray(kept)) return {}
+
+  return Object.fromEntries(Object.entries(kept).filter((e): e is [string, number] => typeof e[1] === "number"))
 }
 
-/** The mark after the person saw every line up to `n`. */
-export function seeUpto(seen: Seen, n: number): Seen {
-  const upto = Math.max(seen.upto, n)
+/** The marks after the person opened the drawer entry `n` is in: every highlight there up to it is opened. */
+export function openUpto(opened: Opened, entries: Entry[], n: number): Opened {
+  const e = entries.find((x) => x.n === n)
 
-  return { upto, looked: seen.looked.filter((m) => m > upto) }
+  if (!e) return opened
+
+  const drawer = drawerOf(e)
+
+  return (opened[drawer] ?? 0) >= n ? opened : { ...opened, [drawer]: n }
 }
 
-/** The mark after the person looked at entry `n` alone, as by opening the drawer of the tab it is in. */
-export const lookAt = (seen: Seen, n: number): Seen => (n <= seen.upto || seen.looked.includes(n) ? seen : { ...seen, looked: [...seen.looked, n] })
-
-/** The entries with a surface's lines `who` has not seen, by number, oldest first: newer than the mark, not looked at one by one, and caused by someone else. */
-export const unseenIn = (entries: Entry[], seen: Seen, who: Who = "person"): number[] =>
-  entries.filter((e) => e.said && e.who !== who && e.n > seen.upto && !seen.looked.includes(e.n)).map((e) => e.n)
-
-/** How many entries with a surface's lines `who` has not seen. */
-export const unseenOf = (entries: Entry[], seen: Seen, who: Who = "person"): number => unseenIn(entries, seen, who).length
+/** The highlights the person has not opened, by number, oldest first: newer than their drawer's mark, and not their own. */
+export const unopenedIn = (entries: Entry[], opened: Opened): number[] =>
+  entries.filter((e) => highlighted(e) && e.who !== "person" && e.n > (opened[drawerOf(e)] ?? 0)).map((e) => e.n)
 
 /** A time as /activity gives it: UTC to the second. */
 export const stamp = (when: number): string => new Date(when).toISOString().replace(/\.\d{3}Z$/, "Z")
 
 /**
- * /activity, newest first, PAGE at a time, or with `notices` only the entries that carry a surface's lines, at
- * /activity/notices: `upto` the number of the newest entry shown, the newest by default; `earlier` names the page before
+ * /activity, newest first, PAGE at a time, or with `highlights` only the entries that carry a highlight, at
+ * /activity/highlights: `upto` the number of the newest entry shown, the newest by default; `earlier` names the page before
  * where there is one. An entry keeps its place by tab number; `tabs` gives the address an open tab stands at now, which
  * its place is said by; `at` is null in the shell's own line about a tab now closed, whose entries went with it.
  */
-export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = false): View | undefined {
+export function activityView(all: Entry[], tabs: Tabs, upto?: number, highlights = false): View | undefined {
   if (upto !== undefined && (!Number.isInteger(upto) || upto < 1)) return undefined
 
-  const base = notices ? NOTICES : ACTIVITY
-  const entries = notices ? all.filter((e) => e.said) : all
+  const base = highlights ? HIGHLIGHTS : ACTIVITY
+  const entries = highlights ? all.filter(highlighted) : all
   const shown = entries.filter((e) => upto === undefined || e.n <= upto).slice(-PAGE).reverse()
   const oldest = shown.at(-1)
   const more = !!oldest && entries[0]!.n < oldest.n
@@ -336,20 +377,22 @@ export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = 
       ...(e.refused !== undefined && { refused: e.refused }),
       ...(e.said && { said: e.said.map((s) => s.text) }),
       ...(there && { saidAt: live(there) }),
+      ...(highlighted(e) && { highlight: true }),
       ...(e.id && { id: e.id }),
     }
   }
 
   return {
     at: upto === undefined ? base : `${base}/${upto}`,
-    about: notices
-      ? "what the surfaces said of what was done in this session's open tabs, newest first, by who did it"
+    about: highlights
+      ? "the highlights of this session's open tabs, what the agent or a surface marked important to the person, newest first"
       : "what was done in this session, newest first: who, the person, an agent, or the world heard by the command in by; did, a call with its " +
-        "inputs or the event heard, times in a row; refused, why; said, the surface's lines, saidAt their place; surface, where at does not name it; " +
-        "own, the shell's line about a tab, at null once it closed with its entries; id, the caller's name for a call",
+        "inputs or the event heard, times in a row; refused, why; said, the surface's lines, saidAt their place, highlight where one is; " +
+        "surface, where at does not name it; own, the shell's line about a tab, at null once it closed with its entries; id, the caller's name for a call, " +
+        "shared by one program's calls",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),
-    ...(!notices && upto === undefined && { notices: { at: NOTICES } }),
+    ...(!highlights && upto === undefined && { highlights: { at: HIGHLIGHTS } }),
   }
 }

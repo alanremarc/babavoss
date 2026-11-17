@@ -3,14 +3,15 @@
 // the mark first, home's tab, which is also whose move it is (turn.ts), then the open tabs newest first. A tab's content
 // fills the rest, or home, the shell's own page, a desktop or the project's own (home.tsx). Every tab, home included, has
 // a drawer (drawer.tsx): its menu, drawn from its surface's views as home's is from the shell's at /, over its activity
-// as a thread; opening it sees the notices in it. A notice heard while the page is open is a bubble beside its tab for a
-// moment (bubbles.tsx). A tab the person opens becomes theirs to look at; one the agent opens takes its place beside the
-// mark, marked until looked at, and the person stays where they are. A tab that is broken, needs someone or holds a
-// notice not yet seen is marked on the rail and on home, from / where the shell gathers who is needed. While the session's hooks are not heard, as the turn says, the mark has a dot, home's drawer pins why
-// and what to do, and as that begins it is a bubble beside the mark, kept in home's thread. The URL is the surface path:
+// as a thread; opening it opens the highlights in it. A highlight heard while the page is open is a bubble beside its tab
+// for a moment (bubbles.tsx); an ordinary entry is none. A tab the person opens becomes theirs to look at; one the agent
+// opens takes its place beside the mark, and the person stays where they are. A tab that is broken, or holds a highlight
+// the person has not opened, is marked on the rail and on home. That the session's hooks are not heard, as the turn says,
+// is the page's own highlight in home: as it begins, a bubble beside the mark, which is marked until home's drawer is
+// opened, and kept in home's thread. The URL is the surface path:
 // / home, also where no tab is, a tab's address and its route; the address is /NAME where the tab holds its surface's
 // name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the
-// agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). The person's settings,
+// agent brings a place to the front, the page goes there, or offers it while the person is busy (pointing.ts). The person's settings,
 // their own surface's that comes with the shell, are applied here: the appearance and where the rail stands, the shortcuts
 // (shortcuts.ts) and the mark's animation (appearance.ts); and with the machine they make the conventions, handed to every
 // page, home's too (src/conventions.ts). It loads no stylesheet: the root's page does, one, which
@@ -20,10 +21,10 @@ import type { Args, Handle, View } from "../../core/index.ts"
 import { cn } from "../../kit/cn.ts"
 import { call, changes, read, type Notice, type Turn, type Unheard } from "./client.ts"
 import { Actions, useTabMenu } from "./actions.tsx"
-import { controlsOf, named, noticesIn, type Offered } from "./commands.ts"
+import { controlsOf, highlightsIn, named, type Offered } from "./commands.ts"
 import { added, Bubbles, gone, type Bubble } from "./bubbles.tsx"
 import { Drawer } from "./drawer.tsx"
-import { ACTIVITY, NOTICES, useFeed, type Feed, type Page as NoticesPage } from "./feed.ts"
+import { ACTIVITY, HIGHLIGHTS, useFeed, type Feed, type Page as HighlightsPage } from "./feed.ts"
 import { Desktop, Foot } from "./home.tsx"
 import { homeMenu, type HomeProps, type SurfaceEntry } from "./home.ts"
 import { Inputs, type Drawers } from "./inputs.tsx"
@@ -37,9 +38,9 @@ import { boot, booted, servedAs } from "./boot.ts"
 import { Overlay, PointedAlert, RefusedAlert, useSaid, type Connected } from "./connection.tsx"
 import { cachesBy } from "./live.ts"
 import { arrival, HOME, placeOf, pointedSince, typingIn, type Pointed } from "./pointing.ts"
-import { awayOf, cycled, doesOf, drawerSide, homeMarkOf, markOf, newestFirst, onScreen, standing, successor, type Mark, type TabNeed } from "./rail.ts"
+import { awayOf, cycled, doesOf, drawerSide, markOf, newestFirst, onScreen, standing, successor, type Mark } from "./rail.ts"
 import { Rail, tabId, type RailItem } from "./rail.tsx"
-import { entriesIn, freshIn, knownAfter, pinnedOf, placeIn, shellEntries, tabIn, unheardLine, unheardPinned, waitingRows, withUnheard, type Row as Entry } from "./thread.ts"
+import { entriesIn, knownAfter, lineOf, pinnedOf, placeIn, shellEntries, tabIn, unheardLine, unopenedOf, waitingRows, withUnheard, type Row as Entry } from "./thread.ts"
 import { TabBroken, TabContent, TabFailed, TabNoPage } from "./tabs.tsx"
 import { standingOf } from "./turn.ts"
 
@@ -50,11 +51,9 @@ import { standingOf } from "./turn.ts"
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode; drawers?: Drawers }>
 /** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
 type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
-/** A tab that is needed, as / gathers it. */
-type Need = { at: string; surface: string } & TabNeed
-type RootView = { title: string; needs?: Need[]; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
-/** A tab as the page draws it: its row at /, what it is called, its icon, who it needs, and its mark. */
-type Tab = { row: Row; label: string; icon: ReactNode; needs: TabNeed[]; mark?: Mark; why: string[]; fresh: boolean }
+type RootView = { title: string; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
+/** A tab as the page draws it: its row at /, what it is called, its icon, its mark and why, and whether the agent opened it since the person looked. */
+type Tab = { row: Row; label: string; icon: ReactNode; mark?: Mark; why: string[]; fresh: boolean }
 /** A notice as the shell hears it: from the stream, or a page's own passing word, `kept: false`, which is in no log and goes to its place. */
 type Heard = Notice & { kept?: false }
 
@@ -80,7 +79,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const surfaces = useMemo(() => ({ ...project, ...OWN }), [project])
   const { settings, mode, conventions, again: settingsAgain } = useSettings()
   const placed = settings.appearance.rail
-  // What the page was served with is its first frame: the shell at /, the turn, the notices, and the shown tab's views.
+  // What the page was served with is its first frame: the shell at /, the turn, the highlights, and the shown tab's views.
   const [root, setRoot] = useState<RootView | undefined>(() => booted<RootView>("/"))
   const [error, setError] = useState("")
   const [connected, setConnected] = useState<Connected>("connecting")
@@ -118,7 +117,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const active = at.key === HOME || rows.some((r) => r.at === at.key) ? at.key : (numbered ?? HOME)
   const icons = useMemo(() => Object.fromEntries(Object.entries(surfaces).map(([name, s]) => [name, s.icon])), [surfaces])
   const newest = useMemo(() => newestFirst(rows), [rows])
-  // Who hears each notice as it comes: the bubbles.
+  // Who hears each notice as it comes: the bubbles, for the highlights.
   const [hearers] = useState(() => new Set<(notice: Heard) => void>())
   // The tabs the person has looked at, or that were open when the page loaded: any other was opened by the agent since.
   const [seen, setSeen] = useState<ReadonlySet<string> | undefined>(() => root && new Set([...root.tabs.map((r) => r.at), active]))
@@ -128,12 +127,14 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   // Each stretch of the hooks' silence the page has known, kept in home's thread; one that begins while it is open is a bubble.
   const [known, setKnown] = useState<readonly Unheard[]>(() => knownAfter([], boot().turn?.unheard))
   const knownNow = useRef(known)
-  // The notices, read once: what marks the tabs until seen.
-  const [servedNotices] = useState(() => booted<NoticesPage>(NOTICES))
-  const told = useFeed(NOTICES, stream, true, servedNotices)
+  // The highlights, read always: what marks the tabs until their drawers are opened.
+  const [servedHighlights] = useState(() => booted<HighlightsPage>(HIGHLIGHTS))
+  const told = useFeed(HIGHLIGHTS, stream, true, servedHighlights)
   const served = useRef(root !== undefined)
-  const unseen = useMemo(() => told.rows.filter((r) => told.fresh.includes(r.n)), [told.rows, told.fresh])
-  // The entry whose drawer is open, a tab's address or home; the notices new in it as it opened; and all activity, read while it is open.
+  const unopened = useMemo(() => told.rows.filter((r) => told.unopened.includes(r.n)), [told.rows, told.unopened])
+  // The stretch of the hooks' silence home's drawer was last opened in, which opens its highlight.
+  const [homeOpened, setHomeOpened] = useState<number>()
+  // The entry whose drawer is open, a tab's address or home; the highlights it held unopened as it opened; and all activity, read while it is open.
   const [drawer, setDrawer] = useState<string>()
   const [stay, setStay] = useState<ReadonlySet<number>>(new Set())
   const all = useFeed(ACTIVITY, stream, drawer !== undefined)
@@ -177,7 +178,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
         if (after === knownNow.current || !next.unheard) return
         knownNow.current = after
         setKnown(after)
-        for (const fn of hearers) fn({ text: unheardLine(next.unheard) })
+        for (const fn of hearers) fn({ text: unheardLine(next.unheard), highlight: true })
       }
     )
   }, [listeners, hearers, settingsAgain, caches])
@@ -386,45 +387,33 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
       reload: () => setReloads((r) => ({ ...r, [row.at]: (r[row.at] ?? 0) + 1 })),
     })
 
-  // Going where an unseen notice is about sees it.
-  useEffect(() => {
-    if (!active.startsWith("/")) return
-
-    const here = active + ((routes[active] ?? "/") === "/" ? "" : routes[active])
-    const there = unseen.filter((n) => n.at === here && here !== active)
-
-    if (!there.length) return
-    void Promise.all(there.map((n) => call(NOTICES, "looked", { n: n.n }))).then(() => told.load(), () => undefined)
-  }, [active, routes, unseen])
-
-  // A tab waits on the person where it holds a notice they have not seen.
-  const noticesOf = (at: string) => noticesIn(at, unseen).length
+  // A tab is marked where it holds a highlight the person has not opened: each one's line, newest first, says why.
+  const highlightsOf = (key: string) => (key === HOME ? shellEntries(unopened) : entriesIn(unopened, key)).map(lineOf)
   const tabs: Tab[] = newest.map((row) => {
-    const needs = (root?.needs ?? []).filter((need) => need.at === row.at).map(({ who, why }) => ({ who, why }))
     const fresh = !!seen && !seen.has(row.at) && row.at !== active
-    const marks = { needs, ...(row.broken !== undefined && { broken: row.broken }) }
-    const mark = markOf({ ...marks, unseen: fresh, waits: noticesOf(row.at) > 0 })
+    const marks = { highlights: highlightsOf(row.at), ...(row.broken !== undefined && { broken: row.broken }) }
+    const mark = markOf(marks)
 
     return {
       row,
       label: row.title ?? `${named(row.surface)} ${row.n}`,
       icon: icons[row.surface] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
-      needs,
       ...(mark && { mark }),
-      why: standing({ ...marks, notices: noticesOf(row.at), unseen: fresh }),
+      why: standing(marks),
       fresh,
     }
   })
   const title = root?.title ?? "babavoss"
 
-  // Opening a drawer shows its tab and sees the notices in it, which keep their dot while it stays; closing it gives focus back to the tab.
+  // Opening a drawer shows its tab and opens the highlights in it, which keep their dot while it stays; closing it gives focus back to the tab.
   const openDrawer = (key: string) => {
-    const mine = freshIn(key === HOME ? shellEntries(told.rows) : entriesIn(told.rows, key), told.fresh)
+    const mine = unopenedOf(key === HOME ? shellEntries(told.rows) : entriesIn(told.rows, key), told.unopened)
 
     if (key !== active) go(key)
     setStay(new Set(mine))
     setDrawer(key)
-    if (mine.length) void Promise.all(mine.map((n) => call(NOTICES, "looked", { n }))).then(() => told.load(), () => undefined)
+    if (key === HOME && turn?.unheard) setHomeOpened(turn.unheard.since)
+    if (mine.length) void call(HIGHLIGHTS, "opened", { n: Math.max(...mine) }).then(() => told.load(), () => undefined)
   }
   const closeDrawer = () => {
     const was = drawer
@@ -454,7 +443,8 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
     return () => window.removeEventListener("keydown", press)
   })
 
-  // Each notice heard is a bubble beside its tab, or the mark where it is in none; not while that tab's drawer, which shows it, is open.
+  // Each highlight heard is a bubble beside its tab, or the mark where it is in none, as is a page's own passing word; not
+  // while that tab's drawer, which shows it, is open. An ordinary notice is kept in its thread alone.
   const hearing = useRef({ drawer, rows })
 
   hearing.current = { drawer, rows }
@@ -463,6 +453,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
       const tab = tabIn(notice.at)
       const key = tab && hearing.current.rows.some((r) => r.at === tab) ? tab : HOME
 
+      if (!notice.highlight && notice.kept !== false) return
       if (hearing.current.drawer === key) return
 
       const bubble: Bubble = {
@@ -500,15 +491,16 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const shownTab = tabs.find((t) => t.row.at === drawer)
   const homeTabs = tabs.map((t) => ({ at: t.row.at, surface: t.row.surface, label: t.label, icon: t.icon, ...(t.mark && { mark: t.mark }), go: () => go(t.row.at) }))
   const HomePage = OwnHome ?? Desktop
-  const homeMark = homeMarkOf(turn?.unheard)
-  const homePinned = unheardPinned(turn?.unheard)
+  // Home's highlights not opened: the shell's own, and that the hooks are not heard, until home's drawer is opened in that stretch.
+  const homeHighlights = [...(turn?.unheard && homeOpened !== turn.unheard.since ? [unheardLine(turn.unheard)] : []), ...highlightsOf(HOME)]
+  const homeMark = markOf({ highlights: homeHighlights })
   const rail: { mark: RailItem; tabs: RailItem[] } = {
     mark: {
       id: HOME,
       label: "Home",
       icon: <Logo standing={standingNow} animate={settings.logo.animate} lost={!!lost} />,
       ...(homeMark && { mark: homeMark }),
-      why: [lost ?? standingNow.said, ...(turn?.unheard ? [unheardLine(turn.unheard)] : [])],
+      why: [lost ?? standingNow.said, ...homeHighlights],
     },
     tabs: tabs.map((t) => ({
       id: t.row.at,
@@ -613,13 +605,11 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
                   loaded={all.loaded}
                   {...(all.earlier && { more: all.more })}
                   stay={stay}
-                  {...(homePinned && { pinned: homePinned })}
                   waiting={waitingRows(all.rows, standingNow.waiting)}
                   go={(entry) => {
                     closeDrawer()
                     if (entry.at && entry.at !== "/") go(placeOf(entry.at).key, placeOf(entry.at).route)
                   }}
-                  goThere={(at) => go(placeOf(at).key, placeOf(at).route)}
                   reload={() => {}}
                   close={closeDrawer}
                 />
@@ -633,7 +623,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
                   route={routes[shownTab.row.at] ?? "/"}
                   feed={all}
                   stay={stay}
-                  notices={noticesIn(shownTab.row.at, unseen)}
+                  highlights={highlightsIn(shownTab.row.at, told.rows.filter((r) => stay.has(r.n)).map((r) => ({ at: r.saidAt ?? r.at })))}
                   controls={controls(shownTab.row)}
                   start={(action) => start(shownTab.row, action)}
                   navigate={(route) => go(shownTab.row.at, route)}
@@ -661,7 +651,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   )
 }
 
-/** A tab's drawer: its menu, read from its surface's views as it opens, over its entries; what its mark says pinned at the foot. */
+/** A tab's drawer: its menu, read from its surface's views as it opens, over its entries; that it is broken pinned at the foot. */
 function TabDrawer({
   tab,
   side,
@@ -669,7 +659,7 @@ function TabDrawer({
   route,
   feed,
   stay,
-  notices,
+  highlights,
   controls,
   start,
   navigate,
@@ -683,7 +673,7 @@ function TabDrawer({
   route: string
   feed: Feed
   stay: ReadonlySet<number>
-  notices: string[]
+  highlights: string[]
   controls: ReturnType<typeof controlsOf>
   start: (action: Offered) => void
   navigate: (route: string) => void
@@ -691,9 +681,9 @@ function TabDrawer({
   close: () => void
 }) {
   const { row } = tab
-  const menu = useTabMenu({ address: row.at, route, ...(row.title !== undefined && { title: row.title }), name: row.surface, start, navigate, notices, controls })
+  const menu = useTabMenu({ address: row.at, route, ...(row.title !== undefined && { title: row.title }), name: row.surface, start, navigate, highlights, controls })
   const plain = row.broken !== undefined || !paged
-  const pinned = pinnedOf({ needs: tab.needs, ...(row.broken !== undefined && { broken: row.broken }) })
+  const pinned = pinnedOf({ ...(row.broken !== undefined && { broken: row.broken }) })
   const goTo = (entry: Entry) => {
     close()
     navigate(placeIn(entry, row.at) ?? "/")
@@ -710,10 +700,6 @@ function TabDrawer({
       stay={stay}
       {...(pinned && { pinned })}
       go={goTo}
-      goThere={(at) => {
-        close()
-        navigate(at)
-      }}
       reload={() => {
         close()
         reload()

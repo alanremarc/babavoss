@@ -1,7 +1,7 @@
 // The queue: the session's work as issues, each a draft, in the backlog, in a lane or done, and each on a narrative, an
 // effort going its own way, with the issues it came out of and the reasoning of its iterations. The agent orchestrates up
 // to five lanes, each a subagent in its own worktree delivering one issue at a time, and keeps this current as the work
-// moves; the person reads it on the page, as a list or by narrative. Nothing here does the work: it says who is delivering what
+// moves; the person reads it on the page, as a list or by narrative, a draft highlighted for them. Nothing here does the work: it says who is delivering what
 // and why. The work is the session's, not a tab's: every queue tab of the session opens the one record (store.ts) and
 // writes through to it, so a second tab shows the same work and a closed one loses nothing. A tab keeps a copy of the work
 // as it last heard it, so it shows at once, and a new one says it is reading until it first hears it; a tab kept from
@@ -59,7 +59,10 @@ function made(w: Work, args: { title: string; about: string; from?: string; narr
   const issue: Issue = { n: w.next, title, about, status, order: w.clock, narrative, from, iterations: [] }
   const placed = narrative === DEFAULT.id ? withDefault(w) : w
 
-  return { model: { ...placed, issues: [...placed.issues, issue], next: w.next + 1, clock: w.clock + 1 } }
+  const model = { ...placed, issues: [...placed.issues, issue], next: w.next + 1, clock: w.clock + 1 }
+
+  // A draft is the person's to look at: a highlight, which marks the tab on their page until they look.
+  return { model, ...(status === "draft" && { notices: [{ ...said(model, issue.n, "is a draft for you to look at"), highlight: true as const }] }) }
 }
 
 /** An issue's inputs: a short imperative title, and brief markdown on what changes and why. */
@@ -314,7 +317,7 @@ function whole(w: Work, issue: Issue) {
     iterations: issue.iterations.map((x, i) => ({ n: i + 1, ...x })),
     ...(issue.updates?.length && { updates: issue.updates }),
     menu,
-    ...(issue.status === "draft" && { attention: { who: "person", why: "to look at this draft" }, approve: approve.bind(subject) }),
+    ...(issue.status === "draft" && { approve: approve.bind(subject) }),
     describe: describe.bind(subject),
     note_: note.bind(subject),
     ...((issue.status === "backlog" || issue.status === "draft") && { start: start.bind(subject) }),
@@ -355,7 +358,6 @@ const pages = view(actions, {
       }),
       // What is done is detail: read at the tab's path, and only counted in the shell's present.
       issues: [...[...lanes, ...backlog, ...drafts].map(row), ...finished.map((issue) => detail(row(issue)))],
-      ...(drafts.length && { attention: { who: "person", why: `to look at ${drafts.length} draft${drafts.length > 1 ? "s" : ""}` } }),
       add: add.bind({}),
       add_from: addFrom.bind({}),
       draft: draft.bind({}),

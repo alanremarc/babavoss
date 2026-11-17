@@ -1,24 +1,23 @@
-// A feed of the shell's activity on the page: the rows at /activity or /activity/notices, newest first, read again on every
-// change while it is live and further back on asking, and for the person which notices they have not seen. The shell reads
-// the notices once, for the marks they put on the tabs; a drawer reads all activity while it is open, for its thread.
+// A feed of the shell's activity on the page: the rows at /activity or /activity/highlights, newest first, read again on
+// every change while it is live and further back on asking, and for the person which highlights they have not opened. The
+// shell reads the highlights always, for the marks they put on the tabs; a drawer reads all activity while it is open, for its thread.
 import { useCallback, useEffect, useRef, useState } from "react"
 import { read } from "./client.ts"
 import type { Row } from "./thread.ts"
 
-/** A page of /activity: its entries, the page before, and for the person how many and which notices they have not seen. */
-export type Page = { entries: Row[] | string; earlier?: { at: string }; unseen?: number; fresh?: number[] }
+/** A page of /activity: its entries, the page before, and for the person which highlights they have not opened. */
+export type Page = { entries: Row[] | string; earlier?: { at: string }; unopened?: number[] }
 type Stream = { subscribe: (fn: () => void) => () => void }
 
 export const ACTIVITY = "/activity"
-export const NOTICES = "/activity/notices"
+export const HIGHLIGHTS = "/activity/highlights"
 const THROTTLE_MS = 400
 
 /** One feed of rows at `path`, newest first, read again on every change while `live`, and further back on asking; `served` what the page was served there, so it is not read at first. */
 export function useFeed(path: string, changes: Stream, live: boolean, served?: Page) {
   const [rows, setRows] = useState<Row[]>(() => (Array.isArray(served?.entries) ? served.entries : []))
   const [earlier, setEarlier] = useState<string | undefined>(served?.earlier?.at)
-  const [unseen, setUnseen] = useState(served?.unseen ?? 0)
-  const [fresh, setFresh] = useState<number[]>(served?.fresh ?? [])
+  const [unopened, setUnopened] = useState<number[]>(served?.unopened ?? [])
   const [loaded, setLoaded] = useState(served !== undefined)
   const first = useRef(served !== undefined)
   const older = useRef<Row[]>([])
@@ -32,8 +31,7 @@ export function useFeed(path: string, changes: Stream, live: boolean, served?: P
     const kept = older.current.filter((r) => r.n < oldest)
 
     setRows([...latest, ...kept])
-    setUnseen(page.unseen ?? 0)
-    setFresh(page.fresh ?? [])
+    setUnopened(page.unopened ?? [])
     setLoaded(true)
     if (!kept.length) setEarlier(page.earlier?.at)
   }, [path])
@@ -69,7 +67,7 @@ export function useFeed(path: string, changes: Stream, live: boolean, served?: P
     }
   }, [changes, load, live])
 
-  return { rows, earlier, unseen, fresh, more, load, loaded }
+  return { rows, earlier, unopened, more, load, loaded }
 }
 
 /** A feed as the shell holds it. */

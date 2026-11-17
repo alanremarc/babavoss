@@ -70,14 +70,14 @@ test("what the agent suggests is a draft, the person's to look at: they approve 
 
   await agent.call("/", "draft", { title: "Rename the picker", about: "It reads as a list" })
   expect(rows(agent.sees())).toEqual([[1, "draft", undefined]])
-  expect(agent.sees()).toMatchObject({ attention: { who: "person", why: "to look at 1 draft" } })
-  expect(agent.sees("/issues/1")).toMatchObject({ attention: { who: "person" } })
+  // The person is shown it as a highlight; the agent is not told back what its own call gave.
+  expect(person.noticed()).toEqual(["highlight: Draft 1, Rename the picker, is a draft for you to look at"])
+  expect(agent.noticed()).toEqual([])
 
   agent.told()
   await person.call("/issues/1", "approve", { n: 1 })
   expect(rows(agent.sees())).toEqual([[1, "backlog", undefined]])
   expect(agent.told()).toContain('/issues/1: status "draft" → "backlog"')
-  expect(agent.sees()).not.toHaveProperty("attention")
   expect(agent.noticed()).toEqual(["Draft 1, Rename the picker, approved: it joins the backlog"])
 
   await agent.call("/", "draft", { title: "A dock", about: "Why" })
@@ -94,7 +94,6 @@ test("a draft the person said to build is started as it is, and an issue is mark
   expect(rows(agent.sees())).toEqual([[1, "lane", 1], [2, "draft", undefined]])
   await agent.call("/issues/2", "done", { n: 2 })
   expect(agent.sees("/issues/2")).toMatchObject({ status: "done" })
-  expect(agent.sees()).not.toHaveProperty("attention")
 })
 
 test("what happens to an issue is noticed: started, done, dropped; the agent is not told back what its own calls did", async () => {

@@ -2,7 +2,7 @@
 //   GET  /p   application/json   the view at /p for the actor in the header     GET /p  text/html  the root's page
 //   GET  /    text/event-stream  change { version } and work { jobs }           POST /p { handle, args }  a call
 //                                 call { path, handle, args, actor, refused? }, each call through this door as it is answered
-//                                 notice { text, at?, from?, by? }, each notice as it is heard, `by` absent where the person
+//                                 notice { text, at?, from?, highlight?, by? }, each notice as heard, `by` absent where the person
 //                                 caused it; a line about the root's own code is one too, and is given to a page that connects
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
 //                                 turn { agent, since, waiting, drivable, harness?, unheard? }, whose move it is (turn.ts), as it
@@ -11,7 +11,8 @@
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
-//   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it
+//   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it;
+//                                   in text too, where a program names each of its calls by its one name (bv.ts)
 //   POST /_/restart text/plain      the runtime restarts, at once or once its work ended (runtime.ts): 200 at once, 202 draining
 //   POST /_/close text/plain        the runtime goes to sleep, its state kept: the agent's word `sleep`, or `close`
 // Each request is a signal of how long it keeps the runtime up (wake.ts), classified as it enters; a hook's word on the turn
@@ -35,7 +36,6 @@ import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Noticed, Running } from "../surface/run.ts"
 import { textArgs, textSession, textView } from "./text.ts"
-import { NEEDS } from "../present/present.ts"
 import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
@@ -402,9 +402,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (!Number.isFinite(seconds) || seconds < 0) return reply(400, "seconds must be a nonnegative number")
 
           // `tell=notices`, what was heard alone, as after a tool call; otherwise a boundary: what was heard, then what changed
-          // at /. A wait ends on what was heard, or on who is needed changing: a fact a surface changed by itself waits for the next.
+          // at /. A wait ends on what was heard: a fact a surface changed by itself waits for the next.
           const heard = url.searchParams.get("tell") === "notices"
-          const due = () => text.noticed() > 0 || (!heard && text.changed().some((c) => c.keys.some((k) => k === NEEDS || k.startsWith(`${NEEDS}[`))))
+          const due = () => text.noticed() > 0
 
           if (!due() && said === undefined)
             await new Promise<void>((done) => {
@@ -452,7 +452,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const args = textArgs(before, call.handle, call.args ?? {})
 
           text.touch(path)
-          const answer = await running.call(path, call.handle, args, actorText)
+          const id = req.headers[CALL_ID_HEADER]
+          const answer = await running.call(path, call.handle, args, actorText, typeof id === "string" && id ? id : undefined)
           const heard = { path, handle: call.handle, args, actor: actorText, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
           for (const stream of streams) stream.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
