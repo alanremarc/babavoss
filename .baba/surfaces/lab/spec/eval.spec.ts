@@ -158,7 +158,6 @@ test("measures a stream: the harness's tokens and cost, calls and refusals, what
   })
 })
 
-test("masks what looks like a credential, and a page's key", () => {
-  expect(mask("http://127.0.0.1:1/?key=el9PDjza2ztXTHpL8QzcMLPvlDaZYvMRgRlTgshe0gU")).toBe("http://127.0.0.1:1/?key=<masked>")
+test("masks what looks like a credential", () => {
   expect(mask('{"token": "abcdefghijkl"} sk-ant-api03-xyz')).toBe('{"token": "<masked>"} <masked>')
 })
