@@ -369,14 +369,16 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(started.status).toBe(0)
     expect(started.stdout).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
-    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.babavoss\/bin\/baba, from the project's directory; /)
+    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+\/\?key=[\w-]{43}  a new address\n/)
+    expect(started.stdout).toContain("  a new address\ncommand: .babavoss/bin/baba, from the project's directory; ")
     // Where the command was put is no part of it: the answer names the command.
     expect(started.stdout).not.toContain("is now a command")
 
     // By hand it is the same runtime, at the same address, wherever in the project it is started from.
     const address = /http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0]
+    const link = /page: (\S+)/.exec(started.stdout)![1]!
 
-    expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
+    expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${link}\n`)
     expect(existsSync(join(baba, ".babavoss"))).toBe(false)
 
     // The shell lists the surface at / with what it says it is for, and offers to open it, to the agent and to the person.
@@ -434,10 +436,16 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
 
     // The page holds the surface's component in its tab.
-    const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
+    // Opened by the link the agent was given: its key becomes the page's cookie, and the page and what it loads are served by it.
+    const linked = await fetch(link, { headers: { accept: "text/html" } })
+    const cookie = linked.headers.get("set-cookie")!.split(";")[0]!
+
+    expect(await linked.text()).toContain(`location.replace("/")`)
+
+    const html = await (await fetch(address, { headers: { accept: "text/html", cookie } })).text()
     const script = /\/_\/[^"]*\.js/.exec(html)![0]
 
-    expect(await (await fetch(address + script)).text()).toContain("The agent proposes")
+    expect(await (await fetch(address + script, { headers: { cookie } })).text()).toContain("The agent proposes")
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
 
     // The person proposes there: a call the agent did not make.
@@ -485,30 +493,43 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)
     expect(hook("PostToolUse").stdout).toBe("")
 
-    // Fully from the surface: what its code says it is for is what the shell lists, as soon as the code says it; and a
-    // surface made by hand is in the root as soon as it is on disk. Nothing is provisioned for either.
+    // Fully from the surface: what its code says it is for is what the shell lists, once the shell runs that code; and a
+    // surface made by hand is in the root once it runs. Nothing is provisioned for either. In normal mode, the default, the
+    // shell runs the code it started with, says when it changed, and runs it once restarted.
     const code = join(baba, "surfaces/desk/src/surface.ts")
+    const restarted = () => {
+      const answer = call("restart")
+
+      expect(answer.stdout, answer.stderr).toMatch(/^baba: instance [0-9a-f]+ restarts\nbaba: instance [0-9a-f]+ answers\n$/)
+    }
 
     writeFileSync(code, readFileSync(code, "utf8").replace("Keep a greeting the person has agreed to.", "Keep the house greeting."))
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("Keep the house greeting.")
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    expect(call("/").stdout).not.toContain("Keep the house greeting.")
+    restarted()
+    expect(call("/").stdout).toContain("Keep the house greeting.")
+    expect(call("/").stdout).not.toContain("code: changed on disk")
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/by-hand"), { recursive: true })
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    restarted()
+    expect(call("/").stdout).toContain('"by-hand"')
 
-    // surfaces/ made anew, as a checkout may leave it: the root follows the new one, and its next answer is of the code there.
+    // surfaces/ made anew, as a checkout may leave it: the root follows the new one, and once restarted runs the code there.
     cpSync(join(baba, "surfaces"), join(baba, "surfaces.new"), { recursive: true })
     rmSync(join(baba, "surfaces"), { recursive: true })
     renameSync(join(baba, "surfaces.new"), join(baba, "surfaces"))
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"')
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/after-checkout"), { recursive: true })
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"after-checkout"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    restarted()
+    expect(call("/").stdout).toContain('"after-checkout"')
   } finally {
     command("start", "close")
   }
   expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], { cwd: project, encoding: "utf8", env, input: "not json" })).toMatchObject({ status: 0, stdout: "" })
 }, 60_000)
 
-test("the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
-  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "" }
+test("in dev mode the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "", BABAVOSS_DEV: "1" }
   const word = join(project, ".babavoss/bin/baba")
   const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
   const code = join(baba, "surfaces/by-hand/src/surface.ts")

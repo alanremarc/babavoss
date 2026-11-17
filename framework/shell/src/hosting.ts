@@ -1,6 +1,7 @@
 // The shell page: bundle source on demand; built releases serve files directly. What the page is built from is installed
-// by the root's door before it opens. A page that does not build leaves the last one that did: it is served until a change
-// builds, through a reload of the root's code too, so a surface's broken page never takes the root's page down. Every
+// by the root's door before it opens. Following the source, as in dev mode, it is built again after an edit; else it is
+// built once, the page of the code the runtime runs, until it restarts. A page that does not build leaves the last one that
+// did: it is served until a change builds, so a surface's broken page never takes the root's page down. Every
 // page is served with the person's settings in it, so it paints in their appearance at once, and /_/settings.json gives
 // them again, read from their file each time (settings/src/store.ts).
 import { existsSync, readFileSync, mkdtempSync, readdirSync, statSync, rmSync } from "node:fs"
@@ -54,8 +55,8 @@ type Build = { dir: string; stamp: string }
 
 const PAGES = Symbol.for("babavoss.pages")
 /**
- * The last page that built, by the root's ui directory. Kept on globalThis, which a hot reload leaves as it is, so the
- * hosting a reload makes serves it while the page does not build; removed when a later one builds, and as the process ends.
+ * The last page that built, by the root's ui directory, for the process: served while a later one does not build; removed
+ * when a later one builds, and as the process ends.
  */
 const lastBuilt = (): Map<string, Build> => {
   const held = globalThis as { [PAGES]?: Map<string, Build> }
@@ -132,9 +133,12 @@ const settingsAsset = (req: IncomingMessage, res: ServerResponse): boolean => {
   return true
 }
 
-/** Serve a built release, or rebuild source on the next request after an edit; each page with the person's settings. */
-export function shellUi(dir: string | URL): UiHosting {
-  const hosting = pageUi(dir)
+/**
+ * Serve a built release, or build source: again on the next request after an edit where it `follow`s the source, else once;
+ * each page with the person's settings.
+ */
+export function shellUi(dir: string | URL, { follow = true }: { follow?: boolean } = {}): UiHosting {
+  const hosting = pageUi(dir, follow)
 
   return async (server) => {
     const hosted = await hosting(server)
@@ -151,7 +155,7 @@ export function shellUi(dir: string | URL): UiHosting {
   }
 }
 
-function pageUi(dir: string | URL): UiHosting {
+function pageUi(dir: string | URL, follow: boolean): UiHosting {
   const root = typeof dir === "string" ? resolve(dir) : fileURLToPath(dir)
 
   return async () => {
@@ -172,6 +176,7 @@ function pageUi(dir: string | URL): UiHosting {
         .join(";")
     const ready = async () => {
       if (pending) return pending
+      if (!follow && pages.has(root)) return
 
       const next = changed(dirname(root)) + changed(frameworkRoot)
 
@@ -223,7 +228,6 @@ function pageUi(dir: string | URL): UiHosting {
             res.end(String(error))
           })
       },
-      // The page built stays for the hosting that takes this one's place, as a reload of the root's code makes.
       close: async () => {
         await pending
       },

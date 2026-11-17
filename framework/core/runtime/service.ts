@@ -2,15 +2,35 @@
 // discovery, never a lock. A client finds a live service or wakes one, and treats a lost response as an uncertain outcome.
 // A service whose process lives on with nothing listening at its port, longer than one takes to close, is deaf: its
 // client ends that process, once and only where it is this session's runtime, and wakes a fresh one, which takes the state.
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import {
+  appendFileSync,
+  chmodSync,
+  closeSync,
+  existsSync,
+  fstatSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { join } from "node:path"
-import { randomUUID } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
 import { sessionCwd } from "../state/state.ts"
 
-export type Identity = { dir: string; token: string; pid: number }
+// Two secrets, each for its own client. The token is one instance's: the command and the hooks send it as a header, read
+// from the endpoint file, and it changes as the runtime starts again. The page key is the session's: what opens its page
+// in a browser, given in the link its agent gives and kept by the browser as a cookie, so an open page outlives a restart.
+// Both are kept in the state directory readable by its owner alone; neither is ever given to a client that did not send it.
+/** `instance` names this runtime's process to the agent, as the token, a secret, cannot: a restart is followed by it. */
+export type Identity = { dir: string; token: string; pid: number; instance: string }
 /** `closing`: since when the service has been closing its door, as it does before it lets go of the session. */
 export type Endpoint = Identity & { port: number; closing?: number }
 /** The response header every answer of a service carries: its token. */
@@ -19,7 +39,7 @@ export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 /** The request header of a client's probe for whether the service is up: answered at once, as the code stands. */
 export const PROBE_HEADER = "babavoss-probe"
-/** The response header of a service that gave way to a new one without doing what it was asked: ask again. */
+/** The response header of a service that restarts for changed code without doing what it was asked: ask again, of the one in its place. */
 export const STALE_HEADER = "babavoss-stale"
 /** The request header naming one run of the word, one tool call of the agent's: what tells calls apart for the hooks' silence. */
 export const CALL_HEADER = "babavoss-call"
@@ -45,6 +65,55 @@ export const lastPort = (dir: string): number | undefined => {
   } catch {
     return undefined
   }
+}
+
+/** Where the session's page key is kept, across its runtimes. */
+export const pageKeyFile = (dir: string) => join(dir, "page.key")
+/** The query parameter of the link that opens the page in a browser that never saw the session. */
+export const PAGE_KEY_PARAM = "key"
+const readKey = (dir: string): string | undefined => {
+  try {
+    const key = readFileSync(pageKeyFile(dir), "utf8").trim()
+
+    return /^[\w-]{32,}$/.test(key) ? key : undefined
+  } catch {
+    return undefined
+  }
+}
+/** The session's page key: the one kept, or one made now, readable by its owner alone. */
+export function pageKey(dir: string): string {
+  mkdirSync(dir, { recursive: true })
+
+  const kept = readKey(dir)
+
+  if (kept) {
+    chmodSync(pageKeyFile(dir), 0o600)
+
+    return kept
+  }
+
+  const key = randomBytes(32).toString("base64url")
+  const temporary = `${pageKeyFile(dir)}.${randomUUID()}.tmp`
+
+  // One that cannot be read as a key is no key: made again.
+  rmSync(pageKeyFile(dir), { force: true })
+  try {
+    writeFileSync(temporary, key, { mode: 0o600 })
+    // Made by the runtime that owns the directory; linked, never renamed over, so a key kept is never replaced.
+    linkSync(temporary, pageKeyFile(dir))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+  } finally {
+    rmSync(temporary, { force: true })
+  }
+
+  return readKey(dir) ?? key
+}
+/** The link that opens the session's page at `port`: its address with the key, or the address alone where there is no key yet. */
+export const pageLink = (dir: string, port: number): string => {
+  const key = readKey(dir)
+
+  return `http://127.0.0.1:${port}/${key ? `?${PAGE_KEY_PARAM}=${key}` : ""}`
 }
 
 /**
@@ -92,7 +161,7 @@ export function ownService(dir: string) {
     )
   }
 
-  const identity: Identity = { dir, token: randomUUID(), pid: process.pid }
+  const identity: Identity = { dir, token: randomUUID(), pid: process.pid, instance: randomUUID().slice(0, 8) }
   let released = false
 
   return {
@@ -177,7 +246,7 @@ const alive = (pid: number) => {
     return (error as NodeJS.ErrnoException).code === "EPERM"
   }
 }
-/** Whether a process is this session's runtime of this entry, by its command line: it was woken as `--hot ENTRY --serve SESSION`. */
+/** Whether a process is this session's runtime of this entry, by its command line: it was woken as `ENTRY --serve SESSION`. */
 export const isRuntime = (pid: number, entry: string, session: string): boolean => {
   if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return false
 
@@ -226,8 +295,8 @@ export function wakeService(dir: string, entry: string | URL, session: string, e
   const recorded = sessionCwd(dir)
 
   try {
-    // Under bun's hot reload: a change in the root's code is loaded into the runtime, which stays up at its address.
-    const child = spawn(process.execPath, ["--hot", typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
+    // Never under bun's hot reload: the runtime takes changed code by starting again, as its mode says (runtime.ts).
+    const child = spawn(process.execPath, [typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
       detached: true,
       stdio: ["ignore", "ignore", log],
       env,
@@ -262,14 +331,6 @@ export const logSize = (dir: string) => {
     return 0
   }
 }
-/** Whether the log says, after `offset`, that code did not load: bun writes a line beginning with `error: ` when a hot reload fails. */
-export const failedSince = (dir: string, offset: number): boolean => {
-  try {
-    return /^error: /m.test(readFileSync(logFile(dir)).subarray(offset).toString("utf8"))
-  } catch {
-    return false
-  }
-}
 /** What a runtime that did not start logged after `offset`, as bun says why code does not load: the file and the error, its last lines. */
 const saidSince = (dir: string, offset: number): string => {
   try {
@@ -289,7 +350,6 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
     let child: ChildProcess | undefined
     let nextLaunch = 0
     let logged = 0
-    let erred = false
     let refusing: { token: string; seen: number } | undefined
 
     try {
@@ -321,12 +381,6 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
         if (child && !child.pid) throw new Denied("the environment refuses starting its runtime as a process of its own")
         if (child && (child.signalCode !== null || (child.exitCode !== null && child.exitCode !== 0)))
           throw new Error(`the runtime failed to start${saidSince(dir, logged).replace(/^(?=.)/, ": ")}`)
-        // Under hot reload a process whose code does not load stays, waiting for a change: once it said why, it is ended.
-        if (child && child.exitCode === null && erred) {
-          child.kill()
-          throw new Error(`the runtime failed to start: ${saidSince(dir, logged)}`)
-        }
-        erred = !!child && /^error: /m.test(saidSince(dir, logged))
         if ((!child || child.exitCode !== null) && Date.now() >= nextLaunch) {
           logged = logSize(dir)
           child = wakeService(dir, entry, session, env)

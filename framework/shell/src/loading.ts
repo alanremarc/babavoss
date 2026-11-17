@@ -1,6 +1,6 @@
 // The project's surfaces as the shell is made from them: each loaded on its own, so one whose code does not load, by a
-// syntax error, an import that is not there or a throw as its module runs, leaves the others, and is named with why. A
-// module that failed is still watched by the hot reload, so the shell is made again when its code is mended.
+// syntax error, an import that is not there or a throw as its module runs, leaves the others, and is named with why. Its
+// code is still the runtime's to watch (scripts/open.ts), so the shell is made again when it is mended.
 import type { AnySurface } from "../../core/surface/surface.ts"
 
 /** A surface by name, as .root/surfaces.ts names it: loaded when asked. */

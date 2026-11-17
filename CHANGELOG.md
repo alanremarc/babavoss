@@ -2,6 +2,37 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.68.0
+
+Breaking: the page is opened only by its link.
+
+- The shell's answer names the page as `page: http://127.0.0.1:PORT/?key=…`: give the person that link whole. It opens the page in any browser, which then keeps a cookie for 30 days, so reloads and runtime restarts need nothing more. `localhost` and `127.0.0.1` each need the link once.
+- Opened without the key, the page says only that it is opened by the link its agent gives. A tab open before this release shows that once: give the person the link again.
+- The key is the session's, kept in its state directory as `page.key`, readable by its owner alone. Never write it into files, commits or notices.
+- A program that fetches the page or its `/_/` files sends the service token from `service.json` in the `babavoss-service` header, as it already does for reads and calls.
+- The runtime no longer sends the token back in answers, except to a request that carried it, and no longer replaces `%TOKEN%` in a root's `index.html`.
+- The client's `VERSION` is 16 and replaces itself.
+
+No surface code needs to change.
+
+## 0.67.0
+
+Breaking: the shell no longer reloads its code under running work. There are two modes, each simple.
+
+- **Normal mode, the default.** A runtime runs the code it started with; it no longer runs under `bun --hot`. After changing `.baba/` or taking a release, run `<word> restart`. Until then `/` and the hooks say `code: changed on disk since instance … started; it runs once restarted`.
+- **Restart with work under way drains.** The runtime takes no new calls, restarts once the work has ended, and the command exits at once, naming the instance. `<word> follow ID [SECONDS]` returns when the next instance answers, or at once where that instance is already gone. `<word> close` cuts the work instead.
+- **Dev mode.** `dev: true` in `.baba/baba.config.ts`, or `BABAVOSS_DEV=1` (`0` turns it off). Any change to the code the runtime loaded restarts it at once and cuts running commands; the next answer says what was cut. Use it while surfaces are being built.
+- A restart, in either mode, is a fresh process at the same address with the state as saved; an open page reloads itself.
+- The version told is the one running. The client's `VERSION` is 15 and replaces itself.
+- A runtime ends within a moment of its state directory being removed, so none is left behind by a deleted project.
+
+To adapt a project's surfaces:
+
+- A cut command sends no event: make long work resumable from the model, and do not count running jobs in the model.
+- Nothing on `globalThis` survives a reload any more.
+- A spec that starts a real runtime and expects an edit to be live sets `BABAVOSS_DEV=1`.
+- Decide the project's mode: set `dev: true` while its surfaces are being made, and leave it out otherwise.
+
 ## 0.66.0
 
 Conventions: the shell hands every page, home included, how the person wants pages to be.

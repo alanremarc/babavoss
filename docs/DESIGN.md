@@ -28,7 +28,8 @@ agent      Does the work.
 harness    Hosts the agent: Claude Code, Codex.
 session    One conversation of the harness.
 runtime    Holds the surfaces of a session: one state, changed by either side.
-page       Shows the same surfaces to the person, at one address per session.
+page       Shows the same surfaces to the person, at one address per session, opened by the link the agent gives:
+           the session's key, kept by the browser, so it outlives a restart.
 ```
 
 ### A surface
@@ -77,7 +78,9 @@ shell      The root surface, from the framework: the desktop. It holds every oth
 tab        An open surface; the same surface may be open in several.
 rail       The tabs, at a side of the page the person chooses; home's mark first, the newest beside it.
 drawer     A tab's panel, home's too: its menu drawn from its views, over its activity as a thread.
-kit        What pages are built with: components, layouts, theming tokens.
+kit        What pages are built with: primitives and theming tokens; it follows the conventions unasked.
+conventions  How the person wants pages to be, from their settings and the machine: motion, text scale, a sidebar's side,
+           where the rail stands, the mode. Handed to every page, which follows them by its own code; expected, never enforced.
 present    The shell at /: every open tab's facts.
 ```
 
@@ -92,7 +95,8 @@ addresses       every place has a link, a tab by its surface's name, and the age
 activity        who did what, kept with each tab and going with it: in its drawer; read on demand by the agent
 frame           title, menus and a surface's actions, in the same place for every surface: a tab's drawer
 theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
-settings        the person's own, the same in every session and project: appearance, where the tabs stand, shortcuts, the mark's motion
+settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
+                follow by convention, shortcuts, the mark's motion
 health          what is broken, and why; a page that lost its runtime says so and finds it again
 ```
 
@@ -148,7 +152,8 @@ framework  One version, named in .baba/. The agent is told of a later one, takes
 ```text
 shared    both act on the surface, at any time. A change by the person is a move to take up, never to undo
 learned   a surface is all an agent learns of it: its description to choose it, its views to work it
-dynamic   a surface made, changed or removed is in the running shell at once
+dynamic   a surface made, changed or removed runs once the shell restarts: at once in dev mode, else when the agent
+          restarts it, the present saying the code changed until then
 soft      hooks add context and never block; hard limits stay the person's, in the harness
 ```
 

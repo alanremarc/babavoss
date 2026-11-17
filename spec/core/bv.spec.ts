@@ -20,7 +20,7 @@ import { HUSH_MS, QUIET_LINE } from "../../framework/core/runtime/turn.ts"
 const client = resolve("framework/core/bv/bv.ts")
 const roots: string[] = []
 
-function setup() {
+function setup(dev = false) {
   const root = mkdtempSync(join(tmpdir(), "bv-spec-"))
 
   roots.push(root)
@@ -38,6 +38,7 @@ function setup() {
     CODEX_THREAD_ID: "",
     BABAVOSS_HOME: root,
     BABAVOSS_BIN: bin,
+    BABAVOSS_DEV: dev ? "1" : "0",
   }
   const run = (args: string[] = [], file = client, input = "") => {
     const result = spawnSync(process.execPath, [file, ...args], { env, input, encoding: "utf8", timeout: 15000 })
@@ -46,9 +47,11 @@ function setup() {
   }
   const open = () => run([], entry)
   const endpoint = () =>
-    JSON.parse(readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/service.json"), "utf8")) as { pid: number; port: number; token: string }
+    JSON.parse(readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/service.json"), "utf8")) as { pid: number; port: number; token: string; instance: string }
+  /** The session's page key, which the link the agent is given carries. */
+  const key = () => readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/page.key"), "utf8")
 
-  return { entry, root, bin, env, run, open, endpoint }
+  return { entry, root, bin, env, run, open, endpoint, key }
 }
 afterEach(async () => {
   for (const root of roots.splice(0)) {
@@ -235,29 +238,90 @@ it("keeps its address after an unannounced runtime death", async () => {
   expect(s.run(["/"]).out).not.toContain("a new address")
   expect(s.endpoint().port).toBe(port)
 })
-it("loads an edit of the root's code into the running runtime: the same process and address, the notes kept, the new code answering", async () => {
-  const s = setup()
+describe("changed code", () => {
+  const edit = (s: ReturnType<typeof setup>) => {
+    const source = join(s.root, "root/src/root.ts")
 
-  s.open()
-  s.run(["/", "add", "text=Pharmacy"])
+    writeFileSync(source, readFileSync(source, "utf8").replace('description: "Keep a note"', 'description: "Keep a note, as edited"'))
+  }
 
-  const before = s.endpoint()
-  const source = join(s.root, "root/src/root.ts")
+  it("in dev mode restarts the runtime at once: the same address, the notes kept, the new code answering, a reminder under way cut and said", async () => {
+    const s = setup(true)
 
-  writeFileSync(source, readFileSync(source, "utf8").replace('description: "Keep a note"', 'description: "Keep a note, as edited"'))
-  await poll(() => s.run(["/"]).out, { timeout: 10_000 }).toContain("Keep a note, as edited")
-  expect(s.endpoint()).toEqual(before)
-  expect(s.run(["/"]).out).toContain("Pharmacy")
-  expect(s.run(["/"]).out).not.toContain("page:")
+    s.open()
+    s.run(["/", "add", "text=Pharmacy"])
+    s.run(["/notes/1", "remind", "seconds=60"])
+
+    const before = s.endpoint()
+
+    const answers: string[] = []
+
+    edit(s)
+    await poll(() => answers[answers.push(s.run(["/"]).out) - 1], { timeout: 10_000 }).toContain("Keep a note, as edited")
+    // The first answer from the code as edited says what the restart cut, as the agent may have to do it again.
+    expect(answers.at(-1)).toMatch(/^demo: its code changed \(.*root\.ts\) and it restarted; the restart cut remind by agent:S\n/)
+
+    const after = s.endpoint()
+
+    expect([after.port, after.instance === before.instance, after.pid === before.pid]).toEqual([before.port, false, false])
+    expect(s.run(["/"]).out).toContain("Pharmacy")
+    expect(s.run(["/"]).out).not.toContain("page:")
+  })
+
+  it("in normal mode runs the code it started with, says it changed, and runs it once restarted, which answers at once with nothing under way", async () => {
+    const s = setup()
+
+    s.open()
+
+    const before = s.endpoint()
+
+    edit(s)
+    await poll(() => s.run(["/"]).out, { timeout: 10_000 }).toContain(`code: changed on disk since instance ${before.instance} started; it runs once restarted: demo restart`)
+    expect(s.run(["/"]).out).not.toContain("as edited")
+
+    const restarted = s.run(["restart"])
+
+    expect(restarted.out).toBe(`demo: instance ${before.instance} restarts\ndemo: instance ${s.endpoint().instance} answers\n`)
+    expect(s.endpoint().port).toBe(before.port)
+    expect(s.run(["/"]).out).toContain("Keep a note, as edited")
+    expect(s.run(["/"]).out).not.toContain("code: changed")
+  })
+
+  it("in normal mode drains a restart while work runs: the command exits at once naming the instance, and follow returns once its successor answers", async () => {
+    const s = setup()
+
+    s.open()
+    s.run(["/", "add", "text=Pharmacy"])
+    s.run(["/notes/1", "remind", "seconds=2"])
+
+    const { instance } = s.endpoint()
+    const asked = Date.now()
+    const draining = s.run(["restart"])
+
+    expect(Date.now() - asked).toBeLessThan(1500)
+    expect(draining.out).toBe(
+      `demo: instance ${instance} is draining to restart: it takes no new calls and restarts once remind by agent:S ended. Wait for it: demo follow ${instance}\n`,
+    )
+    expect(s.run(["/", "add", "text=Later"])).toMatchObject({ status: 1, out: expect.stringContaining("refused: demo: instance") })
+
+    const followed = s.run(["follow", instance])
+
+    expect(followed.status).toBe(0)
+    expect(followed.out).toMatch(new RegExp(`^demo: instance ${instance} restarted; instance (?!${instance})[0-9a-f]+ answers\n$`))
+    expect(Date.now() - asked).toBeGreaterThan(1500)
+    expect(s.run(["/"]).out).toContain("due: 1")
+    // Gone already: follow says so at once.
+    expect(s.run(["follow", instance]).out).toMatch(new RegExp(`^demo: instance ${instance} is gone; instance [0-9a-f]+ answers\n$`))
+  }, 20_000)
 })
 it("an open names the page each time, and calls it new only once", () => {
   const s = setup()
 
-  expect(s.open().out).toContain(`page: http://127.0.0.1:${s.endpoint().port}  a new address\n`)
+  expect(s.open().out).toContain(`page: http://127.0.0.1:${s.endpoint().port}/?key=${s.key()}  a new address\n`)
 
   const again = s.open().out
 
-  expect(again).toContain(`page: http://127.0.0.1:${s.endpoint().port}\n`)
+  expect(again).toContain(`page: http://127.0.0.1:${s.endpoint().port}/?key=${s.key()}\n`)
   expect(again).not.toContain("a new address")
 })
 it("takes another address where the session's last one is taken, and announces it", async () => {
@@ -306,7 +370,8 @@ it("prints the full help", () => expect(setup().run(["help"]).out).toContain("St
 it("opens with the page and the command, and of the command's words only what the skill does not say; no pointer to a fuller guide", () => {
   const out = setup().open().out
 
-  expect(out).toMatch(/^page: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: demo; demo wait \[SECONDS\] waits for the person, then tells what changed\n/)
+  expect(out).toMatch(/^page: http:\/\/127\.0\.0\.1:\d+\/\?key=[\w-]{43}  a new address\n/)
+  expect(out).toContain("\ncommand: demo; demo wait [SECONDS] waits for the person, then tells what changed\n")
   expect(out).not.toContain("help")
 })
 it("door installs bv", () => {

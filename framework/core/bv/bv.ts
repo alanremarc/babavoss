@@ -8,13 +8,15 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 14
+export const VERSION = 16
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
 export const STALE_HEADER = "babavoss-stale"
 export const CALL_HEADER = "babavoss-call"
 export const ENDPOINT_FILE = "service.json"
+/** Where the runtime keeps the session's page key, which opens its page in a browser: the link carries it as `?key=`. */
+export const PAGE_KEY_FILE = "page.key"
 /** How long a live runtime may refuse connections before it is taken for deaf: longer than one takes to close its door. */
 export const DEAF_MS = 10_000
 export type OpenRoot = { directory: string; entry: string; state: string; command?: string; page?: string }
@@ -75,6 +77,8 @@ NAME PATH HANDLE name=value  call: demo / add text=Pharmacy; text=@- reads stand
 bv NAME PATH               select a root: bv demo /notes
 bv wait [SECONDS]          wait for the person: until something is heard or who is needed changes, then what changed: bv wait 60
 bv close                   close: bv close; the next call wakes the root
+bv restart                 restart, to run changed code: at once, or once the work under way ended, naming the instance
+bv follow INSTANCE [SECONDS]  wait until that instance restarted, and say which one answers: bv follow 3f2a9c1b
 bv -e CODE                 async program: bv -e 'for (let i=0;i<3;i++) console.log(await root.call("/", "add", {text:String(i)}))'
 bv -e -                    code from standard input: echo 'console.log(await root.read("/"))' | bv -e -
 bv --session ID PATH       explicit session: bv --session work /notes
@@ -143,6 +147,13 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       if (args.length !== 1) throw new SyntaxError(`${command} close`)
       route = "/_/close"
       method = "POST"
+    } else if (path === "restart") {
+      if (args.length !== 1) throw new SyntaxError(`${command} restart`)
+      route = "/_/restart"
+      method = "POST"
+    } else if (path === "follow") {
+      if (args.length > 3 || !handle || !/^[0-9a-f]+$/.test(handle) || !Number.isFinite(Number(values[0] ?? 600)) || Number(values[0] ?? 600) < 0)
+        throw new SyntaxError(`${command} follow INSTANCE [SECONDS]`)
     } else if (path === "wait") {
       const seconds = handle === undefined ? 600 : Number(handle)
 
@@ -168,7 +179,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         body = JSON.stringify({ handle, args: inputs })
       }
     }
-    type Endpoint = { port: number; token: string; dir: string; pid: number; closing?: number }
+    type Endpoint = { port: number; token: string; dir: string; pid: number; instance?: string; closing?: number }
 
     const refused = (error: unknown) =>
       [error, (error as { cause?: unknown } | undefined)?.cause].some((e) => (e as { code?: string } | undefined)?.code === "ECONNREFUSED")
@@ -248,8 +259,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         const log = openSync(logFile, "a", 0o600)
 
         logged = statSync(logFile).size
-        // Under bun's hot reload: a change in the root's code is loaded into the runtime, which stays up at its address.
-        const child = spawn(process.execPath, ["--hot", root.entry, "--serve", session, command], {
+        // Never under bun's hot reload: the runtime takes changed code by starting again, as its mode says.
+        const child = spawn(process.execPath, [root.entry, "--serve", session, command], {
           cwd: root.directory,
           detached: true,
           stdio: ["ignore", "ignore", log],
@@ -270,7 +281,6 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
 
       // Code that does not load says why where its runtime logs, as bun does, a line beginning with error: and the file it is in.
       const said = () => readFileSync(logFile).subarray(logged).toString("utf8").trim().split("\n").slice(-20).join("\n")
-      let erred = false
 
       while (!endpoint && Date.now() < until && !failed) {
         await sleep(50)
@@ -291,15 +301,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
           until = Date.now() + 10_000
           continue
         }
-        if (child.exitCode === null && child.signalCode === null) {
-          // Under hot reload a process whose code does not load stays, waiting for a change: it is ended, and its words said.
-          if (erred) {
-            child.kill()
-            throw new Error(`${name}'s runtime did not start; it said:\n${said()}`)
-          }
-          erred = /^error: /m.test(said())
-          continue
-        }
+        if (child.exitCode === null && child.signalCode === null) continue
         // It ended without serving. With 0, the runtime before it was still letting go of the session, and the next one
         // woken finds it free; with anything else it failed, and would again.
         if (child.exitCode !== 0) {
@@ -345,13 +347,13 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         try {
           const response = await send()
 
-          // It gave way, having done nothing: its code changed and was not loaded in place. The one woken in its place answers.
+          // It restarted for changed code, having done nothing: the one woken in its place answers.
           if (!response.headers.has(STALE_HEADER) || Date.now() >= until) return response
           await response.body?.cancel()
           await sleep(50)
         } catch (error) {
-          // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when its
-          // code changes; a read is asked again whatever cut it. A call cut off may have been done.
+          // A refused connection carried nothing: the runtime ended between being found and being asked, as it does when it
+          // restarts; a read is asked again whatever cut it. A call cut off may have been done.
           if (method !== "GET" && !refused(error))
             throw new Error(`the call's outcome is unknown: its runtime ended before answering; read before retrying (${error instanceof Error ? error.message : String(error)})`)
           if (Date.now() >= until) throw error
@@ -360,14 +362,25 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         page = `http://127.0.0.1:${endpoint.port}`
       }
     }
+    // The page is named by its link, which carries its key, so a browser that never saw the session opens it; the
+    // registry keeps the address alone.
+    const link = () => {
+      try {
+        const key = readFileSync(join(root.state, PAGE_KEY_FILE), "utf8").trim()
+
+        return key ? `${page}/?key=${key}` : page
+      } catch {
+        return page
+      }
+    }
     // An open always names the page; any other answer names it only when the address is not the one last named.
     const announce = () => {
       if (path === "close") return
       if (root.page !== page) {
-        console.log(`page: ${page}  a new address`)
+        console.log(`page: ${link()}  a new address`)
         root.page = page
         save(file, roots)
-      } else if (!path) console.log(`page: ${page}`)
+      } else if (!path) console.log(`page: ${link()}`)
     }
 
     if (program) {
@@ -403,8 +416,55 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
       return 0
     }
 
+    /**
+     * Waits until `instance` let go of the session, and answers with what answers in its place, woken where nothing does;
+     * undefined where `instance` still runs after `ms`.
+     */
+    const after = async (instance: string, ms: number): Promise<Endpoint | undefined> => {
+      for (const until = Date.now() + ms; ; await sleep(100)) {
+        const named = load<Endpoint>(join(root.state, ENDPOINT_FILE))
+
+        if (named?.instance !== instance || !alive(named.pid)) break
+        if (Date.now() >= until) return undefined
+      }
+      endpoint = await reach()
+      page = `http://127.0.0.1:${endpoint.port}`
+
+      return endpoint
+    }
+
+    if (path === "follow") {
+      const seconds = Number(values[0] ?? 600)
+      const named = load<Endpoint>(join(root.state, ENDPOINT_FILE))
+      const running = !!named && named.instance === handle && alive(named.pid)
+      const next = await after(handle!, seconds * 1000)
+
+      if (!next) {
+        console.log(`${name}: instance ${handle} still runs after ${seconds}s; follow it again: ${command} follow ${handle}`)
+
+        return 1
+      }
+      announce()
+      console.log(`${name}: instance ${handle} ${running ? "restarted" : "is gone"}; instance ${next.instance} answers`)
+
+      return 0
+    }
+
     const response = await request(route, method, body)
 
+    // Restarting at once: the answer is given once the instance in its place answers.
+    if (path === "restart" && response.status === 200) {
+      const was = endpoint.instance!
+
+      console.log(await response.text())
+
+      const next = await after(was, 30_000)
+
+      announce()
+      console.log(next ? `${name}: instance ${next.instance} answers` : `${name}: instance ${was} still runs; follow it: ${command} follow ${was}`)
+
+      return next ? 0 : 1
+    }
     announce()
     // What the skill does not say: the command's name here, and its words besides a path and a handle.
     if (!path) {

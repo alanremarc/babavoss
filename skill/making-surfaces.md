@@ -8,7 +8,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
-The running shell takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harnesses: it writes again what makes each aware of the surfaces beside `.baba/`, as installing does.
+The running shell runs the code it started with. A surface made, changed or removed runs once it restarts, a fresh runtime in its place, at the same address, every tab and its state kept: in dev mode at once, by itself; otherwise when you restart it. Until then `/` says the code changed, with the command, `restart`. With nothing under way it restarts and answers. With work under way it drains: it takes no new calls, restarts once that work ended, and answers at once naming its instance; `follow` with that instance waits until the one in its place answers, and says so at once where it is gone already. `close` cuts the work instead, and the next call starts it again. In dev mode a change to a surface's code cuts what runs, and the next answer says what was cut; a change to its page alone reloads the open pages. `bun run baba provision` is for the harnesses: it writes again what makes each aware of the surfaces beside `.baba/`, as installing does.
 
 ## A surface
 
@@ -164,6 +164,7 @@ import { config } from "babavoss/core/config.ts"
 
 export default config({
   title: "Billing desk",
+  dev: true,
   harnesses: {
     claude: { enable: true, events: ["SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "SessionEnd"] },
     codex: { enable: false },
@@ -171,8 +172,8 @@ export default config({
 })
 ```
 
-`title` names the root: home's heading, the page's title and the title the agent reads at `/`; without it, the root is named after the project directory. The root reads it as it starts. A section per harness, each starting with `enable`; `enable: false` takes back what baba wrote for that harness at the next `bun run baba provision`. `events` lists the hook's events that tell anything, all by default; the hook reads it as it runs, so a change needs no provisioning. Codex's section takes `network: true` too, which opens the sandbox's network in `.codex/config.toml` where that file does not already say, so the shell's command reaches its runtime. A configuration that does not load stops provisioning with its error, and keeps the hooks silent until it is corrected; the shell's answer says so.
+`title` names the root: home's heading, the page's title and the title the agent reads at `/`; without it, the root is named after the project directory. The root reads it as it starts, and `dev`: true, and the shell restarts at once whenever its code changes, cutting what runs, as while the surfaces are being made; false or absent, the default, and it runs the code it started with until restarted. `BABAVOSS_DEV=1` or `0` in the environment overrides it. A section per harness, each starting with `enable`; `enable: false` takes back what baba wrote for that harness at the next `bun run baba provision`. `events` lists the hook's events that tell anything, all by default; the hook reads it as it runs, so a change needs no provisioning. Codex's section takes `network: true` too, which opens the sandbox's network in `.codex/config.toml` where that file does not already say, so the shell's command reaches its runtime. A configuration that does not load stops provisioning with its error, and keeps the hooks silent until it is corrected; the shell's answer says so.
 
 ## Updating
 
-When an answer says a later babavoss is out, take it with the command it gives, unless the person said not to. Then read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up, adapt the surfaces to what changed, and run their specs. Installing provisions again.
+When an answer says a later babavoss is out, take it with the command it gives, unless the person said not to. Then read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up, adapt the surfaces to what changed, and run their specs. Installing provisions again; restart the shell to run the version taken.

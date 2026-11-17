@@ -23,7 +23,7 @@ import {
   type Surface,
   type Update,
 } from "babavoss/core/index.ts"
-import { LEFT_OUT, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
+import { LEFT_OUT, linkOf, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
 import { append, empty, line, NO_HOOK, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
 
 export const MODELS = ["haiku", "sonnet", "opus"]
@@ -316,7 +316,7 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             model: run.model,
             ...(checkout(run.checkout) ?? (run.from && { checkout: run.from })),
             ...(run.project && !gone(run) && { project: run.project }),
-            ...(run.page && !gone(run) && { page: run.page }),
+            ...(run.page && !gone(run) && { page: linkOf(run) }),
             ...(run.ended && { ended: run.ended }),
             turns: run.turns,
             // The run's counters are detail: read at the tab's path, and only counted in the shell's present.

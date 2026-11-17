@@ -6,7 +6,7 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { findService, SERVICE_HEADER, serviceClient, sessionEnv, type Json } from "babavoss/core/index.ts"
+import { findService, pageLink, SERVICE_HEADER, serviceClient, sessionEnv, type Json } from "babavoss/core/index.ts"
 
 /** The checkout a run is a copy of: where, at which commit, and the paths that differed from it, changed or added. */
 export type Checkout = { from: string; commit: string; dirty: string[] }
@@ -140,6 +140,17 @@ const pageOf = async (project: string, session: string) => {
   const found = await findService(stateOf(project, session))
 
   return found && `http://127.0.0.1:${found.port}/`
+}
+/**
+ * The link that opens the page under test, its key with it, read as it is shown: the run's record keeps the address alone,
+ * since it is kept on disk and the key opens a live page that can drive the agent under test.
+ */
+export const linkOf = (run: { project?: string; session?: string; page?: string }): string | undefined => {
+  if (!run.page || !run.project || !run.session) return run.page
+
+  const port = Number(new URL(run.page).port)
+
+  return port ? pageLink(stateOf(run.project, run.session), port) : run.page
 }
 const client = (project: string, home: string, session: string) =>
   serviceClient(stateOf(project, session), session, join(project, "framework/shell/scripts/open.ts"), envOf(project, home))
