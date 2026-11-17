@@ -1,6 +1,15 @@
 # Changelog
 
-What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
+What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its surfaces ran on up, to adapt them.
+
+## Adapting across several releases
+
+Read every section from the version the surfaces ran on up, then write to the newest: where a later section says otherwise than an earlier one, the later stands. Taken from before 0.72.0, two things are easy to get wrong:
+
+- **Who decides is never in a surface.** 0.71.0 said to write in `how` that a decision is the person's, and to keep `attention`; 0.72.0 removed `attention`, and 0.76.0 says a surface's words never say who decides or when to act. Write neither: baba's words have the agent raise such a decision in the conversation. What waits on the person is told by a highlight, the notice of the update that made it wait.
+- **A `kind` changes how an input is shown and printed, never what is admitted.** Admission checks the base type, `choices` and `range` alone. Declare `{ type: "string", kind: "line" }` on a text input and keep your own check that it is not empty; drop only the checks that `choices` and `range` now make.
+
+Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
 ## 0.77.0
 
@@ -115,7 +124,7 @@ Three changes to the shape of a surface and its page.
 
 - Delete `ask: true` from every `action({...})`, and the fifth argument of `handle(...)`. Drop any `actor` branching in a surface's `view`.
 - A page that read `handle.ask`, or a tab row's `asks`, reads nothing in their place.
-- Where a decision is the person's, say so in the view, in `how` or where it stands: "Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead." Keep `attention` while their word is waited for.
+- Where a decision is the person's, say so in the view, in `how` or where it stands: "Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead." Keep `attention` while their word is waited for. Since 0.76.0 a surface's words say mechanics only: write neither this nor `attention`; see "Adapting across several releases" above.
 - Rewrite specs that asserted the agent was refused an ask: both actors are offered it.
 
 **The activity is a log of actions, each with its actor.** An entry at `/activity` is one action: `who` (`person`, `agent` or `world`), `by` (the world's hearer), `at`, `did` (the handle and its inputs, or the event heard), `times`, `refused`, `said` (the surface's lines), `own` and `id`; `surface` only where `at` does not name it. It replaces `kind`, `tab` and `what`.
