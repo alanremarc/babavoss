@@ -101,6 +101,18 @@
         border-radius: 50%;
         background: var(--line);
       }
+      .bar b {
+        margin-left: 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+      .bar span {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.8125rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .cols {
         display: grid;
         grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
@@ -642,7 +654,7 @@
       <p class="lede">Baba is a work surface you share with your agent.</p>
 
       <div class="picture" id="demo" role="img" aria-label="A demo. In the chat, you asked your agent for a slideshow of your newest photos with a soundtrack, and it made one on a surface: the video, the music, and a track of the photos. Then, in three steps. One: you select three parts of the track, lettered A, B and C. Two: you ask for A as a collage, B with a cut on every beat, and C zooming in, and the agent does each. Three: you play it.">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><b>Your harness</b><span>Claude Code, Codex, OpenCode…</span></div>
         <div class="cols" aria-hidden="true">
           <div class="chat">
             <p class="label">Chat</p>
