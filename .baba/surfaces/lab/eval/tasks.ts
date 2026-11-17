@@ -38,14 +38,30 @@ export type Look = {
   opened: Record<string, string>
   page: Ran
   heard: { by: string; did: string; surface: string }[]
+  /** The framework's version as .baba/ holds it. */
+  framework: string
+  /** The page's address, as the session's root keeps it. */
+  address?: string
+  /** Whether the session's root ran as the agent left it, before the rig asked it anything. */
+  up: boolean
+  /** What the run changed outside the project: in the agent's home, beside what the harness keeps, or in the run's directory. */
+  outside: string[]
+  /** The project's own files the run changed, outside .baba/, the harnesses' files and the sessions' state. */
+  strays: string[]
+  /** What the agent gave `open`, a call each. */
+  browsed: string[]
+  /** The paths of the site served for the run that were asked for, in order. */
+  fetched: string[]
 }
 /**
  * A project made by `baba init` alone, with no fixture: `files`, by their path in the project, written after it; `was`, the
  * release they were written for, committed as such before the variant is taken; `touch`, files the rig changes by hand
  * after the agent's turn, as the person would, each by a function of its text; `empty`, a repository where nothing was run,
- * for the agent to install babavoss in, the public install's command sent to the variant.
+ * for the agent to install babavoss in, the public install's command sent to the variant; `cold`, no shell started before
+ * the agent, as after a person's own `init`; `site`, the variant's site/ served on loopback for the run, its address said in
+ * the prompt in place of SITE.
  */
-export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string>; empty?: true }
+export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string>; empty?: true; cold?: true; site?: true }
 /** `files`, the task's own files as the run left them, by their path in the project; `look`, a fresh project's. */
 export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[]; files?: Record<string, string>; look?: Look }
 /** What the dry run does in the agent's place: its command's arguments, one call each, files it writes in the project, and its last words. */
@@ -69,6 +85,8 @@ export type Task = {
 }
 /** A later message: what the person does first, what they say, and the dry run's script for it; COMPACT compacts the session. */
 export type Later = { acts?: Act[]; prompt: string; dry: Dry }
+/** The address the site is published at, which the site served for a run stands in for in its prompt. */
+export const SITE = "https://babavoss.org"
 /** The message that compacts the session, as the person would type it: Claude Code's own command. */
 export const COMPACT = "/compact"
 
@@ -520,7 +538,9 @@ export const TASKS: Task[] = [
 export const scriptFor =
   (tasks: Task[]) =>
   (prompt: string): Dry =>
-    prompt === COMPACT ? { calls: [] } : (tasks.find((t) => t.prompt === prompt)?.dry ?? tasks.flatMap((t) => t.then ?? []).find((later) => later.prompt === prompt)!.dry)
+    prompt === COMPACT
+      ? { calls: [] }
+      : (tasks.find((t) => t.prompt === prompt || (t.fresh?.site && t.prompt.split(SITE).every((part) => prompt.includes(part))))?.dry ?? tasks.flatMap((t) => t.then ?? []).find((later) => later.prompt === prompt)!.dry)
 
 /** The tasks a comma list names, all where it is empty; a name that is none throws. */
 export function tasksNamed(list: string): Task[] {

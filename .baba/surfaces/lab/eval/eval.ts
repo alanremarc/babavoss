@@ -21,8 +21,8 @@
 //   --minutes   the most minutes a run may take, 10 by default
 //   --out       the campaigns' directory, .babavoss/eval in this checkout by default: each campaign a directory in it with
 //               results.jsonl, transcripts/ and table.txt, and tally.json counting the runs of every campaign
-//   --instruction  the install task's instruction, a file's text: fresh/install.md by default, the README's block when
-//               pointed at a file that holds it
+//   --instruction  the install task's instruction, a file's text, as fresh/install.md: the README's line by default, its
+//               address the site served for the run
 //   --dry       play each task's script through the fake harness instead of an agent: everything but the agent, for free
 //
 // A real run needs Claude Code signed in for the person; the agent's home reaches the login by a link, as the lab's does.
@@ -31,7 +31,7 @@ import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 import { claudeCode } from "babavoss/core/index.ts"
 import { campaign, dryHarness, MODEL, REPO, table, tally, variantOf, type Options } from "./rig.ts"
-import { INSTALL, withInstruction } from "./fresh.ts"
+import { withInstruction } from "./fresh.ts"
 import { scriptFor, tasksNamed } from "./tasks.ts"
 
 const { values } = parseArgs({
@@ -46,7 +46,7 @@ const { values } = parseArgs({
     minutes: { type: "string", default: "10" },
     out: { type: "string", default: join(REPO, ".babavoss/eval") },
     dry: { type: "boolean", default: false },
-    instruction: { type: "string", default: INSTALL },
+    instruction: { type: "string" },
   },
 })
 
@@ -62,7 +62,7 @@ try {
   const variants = (values.variant?.length ? values.variant : [REPO]).map((path, i) => variantOf(path, `v${i + 1}`))
   const options: Options = {
     variants,
-    tasks: withInstruction(tasksNamed(values.tasks), resolve(values.instruction)),
+    tasks: values.instruction ? withInstruction(tasksNamed(values.tasks), resolve(values.instruction)) : tasksNamed(values.tasks),
     model: values.model,
     runs: Math.floor(number("runs", values.runs)),
     ...(values.budget !== undefined && { budget: number("budget", values.budget) }),

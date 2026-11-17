@@ -11,10 +11,10 @@ Run these in the project the person wants it in.
 
        bunx github:alanremarc/babavoss init
 
-   It makes `.baba/`, installs the framework in it, and sets up this harness beside it. If `.baba/` is there already, run `bun install` in it instead.
+   It makes `.baba/`, installs the framework in it, and sets up the harnesses beside it, Claude Code and Codex alike. If `.baba/` is there already, run `bun install` in it instead.
 3. Read `.baba/node_modules/babavoss/skill/SKILL.md`. It says how surfaces are worked.
-4. Start the shell: `cd .baba && bun run baba start`. Give the person the address of the page it prints.
-5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on.
+4. Start the shell: `cd .baba && bun run baba start`. It returns at once with the page's address, and the shell runs on by itself: run it in the foreground, and give the person the address.
+5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on. This session began before that was set up: it is told nothing, so read before acting on a surface.
 
 Do not make a surface as part of installing. The person says what they want next.
 
@@ -22,8 +22,8 @@ Do not make a surface as part of installing. The person says what they want next
 
 - How a surface is made or changed: `.baba/node_modules/babavoss/skill/making-surfaces.md`. Read it before doing either.
 - `.baba/` is the project's own code: commit it. `.baba/node_modules` and `.baba/.root` are ignored by its `.gitignore`.
-- A running shell runs the code it started with. While surfaces are being made, `dev: true` in `.baba/baba.config.ts` restarts it on each change; otherwise restart it with the command the shell's answer names.
-- When an answer says a later release is out, take it as that answer says, and adapt the surfaces by the changelog.
+- A running shell runs the code it started with. While surfaces are being made, `dev: true` in `.baba/baba.config.ts`, a file `init` does not make (`export default config({ dev: true })`, `config` from `babavoss/core/config.ts`), restarts it on each change; otherwise restart it with the command the shell's answer names.
+- When an answer says a later release is out, whether to take it is the person's; it is taken as that answer says, the surfaces adapted by the changelog.
 
 ## Links
 
