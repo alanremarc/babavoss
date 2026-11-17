@@ -537,7 +537,13 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     }
     if (req.method === "GET") {
       try {
-        const view = running.read(path, actor)
+        // The agent's program reads one fact of a view by its path, as the command's own read does: the fact's value alone.
+        const fact = () => {
+          const found = actor === actorText ? factAt(path) : undefined
+
+          return found && Object.values(found)[0]
+        }
+        const view = running.read(path, actor) ?? fact()
 
         // A program's read of / gives the agent the present whole, as the word's does.
         if (path === "/" && actor === actorText && view !== undefined) text.seen()
