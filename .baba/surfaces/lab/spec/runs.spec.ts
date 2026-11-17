@@ -1,12 +1,14 @@
 // A run's project: a copy of a checkout as it is now, against a git repository made for the spec. What is uncommitted comes
 // along, staged or not, added or deleted; what git ignores, what sessions write and the lab itself stay out; and the copy
 // is a repository of its own, so what the agent under test commits there never reaches the checkout. A run's directory,
-// once closed, keeps its record alone, and what deletes there never reaches outside it.
+// once closed, keeps its record alone, and what deletes there never reaches outside it. The key that opens the page under
+// test is shown, never kept.
 import { afterAll, expect, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { checkoutOf, copyCheckout, REPO, runDir, runsAt } from "../src/runs.ts"
+import { checkoutOf, copyCheckout, linkOf, REPO, runDir, runsAt } from "../src/runs.ts"
+import { append, empty, resolve } from "../src/timeline.ts"
 
 const made: string[] = []
 const temp = () => {
@@ -167,4 +169,20 @@ test("a sweep clears every run that is not spared, its home's login taken back f
   expect(existsSync(join(root, "r2/project/notes.md"))).toBe(true)
   expect(place.list()).toHaveLength(3)
   expect(existsSync(join(keychain, "login.keychain-db"))).toBe(true)
+})
+
+test("the page under test is shown by its link, its key read as it is shown; the timeline keeps no key, at its own length", () => {
+  const project = temp()
+  const state = join(project, ".babavoss/sessions/S/baba")
+  const key = "k".repeat(43)
+
+  expect(linkOf({ project, session: "S", page: "http://127.0.0.1:5555/" })).toBe("http://127.0.0.1:5555/")
+  put(state, "page.key", key)
+  expect(linkOf({ project, session: "S", page: "http://127.0.0.1:5555/" })).toBe(`http://127.0.0.1:5555/?key=${key}`)
+
+  const said = `page: http://127.0.0.1:5555/?key=${key}  a new address`
+  const kept = resolve(append(empty(), 0, { kind: "word", title: "baba", text: said, call: `open http://127.0.0.1:5555/?key=${key}`, id: "a" }), "a", said)
+  const [entry] = kept.entries
+
+  expect([entry!.text.includes(key), entry!.call!.includes(key), entry!.text.length]).toEqual([false, false, said.length])
 })
