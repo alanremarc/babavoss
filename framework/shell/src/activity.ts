@@ -24,7 +24,8 @@ export type Said = { text: string; at?: string }
  * number; `did`, the handle called, or the kind of the event heard; `args`, its inputs, each whole or cut, and `cut`, the
  * whole length of each one cut; `refused`, why it was refused, where it was; `said`, the surface's own lines about it;
  * `times`, how many it folds, where more than one; `own` where it is the shell's opening, closing or showing of a tab,
- * which is about the tab but not in it; `id` the name its call was given by its caller, where it was given one.
+ * which is about the tab but not in it; `id` the name its call was given by its caller, where it was given one: the
+ * calls of one program share theirs, `program:` and the run's, so they read as one move.
  */
 export type Entry = {
   n: number
@@ -346,7 +347,7 @@ export function activityView(all: Entry[], tabs: Tabs, upto?: number, notices = 
       ? "what the surfaces said of what was done in this session's open tabs, newest first, by who did it"
       : "what was done in this session, newest first: who, the person, an agent, or the world heard by the command in by; did, a call with its " +
         "inputs or the event heard, times in a row; refused, why; said, the surface's lines, saidAt their place; surface, where at does not name it; " +
-        "own, the shell's line about a tab, at null once it closed with its entries; id, the caller's name for a call",
+        "own, the shell's line about a tab, at null once it closed with its entries; id, the caller's name for a call, shared by one program's calls",
     kept: entries.length,
     ...(!shown.length ? { entries: "none yet" } : { entries: shown.map(row) }),
     ...(more && { earlier: { at: `${base}/${oldest!.n - 1}` } }),
