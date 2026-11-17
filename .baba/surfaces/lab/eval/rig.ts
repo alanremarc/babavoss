@@ -7,7 +7,7 @@
 // line of results.jsonl, its stream a transcript beside it; a table compares the variants. The scratch project, its home
 // and its root are ended and deleted whatever happens. A dry run plays each task's script in the agent's place through the
 // fake harness, against the same projects and roots, and spends nothing.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -153,10 +153,48 @@ export function makePlace(variant: Variant, session: string): Place {
   return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
-type Saved = { model?: { tabs?: { surface: string; named?: boolean; model: unknown }[]; activity?: { who?: string; surface?: string; own?: boolean; refused?: string }[] } }
-const saved = (place: Place): Saved => {
+type Entry = { who?: string; surface?: string; own?: boolean; refused?: string }
+type Saved = { model?: { tabs?: { n?: number; surface: string; named?: boolean; model: unknown }[]; activity?: Entry[] } }
+/** A log's entries, one a line, each read as its last line. */
+const logOf = (file: string): Entry[] => {
   try {
-    return JSON.parse(readFileSync(join(place.state, "model.json"), "utf8")) as Saved
+    const byN = new Map<number, Entry>()
+
+    for (const line of readFileSync(file, "utf8").split("\n"))
+      try {
+        const e = JSON.parse(line) as Entry & { n: number }
+
+        byN.set(e.n, e)
+      } catch {}
+
+    return [...byN.values()]
+  } catch {
+    return []
+  }
+}
+/**
+ * The root's model as its framework keeps it: in one model.json, as a variant of before keeps it; or as shell.json, each
+ * open tab's state.json and each log, open or closed.
+ */
+const saved = (place: Place): Saved => {
+  const read = (file: string): unknown => JSON.parse(readFileSync(join(place.state, file), "utf8"))
+
+  try {
+    return read("model.json") as Saved
+  } catch {}
+  try {
+    const shell = read("shell.json") as { tabs?: { n: number; surface: string; named?: boolean }[] }
+    const tabs = (shell.tabs ?? []).map((t) => ({ ...t, model: read(`tabs/${t.n}/state.json`) }))
+    const folders = (dir: string) => {
+      try {
+        return readdirSync(join(place.state, dir)).map((n) => join(place.state, dir, n))
+      } catch {
+        return []
+      }
+    }
+    const logs = [place.state, ...folders("tabs"), ...folders("closed")].flatMap((at) => [join(at, "log.1.jsonl"), join(at, "log.jsonl")])
+
+    return { model: { tabs, activity: logs.flatMap(logOf) } }
   } catch {
     return {}
   }

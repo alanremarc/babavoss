@@ -200,12 +200,12 @@ it("reaches a tab by its surface's name, and answers a path into a tab the perso
   expect(await request("/counter", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
   await request("/", { handle: "close", args: { n: 1 } }, true)
   expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toStartWith(
-    "refused: /tabs/1, the counter tab 1, was closed by the person: open one with open surface=counter at /, and it is at /counter\n"
+    "refused: /tabs/1, the counter tab 1, was closed by the person, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter\n"
   )
-  expect(await request("/counter")).toBe("/counter, the counter tab 1, was closed by the person: open one with open surface=counter at /, and it is at /counter")
+  expect(await request("/counter")).toBe("/counter, the counter tab 1, was closed by the person, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter")
   await request("/", { handle: "open", args: { surface: "counter" } }, true)
   expect(await request("/tabs/1", { handle: "bump", args: { by: "1" } })).toStartWith(
-    "refused: /tabs/1, the counter tab 1, was closed by the person; counter is now at /counter (tab 2)"
+    "refused: /tabs/1, the counter tab 1, was closed by the person, its log kept at /activity/closed/1; counter is now at /counter (tab 2)"
   )
   expect(await request("/counter", { handle: "bump", args: { by: "1" } })).toBe("n: 0 → 1")
   // With the person's message: the tab closed, and the one opened at the name, each by its number.

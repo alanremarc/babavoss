@@ -330,7 +330,7 @@ export function foundItems(found: Found[], navigate: (at: string) => void, start
  */
 export function controlsOf({ close, others, link, reload }: { close?: { hint: string; run: () => void }; others?: () => void; link: string; reload: () => void }): MenuItem[] {
   return [
-    { kind: "action", id: "close", label: "Close tab", note: "its state is dropped", hint: close?.hint, disabled: !close, run: () => close?.run() },
+    { kind: "action", id: "close", label: "Close tab", note: "kept read only in the archive", hint: close?.hint, disabled: !close, run: () => close?.run() },
     { kind: "action", id: "close-others", label: "Close other tabs", disabled: !others, run: () => others?.() },
     { kind: "action", id: "copy", label: "Copy link", hint: link, run: () => void navigator.clipboard?.writeText(link) },
     { kind: "action", id: "reload", label: "Reload", hint: "Read the tab's views again", run: reload },

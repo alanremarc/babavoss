@@ -116,7 +116,7 @@ describe("the shell surface", () => {
       expect(r.read("/tabs/1")).toBeUndefined()
       expect(await r.call("/tabs/1", "bump", { by: 1 }, "agent")).toEqual({
         outcome: "refused",
-        reason: "/tabs/1, the counter tab 1, was closed by the agent: open one with open surface=counter at /, and it is at /counter",
+        reason: "/tabs/1, the counter tab 1, was closed by the agent, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter",
       })
     } finally {
       await r.stop()
@@ -540,19 +540,19 @@ describe("a tab's address", () => {
     agent.told()
     await person.call("/", "close", { n: 1 })
     // Closed: the name and the number say what happened, and how to open it again, in place of nothing.
-    const closed = "/tabs/1, the counter tab 1, was closed by the person: open one with open surface=counter at /, and it is at /counter"
+    const closed = "/tabs/1, the counter tab 1, was closed by the person, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter"
 
     expect(await agent.call("/tabs/1", "bump", { by: 1 })).toEqual({ outcome: "refused", reason: closed })
     expect(await agent.call("/counter", "bump", { by: 1 })).toEqual({
       outcome: "refused",
-      reason: "/counter, the counter tab 1, was closed by the person: open one with open surface=counter at /, and it is at /counter",
+      reason: "/counter, the counter tab 1, was closed by the person, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter",
     })
     await person.call("/", "open", { surface: "counter" })
     // Opened again, it is at the name, under another number: what was written down with the name works on.
     expect(await agent.call("/counter", "bump", { by: 1 })).toMatchObject({ outcome: "written", view: { n: 1 } })
     expect(await agent.call("/tabs/1", "bump", { by: 1 })).toEqual({
       outcome: "refused",
-      reason: "/tabs/1, the counter tab 1, was closed by the person; counter is now at /counter (tab 2)",
+      reason: "/tabs/1, the counter tab 1, was closed by the person, its log kept at /activity/closed/1; counter is now at /counter (tab 2)",
     })
     // With the person's next message, the tab closed and the tab opened, each once by its number.
     expect(agent.told()[0]).toBe('- /counter "Counter" (tab 1) closed')
@@ -575,7 +575,7 @@ describe("a tab's address", () => {
     await person.call("/", "close", { n: 1 })
     expect(await agent.call("/counter", "bump", { by: 1 })).toEqual({
       outcome: "refused",
-      reason: "/counter, the counter tab 1, was closed by the person; the counter tab open is /tabs/2, and open surface=counter at / opens one at /counter",
+      reason: "/counter, the counter tab 1, was closed by the person, its log kept at /activity/closed/1; the counter tab open is /tabs/2, and open surface=counter at / opens one at /counter",
     })
     expect(agent.sees("/tabs/2")).toMatchObject({ n: 6 })
     await agent.call("/", "open", { surface: "counter" })

@@ -8,9 +8,11 @@
 // notices. A line may be a highlight, the one class of important entry: one the surface marked, or the agent's call of the
 // shell's `highlight`; /activity/highlights is the entries that carry one. A quiet commit, the page's own bookkeeping, is
 // none, and the person opening a drawer neither. Time is the message's own, stamped as it enters, a call by
-// the run loop and a tab's event by the shell's run, so the update that keeps it stays pure. The last KEPT entries are kept,
-// in the shell's model; `record` is the one place an entry is added, `activityView` the one where they are read. An entry
-// lives with the tab it is in: when the tab closes its entries go with it, and the shell's own line that it closed stays.
+// the run loop and a tab's event by the shell's run, so the update that keeps it stays pure. The model holds the last KEPT
+// entries of each tab, and of the shell's own; on disk each tab's log is kept whole in its own file, up to a bound (keep.ts).
+// `record` is the one place an entry is added, `activityView` the one where the held ones are read. An entry lives with the
+// tab it is in: when the tab closes its entries leave the model with it, kept read only in the archive of closed tabs
+// (archive.ts), and the shell's own line that it closed stays.
 // Which highlights the person has opened is kept beside them, a mark per drawer the page sets as it opens one: a highlight
 // is unopened until the drawer of the tab it is in, or home's, is opened after it, so a page opened later knows from the
 // log itself which tabs to mark.
@@ -52,7 +54,7 @@ export type Opened = Record<string, number>
 /** The tabs an entry can be in: the address the open tab numbered n stands at. */
 export type Tabs = { at: (n: number) => string | undefined }
 
-/** How many entries are kept; an older one goes first. */
+/** How many entries of each tab, and of the shell's own, the model holds; an older one of the same goes first. */
 export const KEPT = 200
 /** How many entries /activity shows at a time. */
 export const PAGE = 50
@@ -117,7 +119,10 @@ export const didLine = (e: Pick<Entry, "did" | "args" | "cut">): string =>
     .filter(Boolean)
     .join(" ")
 
-/** The entries kept after `line`, the one place an entry is added: numbered on from the last, the newest KEPT; the world's in a row folded. */
+/**
+ * The entries kept after `line`, the one place an entry is added: numbered on from the last, the newest KEPT of its tab, or
+ * of the shell's own; the world's in a row folded.
+ */
 export function record(kept: Entry[], line: Line | undefined): Entry[] {
   if (!line) return kept
 
@@ -125,7 +130,28 @@ export function record(kept: Entry[], line: Line | undefined): Entry[] {
 
   if (into) return kept.map((e) => (e === into ? { ...e, when: line.when, times: (e.times ?? 1) + 1 } : e))
 
-  return [...kept, { n: (kept.at(-1)?.n ?? 0) + 1, ...line }].slice(-KEPT)
+  const tab = tabOfEntry(line)
+  const next = [...kept, { n: (kept.at(-1)?.n ?? 0) + 1, ...line }]
+  const same = next.filter((e) => tabOfEntry(e) === tab)
+
+  return same.length > KEPT ? next.filter((e) => e !== same[0]) : next
+}
+
+/** The newest KEPT of each tab's entries, and of the shell's own, in order. */
+export function held(entries: Entry[]): Entry[] {
+  const count = new Map<number | undefined, number>()
+
+  return entries
+    .toReversed()
+    .filter((e) => {
+      const tab = tabOfEntry(e)
+      const seen = (count.get(tab) ?? 0) + 1
+
+      count.set(tab, seen)
+
+      return seen <= KEPT
+    })
+    .reverse()
 }
 
 /**
@@ -273,8 +299,11 @@ function entryFrom(e: unknown): Entry | undefined {
   return { n: x.n, when: x.when, who, surface: x.surface, at: x.at, did: (own.own && OWN[x.what]) || x.what, ...own, ...id }
 }
 
-/** The entries kept from before: none where state kept before activity has none, and only what reads as an entry, in either shape. */
-export const restored = (kept: unknown): Entry[] => (Array.isArray(kept) ? kept.map(entryFrom).filter((e): e is Entry => !!e).slice(-KEPT) : [])
+/** What reads as an entry of those kept, in either shape, all of them: as a closed tab's log is read whole. */
+export const entriesFrom = (kept: unknown): Entry[] => (Array.isArray(kept) ? kept.map(entryFrom).filter((e): e is Entry => !!e) : [])
+
+/** The entries kept from before: none where state kept before activity has none, and only what reads as an entry, the newest KEPT of each tab. */
+export const restored = (kept: unknown): Entry[] => held(entriesFrom(kept))
 
 /** Whether an entry carries a highlight. */
 export const highlighted = (e: Pick<Entry, "said">): boolean => !!e.said?.some((s) => s.highlight)
