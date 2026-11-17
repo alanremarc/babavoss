@@ -8,13 +8,15 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 14
+export const VERSION = 15
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
 export const STALE_HEADER = "babavoss-stale"
 export const CALL_HEADER = "babavoss-call"
 export const ENDPOINT_FILE = "service.json"
+/** Where the runtime keeps the session's page key, which opens its page in a browser: the link carries it as `?key=`. */
+export const PAGE_KEY_FILE = "page.key"
 /** How long a live runtime may refuse connections before it is taken for deaf: longer than one takes to close its door. */
 export const DEAF_MS = 10_000
 export type OpenRoot = { directory: string; entry: string; state: string; command?: string; page?: string }
@@ -360,14 +362,25 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
         page = `http://127.0.0.1:${endpoint.port}`
       }
     }
+    // The page is named by its link, which carries its key, so a browser that never saw the session opens it; the
+    // registry keeps the address alone.
+    const link = () => {
+      try {
+        const key = readFileSync(join(root.state, PAGE_KEY_FILE), "utf8").trim()
+
+        return key ? `${page}/?key=${key}` : page
+      } catch {
+        return page
+      }
+    }
     // An open always names the page; any other answer names it only when the address is not the one last named.
     const announce = () => {
       if (path === "close") return
       if (root.page !== page) {
-        console.log(`page: ${page}  a new address`)
+        console.log(`page: ${link()}  a new address`)
         root.page = page
         save(file, roots)
-      } else if (!path) console.log(`page: ${page}`)
+      } else if (!path) console.log(`page: ${link()}`)
     }
 
     if (program) {

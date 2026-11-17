@@ -16,11 +16,16 @@
 // never in a view. And with what it shows first, so its first frame is whole: an island of JSON, the root's state as the
 // person reads it now: the change it counts the stream from, whose move it is, and the views at the paths the root names
 // for the page's path. The page reads it before it draws, and the stream's first change says whether it is still so.
-// Only this machine's clients: loopback host, own origin, the service token on everything but the page, as a header or
-// as the cookie the page response sets, named after the port. A runtime that gives way answers 503 with STALE_HEADER, having
-// done nothing, and ends: its clients ask again, of the one in its place. A client's probe for whether it is up never waits.
+// Only this machine's clients: loopback host, own origin, and proof on everything. A program proves itself by the service
+// token as a header, and only it is told the token back, so it knows it reached its own runtime. A browser proves itself by
+// the session's page key: once in the link its agent gives, `?key=`, answered with the key as a cookie named after the port
+// and a page that loads its address without it, so the key leaves the address bar and the history; then by that cookie.
+// A browser with neither is given a plain page that says how the page is opened, and nothing of the session. A runtime
+// that gives way answers 503 with STALE_HEADER, having done nothing, and ends: its clients ask again, of the one in its
+// place. A client's probe for whether it is up never waits.
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { timingSafeEqual } from "node:crypto"
 import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Noticed, Running } from "../surface/run.ts"
@@ -28,7 +33,7 @@ import { textArgs, textSession, textView } from "./text.ts"
 import { NEEDS } from "../present/present.ts"
 import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
-import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PAGE_KEY_PARAM, pageKey, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
 import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unheardOf, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
@@ -105,14 +110,33 @@ const body = (req: IncomingMessage) =>
     req.on("error", fail)
   })
 // Cookies ignore ports, and several runtimes share 127.0.0.1, so each names its cookie after its port; a page embedding another root's page keeps its own.
-const cookieName = (port: number) => `babavoss-service-${port}`
-const tokenOf = (req: IncomingMessage, port: number): string | undefined => {
-  const header = req.headers[SERVICE_HEADER]
+const cookieName = (port: number) => `babavoss-page-${port}`
+const cookieOf = (req: IncomingMessage, port: number): string | undefined =>
+  new RegExp(`(?:^|;\\s*)${cookieName(port)}=([^;]+)`).exec(req.headers.cookie ?? "")?.[1]
+/** Whether `given` is `secret`, in a time that does not tell how much of it was right. */
+const same = (given: unknown, secret: string) => {
+  if (typeof given !== "string") return false
 
-  if (typeof header === "string") return header
+  const a = Buffer.from(given)
+  const b = Buffer.from(secret)
 
-  return new RegExp(`(?:^|;\\s*)${cookieName(port)}=([^;]+)`).exec(req.headers.cookie ?? "")?.[1]
+  return a.length === b.length && timingSafeEqual(a, b)
 }
+/** How long a browser keeps the page key: a session's page is opened again within it without the link. */
+const KEPT_S = 30 * 24 * 60 * 60
+/** What a browser that has not proven itself is shown: how the page is opened, and nothing of the session. */
+const CLOSED = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<meta name="referrer" content="no-referrer"><title>babavoss</title>
+<style>:root{color-scheme:light dark}body{font:15px/1.5 system-ui,sans-serif;max-width:32rem;margin:20vh auto;padding:0 1rem}</style></head>
+<body><p>This session's page is opened by the link its agent gives.</p><p>Ask the agent for the page's link, and open it here.</p></body></html>`
+/**
+ * The answer to the link: a page that loads `to`, its address without the key, in the key's place in the history. Not a
+ * redirect: a browser sends no SameSite=Strict cookie on the redirect of a navigation another site started, as a link
+ * clicked in a harness's web page is, while one the page itself starts carries it.
+ */
+const opening = (to: string) =>
+  `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">` +
+  `<script>location.replace(${JSON.stringify(to).replaceAll("<", "\\u003c")})</script></head></html>`
 
 export type Door = {
   server: Server
@@ -181,6 +205,12 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     return undefined
   }
   const streams = new Set<ServerResponse>()
+  /** The session's page key, kept across its runtimes. */
+  const key = pageKey(options.identity.dir)
+  const closed = (res: ServerResponse) => {
+    res.writeHead(401, { "content-type": "text/html", "cache-control": "no-store", "referrer-policy": "no-referrer" })
+    res.end(CLOSED)
+  }
   // What the runtime has to say of the root's code, until an answer to the agent carries it; a wait ends for it too.
   let said: string | undefined
   const noted = new Set<() => void>()
@@ -271,10 +301,13 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
   const server = createServer(async (req, res) => {
     options.touched?.()
-    res.setHeader(SERVICE_HEADER, options.identity.token)
 
     const port = (server.address() as { port: number } | null)?.port ?? 0
+    // A program's proof, and a browser's: the token as a header, the page key as its cookie.
+    const program = same(req.headers[SERVICE_HEADER], options.identity.token)
+    const proven = program || same(cookieOf(req, port), key)
 
+    if (program) res.setHeader(SERVICE_HEADER, options.identity.token)
     if (!admitted(req, port)) return json(res, 403, { error: "not this machine's client" })
 
     const url = new URL(req.url ?? "/", "http://127.0.0.1")
@@ -296,7 +329,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         res.end(hush ? `${hush}\n${value}` : value)
       }
 
-      if (tokenOf(req, port) !== options.identity.token) return reply(401, "service token required")
+      if (!program) return reply(401, "service token required")
       if (req.method === "POST" && path === "/_/turn") {
         const event = (await body(req)).trim() as TurnEvent
 
@@ -399,9 +432,24 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         return reply(409, `refused: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
-    if (req.method === "POST" && path === "/_/turn") {
-      if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
+    if (html && url.searchParams.has(PAGE_KEY_PARAM)) {
+      const given = same(url.searchParams.get(PAGE_KEY_PARAM), key)
 
+      if (!given && !proven) return closed(res)
+      url.searchParams.delete(PAGE_KEY_PARAM)
+      res.writeHead(200, {
+        "content-type": "text/html",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        ...(given && { "set-cookie": `${cookieName(port)}=${key}; Path=/; Max-Age=${KEPT_S}; SameSite=Strict; HttpOnly` }),
+      })
+
+      // Leading slashes are one: a path is never read as another host's address.
+      return res.end(opening(`/${path.replace(/^\/+/, "")}${url.search}`))
+    }
+    if (html && !proven) return closed(res)
+    if (!proven) return json(res, 401, { error: "the service token or the page's key required" })
+    if (req.method === "POST" && path === "/_/turn") {
       let message: unknown
 
       try {
@@ -448,15 +496,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       const boot = island({ version, turn: turnNow(), views })
 
       // The page carries the state it was served with, so it is never kept: a refresh is served it anew.
-      res.writeHead(200, {
-        "content-type": "text/html",
-        "cache-control": "no-store",
-        "set-cookie": `${cookieName(port)}=${options.identity.token}; Path=/; SameSite=Strict; HttpOnly`,
-      })
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" })
 
-      return res.end(served.html.replaceAll("%TOKEN%", options.identity.token).replace("</head>", () => `${boot}${about()}</head>`))
+      return res.end(served.html.replace("</head>", () => `${boot}${about()}</head>`))
     }
-    if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
 
     const actor = typeof req.headers[ACTOR_HEADER] === "string" ? req.headers[ACTOR_HEADER] : "person"
 
