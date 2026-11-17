@@ -29,6 +29,10 @@ export type Look = {
   surfaces: string[]
   files: Record<string, string>
   stale: boolean
+  /** Whether each of the paths a set-up project has is there: .baba/, the harnesses' files, the root's command. */
+  there: Record<string, boolean>
+  /** The root's answer at `/`, read before anything else. */
+  present: string
   check: Ran
   test: Ran
   opened: Record<string, string>
@@ -38,9 +42,10 @@ export type Look = {
 /**
  * A project made by `baba init` alone, with no fixture: `files`, by their path in the project, written after it; `was`, the
  * release they were written for, committed as such before the variant is taken; `touch`, files the rig changes by hand
- * after the agent's turn, as the person would, each by a function of its text.
+ * after the agent's turn, as the person would, each by a function of its text; `empty`, a repository where nothing was run,
+ * for the agent to install babavoss in, the public install's command sent to the variant.
  */
-export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string> }
+export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string>; empty?: true }
 /** `files`, the task's own files as the run left them, by their path in the project; `look`, a fresh project's. */
 export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[]; files?: Record<string, string>; look?: Look }
 /** What the dry run does in the agent's place: its command's arguments, one call each, files it writes in the project, and its last words. */

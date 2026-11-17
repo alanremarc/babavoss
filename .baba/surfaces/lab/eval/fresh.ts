@@ -192,7 +192,38 @@ const CODE = {
 }
 const SHOTS = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`screenshots/screen-${String(i + 1).padStart(2, "0")}.png`, ""]))
 
+/** The instruction the install task gives by default: a plain one, in place of the README's block until it is pointed there. */
+export const INSTALL = join(HERE, "fresh/install.md")
+/** The install task's prompt, the text of the instruction at `path`. */
+export const withInstruction = (tasks: Task[], path: string): Task[] =>
+  tasks.map((t) => (t.name === "install" ? { ...t, prompt: readFileSync(path, "utf8").trim() } : t))
+/** What a set-up project has: .baba/ with its framework, the harnesses' files, the root's command. */
+const SET_UP = [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".babavoss/bin/baba"]
+
 export const FRESH: Task[] = [
+  {
+    // An instruction to install babavoss, given in a repository where nothing was run: it installs, provisions, starts
+    // the shell and gives the page's address, and makes no surface. Its text is a file's, --instruction to the eval.
+    name: "install",
+    kind: "probe",
+    prompt: readFileSync(INSTALL, "utf8").trim(),
+    fresh: { empty: true },
+    check: ({ look, answer }) => {
+      if (!look) return no("the project could not be looked at")
+
+      const missing = SET_UP.filter((p) => !look.there[p])
+
+      if (missing.length) return no(`missing ${missing.join(", ")}`)
+      if (look.check.code !== 0) return no(`bun check in .baba/ fails: ${look.check.out.split("\n").slice(-2).join(" ")}`)
+      if (!/^page: /m.test(look.present)) return no(`the shell does not answer: ${look.present.slice(0, 120)}`)
+      if (look.surfaces.length) return no(`made ${look.surfaces.join(", ")}`)
+      if (!PAGE.test(answer)) return no("gave no page's address")
+      if (!/\.baba|shell|installed|set up/i.test(answer)) return no("did not say what was set up")
+
+      return ok()
+    },
+    dry: { calls: [] },
+  },
   {
     // The first question in a project with no surfaces: what is there, truthfully, the page's address, and nothing made.
     name: "first-contact",

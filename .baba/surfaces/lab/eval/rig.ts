@@ -10,7 +10,7 @@
 // project is one that only ran `baba init` from the variant, with the task's files, and what the agent left there is
 // looked at before it is deleted: the surfaces' files, their checks and specs, each surface opened and its page built,
 // and what the log heard once the rig, as the person, touched the files the task names.
-import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -196,6 +196,11 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
     writeFileSync(join(project, "README.md"), "# App\n\nA small app.\n")
     sh(["git", "init", "-q"], project)
     commit(project, "the project")
+    if (fresh.empty) {
+      shim(dir, variant)
+
+      return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
+    }
     // The person's own package cache, read and filled by the install, so a run does not download the framework's dependencies.
     sh(["bun", join(variant.path, "bin/baba.ts"), "init", "--from", `file:${variant.path}`], project, { ...env, BUN_INSTALL_CACHE_DIR: join(homedir(), ".bun/install/cache") })
     // A release is a copy of the package, its dependencies beside it in .baba/node_modules; installed from a checkout, its
@@ -227,8 +232,40 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
   return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
+/** The package as the public install names it, which the shim sends to the variant. */
+export const PUBLIC = "github:alanremarc/babavoss"
+
+/**
+ * A `bunx` first on the agent's PATH, in the run's `bin/`: `bunx github:alanremarc/babavoss ARGS…` runs the variant's own
+ * command with the variant as the framework, copied as a release is; anything else goes to the real bunx. The public
+ * repository may not carry the variant's release, so an instruction to install it is tried on the variant, word for word.
+ */
+function shim(dir: string, variant: Variant) {
+  const bin = join(dir, "bin")
+  const bunx = Bun.which("bunx") ?? "bunx"
+  const copy = `rm -rf .baba/node_modules/babavoss && rsync -a --exclude node_modules --exclude .git --exclude .babavoss '${variant.path}/' .baba/node_modules/babavoss/`
+
+  const lines = [
+    "#!/bin/sh",
+    "# The eval's bunx: the public install, sent to the variant.",
+    `export BUN_INSTALL_CACHE_DIR='${join(homedir(), ".bun/install/cache")}'`,
+    `case "$1" in ${PUBLIC}*)`,
+    "  shift",
+    `  if [ "$1" = init ]; then bun '${variant.path}/bin/baba.ts' init --from 'file:${variant.path}' || exit $?; ${copy}; exit 0; fi`,
+    `  exec bun '${variant.path}/bin/baba.ts' "$@";;`,
+    "esac",
+    `exec '${bunx}' "$@"`,
+  ]
+
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(join(bin, "bunx"), `${lines.join("\n")}\n`)
+  chmodSync(join(bin, "bunx"), 0o755)
+}
+
 /** A command's exit code and the end of what it said. */
 const ran = (cmd: string[], cwd: string, env: Record<string, string>, timeout = 120_000): Ran => {
+  if (!existsSync(cwd)) return { code: -1, out: `there is no ${cwd}` }
+
   const done = Bun.spawnSync(cmd, { cwd, env, stdout: "pipe", stderr: "pipe", timeout })
 
   return { code: done.exitCode ?? -1, out: (done.stdout.toString() + done.stderr.toString()).trim().slice(-3000) }
@@ -270,7 +307,13 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
       return []
     }
   })()
-  const stale = /changed on disk/.test(word("/").out)
+  const present = word("/").out
+  const stale = /changed on disk/.test(present)
+  const there = Object.fromEntries(
+    [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".codex/hooks.json", ".babavoss/bin/baba"].map(
+      (p) => [p, existsSync(join(place.project, p))],
+    ),
+  )
   const check = ran(["bun", "check"], baba, env)
   const test = ran(["bun", "test"], baba, env, 180_000)
   const restart = word("restart")
@@ -303,7 +346,7 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
   })
   const files = { ...filesUnder(join(baba, "surfaces"), place.project), ...Object.fromEntries(own) }
 
-  return { surfaces, files, stale, check, test, opened, page, heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })) }
+  return { surfaces, files, stale, there, present, check, test, opened, page, heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })) }
 }
 
 type Entry = {
@@ -683,7 +726,18 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     seed = task.fresh ? BLANK : await openFixture(place, task.before)
     harness.home(place.home)
 
-    const agent = harness.start({ project: place.project, home: place.home, session, model: options.model, budget: options.cap })
+    // An empty project's agent finds the eval's bunx first, as it starts; the rig's own PATH is put back at once.
+    const path = process.env.PATH
+
+    if (task.fresh?.empty) process.env.PATH = `${join(place.dir, "bin")}:${path}`
+
+    const agent = (() => {
+      try {
+        return harness.start({ project: place.project, home: place.home, session, model: options.model, budget: options.cap })
+      } finally {
+        process.env.PATH = path
+      }
+    })()
     const timeout = AbortSignal.timeout(options.minutes * 60_000)
 
     try {
