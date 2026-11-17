@@ -279,6 +279,8 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     } else if (!program && path !== undefined) {
       if (!path.startsWith("/") || path.startsWith("//")) throw new SyntaxError(`${command} PATH [HANDLE name=value…]`)
       route = path.split("/").map(encodeURIComponent).join("/")
+      // A program comes after a path alone: one after a handle, as `/queue add -e -`, is neither a call nor a program.
+      if (handle === "-e" || values.includes("-e")) throw new SyntaxError(`-e follows a path alone: ${command} ${path} -e - <<'EOF' with the program`)
       if (handle) {
         const inputs: Record<string, string> = {}
         let stdin: string | undefined

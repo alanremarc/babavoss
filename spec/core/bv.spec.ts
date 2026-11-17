@@ -453,6 +453,7 @@ describe("the program door", () => {
     expect(split.status).toBe(2)
     expect(split.err).toContain("the program came as 2 words, not one: a quote inside it ended the shell's. Give it on standard input: demo -e - <<'EOF'")
     expect(s.run(["-e", 'await call("/", "add", { text: "one" })']).out).toBe("1 call done\n/ add: notes.count: 0 → 1; latest: null → \"one\"; + action clear\n")
+    expect(s.run(["/", "add", "-e", "-"]).err).toContain("-e follows a path alone: demo / -e - <<'EOF' with the program")
     expect(s.run(["-e", `await call("/", "add", { text: "its })`]).err).toContain("a quote inside it may have ended the shell's")
   })
 })
