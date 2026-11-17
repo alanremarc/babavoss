@@ -431,14 +431,14 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call(tab).stdout).toContain('greeting: "hello"')
 
     // The tab's own path offers its actions, the command once and a line each, an input as what it means.
-    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   a greeting, which stands beside the one in use until accepted or declined`)
+    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   stands beside the greeting in use until accepted or declined`)
 
     // The page holds the surface's component in its tab.
     // At its bare address: no link, no key, no cookie.
     const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
     const script = /\/_\/[^"]*\.js/.exec(html)![0]
 
-    expect(await (await fetch(address + script)).text()).toContain("The agent proposes")
+    expect(await (await fetch(address + script)).text()).toContain("A greeting proposed shows here")
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
 
     // The person proposes there: a call the agent did not make.
