@@ -2,8 +2,9 @@
 // says (rail.ts). Its menu floats at its head as the island (island.tsx), and its activity fills it as a thread
 // (thread.ts): newest at the foot, where it opens and stays as entries arrive unless the person scrolled up, its head kept
 // clear so the oldest entry can be scrolled out from under the island, earlier entries read as the person scrolls up. A
-// notice is a message bubble under its author and time, the person's at the right, tinted; calls in a row by one author
-// are one small centred line that opens to them; a tab entry is one small centred line. What the tab needs, or that it is
+// notice is a message bubble under its author and time, the person's at the right, tinted, what was done under it; calls
+// in a row by one author, or events by one hearer of the world, are one small centred line that opens to them; a refusal
+// and a tab entry are each one small centred line. What the tab needs, or that it is
 // broken, is pinned at the foot with its one action; on home, what of the person's waits for the agent's next turn, and
 // that the session's hooks are not heard. The notices that were new as it opened keep a dot while it stays. Escape, a
 // click outside, or the gesture that opened it closes it; the shell gives focus back to the tab. It opens with the cursor
@@ -12,7 +13,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { cn } from "../../kit/cn.ts"
 import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import { Island } from "./island.tsx"
-import { agoOf, authorOf, callsLine, itemsOf, keyOf, tabLine, type Item, type Pinned, type Row } from "./thread.ts"
+import { agoOf, authorOf, callsLine, didOf, itemsOf, keyOf, lineOf, refusedLine, tabLine, type Item, type Pinned, type Row } from "./thread.ts"
 
 /** How far the thread's head is kept clear of entries, so the oldest can be scrolled out from under the open island. */
 const HEAD = "pt-[372px]"
@@ -147,11 +148,18 @@ export function Drawer({ label, side, home = false, menu, rows, loaded, more, st
   )
 }
 
-/** One line of the thread: a notice's bubble, calls folded into one line, or a tab entry. */
+/** One line of the thread: a notice's bubble, calls folded into one line, a refusal, or a tab entry. */
 export function Line({ item, label, home, fresh, go }: { item: Item; label: string; home: boolean; fresh: boolean; go: (row: Row) => void }) {
   const [open, setOpen] = useState(false)
 
-  if (item.kind === "notice") return <Notice row={item.row} author={authorOf(item.row.who, home ? item.row.surface : label)} fresh={fresh} go={() => go(item.row)} />
+  if (item.kind === "notice")
+    return <Notice row={item.row} author={authorOf(item.row.who, item.row.by, home ? item.row.surface : label)} fresh={fresh} go={() => go({ ...item.row, at: item.row.saidAt ?? item.row.at })} />
+  if (item.kind === "refused")
+    return (
+      <p className="py-1 text-center text-meta break-words text-muted-foreground/80">
+        {refusedLine(item.row)} · <Ago when={item.row.when} />
+      </p>
+    )
   if (item.kind === "tab")
     return (
       <p className="py-1 text-center text-meta text-muted-foreground/80">
@@ -169,13 +177,13 @@ export function Line({ item, label, home, fresh, go }: { item: Item; label: stri
         className="cursor-pointer rounded-full px-2 py-0.5 text-meta text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:bg-foreground/8"
         onClick={() => setOpen(!open)}
       >
-        {callsLine(item, label)} · <Ago when={first.when} />
+        {callsLine(item)} · <Ago when={first.when} />
       </button>
       {open && (
         <div className="flex w-full flex-col gap-0.5 rounded-lg bg-foreground/4 px-2.5 py-1.5">
           {[...item.rows].reverse().map((row) => (
             <span key={row.n} className="font-mono text-meta break-words text-muted-foreground">
-              {row.what}
+              {didOf(row)}
             </span>
           ))}
         </div>
@@ -204,8 +212,13 @@ export function Notice({ row, author, fresh, go }: { row: Row; author: string; f
         )}
         onClick={go}
       >
-        {row.what}
+        {row.said!.map((text, i) => (
+          <span key={i} className="block">
+            {text}
+          </span>
+        ))}
       </button>
+      {row.did && <span className="max-w-[85%] truncate px-1 font-mono text-badge text-muted-foreground/80" title={didOf(row)}>{didOf(row)}</span>}
     </div>
   )
 }
@@ -252,7 +265,7 @@ export function Waiting({ rows }: { rows: Row[] }): ReactNode {
       {open &&
         rows.map((row) => (
           <span key={row.n} className="font-mono text-meta break-words text-muted-foreground">
-            {row.what}
+            {lineOf(row)}
           </span>
         ))}
     </div>

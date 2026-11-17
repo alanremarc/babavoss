@@ -65,31 +65,32 @@ export function sampleDoor(views: Record<string, View> = VIEWS): Door {
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d+Z$/, "Z")
 
 /**
- * A session's activity, newest first: in the queue's tab, notices by the agent, the surface and the person, calls in a
- * row by the agent, and the shell's line that it was opened; the shell's own lines, about tabs opened and closed.
+ * A session's activity, newest first: in the queue's tab, notices by the agent, the world and the person, each with what
+ * was done, calls in a row by the agent, a refusal, events of the world in a row, and the shell's line that it was opened;
+ * the shell's own lines, about tabs opened and closed.
  */
 export const ROWS: Row[] = [
-  { n: 14, when: ago(1), who: "agent", kind: "notice", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: "Issue 4, Show the present, is done" },
-  { n: 13, when: ago(2), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: 'note n=4 text="specs pass, merging"' },
-  { n: 12, when: ago(2), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/4", tab: "/queue", what: "done n=4" },
-  { n: 11, when: ago(3), who: "agent", kind: "call", surface: "queue", at: "/queue/issues/5", tab: "/queue", what: "start n=5 lane=2" },
-  { n: 10, when: ago(5), who: "person", kind: "notice", surface: "queue", at: "/queue/issues/7", tab: "/queue", what: "Draft 7 approved: it joins the backlog" },
-  { n: 9, when: ago(8), who: "surface", kind: "notice", surface: "queue", at: "/queue", tab: "/queue", what: "Lane 2 is free again" },
+  { n: 16, when: ago(1), who: "agent", surface: "queue", at: "/queue/issues/4", did: "done n=4", said: ["Issue 4, Show the present, is done"] },
+  { n: 15, when: ago(2), who: "agent", surface: "queue", at: "/queue/issues/4", did: 'note n=4 text="specs pass, merging"' },
+  { n: 14, when: ago(2), who: "agent", surface: "queue", at: "/queue/issues/4", did: "start n=4 lane=2", refused: "lane 2 is busy with issue 5" },
+  { n: 13, when: ago(3), who: "agent", surface: "queue", at: "/queue/issues/5", did: "start n=5 lane=2" },
+  { n: 12, when: ago(4), who: "world", by: "watch", surface: "queue", at: "/queue", did: "changed", times: 3 },
+  { n: 10, when: ago(5), who: "person", surface: "queue", at: "/queue/issues/7", did: "approve n=7", said: ["Draft 7 approved: it joins the backlog"] },
+  { n: 9, when: ago(8), who: "world", by: "lanes", surface: "queue", at: "/queue", did: "freed", said: ["Lane 2 is free again"] },
   {
     n: 8,
     when: ago(40),
     who: "agent",
-    kind: "notice",
     surface: "queue",
     at: "/queue/issues/4",
-    tab: "/queue",
-    what: "Issue 4 begins iteration 2: the dots stand on the icon, and the drawer opens where the rail is",
+    did: "iterate n=4",
+    said: ["Issue 4 begins iteration 2: the dots stand on the icon, and the drawer opens where the rail is"],
   },
-  { n: 7, when: ago(41), who: "person", kind: "call", surface: "queue", at: "/queue", what: "shown to the person" },
-  { n: 6, when: ago(45), who: "person", kind: "call", surface: "queue", at: "/queue", what: "opened" },
-  { n: 5, when: ago(50), who: "agent", kind: "call", surface: "lab", at: null, what: "closed" },
-  { n: 4, when: ago(80), who: "agent", kind: "call", surface: "lab", at: null, what: "opened" },
-  { n: 3, when: ago(90), who: "agent", kind: "call", surface: "design", at: "/design", what: "opened" },
+  { n: 7, when: ago(41), who: "person", surface: "queue", at: "/queue", own: true, did: "show at=/queue" },
+  { n: 6, when: ago(45), who: "person", surface: "queue", at: "/queue", own: true, did: "open surface=queue" },
+  { n: 5, when: ago(50), who: "agent", surface: "lab", at: null, own: true, did: "close n=2" },
+  { n: 4, when: ago(80), who: "agent", surface: "lab", at: null, own: true, did: "open surface=lab" },
+  { n: 3, when: ago(90), who: "agent", surface: "design", at: "/design", own: true, did: "open surface=design" },
 ]
 /** The notices the person had not seen as the drawer opened, by number. */
-export const FRESH = [14, 9]
+export const FRESH = [16, 9]

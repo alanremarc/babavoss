@@ -37,7 +37,7 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 | Kind | What | Written as |
 |---|---|---|
 | a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
-| a notice from `update` | what just happened, told once and kept nowhere | `notices`, beside `model` and `commands` |
+| a notice from `update` | what just happened, told once, kept in no view: the line of its action in the log | `notices`, beside `model` and `commands` |
 
 `attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where a decision is the person's, say it: `attention` is that their word is waited for, in the conversation or on the page.
 
@@ -51,7 +51,7 @@ A notice is one short line on what just happened, in answer to a call or to a co
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
-A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and in its tab's drawer, where calls in a row are one folded line, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person as words. A tab's entries go with it when it closes.
+A surface's activity comes by itself: the shell keeps a log of every action in a tab, for auditing rather than replay, at `/activity` and in its tab's drawer. An entry says when; who, the person, the agent or the world; where; the handle and its inputs, one past 200 characters cut and a credential never kept; and what came of it, done, or refused with why. An event of a session command is the world's, named by the command's `kind`, so name a command for what it hears, `watch-work-file`; its silent events in a row are one entry with a count. An event of work a call started is the caller's, kept only where the surface says a line about it. A notice is how a surface adds its own line to an entry, for a call or for an event, and the only way it reaches the person as words: the drawer shows it as a message, the call under it, and calls in a row with no line as one folded line. A tab's entries go with it when it closes.
 
 The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
 
@@ -61,7 +61,7 @@ What is there to be looked up rather than followed, rows that are finished or co
 issues: [...open.map(row), ...done.map((issue) => detail(row(issue)))],
 ```
 
-An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way. An update may return `quiet: true` for an event of the same kind.
+An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way, and kept in no log. An update may return `quiet: true` for an event of the same kind.
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 

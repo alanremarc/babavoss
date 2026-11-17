@@ -19,6 +19,13 @@ export type Said = { ok: boolean; text: string }
  */
 export type Heard = { n: number; when: number; who: string; surface: string; at: string; what: string; id?: string }
 
+/** An entry as /activity gives it: its surface absent where its place names it; what was done, its lines, or why it was refused. */
+type Row = { n: number; when: string; who: string; surface?: string; at: string | null; did?: string; said?: string[]; refused?: string; id?: string }
+
+/** What an entry says was done, in one line: the surface's lines about it where it gave any, else the call; and why it was refused. */
+const whatOf = (row: Pick<Row, "did" | "said" | "refused">): string =>
+  [row.said?.join(" ") || row.did || "", row.refused === undefined ? "" : `refused: ${row.refused}`].filter(Boolean).join(", ")
+
 export interface Runs {
   /** Makes run `id`'s directory: the project, a copy of the checkout at `from` (this repository where empty), its root started for `session`. */
   make(id: string, from: string, session: string): Promise<Made>
@@ -229,10 +236,11 @@ export function runsAt(root: string = RUNS): Runs {
           signal: AbortSignal.timeout(5000),
         })
         const page = (await answer.json()) as { entries?: unknown; earlier?: { at?: string } }
-        const entries = Array.isArray(page.entries) ? (page.entries as (Omit<Heard, "when"> & { when: string })[]) : []
+        const entries = Array.isArray(page.entries) ? (page.entries as Row[]) : []
 
-        for (const { n, when, who, surface, at: where, what, id } of entries)
-          if (n > after) heard.push({ n, when: Date.parse(when), who, surface, at: where ?? "", what, ...(typeof id === "string" && { id }) })
+        for (const { n, when, who, surface, at: where, id, ...row } of entries)
+          if (n > after)
+            heard.push({ n, when: Date.parse(when), who, surface: surface ?? /^\/([a-z][a-z0-9-]*)/.exec(where ?? "")?.[1] ?? "", at: where ?? "", what: whatOf(row), ...(typeof id === "string" && { id }) })
         at = entries.length && entries.at(-1)!.n > after + 1 ? page.earlier?.at : undefined
       }
 
