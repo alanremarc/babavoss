@@ -127,7 +127,7 @@ export const SCENARIOS: Scenario[] = [
     group: "canonical",
     title: "The person's decision",
     about:
-      "Approving a task is the person's decision: the agent marks one done, which the surface highlights for the person, reads that the decision is theirs, and asks them in the conversation, then approves it on their word; the next, the person approves on the page, and the agent is told what they did.",
+      "The person asked to check each task: the agent marks one done, which the surface highlights for the person, and asks them in the conversation, then approves it on their word; the next, the person approves on the page, and the agent is told what they did.",
     steps: [
       { kind: "start", source: "startup" },
       { kind: "say", text: "Write the notes and the changelog, and have me check each." },
@@ -136,7 +136,6 @@ export const SCENARIOS: Scenario[] = [
       { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Write the changelog" } },
       { kind: "tool", what: "write NOTES.md" },
       { kind: "call", path: "/tabs/1/tasks/1", handle: "done" },
-      { kind: "read", path: "/tabs/1" },
       { kind: "stop" },
       { kind: "say", text: "The notes are good: approve them." },
       { kind: "call", path: "/tabs/1/tasks/1", handle: "approve" },
@@ -325,7 +324,7 @@ function NOISE(): Scenario[] {
           edits: [
             ['description: "Track the project\'s tasks. Use when work is asked for."', 'description: "Track the project\'s tasks and when they are due. Use when work is asked for."'],
             ['title: "Tasks",', 'title: "Tasks",\n      due: "Friday",'],
-            ['they may do it on the page instead."', 'they may do it on the page instead. Say when one is due."'],
+            ['reopening sends it back to do."', 'reopening sends it back to do. due is when the work is due."'],
           ],
         },
         { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Tag the release" }, timing: "called while the root loads the changed code: what it is told depends on how far the reload is" },

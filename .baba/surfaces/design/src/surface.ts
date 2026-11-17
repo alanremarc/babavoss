@@ -33,7 +33,7 @@ export const PLAY_MS = 120_000
 const HOW =
   "Each scenario is played on the demo project through the framework's own hook, word and runtime, again whenever their code changes, so this is what an agent is given now. " +
   "A step's path has its texts whole, and its page what the person's page showed after it; /demo is the demo project's shape. " +
-  "Pin to keep the texts as the baseline to compare with. Tokens are estimated: characters / 4."
+  "pin keeps the texts as the baseline the next are compared with. Tokens are estimated: characters / 4."
 
 const playing = (m: Model): Result => (m.playing ? { model: { ...m, again: true } } : { model: { ...m, playing: true, again: false }, commands: [{ kind: "play" }] })
 

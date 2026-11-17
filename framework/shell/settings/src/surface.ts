@@ -254,7 +254,7 @@ const archived = (m: Model, place: string | undefined) => {
     title: "Closed tabs",
     how:
       "A closed tab is kept read only, its state and log, in the archive of its session, read at the shell's /activity/closed. The archive " +
-      "clears itself by the window, the person's in every project. A clear acts on this project alone, and only when the person asks.",
+      "clears itself by the window, the person's in every project. A clear acts on this project alone.",
     ...(project ? { project } : { project: "none: this tab runs in no session" }),
     window: { ...m.settings.archive },
     keep: keep.bind({}),
@@ -283,7 +283,7 @@ const pagesOf = (place: () => string | undefined) => view([mode, theme, dynamic,
 
     return {
       title: "Settings",
-      how: "The person's own settings of the shell's page, the same in every session and project. Change one when they ask.",
+      how: "The person's own settings of the shell's page, the same in every session and project.",
       appearance: told.appearance,
       preferences: told.preferences,
       shortcuts: { at: "/shortcuts", ...told.shortcuts },
@@ -321,7 +321,7 @@ export function settings(file: () => string = () => settingsFile(), place: () =>
   const pages = pagesOf(place)
 
   return surface<Model, Event, Command>({
-    description: "The person's settings of the shell's page: appearance, where the tabs stand, motion, text size, the side of a page's sidebar, shortcuts, whether the mark moves while the agent works, and how long closed tabs are kept, with clearing them. Use when the person asks to change one, or to clear closed tabs.",
+    description: "The person's settings of the shell's page: appearance, where the tabs stand, motion, text size, the side of a page's sidebar, shortcuts, whether the mark moves while the agent works, and how long closed tabs are kept, with clearing them. Use when one of them is to be read or changed.",
     init: () => ({ settings: settingsOf(undefined), writing: 0 }),
     // What a tab kept is only a first look: the file is read again as it starts.
     restore: (saved) => ({ settings: settingsOf((saved as { settings?: unknown } | undefined)?.settings), writing: 0 }),

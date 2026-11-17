@@ -292,9 +292,10 @@ const injected = (m: Model, from = 0) => ({
 const hooksOf = (run: Run): string[] | string => (run.hooks.length ? run.hooks : run.turns ? `${NO_HOOK}: the agent under test was told nothing by baba's hooks` : "none heard yet")
 const checkout = (c: Checkout | undefined) => c && { checkout: c.from, commit: c.commit.slice(0, 10), uncommitted: c.dirty.length }
 const HOW =
-  "Start a run, say a message, then wait: the wait ends when the turn does, status idle. Read what the agent under test was told: " +
-  "/entries a line each, /entries/since/N the entries after N, /entries/N one whole, /injected what hooks injected. Act on its page as " +
-  "the person with look and act, then end_move. All of it is on the timeline the person watches. Close the run when done: its record stays, in /runs."
+  "A run is an agent under test in a copy of a checkout. A message starts its turn; a wait ends when the turn does, status idle. What " +
+  "the agent under test was told: /entries a line each, /entries/since/N the entries after N, /entries/N one whole, /injected what " +
+  "hooks injected. look and act work its page as the person, and end_move ends their move. All of it is on the timeline the person " +
+  "watches. Closing a run ends its agent and deletes its project; its record stays, in /runs."
 
 const pages = view([start, startFrom, say, endMove, stop, act, look, close, open, forget], {
   "/": (m) => {
@@ -511,7 +512,7 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
     description:
       "Have an agent under test use a checkout as it is now, uncommitted work included, through its real surfaces and hooks: what entered " +
       "its context chunk by chunk, with tokens and cost, its page beside, acted on as the person. " +
-      "Use when checking how a surface you built appears to the agent that uses it.",
+      "Use when how a surface appears to the agent that uses it is checked.",
     init: () => ({ next: 1, runs: [] }),
     // A run whose process this runtime did not start is gone: it is shown ended, its timeline kept, its project still to close.
     restore(saved) {

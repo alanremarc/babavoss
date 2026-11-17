@@ -4,7 +4,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 
 ## The loop
 
-1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and which decisions are theirs.
+1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, what they see in its tab, and what they want of the agent that works it, which belongs in the project's instructions, not in the surface.
 2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
@@ -20,27 +20,29 @@ surfaces/NAME/
   spec/            its rules, as stories
 ```
 
-Everything an agent learns of a surface, it learns from the surface. There is no file of instructions beside it.
+Everything an agent learns of how a surface works, it learns from the surface. There is no file of instructions beside it.
 
-- `description` is how the shell lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
-- How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what comes next; that the person's word is waited for is a highlight, below. Keep it short, since it is read each time.
+A surface teaches mechanics, never intent. Its `how`, its descriptions and its facts say what a thing is, what an action does and what must hold for it: "a lane holds one issue at a time", "moves the draft into the backlog". They never say when the agent ought to act, how it should run its work, or who should decide: not "start an issue when a subagent takes it", not "note where it stands as you go", not "ask the person first". What to do comes from the person and the task, and the agent carries it; a surface that dictates is obeyed where nobody asked, as an agent told a lane is a subagent launched one for every start. Where a project wants a standing behaviour, as keeping its queue true while the work moves, that belongs in the project's own instructions to its agent, its AGENTS.md or CLAUDE.md, beside the surfaces and not in them.
+
+- `description` is how the shell lists it, and so how an agent chooses it: what it does and when it fits, a phrase and a "use when", as "Use when the work's issues are read or moved".
+- `how` at `/` says what always holds: what its things are and how its actions move them. Say what depends on the state where the state is, as a fact; what waits on the person is a highlight, below. Keep it short, since it is read each time.
 - What is mechanical needs no words: what an input may be is declared with it, and an action that may not be taken now is not offered.
 
-Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and marks it for the person with the shell's `highlight`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
+Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and marks it for the person with the shell's `highlight`. The actions every row of a list offers at its own path, with the same inputs and its value as their argument, are printed once at the session's start as a pattern, `/queue/issues/N ACTION n=N`, so the agent acts on any row without reading it; an action whose inputs differ from row to row is left to the row's own read. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
 
-The agent and the person are offered the same handles: the agent does the work through them, and the person may take any of them on the page. Where a decision is the person's, the view says so, in `how` or where it stands, and the agent raises it in the conversation: it acts on their word there, or they take the same handle on the page. The conversation is where the person steers; the page shows what the surface says and offers them their decisions, and anything else they want changed, they tell the agent.
+The agent and the person are offered the same handles: the agent does the work through them, and the person may take any of them on the page. Which decisions are the person's, they and the project's instructions say, not the surface; the agent raises such a decision in the conversation and acts on their word there, or they take the same handle on the page. A surface may say what only the person can know, as a fact: "the person has read the notes". The conversation is where the person steers; the page shows what the surface says and offers the same handles, and anything else they want changed, they tell the agent.
 
 ## A handle
 
 The agent reads a view's handles in one block: the command once, with `ACTION` for the name and the arguments they all share, then a line per handle, its name, its own arguments and its description. Its name says what it does; the rest says what the name does not.
 
-- A description is one clause that adds what the name does not say: the effect, or when to use it. It never repeats the handle's name, its subject or the command; lower case, no full stop; empty where the name says it all. `done`: "its work is merged into main"; `start`: "when a subagent begins on it"; `describe`: "".
+- A description is one clause that adds what the name does not say: its effect, or what must hold for it. It never repeats the handle's name, its subject or the command, and never says when to call it; lower case, no full stop; empty where the name says it all. `done`: "its work is merged into main"; `start`: "puts it in the lane, which must be free"; `describe`: "".
 - An input declares its base type, `"string"`, `"number"` or `"boolean"`, and beside it what it means where the type alone does not say: `kind`, a word, `line`, `markdown` and `path` being the text the page's form knows, any other the surface's own and said with its type, as `id(string)`; `choices`, the values it may take, said `light|dark|system`; or `range`, whole numbers, said `1..5`. One declaration serves the agent, the form, a picker or a box of several lines, and admission, which refuses a value outside the choices or the range, saying what is allowed.
 
 ```ts
 const start = action({
   name: "start",
-  description: "when a subagent begins on it",
+  description: "puts it in the lane, which must be free",
   subject: { n: "number" },
   inputs: { lane: { type: "number", range: [1, 5] } },
   update: (w: Work, { n, lane }) => …,
@@ -62,7 +64,7 @@ A notice is one short line on what just happened, in answer to a call or to a co
 update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
 ```
 
-A notice marked `highlight: true` is a highlight: what happened that the person should look at, such as a proposal that waits on their word, or a run that failed. Their page shows it as a bubble beside its tab for a moment and marks the tab with a dot until they open its drawer, where highlights are what its thread shows, each with who raised it, when and where it goes; the agent is told it first among what it hears. The agent raises one of its own with the shell's `highlight`. Mark only what deserves it: everything else is folded between the highlights, a line that says how many and by whom, for whoever opens it.
+A notice marked `highlight: true` is a highlight: what happened that the person should look at, such as a proposal that waits on them, or a run that failed. Their page shows it as a bubble beside its tab for a moment and marks the tab with a dot until they open its drawer, where highlights are what its thread shows, each with who raised it, when and where it goes; the agent is told it first among what it hears. The agent raises one of its own with the shell's `highlight`. Mark only what deserves it: everything else is folded between the highlights, a line that says how many and by whom, for whoever opens it.
 
 ```ts
 update: (m, { text }) => ({ model: { ...m, proposed: text }, notices: [{ text: `"${text}" is proposed, to accept or decline`, highlight: true }] }),

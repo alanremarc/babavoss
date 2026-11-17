@@ -37,7 +37,7 @@ const add = action({
 })
 const done = action({
   name: "done",
-  description: "the person reviews it",
+  description: "it goes to review",
   subject: { n: "number" },
   inputs: {},
   update: (m: Model, { n }): Result => moved(m, n, "review", "waits for review"),
@@ -66,7 +66,7 @@ const annotate = action({
 const pages = view([add, done, approve, reopen, annotate], {
   "/": (m) => ({
     title: "Tasks",
-    how: "Add what the person asks for and mark a task done when it is. Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead.",
+    how: "A task is to do, in review once marked done, then done once approved; reopening sends it back to do.",
     tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
     add: add.bind({}),
   }),
