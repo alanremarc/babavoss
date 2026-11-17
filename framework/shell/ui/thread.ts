@@ -108,18 +108,16 @@ export const needLine = (why: string): string => {
 
 /**
  * What is pinned at a thread's foot, the one thing that explains the tab's mark, the strongest first: that it is broken,
- * with Reload; that the person is needed, or an ask waits for them, with Go there; that it needs the agent, with nothing to
- * do; else nothing. `ask` is the first ask the tab offers, by its label and where it is.
+ * with Reload; that the person is needed, with Go there; that it needs the agent, with nothing to do; else nothing.
  */
 export type Pinned = { tone: "broken" | "person" | "agent"; text: string; detail?: string; does?: { label: "Reload" } | { label: "Go there"; at: string } }
 
-export function pinnedOf({ broken, needs = [], ask }: { broken?: string; needs?: { who: "person" | "agent"; why: string }[]; ask?: { label: string; at: string } }): Pinned | undefined {
+export function pinnedOf({ broken, needs = [] }: { broken?: string; needs?: { who: "person" | "agent"; why: string }[] }): Pinned | undefined {
   const person = needs.find((n) => n.who === "person")
   const agent = needs.find((n) => n.who === "agent")
 
   if (broken !== undefined) return { tone: "broken", text: "This tab is broken", detail: broken, does: { label: "Reload" } }
-  if (person) return { tone: "person", text: needLine(person.why), does: { label: "Go there", at: ask?.at ?? "/" } }
-  if (ask) return { tone: "person", text: `${ask.label.replace(/…$/, "")} waits for you`, does: { label: "Go there", at: ask.at } }
+  if (person) return { tone: "person", text: needLine(person.why), does: { label: "Go there", at: "/" } }
   if (agent) return { tone: "agent", text: `Waits for the agent: ${needLine(agent.why).replace(/^./, (c) => c.toLowerCase())}` }
 
   return undefined

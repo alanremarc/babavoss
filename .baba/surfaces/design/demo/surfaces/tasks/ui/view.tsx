@@ -1,4 +1,4 @@
-// The tasks page as a function of its view at /: the tasks as rows, each by its status, the asks of one in review beside
+// The tasks page as a function of its view at /: the tasks as rows, each by its status, approve and reopen of one in review beside
 // it, and who is waited for above them. Its own page draws it with the live view; the design document draws it with a view
 // a play recorded, and gives no `call`, so nothing in it acts.
 import { CircleCheckIcon, CircleDotIcon, CircleIcon } from "lucide-react"

@@ -132,7 +132,7 @@ const ROOT: View = {
 /** A tab's drawer over a sample page, its menu read from the sample's views, as the shell opens it; closed, a button opens it again. */
 function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: string; empty?: boolean }) {
   const menu = useTabMenu({ door, address: "/queue", route: "/issues/4", title: "Queue", name: "queue", start: () => {}, navigate: () => {}, notices: UNSEEN, controls: controls() })
-  const pinned = pinnedOf({ needs: broken ? [] : [{ who: "person", why: "to approve or drop 1 draft" }], ...(broken && { broken }), ...(menu.ask && { ask: menu.ask }) })
+  const pinned = pinnedOf({ needs: broken ? [] : [{ who: "person", why: "to approve or drop 1 draft" }], ...(broken && { broken }) })
 
   return (
     <Drawer
@@ -301,8 +301,8 @@ function DesktopSpecimen() {
 }
 
 const ASKS: { label: string; action: Offered }[] = [
-  { label: "Describe…", action: { path: "/", ask: false, handle: handle("describe", "Rewrite what issue 4 is about, as brief markdown; empty is refused", { n: 4 }, { about: "string" }) } },
-  { label: "Start…", action: { path: "/", ask: false, handle: handle("start", "Give issue 4 to a lane, 1 to 5; another is refused", { n: 4 }, { lane: "number", notify: "boolean" }) } },
+  { label: "Describe…", action: { path: "/", handle: handle("describe", "Rewrite what issue 4 is about, as brief markdown; empty is refused", { n: 4 }, { about: "string" }) } },
+  { label: "Start…", action: { path: "/", handle: handle("start", "Give issue 4 to a lane, 1 to 5; another is refused", { n: 4 }, { lane: "number", notify: "boolean" }) } },
 ]
 
 function InputsSpecimen() {

@@ -1,8 +1,7 @@
 // Authoring vocabulary: objects with identity, actions bound to subjects, a view composed from routes. The result runs through the ordinary loop.
-import { isPerson } from "../session.ts"
 import { route, type Routes } from "./routes.ts"
 import type { Call, Update } from "./surface.ts"
-import { handle, type Args, type Json, type Schema, type View } from "./view.ts"
+import { handle, type Args, type Schema, type View } from "./view.ts"
 
 /** Select public facts and relationships deliberately; references carry only the object's identity. */
 export function object<S, Id extends Args>(identity: (subject: S) => Id, project: (subject: S) => View) {
@@ -12,11 +11,11 @@ export function object<S, Id extends Args>(identity: (subject: S) => Id, project
 /** Caller and subject arguments use the same scalar vocabulary as handles. */
 export type Inputs<S extends Schema> = { [K in keyof S]: { string: string; number: number; boolean: boolean }[S[K]] }
 
-type Action<M, C> = { name: string; ask: boolean; quiet?: boolean; update(model: M, call: Call): Update<M, C> }
+type Action<M, C> = { name: string; quiet?: boolean; update(model: M, call: Call): Update<M, C> }
 
 /**
- * Define the contract and pure transition once, then bind the subject wherever the action is offered. An ask is offered to
- * the person only: bind it where the decision stands, and say `attention` at / with who is waited for and why, so the agent knows to wait.
+ * Define the contract and pure transition once, then bind the subject wherever the action is offered: the agent and the
+ * person are offered it alike. A decision that is the person's is said in the view, and raised by the agent in the conversation.
  * A quiet action is the page's own bookkeeping, of no event in the work: what it changes is told to the agent in no way.
  */
 export function action<M, const S extends Schema, const I extends Schema, C = never>(definition: {
@@ -24,7 +23,6 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
   description: string | ((subject: Inputs<S>) => string)
   subject: S
   inputs: I
-  ask?: boolean
   quiet?: boolean
   update(model: M, args: Inputs<S> & Inputs<I>, call: Call): Update<M, C>
 }) {
@@ -34,15 +32,13 @@ export function action<M, const S extends Schema, const I extends Schema, C = ne
 
   return {
     name: definition.name,
-    ask: definition.ask ?? false,
     quiet: definition.quiet ?? false,
     bind: (subject: Inputs<S>) =>
       handle(
         definition.name,
         typeof definition.description === "string" ? definition.description : definition.description(subject),
         subject,
-        definition.inputs,
-        definition.ask
+        definition.inputs
       ),
     // The loop has already checked the fixed subject, inputs and current availability.
     update: (model: M, call: Call) => definition.update(model, call.args as Inputs<S> & Inputs<I>, call),
@@ -59,30 +55,12 @@ export function view<M, C>(actions: readonly Action<M, C>[], routes: Routes<M>) 
     if (pattern.split("/").some((segment) => segment.startsWith("_"))) throw new Error(`A segment may not start with _, that prefix is the page's: ${pattern}`)
   }
 
-  const asks = new Set(actions.filter((a) => a.ask).map((a) => a.name))
-  /** An ask, wherever it stands: a handle of an action this view declares one. */
-  const isAsk = (value: Json | undefined) =>
-    !!value && typeof value === "object" && !Array.isArray(value) && value.kind === "handle" && asks.has(String(value.name))
-  /** The view without the handles that are the person's alone, at any depth, lists included, and with no handle marked as one. */
-  const unasked = (value: Json | undefined): Json | undefined => {
-    if (Array.isArray(value)) return value.filter((v) => !isAsk(v)).map((v) => unasked(v) ?? null)
-    if (value && typeof value === "object" && value.kind === "handle") {
-      const { ask, ...rest } = value
-
-      return ask === undefined ? value : rest
-    }
-    if (!value || typeof value !== "object") return value
-
-    return Object.fromEntries(Object.entries(value).flatMap(([k, v]) => (isAsk(v) ? [] : [[k, unasked(v)]])))
-  }
-
   return {
-    /** The view at a path for an actor: the same facts for all, an ask among its handles for the person only. */
-    view: (model: M, path: string, actor?: string): View | undefined => {
+    /** The view at a path, the same for every reader. */
+    view: (model: M, path: string): View | undefined => {
       const at = route(routes, path)
-      const shown = at && at.project(model, at.params)
 
-      return shown && asks.size && !(actor !== undefined && isPerson(actor)) ? (unasked(shown) as View) : shown
+      return at && at.project(model, at.params)
     },
     update: (model: M, call: Call): Update<M, C> => {
       const a = named.get(call.handle)

@@ -375,7 +375,7 @@ const pages = view(actions, {
 })
 /** The archive's places are the list's, below /archive, so the tab's route keeps which view it is in and the menu offers the same there. */
 const listed = (path: string) => path.replace(/^\/archive(?=\/|$)/, "") || "/"
-const viewAt = (w: Work, path: string, actor?: string) => pages.view(w, listed(path), actor)
+const viewAt = (w: Work, path: string) => pages.view(w, listed(path))
 
 /** The queue, with where the session's work is kept given: the session's file in the runtime, memory in its stories. */
 export function queue(work: Store): Surface<Model, Event, Command> {
@@ -416,8 +416,8 @@ export function queue(work: Store): Surface<Model, Event, Command> {
 
       return { model: { ...m, work: r.model }, commands: [{ kind: "apply", call: at }], ...(r.notices && { notices: r.notices }) }
     },
-    view(m, path, actor) {
-      const seen = viewAt(m.work, path, actor)
+    view(m, path) {
+      const seen = viewAt(m.work, path)
 
       if (!seen || path !== "/") return seen
       if (m.trouble) return { ...seen, broken: `the session's work cannot be kept: ${m.trouble}` }
@@ -429,8 +429,8 @@ export function queue(work: Store): Surface<Model, Event, Command> {
       // The record may have moved since this tab last heard it: what is no longer offered there is not applied, and every tab
       // hears the record as it is.
       work.apply((w) => {
-        const { path, handle, args, actor } = c.call
-        const seen = viewAt(w, path, actor)
+        const { path, handle, args } = c.call
+        const seen = viewAt(w, path)
 
         if (!seen || typeof admit(seen, path, handle, args) === "string") return undefined
 

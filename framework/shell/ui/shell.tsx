@@ -5,9 +5,8 @@
 // a drawer (drawer.tsx): its menu, drawn from its surface's views as home's is from the shell's at /, over its activity
 // as a thread; opening it sees the notices in it. A notice heard while the page is open is a bubble beside its tab for a
 // moment (bubbles.tsx). A tab the person opens becomes theirs to look at; one the agent opens takes its place beside the
-// mark, marked until looked at, and the person stays where they are. A tab that is broken, needs someone, offers an ask or
-// holds a notice not yet seen is marked on the rail and on home, from / where the shell gathers who is needed and counts
-// each tab's asks. While the session's hooks are not heard, as the turn says, the mark has a dot, home's drawer pins why
+// mark, marked until looked at, and the person stays where they are. A tab that is broken, needs someone or holds a
+// notice not yet seen is marked on the rail and on home, from / where the shell gathers who is needed. While the session's hooks are not heard, as the turn says, the mark has a dot, home's drawer pins why
 // and what to do, and as that begins it is a bubble beside the mark, kept in home's thread. The URL is the surface path:
 // / home, also where no tab is, a tab's address and its route; the address is /NAME where the tab holds its surface's
 // name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the
@@ -16,11 +15,11 @@
 // (shortcuts.ts) and the mark's animation (appearance.ts); and with the machine they make the conventions, handed to every
 // page, home's too (src/conventions.ts). It loads no stylesheet: the root's page does, one, which
 // imports the shell's styles.css, so the shell's styles are compiled once.
-import { Activity, Component, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
+import { Activity, Component, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
 import type { Args, Handle, View } from "../../core/index.ts"
 import { cn } from "../../kit/cn.ts"
 import { call, changes, read, type Notice, type Turn, type Unheard } from "./client.ts"
-import { Actions, useTabAsks, useTabMenu } from "./actions.tsx"
+import { Actions, useTabMenu } from "./actions.tsx"
 import { controlsOf, named, noticesIn, type Offered } from "./commands.ts"
 import { added, Bubbles, gone, type Bubble } from "./bubbles.tsx"
 import { Drawer } from "./drawer.tsx"
@@ -49,8 +48,8 @@ import { standingOf } from "./turn.ts"
  * drawers its frame opens for the inputs of the actions they are named for.
  */
 export type Registry = Record<string, { default: ComponentType; icon?: ReactNode; drawers?: Drawers }>
-/** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps; `asks`, how many it offers the person anywhere in it. */
-type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string; asks?: number }
+/** A tab as the desktop lists it; `broken` says why its surface fails on what it keeps. */
+type Row = { at: string; n: number; surface: string; title?: string; close?: Handle; broken?: string }
 /** A tab that is needed, as / gathers it. */
 type Need = { at: string; surface: string } & TabNeed
 type RootView = { title: string; needs?: Need[]; missing?: string; empty?: string; surfaces: SurfaceEntry[]; tabs: Row[]; pointed?: Pointed }
@@ -90,9 +89,6 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const [at, setAt] = useState(parse)
   const [routes, setRoutes] = useState<Record<string, string>>(() => (at.key.startsWith("/") ? { [at.key]: at.route } : {}))
   const [listeners] = useState(() => new Set<() => void>())
-  // Each tab's asks, which mark it.
-  const asks = useTabAsks()
-  const [, asksMoved] = useReducer((n: number) => n + 1, 0)
   // The action asking its inputs in a modal, by the tab it is of, or home; and the last refusal of one, by its tab.
   const [asking, setAsking] = useState<{ at: string; action: Offered }>()
   const [refused, setRefused] = useState<{ at: string; reason: string }>()
@@ -142,8 +138,6 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const [stay, setStay] = useState<ReadonlySet<number>>(new Set())
   const all = useFeed(ACTIVITY, stream, drawer !== undefined)
   const [bubbles, setBubbles] = useState<Record<string, Bubble[]>>({})
-
-  useEffect(() => asks.subscribe(asksMoved), [asks])
 
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -403,14 +397,13 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
     void Promise.all(there.map((n) => call(NOTICES, "looked", { n: n.n }))).then(() => told.load(), () => undefined)
   }, [active, routes, unseen])
 
-  // A tab waits on the person where it offers them an ask, at any depth as / counts them, or where it is shown, or holds a notice not seen.
+  // A tab waits on the person where it holds a notice they have not seen.
   const noticesOf = (at: string) => noticesIn(at, unseen).length
-  const asksOf = (row: Row) => Math.max(row.asks ?? 0, asks.count(row.at))
   const tabs: Tab[] = newest.map((row) => {
     const needs = (root?.needs ?? []).filter((need) => need.at === row.at).map(({ who, why }) => ({ who, why }))
     const fresh = !!seen && !seen.has(row.at) && row.at !== active
     const marks = { needs, ...(row.broken !== undefined && { broken: row.broken }) }
-    const mark = markOf({ ...marks, unseen: fresh, waits: asksOf(row) > 0 || noticesOf(row.at) > 0 })
+    const mark = markOf({ ...marks, unseen: fresh, waits: noticesOf(row.at) > 0 })
 
     return {
       row,
@@ -418,7 +411,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
       icon: icons[row.surface] ?? <span className="size-3.5 rounded-full bg-foreground/30" aria-hidden />,
       needs,
       ...(mark && { mark }),
-      why: standing({ ...marks, asks: asksOf(row), notices: noticesOf(row.at), unseen: fresh }),
+      why: standing({ ...marks, notices: noticesOf(row.at), unseen: fresh }),
       fresh,
     }
   })
@@ -588,11 +581,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
                             reload={reloads[row.at] ?? 0}
                           >
                             <Actions
-                              asks={asks}
-                              title={row.title}
-                              name={row.surface}
                               drawers={surfaces[row.surface]?.drawers}
-                              start={(action) => start(row, action)}
                               {...(asking?.at === row.at && { asking: asking.action })}
                               answered={() => setAsking(undefined)}
                               {...(refused?.at === row.at && { refused: refused.reason })}
@@ -704,7 +693,7 @@ function TabDrawer({
   const { row } = tab
   const menu = useTabMenu({ address: row.at, route, ...(row.title !== undefined && { title: row.title }), name: row.surface, start, navigate, notices, controls })
   const plain = row.broken !== undefined || !paged
-  const pinned = pinnedOf({ needs: tab.needs, ...(row.broken !== undefined && { broken: row.broken }), ...(!plain && menu.ask && { ask: menu.ask }) })
+  const pinned = pinnedOf({ needs: tab.needs, ...(row.broken !== undefined && { broken: row.broken }) })
   const goTo = (entry: Entry) => {
     close()
     navigate(placeIn(entry, row.at) ?? "/")

@@ -118,15 +118,14 @@ describe("a tab's mark", () => {
   })
 
   it("says why under the tab's title, the strongest first", () => {
-    expect(standing({ broken: "fails", needs: [{ who: "agent", why: "to rerun" }, { who: "person", why: "to decide" }], asks: 2, notices: 1, unseen: true })).toEqual([
+    expect(standing({ broken: "fails", needs: [{ who: "agent", why: "to rerun" }, { who: "person", why: "to decide" }], notices: 1, unseen: true })).toEqual([
       "Broken",
       "Needs you: to decide",
       "1 new notice",
       "Opened by the agent",
       "Needs the agent: to rerun",
     ])
-    expect(standing({ asks: 1 })).toEqual(["Something waits for you"])
-    expect(standing({ asks: 3, notices: 2 })).toEqual(["3 things wait for you", "2 new notices"])
+    expect(standing({ notices: 2 })).toEqual(["2 new notices"])
   })
 })
 

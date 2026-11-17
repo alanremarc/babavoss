@@ -4,7 +4,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 
 ## The loop
 
-1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and what they decide there.
+1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and which decisions are theirs.
 2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
@@ -28,7 +28,7 @@ Everything an agent learns of a surface, it learns from the surface. There is no
 
 Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and points the person there with the shell's `show`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
 
-The agent does the work through handles. What only the person may decide is an ask, offered to them alone on the page. The page shows what the surface says and offers the person their decisions; anything else they want changed, they tell the agent.
+The agent and the person are offered the same handles: the agent does the work through them, and the person may take any of them on the page. Where a decision is the person's, the view says so, in `how` or where it stands, and the agent raises it in the conversation: it acts on their word there, or they take the same handle on the page. The conversation is where the person steers; the page shows what the surface says and offers them their decisions, and anything else they want changed, they tell the agent.
 
 ## Speaking to the shell
 
@@ -39,7 +39,7 @@ A surface tells the shell two kinds of thing, and the shell tells both sides: th
 | a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
 | a notice from `update` | what just happened, told once and kept nowhere | `notices`, beside `model` and `commands` |
 
-`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where an ask is offered, say it: the ask is how the person decides, `attention` is that they are waited for.
+`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab on the rail and pins the why at the foot of its drawer; a list says it of both. Where a decision is the person's, say it: `attention` is that their word is waited for, in the conversation or on the page.
 
 ```ts
 ...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
@@ -85,7 +85,7 @@ A tab is the home of one instance of a surface, with its own state. The page's r
 - Where the tab's route is below `/`, the actions offered there, under the place's view's `title` or `name`, or its row's.
 - Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. Go of more than 8 places opens on a field that filters it.
 - The shell's own: close the tab, close the others, copy its link, reload its views.
-- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask stands first in its group, dotted; an ask at another place, or a notice they have not seen about one, dots Go and that place. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
+- What waits on the person carries one dot: on the tab, where its `attention` names them or a notice they have not seen is in it; and in the menu, on Go and every step of the way to the place such a notice is about. Home, the rail's first tab, is the shell's own page, never a surface's, with a drawer of its own: the shell's actions, the tabs as its places, and the shell's own entries; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P opens the drawer of the tab shown, and closes it; ⌘J and ⌘K go to the previous and next tab along the rail. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
 
 So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
 

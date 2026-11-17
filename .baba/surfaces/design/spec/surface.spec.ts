@@ -94,12 +94,19 @@ test("a read's answer is the door's text of the view, and what is heard after a 
   expect(heard.text).toContain("the person acted on /tasks")
 })
 
-test("an ask: the wait ends with what the person decided on the page", async () => {
-  const { agent } = await played()
-  const { n, step } = stepOf("ask", "the wait ends")
+test("the person's decision: the agent is told it is theirs, takes it on their word, and is told when they take it on the page", async () => {
+  await played()
 
-  expect(step.tellings[0]!.text).toContain("Task 1, Write the notes, is approved (by the person)")
-  expect((agent.sees(`/scenarios/ask/${n}`) as Step).changed).toEqual("nothing")
+  const told = (did: string) => stepOf("decision", did).step.tellings.map((t) => t.text).join("\n")
+
+  // The task in review: the agent is offered approve and reopen, as the person is; whose decision it is, its how says.
+  expect(told(`${WORD} /tabs/1/tasks/1 done`)).toContain("+ action approve")
+  expect(told(`${WORD} /tabs/1`)).toContain("Approving it is the person's decision")
+  expect(told(`${WORD} /tabs/1`)).toContain("to review task 1")
+  // On the person's word, said in the conversation, the agent approves.
+  expect(told(`${WORD} /tabs/1/tasks/1 approve`)).not.toContain("refused")
+  // Taken on the page, it is told with the person's next message, by them.
+  expect(told("says: Anything left?")).toContain("Task 2, Write the changelog, is approved (by the person)")
 })
 
 test("a scenario's path lists its steps with sizes and an at each; a step's path has its texts whole", async () => {
@@ -120,25 +127,22 @@ test("a scenario's path lists its steps with sizes and an at each; a step's path
 
 test("a step carries what the person's page showed after it: each open tab at /, as the person reads it, and the tab in front", async () => {
   const { agent } = await played()
-  const at = (did: string) => agent.sees(`/scenarios/ask/${stepOf("ask", did).n}/page`) as Page
+  const at = (did: string) => agent.sees(`/scenarios/decision/${stepOf("decision", did).n}/page`) as Page
   const task = (page: Page) => (page.tabs.find((t) => t.at === "/tasks")!.view as { tasks: Json[] }).tasks[0]
   const done = at(`${WORD} /tabs/1/tasks/1 done`)
 
-  expect(at("says: Write the notes and have me check them.")).toEqual({ tabs: [] })
+  expect(at("says: Write the notes and the changelog, and have me check each.")).toEqual({ tabs: [] })
   // The agent opening a tab leaves the page on home, as the shell's page does until the person moves.
   expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toEqual({ tabs: [expect.objectContaining({ at: "/tasks", surface: "tasks" })] })
   expect(task(at(`${WORD} /tabs/1 add 'title=Write the notes'`))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "todo" })
-  // In review, the task carries the person's asks, as their page has them, and the tab says they are waited for.
-  expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve", ask: true }, reopen: { ask: true } })
+  // In review, the task carries approve and reopen, as the agent's view has them, and the tab says the person is waited for.
+  expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve" }, reopen: { name: "reopen" } })
   expect(done.tabs[0]!.view).toMatchObject({ attention: { who: "person", why: "to review task 1" } })
-  expect(task(at("on the page: approve n=1 at /tabs/1/tasks/1"))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "done" })
+  expect(task(at(`${WORD} /tabs/1/tasks/1 approve`))).toMatchObject({ at: "/tasks/2", n: 2, title: "Write the changelog", status: "todo" })
 
-  // The agent is never offered the asks, in no text of any play; the step lists the page in a line.
-  const told = plays.flatMap((p) => p.steps.flatMap((s) => s.tellings.map((t) => t.text)))
-
-  expect(told.filter((t) => /baba \S+ (approve|reopen)/.test(t))).toEqual([])
-  expect((agent.sees(`/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
-    at: `/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
+  // The step lists the page in a line.
+  expect((agent.sees(`/scenarios/decision/${stepOf("decision", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
+    at: `/scenarios/decision/${stepOf("decision", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
     tabs: ["tasks /tasks"],
     front: "home",
   })
@@ -159,7 +163,7 @@ test("a step carries what the person's page showed after it: each open tab at /,
   expect(plays.find((p) => p.name === "break")!.steps.find((s) => s.who === "root")!.page).toMatchObject({ asleep: true, tabs: [{}, {}] })
 })
 
-test("the demo's shape is read from its surfaces: places by pattern, their facts, the ask and the notice, what changes by itself", async () => {
+test("the demo's shape is read from its surfaces: places by pattern, their facts, the notice, what changes by itself", async () => {
   const { agent } = await played()
   const surfaces = (agent.sees("/demo") as { surfaces: Shape[] }).surfaces
   const tasks = surfaces.find((s) => s.name === "tasks")!
@@ -171,11 +175,11 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
   expect(tasks.views.map((v) => v.path)).toEqual(["/", "/tasks/:n"])
   expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status note", "attention"]), actions: [{ name: "add", inputs: ["title"] }] })
   expect(tasks.views[0]!.actions[0]).not.toHaveProperty("notice")
-  expect(tasks.views[1]!.actions.map((a) => [a.name, a.ask ?? false, a.notice ?? false])).toEqual([
-    ["annotate", false, false],
-    ["done", false, true],
-    ["approve", true, true],
-    ["reopen", true, true],
+  expect(tasks.views[1]!.actions.map((a) => [a.name, a.notice ?? false])).toEqual([
+    ["annotate", false],
+    ["done", true],
+    ["approve", true],
+    ["reopen", true],
   ])
   // An action's description is said of any task, not of the one the exploration reached.
   expect(tasks.views[1]!.actions.map((a) => a.description)).toEqual([

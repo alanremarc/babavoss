@@ -7,7 +7,7 @@
 // from the pin; left and right, Home and End move the step, and play steps through by itself. The scenario and step are
 // the tab's route, so a refresh and the agent's pointing land on them. What is not needed at a glance is on hover.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { ArrowLeftIcon, BellIcon, BookOpenTextIcon, EllipsisIcon, PauseIcon, PlayIcon, UserIcon } from "lucide-react"
+import { ArrowLeftIcon, BellIcon, BookOpenTextIcon, EllipsisIcon, PauseIcon, PlayIcon } from "lucide-react"
 import type { Handle, Json } from "babavoss/core/index.ts"
 import { Popover, PopoverContent, PopoverTrigger } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
@@ -517,10 +517,9 @@ function DemoShape({ demo }: { demo?: Demo }) {
                 {v.actions.length > 0 && (
                   <span className="flex flex-wrap gap-x-2 font-mono text-meta [&_svg]:size-2.5">
                     {v.actions.map((a) => (
-                      <span key={a.name} title={`${a.description}${a.ask ? " — an ask: the person's alone" : ""}${a.notice ? " — a call gives a notice" : ""}`} className={`flex items-center gap-0.5 ${a.ask ? "text-warning" : ""}`}>
+                      <span key={a.name} title={`${a.description}${a.notice ? " — a call gives a notice" : ""}`} className="flex items-center gap-0.5">
                         {a.name}
                         {a.inputs.length > 0 && <span className="text-muted-foreground">({a.inputs.join(", ")})</span>}
-                        {a.ask && <UserIcon aria-label="ask" />}
                         {a.notice && <BellIcon aria-label="notice" />}
                       </span>
                     ))}
