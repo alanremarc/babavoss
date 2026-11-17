@@ -83,6 +83,16 @@ test("the probes pass by their dry scripts: a surface opened, the person's acts 
   expect(scratch()).toEqual(before)
 }, 120_000)
 
+test("the tasks of judgment pass by their dry scripts, and a surface of 0.64.0 adapted as its reference passes every rule and the judge", async () => {
+  const o = options("typo,rename-fn,screens-opinion,track-endpoints,verbose-told,verbose-untold,adapt-0.64", { variants: [v1] })
+  const done = await campaign(o, dryHarness(scriptFor(o.tasks)), new AbortController().signal)
+
+  expect(done.runs.map((r) => `${r.task} ${r.pass}`)).toEqual(o.tasks.map((t) => `${t.name} true`))
+  expect(done.runs.find((r) => r.task === "adapt-0.64")!.reason).toContain("judged+")
+  expect(done.runs.find((r) => r.task === "track-endpoints")!.reason).toContain("lean=file")
+  expect(scratch()).toEqual(before)
+}, 120_000)
+
 test("knows a call that goes around the surfaces, to their code or the root's state on disk", () => {
   expect(goesAround({ tool: "Read", input: JSON.stringify({ file_path: "/p/.baba/surfaces/queue/src/seed.ts" }) })).toBe(true)
   expect(goesAround({ tool: "Bash", input: "cat .babavoss/sessions/s/baba/model.json" })).toBe(true)

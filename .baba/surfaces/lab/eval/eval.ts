@@ -11,7 +11,9 @@
 //               open-count, note-backlog, note-parents, done-list, create-eight; and the probes open-release, retitle,
 //               busy-lane, about-26, highlight-13, second-turn, done-then-lanes, link-cycle, release-ready, compact-then-act,
 //               no-surface, done-sleep (tasks.ts); and on a fresh project, with no fixture (fresh.ts): install, first-contact,
-//               make-books, hear-books, rate-books, adapt-release, plain-edit, rename-var, screenshots-ask
+//               make-books, hear-books, rate-books, adapt-release, plain-edit, rename-var, screenshots-ask; adapting a surface
+//               of 0.64.0 (adapting.ts): adapt-0.64; and judgment with the queue open (judgment.ts): typo, rename-fn,
+//               screens-opinion, track-endpoints, verbose-told, verbose-untold
 //   --model     the model Claude Code runs, claude-sonnet-5-5 by default; the one it reports is recorded beside it
 //   --runs      runs of each task on each variant, 3 by default
 //   --budget    optional: the most the campaign may spend in dollars as the harness counts them; refused before it starts
@@ -20,7 +22,8 @@
 //   --turns     the most tool calls a run may make before it is ended, 40 by default
 //   --minutes   the most minutes a run may take, 10 by default
 //   --out       the campaigns' directory, .babavoss/eval in this checkout by default: each campaign a directory in it with
-//               results.jsonl, transcripts/ and table.txt, and tally.json counting the runs of every campaign
+//               results.jsonl, transcripts/ (with what the agent left in a fresh project, NAME.files.json) and table.txt,
+//               and tally.json counting the runs of every campaign
 //   --instruction  the install task's instruction, a file's text, as fresh/install.md: the README's line by default, its
 //               address the site served for the run
 //   --dry       play each task's script through the fake harness instead of an agent: everything but the agent, for free

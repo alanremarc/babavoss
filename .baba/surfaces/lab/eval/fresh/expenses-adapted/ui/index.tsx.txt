@@ -1,0 +1,88 @@
+// The expenses page: the month's budget and what is spent against it, every expense by its state, and the decision on
+// each one submitted. Anything else the person wants, they tell the agent.
+import { useState } from "react"
+import { ReceiptIcon } from "lucide-react"
+import type { Handle } from "babavoss/core/index.ts"
+import { Badge, Button, cn, Input, WorkbenchPage } from "babavoss/kit/index.ts"
+import { useLive, useShell, useTab } from "babavoss/shell/ui/index.tsx"
+
+type Row = { at: string; id: number; what: string; amount: number; category: string; state: string }
+type Root = { budget: number; spent: number; over?: number; waiting: number; expenses: Row[] }
+type One = Row & { note?: string; approve?: Handle; reject?: Handle }
+
+export const icon = ReceiptIcon
+
+const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "EUR" })
+const STATES = ["submitted", "logged", "approved", "rejected"]
+
+function Decision({ at }: { at: string }) {
+  const { view } = useLive<One>(at)
+  const { call } = useTab()
+  const { toast } = useShell()
+  const [why, setWhy] = useState("")
+
+  if (!view?.approve) return null
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button size="sm" onClick={() => void call(at, "approve", { id: view.id }).then(() => toast(`Expense ${view.id} approved`))}>
+        Approve
+      </Button>
+      <Input className="h-row" placeholder="why" value={why} onChange={(e) => setWhy(e.target.value)} />
+      <Button size="sm" variant="outline" disabled={!why.trim()} onClick={() => void call(at, "reject", { id: view.id, why })}>
+        Reject
+      </Button>
+    </div>
+  )
+}
+
+export default function Expenses() {
+  const { view } = useLive<Root>("/")
+  const { route, navigate } = useTab()
+  const share = view ? Math.min(1, view.spent / view.budget) : 0
+
+  return (
+    <WorkbenchPage
+      title="Expenses"
+      meta={
+        <span className={cn("inline-flex items-center gap-1.5 tabular-nums", view?.over !== undefined && "text-destructive")}>
+          <span aria-hidden className="relative h-1 w-12 overflow-hidden rounded-full bg-foreground/10">
+            <span className="absolute inset-y-0 left-0 rounded-full bg-foreground/40" style={{ width: `${share * 100}%` }} />
+          </span>
+          {money(view?.spent ?? 0)} of {money(view?.budget ?? 0)}
+        </span>
+      }
+    >
+      {view?.over !== undefined && <p role="alert" className="rounded-md bg-destructive/10 px-2 py-1 text-destructive">Over budget by {money(view.over)}</p>}
+      {STATES.map((state) => {
+        const rows = (view?.expenses ?? []).filter((e) => e.state === state)
+
+        return (
+          <section key={state} className="flex flex-col gap-1.5">
+            <h3 className="flex items-baseline gap-2 font-medium">
+              {state} <Badge variant="outline">{rows.length}</Badge>
+            </h3>
+            {rows.length === 0 && <p className="text-muted-foreground">Nothing {state}</p>}
+            {rows.map((e) => (
+              <button
+                key={e.at}
+                type="button"
+                onClick={() => navigate(e.at)}
+                className={cn("flex h-row items-baseline gap-2 rounded-md px-2 text-left hover:bg-accent", route === e.at && "bg-accent text-accent-foreground")}
+              >
+                <span className="flex-1 truncate">{e.what}</span>
+                <span className="text-meta text-muted-foreground">{e.category}</span>
+                <span className="text-meta tabular-nums">{money(e.amount)}</span>
+              </button>
+            ))}
+          </section>
+        )
+      })}
+      {route.startsWith("/expenses/") && (
+        <section className="flex flex-col gap-2 rounded-md border p-3 text-muted-foreground">
+          <Decision at={route} />
+        </section>
+      )}
+    </WorkbenchPage>
+  )
+}
