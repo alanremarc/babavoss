@@ -191,7 +191,7 @@
         font-size: 0.8125rem;
       }
 
-      /* The page: the tabs at its side, one with a dot, and the surface: three invoices, one just paid. */
+      /* The page: the tabs at its side, one with a dot, and the surface: what is left before a launch, one thing just done. */
       .page {
         display: flex;
         flex: 1;
@@ -308,7 +308,7 @@
         font-weight: 600;
       }
 
-      /* The picture plays once through as it is first seen: the ask, the answer, the invoice paid, the note. Still where motion is reduced. */
+      /* The picture plays once through as it is first seen: the ask, the answer, the thing ticked off, the note. Still where motion is reduced. */
       @media (prefers-reduced-motion: no-preference) {
         .step {
           opacity: 0;
@@ -434,7 +434,7 @@
       <h1>Baba Voss</h1>
       <p class="lede">Baba is a work surface you share with your agent.</p>
 
-      <div class="picture" role="img" aria-label="You ask your agent in the chat. The agent works on the surface directly. You see the surface on a page: here, three invoices, one just marked paid.">
+      <div class="picture" role="img" aria-label="You ask your agent in the chat. The agent works on the surface directly. You see the surface on a page: here, what is left before a launch, one thing just ticked off.">
         <div class="top" aria-hidden="true">
           <span class="node">agent</span>
           <span class="state">works on it directly</span>
@@ -448,8 +448,8 @@
               <span class="dots"><i></i><i></i><i></i></span><b>Chat</b>
             </div>
             <div class="chat">
-              <div class="say you step s1">Acme paid yesterday. Which invoices are still open?</div>
-              <div class="say step s2">I marked Acme as paid. Two are still open: Birch and Cedar.</div>
+              <div class="say you step s1">The pricing page is live. What's left before launch?</div>
+              <div class="say step s2">I ticked it off. Two left: the welcome email and the terms.</div>
               <div class="ask">Ask your agent…</div>
             </div>
           </div>
@@ -461,11 +461,11 @@
             <div class="page">
               <div class="rail"><span class="tab on"></span><span class="tab"></span><span class="tab"></span></div>
               <div class="surface">
-                <h3>Invoices</h3>
-                <div class="row done step s3"><span>Acme, March</span><span class="pill">Paid</span></div>
-                <div class="row"><span>Birch, March</span><span class="pill">Open</span></div>
-                <div class="row"><span>Cedar, March</span><span class="pill">Open</span></div>
-                <div class="note step s4">Acme matched yesterday's payment.</div>
+                <h3>Launch</h3>
+                <div class="row done step s3"><span>Pricing page</span><span class="pill">Done</span></div>
+                <div class="row"><span>Welcome email</span><span class="pill">Open</span></div>
+                <div class="row"><span>Terms reviewed</span><span class="pill">Open</span></div>
+                <div class="note step s4">Pricing page went live today.</div>
               </div>
             </div>
           </div>
