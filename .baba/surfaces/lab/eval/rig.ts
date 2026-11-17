@@ -73,11 +73,10 @@ export type Run = {
 
 const say = (line: string) => console.log(line)
 
-/** Masks what looks like a credential or a key that opens a live page: a run's transcript is kept on disk. */
+/** Masks what looks like a credential: a run's transcript is kept on disk. */
 export const mask = (text: string): string =>
   text
     .replace(/sk-ant-[\w-]+/g, "<masked>")
-    .replace(/([?&]key=)[\w-]{16,}/g, "$1<masked>")
     .replace(/((?:token|secret|password|authorization|api[_-]?key)["']?\s*[:=]\s*["']?)[^\s"',}]{8,}/gi, "$1<masked>")
     .replace(/\b[A-Za-z0-9+_-]{48,}\b/g, "<masked>")
 
