@@ -138,7 +138,15 @@ test("a book added is to-read, and the person sets its status on the page", asyn
 ```
 
 - `sees(path?)`, `offered(path?)`, `call(path, handle, args)`; `told()`, what changed since it last asked, as the agent is told; `noticed()`, the notices since it last asked, a highlight as `highlight: TEXT`.
-- `world.settle(command, event)` ends a command the surface started, with its event; one that keeps running is given events one at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`; `world.commands()` lists those running. `story(surface, { model })` starts from a model.
+- The test holds every command the surface starts; none runs. `await world.settle(command, event)` ends one with its event; one that keeps running, as a session command, is given events one at a time by `await world.send(command, event)`, the actors looking between, and ended by `await world.end(command)`. Name the command by a test of it, `(c) => c.kind === "watch-books-file"`, or leave it out where one is running; `world.commands()` lists them. `story(surface, { model })` starts from a model.
+
+```ts
+const { agent, world } = story(books)
+const watching = (c: Command) => c.kind === "watch-books-file"
+
+await world.send(watching, { kind: "file-read", books: [{ title: "Dune", status: "reading" }] })
+expect(agent.sees()).toMatchObject({ reading: [{ title: "Dune" }] })
+```
 
 ## The page
 
