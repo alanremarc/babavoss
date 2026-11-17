@@ -191,7 +191,7 @@ describe("the settings", () => {
 
     await agent.call("/", "animate", { on: false })
     await world.fail(writing, "EACCES")
-    expect(agent.noticed()).toEqual(["The settings were not saved: EACCES"])
+    expect(agent.noticed()).toEqual(["highlight: The settings were not saved: EACCES"])
     expect(agent.sees()).toMatchObject({ unsaved: "EACCES" })
   })
 

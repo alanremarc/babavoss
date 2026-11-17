@@ -1,5 +1,5 @@
 // The shell's specimens: the rail in each of its four positions with tabs in every standing, a tab's drawer and home's,
-// the three kinds of entry in a thread, a notice's bubble, the desktop, the modal an action's inputs open in, the
+// the kinds of entry in a thread, a highlight's bubble, the desktop, the modal an action's inputs open in, the
 // connection's states and a tab's own. Each is the shell's component, given sample data (samples.ts) where the live shell
 // gives it the runtime's; a drawer's menu reads sample views through a door of their own, so what it lists, orders and
 // dots is the shell's own working.
@@ -9,7 +9,7 @@ import { handle, type Args, type View } from "../../../../framework/core/surface
 import { Button } from "babavoss/kit/index.ts"
 import { RefusedLine, useTabMenu } from "../../../../framework/shell/ui/actions.tsx"
 import { Said, type Bubble } from "../../../../framework/shell/ui/bubbles.tsx"
-import { controlsOf, noticesIn, type Offered } from "../../../../framework/shell/ui/commands.ts"
+import { controlsOf, highlightsIn, type Offered } from "../../../../framework/shell/ui/commands.ts"
 import { Overlay, PointedAlert, RefusedAlert, said } from "../../../../framework/shell/ui/connection.tsx"
 import { Drawer, Line } from "../../../../framework/shell/ui/drawer.tsx"
 import { Desktop, Foot } from "../../../../framework/shell/ui/home.tsx"
@@ -17,7 +17,7 @@ import { homeMenu, type HomeProps } from "../../../../framework/shell/ui/home.ts
 import { Inputs } from "../../../../framework/shell/ui/inputs.tsx"
 import { Logo } from "../../../../framework/shell/ui/mark.tsx"
 import { Rail, RailEntry, type RailItem } from "../../../../framework/shell/ui/rail.tsx"
-import { entriesIn, itemsOf, pinnedOf, shellEntries, unheardPinned, waitingRows, withUnheard } from "../../../../framework/shell/ui/thread.ts"
+import { entriesIn, itemsOf, pinnedOf, shellEntries, waitingRows, withUnheard } from "../../../../framework/shell/ui/thread.ts"
 import { TabBroken, TabFailed, TabNoPage } from "../../../../framework/shell/ui/tabs.tsx"
 import { standingOf } from "../../../../framework/shell/ui/turn.ts"
 import type { Rail as Placed } from "../../../../framework/shell/settings/src/settings.ts"
@@ -37,8 +37,8 @@ const STILL = standingOf({ agent: "idle", waiting: 0 })
 const door = sampleDoor()
 /** The shell's controls of a sample tab: they do nothing here. */
 const controls = (others = true) => controlsOf({ close: { hint: "Close the tab", run: () => {} }, ...(others && { others: () => {} }), link: `${location.origin}/queue`, reload: () => {} })
-/** The unseen notices of the sample, about the queue's tab: one at issue 2. */
-const UNSEEN = noticesIn("/queue", [{ at: "/queue/issues/2" }])
+/** The highlights of the sample not opened, about the queue's tab: one at issue 7. */
+const UNOPENED = highlightsIn("/queue", [{ at: "/queue/issues/7" }])
 
 /** The mark, home's entry on the rail, as a row has it: its standing, or a connection lost. */
 const Mark = ({ lost }: { lost?: string }) => (
@@ -70,9 +70,9 @@ function Asking({ action, close }: { action?: Offered; close: () => void }) {
 const TABS: RailItem[] = [
   { id: "/tabs/9", label: "Settle the second channel's history and its dots", icon: ICONS.settings },
   { id: "/notes", label: "Notes", icon: ICONS.notes, mark: "broken", why: ["Broken"] },
-  { id: "/design", label: "Design", icon: ICONS.design, mark: "agent", why: ["Needs the agent: to play the scenarios again"] },
-  { id: "/tabs/5", label: "Lab", icon: ICONS.lab, mark: "person", why: ["Opened by the agent"] },
-  { id: "/queue", label: "Queue", icon: ICONS.queue, mark: "person", why: ["Needs you: to approve or drop 1 draft", "1 new notice"] },
+  { id: "/design", label: "Design", icon: ICONS.design },
+  { id: "/tabs/5", label: "Lab", icon: ICONS.lab, mark: "highlight", why: ["The run ended: 2 turns, 41s"] },
+  { id: "/queue", label: "Queue", icon: ICONS.queue, mark: "highlight", why: ["Draft 7 waits on you", "Lane 2 is free again"] },
 ]
 const PLACES: { label: string; placed: Placed }[] = [
   { label: "left, from the bottom: the mark at the foot, the newest tab above it", placed: { side: "left", from: "bottom", drawer: "left" } },
@@ -131,8 +131,8 @@ const ROOT: View = {
 
 /** A tab's drawer over a sample page, its menu read from the sample's views, as the shell opens it; closed, a button opens it again. */
 function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: string; empty?: boolean }) {
-  const menu = useTabMenu({ door, address: "/queue", route: "/issues/4", title: "Queue", name: "queue", start: () => {}, navigate: () => {}, notices: UNSEEN, controls: controls() })
-  const pinned = pinnedOf({ needs: broken ? [] : [{ who: "person", why: "to approve or drop 1 draft" }], ...(broken && { broken }) })
+  const menu = useTabMenu({ door, address: "/queue", route: "/issues/4", title: "Queue", name: "queue", start: () => {}, navigate: () => {}, highlights: UNOPENED, controls: controls() })
+  const pinned = pinnedOf({ ...(broken && { broken }) })
 
   return (
     <Drawer
@@ -144,7 +144,6 @@ function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: s
       stay={new Set(FRESH)}
       {...(pinned && { pinned })}
       go={() => {}}
-      goThere={() => {}}
       reload={() => {}}
       close={() => {}}
     />
@@ -153,25 +152,22 @@ function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: s
 
 /**
  * Home's drawer: the shell's menu from its view at /, the shell's own entries, and what of the person's waits for the agent;
- * with `unheard`, the session's hooks gone quiet 20 minutes ago, its notice kept among the entries and why pinned at the foot.
+ * with `unheard`, the session's hooks gone quiet 20 minutes ago, its highlight among the entries, saying what to do.
  */
 function HomeDrawer({ unheard = false }: { unheard?: boolean }) {
   const quiet = unheard ? { ever: true, since: Date.now() - 20 * 60_000 } : undefined
-  const pinned = unheardPinned(quiet)
 
   return (
     <Drawer
       label="babavoss"
       side="left"
       home
-      menu={{ items: homeMenu({ view: ROOT, title: "babavoss", tabs: [{ at: "/queue", label: "Queue", mark: "person" }], start: () => {}, navigate: () => {} }) }}
+      menu={{ items: homeMenu({ view: ROOT, title: "babavoss", tabs: [{ at: "/queue", label: "Queue", mark: "highlight" }], start: () => {}, navigate: () => {} }) }}
       rows={withUnheard(shellEntries(ROWS), quiet ? [quiet] : [])}
       loaded
-      stay={new Set()}
-      {...(pinned && { pinned })}
+      stay={new Set(quiet ? [-quiet.since] : [])}
       waiting={waitingRows(ROWS, unheard ? 0 : 2)}
       go={() => {}}
-      goThere={() => {}}
       reload={() => {}}
       close={() => {}}
     />
@@ -197,7 +193,7 @@ function Under({ children }: { children: ReactNode }) {
 function DrawerSpecimen() {
   return (
     <States min={420}>
-      <State label="a tab's: its menu at rest over its thread, new notices dotted, what it needs pinned at the foot. Click the field to open the menu; type to search" bare>
+      <State label="a tab's: its menu at rest over its thread, its highlights standing out, those not opened before dotted. Click the field to open the menu; type to search" bare>
         <Under>
           <TabDrawer side="left" />
         </Under>
@@ -207,7 +203,7 @@ function DrawerSpecimen() {
           <HomeDrawer />
         </Under>
       </State>
-      <State label="home's, the session's hooks gone quiet: the notice kept in its thread, why and what to do pinned at the foot" bare>
+      <State label="home's, the session's hooks gone quiet: its highlight in the thread, saying what to do" bare>
         <Under>
           <HomeDrawer unheard />
         </Under>
@@ -227,7 +223,7 @@ function Entries() {
 
   return (
     <States min={360}>
-      <State label="notices, the agent's, the surface's and yours; calls in a row folded, click to open; the tab entry" className="flex-col items-stretch gap-2">
+      <State label="notices, the agent's, the surface's and yours, the highlights standing out; calls in a row folded, click to open; the tab entry" className="flex-col items-stretch gap-2">
         {[...items].reverse().map((item) => (
           <Line key={item.kind === "calls" ? item.rows[0]!.n : item.row.n} item={item} label="Queue" home={false} fresh={item.kind === "notice" && FRESH.includes(item.row.n)} go={() => {}} />
         ))}
@@ -242,10 +238,10 @@ function Entries() {
 }
 
 const BUBBLES: (Bubble & { away: "right" | "left" | "down" | "up"; label: string })[] = [
-  { id: 1, text: "Issue 4, Show the present, is done", kept: true, away: "right", label: "beside a tab on a rail at the left" },
+  { id: 1, text: "Draft 7 waits on you", kept: true, away: "right", label: "a highlight beside a tab on a rail at the left" },
   { id: 2, text: "The run ended: 2 turns, 41s", kept: true, away: "left", label: "at the right" },
   { id: 3, text: "Lane 2 is free again", kept: true, away: "down", label: "under a rail along the top" },
-  { id: 4, text: "Saved", from: "Settings", kept: true, away: "up", label: "beside the mark, saying its surface" },
+  { id: 4, text: "The settings were not saved: EACCES", from: "Settings", kept: true, away: "up", label: "beside the mark, saying its surface" },
 ]
 
 function BubbleSpecimen() {
@@ -281,8 +277,8 @@ const DESKTOP: HomeProps = {
     { name: "notes", label: "Notes", description: "", icon: ICONS.notes, broken: "the notes surface does not load (src/surface.ts: Unexpected end of file)" },
   ],
   tabs: [
-    { at: "/queue", surface: "queue", label: "Queue", mark: "person", go: () => {} },
-    { at: "/tabs/5", surface: "lab", label: "Lab", mark: "agent", go: () => {} },
+    { at: "/queue", surface: "queue", label: "Queue", mark: "highlight", go: () => {} },
+    { at: "/tabs/5", surface: "lab", label: "Lab", go: () => {} },
     { at: "/tabs/4", surface: "lab", label: "Lab 4", go: () => {} },
   ],
   foot: <Foot harness="claude" facts={{ root: "babavoss", version: "0.60.0", session: "d437fdcb-0d70-40c0-b515-97ae0de7c265", update: undefined }} />,

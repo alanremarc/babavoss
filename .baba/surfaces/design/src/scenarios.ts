@@ -29,9 +29,9 @@ export type Step =
   | { kind: "stop" }
   /** The root goes to sleep, as the agent's `sleep` puts it, or nothing used it for a while; the next command wakes it. */
   | { kind: "sleep" }
-  /** The person marks every notice seen, or opens the drawer of the newest notice's tab, which marks it seen: the page's `seen` or `looked`. */
-  | { kind: "look"; mark: "seen" | "looked" }
-  /** The person's page goes where the agent last pointed it, as when the person follows the offer. */
+  /** The person opens the drawer of the newest highlight's tab, which opens its highlights: the page's `opened`. */
+  | { kind: "look" }
+  /** The person's page goes where the agent last brought it, as when the person follows the offer. */
   | { kind: "go" }
   /** The person makes several calls on the page in a row, as by clicking down a list. */
   | { kind: "acts"; what: string; calls: { path: string; handle: string; args?: Record<string, string | number> }[] }
@@ -127,7 +127,7 @@ export const SCENARIOS: Scenario[] = [
     group: "canonical",
     title: "The person's decision",
     about:
-      "Approving a task is the person's decision: the agent marks one done, reads that it is theirs, and asks them in the conversation, then approves it on their word; the next, the person approves on the page, and the agent is told with their message.",
+      "Approving a task is the person's decision: the agent marks one done, which the surface highlights for the person, reads that the decision is theirs, and asks them in the conversation, then approves it on their word; the next, the person approves on the page, and the agent is told what they did.",
     steps: [
       { kind: "start", source: "startup" },
       { kind: "say", text: "Write the notes and the changelog, and have me check each." },
@@ -184,7 +184,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "The person looks at the activity",
       about:
-        "While the agent works, the person opens a tab's drawer and marks what is new seen, follows where the agent pointed them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
+        "While the agent works, the person opens the drawer of a tab the build's failure highlighted, follows where the agent brought them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Add the release tasks and watch the build." },
@@ -192,10 +192,9 @@ function NOISE(): Scenario[] {
         { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Write the notes" } },
         { kind: "build", line: "running" },
         { kind: "build", line: "failed: 1 spec fails" },
-        { kind: "look", mark: "looked" },
+        { kind: "look" },
         { kind: "tool", what: "edit spec/notes.spec.ts" },
-        { kind: "look", mark: "seen" },
-        { kind: "call", path: "/", handle: "show", args: { at: "/tabs/1/tasks/1" } },
+        { kind: "call", path: "/", handle: "highlight", args: { at: "/tabs/1/tasks/1", why: "the notes are next", front: "true" } },
         { kind: "go" },
         { kind: "act", path: "/", handle: "open", args: { surface: "settings" } },
         { kind: "act", path: "/tabs/3", handle: "theme", args: { mode: "dark", theme: "claude" } },
@@ -216,7 +215,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "One event, one line",
       about:
-        "Twelve tasks; the person approves one on the page. It is one event: is it told as one line, or as the notice, the row's status, the need gone and the whole new order of the list?",
+        "Twelve tasks; the person approves one on the page. It is one event: is it told as one line, or as the notice, the row's status and the whole new order of the list?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Plan the release as tasks; I'll approve them as they are done." },

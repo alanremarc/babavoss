@@ -4,7 +4,7 @@
 // one mark and why; and where the shortcuts give way to a field, the drawer's search excepted.
 import { describe, expect, it } from "bun:test"
 import type { Rail } from "../../framework/shell/settings/src/settings.ts"
-import { awayOf, cycled, doesOf, drawerSide, homeMarkOf, markOf, newestFirst, onScreen, opensDrawer, standing, stepOf, successor } from "../../framework/shell/ui/rail.ts"
+import { awayOf, cycled, doesOf, drawerSide, markOf, newestFirst, onScreen, opensDrawer, standing, stepOf, successor } from "../../framework/shell/ui/rail.ts"
 import { yields, RECORDING_MARK, SEARCH_MARK, type Focused } from "../../framework/shell/ui/shortcuts.ts"
 
 const tab = (n: number) => ({ at: `/tabs/${n}`, n })
@@ -94,38 +94,22 @@ describe("a tab's drawer", () => {
     expect([drawerSide(at("top", "top", "right")), drawerSide(at("bottom", "top", "left"))]).toEqual(["right", "left"])
   })
 
-  it("has the bubbles of its notices point away from the rail", () => {
+  it("has the bubbles of its highlights point away from the rail", () => {
     expect([awayOf(at("left")), awayOf(at("right")), awayOf(at("top")), awayOf(at("bottom"))]).toEqual(["right", "left", "down", "up"])
   })
 })
 
-describe("the mark's dot", () => {
-  it("is the person's while the session's hooks are not heard, never heard or gone quiet, and none once one is heard", () => {
-    expect(homeMarkOf({ ever: false, since: 1 })).toBe("person")
-    expect(homeMarkOf({ ever: true, since: 1 })).toBe("person")
-    expect(homeMarkOf(undefined)).toBeUndefined()
-  })
-})
-
-describe("a tab's mark", () => {
-  it("is one dot for whatever waits on the person, a broken mark before it and the agent's quiet one after", () => {
-    expect(markOf({ waits: true })).toBe("person")
-    expect(markOf({ unseen: true })).toBe("person")
-    expect(markOf({ needs: [{ who: "person", why: "a draft" }] })).toBe("person")
-    expect(markOf({ needs: [{ who: "agent", why: "a run" }] })).toBe("agent")
-    expect(markOf({ waits: true, broken: "fails" })).toBe("broken")
+describe("a tab's mark, and home's", () => {
+  it("is one dot for a highlight the person has not opened, a broken mark before it, and none for anything else", () => {
+    expect(markOf({ highlights: ["Checks failed on 3"] })).toBe("highlight")
+    expect(markOf({ highlights: ["Checks failed on 3"], broken: "fails" })).toBe("broken")
+    expect(markOf({ highlights: [] })).toBeUndefined()
     expect(markOf({})).toBeUndefined()
   })
 
-  it("says why under the tab's title, the strongest first", () => {
-    expect(standing({ broken: "fails", needs: [{ who: "agent", why: "to rerun" }, { who: "person", why: "to decide" }], notices: 1, unseen: true })).toEqual([
-      "Broken",
-      "Needs you: to decide",
-      "1 new notice",
-      "Opened by the agent",
-      "Needs the agent: to rerun",
-    ])
-    expect(standing({ notices: 2 })).toEqual(["2 new notices"])
+  it("says why under the tab's title: broken, then each highlight not opened", () => {
+    expect(standing({ broken: "fails", highlights: ["Checks failed on 3", "Draft 7 is ready"] })).toEqual(["Broken", "Checks failed on 3", "Draft 7 is ready"])
+    expect(standing({})).toEqual([])
   })
 })
 

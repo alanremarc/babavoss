@@ -1,6 +1,6 @@
-// Notices as they arrive: each a bubble beside the tab it is in, beside the mark where it is in none, pointing away from
+// Highlights as they arrive: each a bubble beside the tab it is in, beside the mark where it is in none, pointing away from
 // the rail, gone after a few seconds, at most a few per tab; hovering one keeps it, and a click opens its tab's drawer,
-// where its thread keeps it. A page's own passing word (useShell().toast), kept nowhere, is a bubble too, and its click
+// where its thread keeps it. An ordinary entry makes none. A page's own passing word (useShell().toast), kept nowhere, is a bubble too, and its click
 // goes where it is about. The tab's mark and its thread are what remain. They stand over the page, so a rail that scrolls
 // does not cut them, placed by where the tab's button is.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"

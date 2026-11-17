@@ -1,11 +1,11 @@
 // A drawer's thread, worked out without a page: a tab's entries, read from the shell's activity, as a thread reads them.
-// An entry the surface said lines about is a notice, its words, with what was done under it; one refused, a quiet line
-// with why; one that said nothing, mechanical, a run of them in a row by one author, or one hearer of the world, folded
-// into one line; or a tab entry, the shell's opening, closing or showing of a tab. A tab's thread is what
-// is in it and the shell's lines about it; home's is the shell's own, each naming its surface. What a tab needs, or that
-// it is broken, is pinned at the thread's foot with its one action, as is what of the person's waits for the agent on
-// home's, and that the session's hooks are not heard, with what to do, while that lasts; each time it began is kept in
-// home's thread as the page's own notice. Pure: drawer.tsx draws it.
+// An entry the surface said lines about is a notice, its words, with what was done under it, standing out where it is a
+// highlight; one refused, a quiet line with why; one that said nothing, mechanical, a run of them in a row by one author,
+// or one hearer of the world, folded into one line; or a tab entry, the shell's opening or closing of a tab. A tab's
+// thread is what is in it and the shell's lines about it; home's is the shell's own, each naming its surface. That a tab
+// is broken is pinned at the thread's foot with its one action, as is what of the person's waits for the agent on home's.
+// Each time the session's hooks were found not heard is kept in home's thread as the page's own highlight, saying what to
+// do. Pure: drawer.tsx draws it.
 import type { Unheard } from "./client.ts"
 import { named } from "./commands.ts"
 
@@ -14,7 +14,7 @@ export type Who = "person" | "agent" | "world"
  * An entry as /activity gives it (activity.ts): `when` UTC to the second; `by` the world's hearer; `surface` absent where
  * `at` names it; `at` null in the shell's
  * line about a tab now closed; `own` the shell's line about a tab; `did` the call, or the event heard, `times` in a row;
- * `refused` why; `said` the surface's lines, `saidAt` their place.
+ * `refused` why; `said` the surface's lines, `saidAt` their place; `highlight` where one of them is a highlight.
  */
 export type Row = {
   n: number
@@ -29,6 +29,7 @@ export type Row = {
   refused?: string
   said?: string[]
   saidAt?: string | null
+  highlight?: true
 }
 /** What an entry is: a notice, the surface's lines; a refusal; a call or an event that said nothing; or the shell's own line about a tab. */
 export type Kind = "notice" | "refused" | "call" | "tab"
@@ -128,29 +129,11 @@ export function placeIn(row: Row, address: string): string | undefined {
 /** The tab a place is in: "/tabs/2/issues/12" is in /tabs/2, "/queue/issues/12" in /queue; anything else is in none. */
 export const tabIn = (at: string | undefined): string | undefined => (at && /^(?:\/tabs\/\d+|\/(?!(?:tabs|activity)(?:\/|$))[a-z][a-z0-9-]*)/.exec(at)?.[0]) || undefined
 
-/** Why a tab needs the person, as a line: "to approve or drop 1 draft" reads "Approve or drop 1 draft". */
-export const needLine = (why: string): string => {
-  const line = why.replace(/^to\s+/i, "")
+/** What is pinned at a thread's foot: that its tab is broken, with Reload. */
+export type Pinned = { tone: "broken"; text: string; detail?: string; does?: { label: "Reload" } }
 
-  return line.charAt(0).toUpperCase() + line.slice(1)
-}
-
-/**
- * What is pinned at a thread's foot, the one thing that explains the tab's mark, the strongest first: that it is broken,
- * with Reload; that the person is needed, with Go there; that it needs the agent, with nothing to do; else nothing.
- */
-export type Pinned = { tone: "broken" | "person" | "agent"; text: string; detail?: string; does?: { label: "Reload" } | { label: "Go there"; at: string } }
-
-export function pinnedOf({ broken, needs = [] }: { broken?: string; needs?: { who: "person" | "agent"; why: string }[] }): Pinned | undefined {
-  const person = needs.find((n) => n.who === "person")
-  const agent = needs.find((n) => n.who === "agent")
-
-  if (broken !== undefined) return { tone: "broken", text: "This tab is broken", detail: broken, does: { label: "Reload" } }
-  if (person) return { tone: "person", text: needLine(person.why), does: { label: "Go there", at: "/" } }
-  if (agent) return { tone: "agent", text: `Waits for the agent: ${needLine(agent.why).replace(/^./, (c) => c.toLowerCase())}` }
-
-  return undefined
-}
+export const pinnedOf = ({ broken }: { broken?: string }): Pinned | undefined =>
+  broken === undefined ? undefined : { tone: "broken", text: "This tab is broken", detail: broken, does: { label: "Reload" } }
 
 /**
  * The person's latest calls, as many as the agent has not been told of: what it is told with their next message, newest
@@ -158,32 +141,20 @@ export function pinnedOf({ broken, needs = [] }: { broken?: string; needs?: { wh
  */
 export const waitingRows = (rows: readonly Row[], waiting: number): Row[] => rows.filter((r) => r.who === "person" && r.refused === undefined).slice(0, Math.max(0, waiting))
 
-/** What the person is told as the session's hooks are found not heard: never heard, or heard and gone quiet. */
+/** What the person is told as the session's hooks are found not heard: never heard, or heard and gone quiet; and what to do. */
 export const UNHEARD = "This session's agent is not told of changes; it sees them only when it reads"
-const BACK = "Start a new session to get them back."
+const NEVER = "Start the session in a harness set up for this project, from its folder."
 
-/** The notice that the hooks are not heard, as its bubble and its entry in home's thread say it. */
-export const unheardLine = (unheard: Unheard): string => (unheard.ever ? `${UNHEARD}. ${BACK}` : `${UNHEARD}.`)
-
-/** What home's thread pins while the hooks are not heard: that the agent is not told, why, and what to do; nothing to press. */
-export function unheardPinned(unheard: Unheard | undefined): Pinned | undefined {
-  if (!unheard) return undefined
-
-  return {
-    tone: "person",
-    text: UNHEARD,
-    detail: unheard.ever
-      ? `Its harness's hooks were heard, then went quiet. ${BACK}`
-      : "No hook of its harness has been heard. Start the session in a harness set up for this project, from its folder, to have them.",
-  }
-}
+/** The highlight that the hooks are not heard, as its bubble and its entry in home's thread say it. */
+export const unheardLine = (unheard: Unheard): string =>
+  `${UNHEARD}. ${unheard.ever ? "Its hooks went quiet: start a new session to get them back." : NEVER}`
 
 /** The stretches of silence the page has known, with one more where `unheard` is new: the same list where it is known or there is none. */
 export const knownAfter = (known: readonly Unheard[], unheard: Unheard | undefined): readonly Unheard[] =>
   !unheard || known.some((k) => k.since === unheard.since) ? known : [...known, unheard]
 
 /**
- * Home's entries with the page's own notices among them, one for each stretch of silence it has known, by its time: newest
+ * Home's entries with the page's own highlights among them, one for each stretch of silence it has known, by its time: newest
  * first as given, each before the first entry older than it. Numbered below every entry's, so their keys never meet.
  */
 export function withUnheard(rows: readonly Row[], known: readonly Unheard[]): Row[] {
@@ -192,7 +163,7 @@ export function withUnheard(rows: readonly Row[], known: readonly Unheard[]): Ro
   for (const unheard of [...known].sort((a, b) => a.since - b.since)) {
     const when = new Date(unheard.since).toISOString().replace(/\.\d{3}Z$/, "Z")
     const older = all.findIndex((r) => Date.parse(r.when) < Date.parse(when))
-    const row: Row = { n: -unheard.since, when, who: "world", surface: "baba", at: null, said: [unheardLine(unheard)] }
+    const row: Row = { n: -unheard.since, when, who: "world", surface: "baba", at: null, said: [unheardLine(unheard)], highlight: true }
 
     all.splice(older < 0 ? all.length : older, 0, row)
   }
@@ -200,5 +171,6 @@ export function withUnheard(rows: readonly Row[], known: readonly Unheard[]): Ro
   return all
 }
 
-/** The notices of `rows` the person has not seen, by number, of those the shell names. */
-export const freshIn = (rows: readonly Row[], fresh: readonly number[]): number[] => rows.filter((r) => kindOf(r) === "notice" && fresh.includes(r.n)).map((r) => r.n)
+/** The highlights of `rows` the person has not opened, by number, of those the shell names. */
+export const unopenedOf = (rows: readonly Row[], unopened: readonly number[]): number[] =>
+  rows.filter((r) => r.highlight && unopened.includes(r.n)).map((r) => r.n)

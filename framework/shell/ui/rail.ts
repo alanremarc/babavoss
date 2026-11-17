@@ -3,10 +3,6 @@
 // the person lands when the tab they look at closes; the side a drawer opens at and the way a bubble points, away from
 // the rail; and a tab's one mark, and why, as its tooltip says it. Pure: rail.tsx draws it.
 import type { Rail } from "../settings/src/settings.ts"
-import type { Unheard } from "./client.ts"
-
-/** Who a tab needs, and why. */
-export type TabNeed = { who: "person" | "agent"; why: string }
 
 /** The tabs newest first, by their number, which grows with each one opened. */
 export function newestFirst<T extends { n: number }>(tabs: readonly T[]): T[] {
@@ -63,34 +59,21 @@ export const drawerSide = (rail: Rail): "left" | "right" => (upright(rail) ? (ra
 export const awayOf = (rail: Rail): "right" | "left" | "down" | "up" =>
   ({ left: "right", right: "left", top: "down", bottom: "up" } as const)[rail.side]
 
-/** The mark on a tab's icon, the strongest first: broken; the one dot of what waits on the person; needing the agent. */
+/** The mark on a tab's icon, the strongest first: broken; a highlight the person has not opened. */
 export const MARK = {
   broken: "size-2 bg-destructive",
-  person: "size-1.5 bg-primary",
-  agent: "size-1.5 bg-muted-foreground/70",
+  highlight: "size-1.5 bg-primary",
 }
 export type Mark = keyof typeof MARK
 
-/**
- * A tab's mark: broken; waiting on the person, where they are needed, a notice they have not seen waits in it,
- * or it is a tab the agent opened that they have not looked at; needing the agent; or none.
- */
-export const markOf = ({ needs = [], broken, unseen, waits }: { needs?: TabNeed[]; broken?: string; unseen?: boolean; waits?: boolean }): Mark | undefined =>
-  broken !== undefined ? "broken" : waits || unseen || needs.some((n) => n.who === "person") ? "person" : needs.length ? "agent" : undefined
+/** A tab's mark, home's too: broken, or holding a highlight the person has not opened, or none. */
+export const markOf = ({ broken, highlights = [] }: { broken?: string; highlights?: readonly string[] }): Mark | undefined =>
+  broken !== undefined ? "broken" : highlights.length ? "highlight" : undefined
 
-/** The mark's own dot, home's: the person's, while the session's hooks are not heard; the mark's look is its own. */
-export const homeMarkOf = (unheard: Unheard | undefined): Mark | undefined => (unheard ? "person" : undefined)
-
-/**
- * Why a tab is marked, one line each, as its tooltip says it under its title: broken; who it needs and why; what waits on
- * the person in it, notices they have not seen; and that the agent opened it while they have not looked at it.
- */
-export const standing = ({ needs = [], broken, notices = 0, unseen }: { needs?: TabNeed[]; broken?: string; notices?: number; unseen?: boolean }): string[] => [
+/** Why a tab is marked, one line each, as its tooltip says it under its title: broken; and each highlight in it not opened, newest first. */
+export const standing = ({ broken, highlights = [] }: { broken?: string; highlights?: readonly string[] }): string[] => [
   ...(broken !== undefined ? ["Broken"] : []),
-  ...needs.filter((n) => n.who === "person").map((n) => `Needs you: ${n.why}`),
-  ...(notices > 0 ? [`${notices} new ${notices === 1 ? "notice" : "notices"}`] : []),
-  ...(unseen ? ["Opened by the agent"] : []),
-  ...needs.filter((n) => n.who === "agent").map((n) => `Needs the agent: ${n.why}`),
+  ...highlights,
 ]
 
 /** What opens a tab's drawer from the keyboard, on the tab: the context-menu key, or Shift+F10. */
