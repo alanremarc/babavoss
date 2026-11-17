@@ -3,4 +3,4 @@ These are baba's words in short, given where this session was given them whole b
 - A surface is a tool you work with for the person: you read and act on it through the command the shell's answer below names, and they watch and act on the same thing in its tab on the page.
 - An answer shows what is true now; never look for it in a surface's code or in what it keeps on disk. An action is offered only where it is printed: copy its command.
 - What the person did is a move to take up and build on, never to undo or overwrite. A refusal gives its reason: read again, and do not repeat the call.
-- `/` is the present whole, `needs` first: what is yours, take up; what is the person's, raise with them in the conversation and act on their word, unless they act on the page first. Read `/activity/notices` to catch up on what happened while you were away.
+- `/` is the present whole. Read `/activity` to catch up on what happened while you were away.

@@ -1,8 +1,8 @@
 // What the shell makes of a tab's actions, from its surface's views alone, the same for every surface; the page returns
 // its content alone and draws none of it. The tab's menu, which its drawer holds at its head: a search of the actions and
 // places of the whole tree below the tab; the surface's actions at /; where the tab is below /, the place's, under its
-// name; Go, the places and the way back up; then the shell's own controls. A notice the person has not seen is dotted on
-// every step of the way to it. Around the tab's content: the line that says why an action was refused, and the modal an
+// name; Go, the places and the way back up; then the shell's own controls. A highlight the person had not opened is dotted
+// on every step of the way to it. Around the tab's content: the line that says why an action was refused, and the modal an
 // action with inputs opens, the page's drawer for it or a form of its inputs.
 import { Suspense, useContext, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react"
 import { XIcon } from "lucide-react"
@@ -69,8 +69,8 @@ function useModel({
   name: string
   start: (action: Offered) => void
   navigate: (route: string) => void
-  /** The unseen notices the tab is about, which dot the way to them, and its controls. */
-  menu: { notices: string[]; controls: MenuItem[] }
+  /** The places of the highlights the person had not opened in the tab, which dot the way to them, and its controls. */
+  menu: { highlights: string[]; controls: MenuItem[] }
 }): Model {
   // The surface's root, where the tab is, and the place above it: a route that is no path of the surface offers nothing.
   // The place above is read only where a view known names it, so a parent path with no view is never asked for.
@@ -94,7 +94,7 @@ function useModel({
     surface: { label: shown, actions: atRoot, menu: root?.menu },
     ...(route !== "/" && here && { place: { label: placeLabel, actions: atHere, menu: here.menu } }),
     go,
-    dots: dotted(menu.notices, route, go),
+    dots: dotted(menu.highlights, route, go),
     start,
     navigate,
     controls: menu.controls,
@@ -115,7 +115,7 @@ export function useTabMenu({
   name,
   start,
   navigate,
-  notices,
+  highlights,
   controls,
 }: {
   /** Where its views are read from: the tab's, at its address, unless another is given, as a sample's. */
@@ -126,12 +126,12 @@ export function useTabMenu({
   name: string
   start: (action: Offered) => void
   navigate: (route: string) => void
-  notices: string[]
+  highlights: string[]
   controls: MenuItem[]
 }): TabMenuModel {
   const changes = useContext(ChangesContext)
   const door = useMemo(() => given ?? doorOf(address, changes), [given, address, changes])
-  const model = useModel({ door, route, title, name, start, navigate, menu: { notices, controls } })
+  const model = useModel({ door, route, title, name, start, navigate, menu: { highlights, controls } })
   return {
     items: model.ready ? model.items : controls,
     find: (query) => foundItems(search(model.found ?? [], query), navigate, start),

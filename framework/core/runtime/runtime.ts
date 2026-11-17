@@ -172,7 +172,7 @@ export async function startRuntime(
   const entry = options.entry ?? process.argv[1]!
   const { instance } = owner.identity
   const command = options.command ?? `bv ${root.name}`
-  const running = run(root.surface, { ...modelPorts(dir), log })
+  const running = run(root.surface, { ...(root.keep ?? modelPorts)(dir), log })
   const code = loaded(entry)
   const watchers: FSWatcher[] = []
   const wake = wakeful({ ...strengthsOf(options.env), ...options.strengths }, Date.now())
@@ -356,6 +356,17 @@ export async function startRuntime(
   const port = (entrance.server.address() as { port: number }).port
 
   owner.publish(port)
+  if (root.started) {
+    const started = root.started
+
+    setTimeout(() => {
+      try {
+        started(dir)
+      } catch (error) {
+        log(`${root.name}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }, 0).unref()
+  }
   log(`${root.name} runtime for session ${session}, instance ${instance}, ${dev ? "dev" : "normal"} mode, on 127.0.0.1:${port}, in ${process.cwd()}, state in ${dir}`)
   // A change in a file the page may be made of: in dev mode the door builds the page again and tells the open ones if it
   // differs; in normal mode it is changed code, said.

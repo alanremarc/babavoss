@@ -1,7 +1,7 @@
 // A told text read for its shape, so the page can show it dense and coloured without changing a character of it. A text is
 // cut into parts by its lines: prose, written as markdown, such as baba's words; and shaped, what the framework prints:
 // lead lines, sections, a heading per tab, `key: value` facts, tables of tab-separated rows, commands, `+` and `-` lines,
-// `a → b` changes, notices and who did what. A shaped line is cut into spans, each of a kind. Nothing is made here: the
+// `a → b` changes, notices, a highlight marked so, and who did what. A shaped line is cut into spans, each of a kind. Nothing is made here: the
 // parts' texts joined by newlines are the text, a part's lines joined by newlines are its text, and a line's spans joined
 // are the line, exactly.
 
@@ -114,16 +114,20 @@ export function readLine(text: string, section = "", table = false): Line {
 
   if (fact && fact[3]!.includes("\t")) return { kind: "head", text, spans: [{ kind: "key", text: fact[1]! }, { kind: "plain", text: fact[2]! }, { kind: "plain", text: fact[3]! }] }
   if (section === "notices") {
-    const notice = /^([a-z][\w-]*)( )(\/\S*?)(: )(.*)$/.exec(text)
+    // A highlight is marked by its first word.
+    const marked = /^highlight (?=\S)/.exec(text)?.[0] ?? ""
+    const rest = text.slice(marked.length)
+    const mark: Span[] = marked ? [{ kind: "keyword", text: marked.trimEnd() }, { kind: "plain", text: " " }] : []
+    const notice = /^([a-z][\w-]*)( )(\/\S*?)(: )(.*)$/.exec(rest)
 
     if (notice)
       return {
         kind: "notice",
         text,
-        spans: [{ kind: "surface", text: notice[1]! }, { kind: "plain", text: notice[2]! }, { kind: "path", text: notice[3]! }, { kind: "plain", text: notice[4]! }, ...valueSpans(notice[5]!)],
+        spans: [...mark, { kind: "surface", text: notice[1]! }, { kind: "plain", text: notice[2]! }, { kind: "path", text: notice[3]! }, { kind: "plain", text: notice[4]! }, ...valueSpans(notice[5]!)],
       }
 
-    return { kind: "notice", text, spans: valueSpans(text) }
+    return { kind: "notice", text, spans: [...mark, ...valueSpans(rest)] }
   }
   if (fact) return { kind: "fact", text, spans: factSpans(text) }
 

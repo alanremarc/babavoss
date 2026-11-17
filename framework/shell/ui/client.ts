@@ -30,7 +30,7 @@ export async function call<V = View>(path: string, handle: string, args: Args): 
 
 export type Change = { version: number; jobs: string[] }
 /** What just happened, told once as it is heard: `at` the path it is about, `from` who says it, `by` who caused it where not the person. */
-export type Notice = { text: string; at?: string; from?: string; by?: string }
+export type Notice = { text: string; at?: string; from?: string; highlight?: true; by?: string }
 
 /**
  * The hooks' silence the agent was told of, while it lasts: `since` when the runtime found it, `ever` where a hook was heard

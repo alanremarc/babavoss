@@ -2,7 +2,7 @@
 //   GET  /p   application/json   the view at /p for the actor in the header     GET /p  text/html  the root's page
 //   GET  /    text/event-stream  change { version } and work { jobs }           POST /p { handle, args }  a call
 //                                 call { path, handle, args, actor, refused? }, each call through this door as it is answered
-//                                 notice { text, at?, from?, by? }, each notice as it is heard, `by` absent where the person
+//                                 notice { text, at?, from?, highlight?, by? }, each notice as heard, `by` absent where the person
 //                                 caused it; a line about the root's own code is one too, and is given to a page that connects
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
 //                                 turn { agent, since, waiting, drivable, harness?, unheard? }, whose move it is (turn.ts), as it
@@ -36,7 +36,6 @@ import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Noticed, Running } from "../surface/run.ts"
 import { textArgs, textSession, textView } from "./text.ts"
-import { NEEDS } from "../present/present.ts"
 import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
@@ -403,9 +402,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (!Number.isFinite(seconds) || seconds < 0) return reply(400, "seconds must be a nonnegative number")
 
           // `tell=notices`, what was heard alone, as after a tool call; otherwise a boundary: what was heard, then what changed
-          // at /. A wait ends on what was heard, or on who is needed changing: a fact a surface changed by itself waits for the next.
+          // at /. A wait ends on what was heard: a fact a surface changed by itself waits for the next.
           const heard = url.searchParams.get("tell") === "notices"
-          const due = () => text.noticed() > 0 || (!heard && text.changed().some((c) => c.keys.some((k) => k === NEEDS || k.startsWith(`${NEEDS}[`))))
+          const due = () => text.noticed() > 0
 
           if (!due() && said === undefined)
             await new Promise<void>((done) => {

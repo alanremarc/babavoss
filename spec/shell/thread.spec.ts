@@ -1,6 +1,6 @@
 // A drawer's thread: a tab's entries read from the shell's activity, and home's, the shell's own; the four kinds of entry,
 // calls in a row by one author, or the world's events by one hearer, folded; the words of their lines; where a click on one goes; what is pinned at the foot,
-// and what of the person's waits for the agent; the notices opening a drawer sees; and a closed tab's entries gone with it.
+// and what of the person's waits for the agent; the highlights opening a drawer opens; and a closed tab's entries gone with it.
 import { describe, expect, it } from "bun:test"
 import { action, story, surface, view, type Update } from "../../framework/core/index.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
@@ -10,7 +10,6 @@ import {
   callsLine,
   didOf,
   entriesIn,
-  freshIn,
   itemsOf,
   kindOf,
   knownAfter,
@@ -23,7 +22,7 @@ import {
   tabLine,
   UNHEARD,
   unheardLine,
-  unheardPinned,
+  unopenedOf,
   waitingRows,
   withUnheard,
   type Row,
@@ -66,6 +65,7 @@ describe("a thread", () => {
     expect(programRowOf(rows[1]!)).toBe("note n=8: refused, issue 8 is done")
     expect(programRowOf(rows[2]!)).toBe("note n=7: Issue 7 noted")
     expect(callsLine({ kind: "calls", who: "agent", rows: [rows[3]!, rows[4]!], program: "program:1" })).toBe("Agent made 2 calls in one command")
+    expect(itemsOf([row(3, { ...one }), row(2, { ...one, said: ["Look here"], highlight: true }), row(1, { ...one })]).map((i) => i.kind)).toEqual(["calls", "notice", "calls"])
   })
 
   it("is a tab's entries and the shell's lines about it; home's is the shell's own", () => {
@@ -124,15 +124,8 @@ describe("a thread", () => {
 })
 
 describe("what a thread's foot pins", () => {
-  it("is the one thing that explains the tab's mark, the strongest first, with its one action", () => {
-    const needs = [
-      { who: "agent" as const, why: "to rerun the build" },
-      { who: "person" as const, why: "to approve or drop 1 draft" },
-    ]
-
-    expect(pinnedOf({ broken: "it fails", needs })).toEqual({ tone: "broken", text: "This tab is broken", detail: "it fails", does: { label: "Reload" } })
-    expect(pinnedOf({ needs })).toEqual({ tone: "person", text: "Approve or drop 1 draft", does: { label: "Go there", at: "/" } })
-    expect(pinnedOf({ needs: [needs[0]!] })).toEqual({ tone: "agent", text: "Waits for the agent: rerun the build" })
+  it("is that the tab is broken, with Reload, and nothing else", () => {
+    expect(pinnedOf({ broken: "it fails" })).toEqual({ tone: "broken", text: "This tab is broken", detail: "it fails", does: { label: "Reload" } })
     expect(pinnedOf({})).toBeUndefined()
   })
 
@@ -140,25 +133,12 @@ describe("what a thread's foot pins", () => {
     expect(waitingRows([row(13, { who: "person", refused: "no" }), ...ROWS], 2).map((r) => r.n)).toEqual([6, 2])
     expect(waitingRows(ROWS, 0)).toEqual([])
   })
-
-  it("on home, is that the session's hooks are not heard, while they are not: never heard, or gone quiet, with what to do", () => {
-    const never = unheardPinned({ ever: false, since: 0 })!
-    const quiet = unheardPinned({ ever: true, since: 0 })!
-
-    expect(never).toMatchObject({ tone: "person", text: UNHEARD })
-    expect(never.detail).toStartWith("No hook of its harness has been heard.")
-    expect(quiet).toMatchObject({ tone: "person", text: UNHEARD })
-    expect(quiet.detail).toEndWith("Start a new session to get them back.")
-    expect(never.does ?? quiet.does).toBeUndefined()
-    // Heard again: nothing is pinned.
-    expect(unheardPinned(undefined)).toBeUndefined()
-  })
 })
 
 describe("home's thread", () => {
   const at = (iso: string) => Date.parse(iso)
 
-  it("keeps each stretch of the hooks' silence the page has known as its own notice, by its time among the shell's entries", () => {
+  it("keeps each stretch of the hooks' silence the page has known as its own highlight, by its time among the shell's entries, saying what to do", () => {
     const rows = [
       row(3, { when: "2026-11-16T12:05:00Z", at: "/tabs/3" }),
       row(2, { when: "2026-11-16T12:01:00Z" }),
@@ -171,11 +151,11 @@ describe("home's thread", () => {
     const thread = withUnheard(rows, known)
 
     expect(thread.map((r) => r.n)).toEqual([3, -known[1]!.since, 2, 1, -known[0]!.since])
-    expect(thread[1]).toMatchObject({ who: "world", surface: "baba", at: null, when: "2026-11-16T12:03:00Z" })
-    expect(thread[1]!.said).toEqual([`${UNHEARD}. Start a new session to get them back.`])
-    expect(thread[4]!.said).toEqual([`${UNHEARD}.`])
+    expect(thread[1]).toMatchObject({ who: "world", surface: "baba", at: null, when: "2026-11-16T12:03:00Z", highlight: true })
+    expect(thread[1]!.said).toEqual([`${UNHEARD}. Its hooks went quiet: start a new session to get them back.`])
+    expect(thread[4]!.said).toEqual([`${UNHEARD}. Start the session in a harness set up for this project, from its folder.`])
     expect(itemsOf(thread.map((r) => (r.said ? r : { ...r, own: true }))).map((i) => i.kind)).toEqual(["tab", "notice", "tab", "tab", "notice"])
-    expect(unheardLine(known[0]!)).toBe(`${UNHEARD}.`)
+    expect([unheardLine(known[0]!)]).toEqual(thread[4]!.said!)
   })
 
   it("knows a stretch once, by when it began: a turn that says it again, as on a reload or a reconnect, adds none", () => {
@@ -190,16 +170,23 @@ describe("home's thread", () => {
 })
 
 describe("opening a drawer", () => {
-  it("sees the notices new in its tab, and on home those in no tab, never a call", () => {
-    const fresh = [12, 8, 4]
+  it("opens the highlights not yet opened in its tab, and on home those in no tab, never an ordinary entry", () => {
+    const rows = ROWS.map((r) => (r.n === 12 || r.n === 4 ? { ...r, highlight: true as const } : r))
+    const unopened = [12, 8, 4]
 
-    expect(freshIn(entriesIn(ROWS, "/queue"), fresh)).toEqual([12])
-    expect(freshIn(entriesIn(ROWS, "/tabs/3"), fresh)).toEqual([4])
-    expect(freshIn(shellEntries(ROWS), fresh)).toEqual([])
+    expect(unopenedOf(entriesIn(rows, "/queue"), unopened)).toEqual([12])
+    expect(unopenedOf(entriesIn(rows, "/tabs/3"), unopened)).toEqual([4])
+    expect(unopenedOf(shellEntries(rows), unopened)).toEqual([])
   })
 
-  it("marks them seen quietly, by the page's actions, which tell the agent nothing and keep no entry", async () => {
-    const ring = action({ name: "ring", description: "ring", subject: {}, inputs: {}, update: (m: { n: number }): Update<{ n: number }, never> => ({ model: m, notices: ["Rang"] }) })
+  it("marks them opened quietly, by the page's mark, which tells the agent nothing and keeps no entry", async () => {
+    const ring = action({
+      name: "ring",
+      description: "ring",
+      subject: {},
+      inputs: {},
+      update: (m: { n: number }): Update<{ n: number }, never> => ({ model: m, notices: [{ text: "Rang", highlight: true }] }),
+    })
     const pages = view([ring], { "/": () => ({ title: "Bell", ring: ring.bind({}) }) })
     const bell = surface<{ n: number }, never, never>({ description: "a bell", init: () => ({ n: 0 }), update: (m, msg) => pages.update(m, msg as never), view: pages.view, run: async () => {}, failed: () => undefined as never })
     const { agent, person } = story(shell({ bell }))
@@ -209,12 +196,12 @@ describe("opening a drawer", () => {
     agent.told()
     agent.noticed()
 
-    const notices = person.sees("/activity/notices")!
-    const mine = freshIn(entriesIn((agent.sees("/activity")!.entries as Row[]) ?? [], "/bell"), notices.fresh as number[])
+    const highlights = person.sees("/activity/highlights")!
+    const mine = unopenedOf(entriesIn((highlights.entries as Row[]) ?? [], "/bell"), highlights.unopened as number[])
 
-    expect(mine).toHaveLength(1)
-    for (const n of mine) expect(await person.call("/activity/notices", "looked", { n })).toMatchObject({ outcome: "written" })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 0 })
+    expect(mine).toEqual([2])
+    expect(await person.call("/activity/highlights", "opened", { n: 2 })).toMatchObject({ outcome: "written" })
+    expect(person.sees("/activity/highlights")).toMatchObject({ unopened: [] })
     expect(agent.told()).toEqual([])
     expect(agent.noticed()).toEqual([])
     expect(agent.sees("/activity")).toMatchObject({ kept: 2 })

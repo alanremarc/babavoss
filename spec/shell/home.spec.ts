@@ -31,7 +31,7 @@ describe("home", () => {
     const icons = iconsOf(
       [{ name: "queue" }, { name: "lab" }, { name: "notes" }],
       [
-        { at: "/tabs/4", surface: "lab", mark: "agent" as const },
+        { at: "/tabs/4", surface: "lab", mark: "highlight" as const },
         { at: "/queue", surface: "queue" },
         { at: "/lab", surface: "lab", mark: "broken" as const },
       ]
@@ -56,7 +56,7 @@ describe("home", () => {
       title: "baba",
       tabs: [
         { at: "/tabs/2", label: "Counter 2" },
-        { at: "/counter", label: "Counter", mark: "person" },
+        { at: "/counter", label: "Counter", mark: "highlight" },
       ],
       start: () => {},
       navigate: () => {},
@@ -65,8 +65,8 @@ describe("home", () => {
     expect(labels(items)).toEqual([
       "Open a counter tab",
       "Open the settings tab, or show the one open",
-      "Close tab 1, Counter; its state is dropped",
-      "Close tab 2, Counter; its state is dropped",
+      "Close tab 1, Counter; its state and log are kept read only in the archive of closed tabs, /activity/closed",
+      "Close tab 2, Counter; its state and log are kept read only in the archive of closed tabs, /activity/closed",
       "—",
       { Go: ["Counter 2", "Counter •"] },
     ])

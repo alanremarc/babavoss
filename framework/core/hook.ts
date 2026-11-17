@@ -10,13 +10,14 @@
 // a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
 // from stopping. Nothing here knows a harness: its adapter reads the hook's input as the framework's moment, and prints what
 // is told as the harness takes it (harness/).
-import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, save, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
 import { HARNESS_HEADER, type TurnEvent } from "./runtime/turn.ts"
+import { ENDED } from "./state/session-dir.ts"
 
 type Endpoint = { port: number; token: string; dir: string }
 
@@ -100,6 +101,11 @@ export async function hookContext(input: HookEvent, baba: string, harness?: stri
   const roots = () => Object.entries(load<Record<string, OpenRoot>>(registryFile(session)) ?? {})
   const lines: string[] = []
   const turn = turnOf(input)
+  // The session's end is left in its directory, so the archive's sweep knows it is over; anything heard after takes it back.
+  const ended = join(dirname(registryFile(session)), ENDED)
+
+  if (turn !== "gone") rmSync(ended, { force: true })
+  else if (existsSync(dirname(ended))) writeFileSync(ended, "", { mode: 0o600 })
   // Whose move it is, told before what changed is read, so the page counts nothing as waiting once the turn has it.
   const tell = async () => {
     if (turn) await Promise.all(roots().map(([, root]) => tellTurn(root, session, turn, harness).catch(() => {})))

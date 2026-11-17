@@ -123,8 +123,8 @@ export const GROUPS = [
       {
         title: "Drawer",
         entries: [
-          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`, L("menu.tsx")], states: ["a tab's", "home's", "home's, hooks not heard", "broken", "menu", "search", "pinned"] },
-          { id: "entries", title: "Entries", files: [`${SHELL}/thread.ts`, `${SHELL}/drawer.tsx`], states: ["notice", "calls", "tab entry", "on home"] },
+          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`, L("menu.tsx")], states: ["a tab's", "home's", "home's, hooks not heard", "broken", "menu", "search"] },
+          { id: "entries", title: "Entries", files: [`${SHELL}/thread.ts`, `${SHELL}/drawer.tsx`], states: ["notice", "highlight", "calls", "tab entry", "on home"] },
           { id: "inputs", title: "Input modal", files: [`${SHELL}/inputs.tsx`], states: ["form", "refused"] },
         ],
       },

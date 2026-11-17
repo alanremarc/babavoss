@@ -25,6 +25,7 @@ describe("the settings", () => {
       preferences: { motion: "system", scale: 1, side: "right" },
       shortcuts: { at: "/shortcuts", drawer: "mod+p", next: "mod+k", previous: "mod+j" },
       logo: { animate: true },
+      archive: { at: "/archive", days: 30, megabytes: 200 },
       mode: expect.anything(),
       theme: expect.anything(),
       dynamic: expect.anything(),
@@ -71,6 +72,7 @@ describe("the settings", () => {
         preferences: DEFAULTS.preferences,
         keys: {},
         logo: { animate: false },
+        archive: DEFAULTS.archive,
       },
     })
     expect(agent.noticed()).toEqual([])
@@ -191,7 +193,7 @@ describe("the settings", () => {
 
     await agent.call("/", "animate", { on: false })
     await world.fail(writing, "EACCES")
-    expect(agent.noticed()).toEqual(["The settings were not saved: EACCES"])
+    expect(agent.noticed()).toEqual(["highlight: The settings were not saved: EACCES"])
     expect(agent.sees()).toMatchObject({ unsaved: "EACCES" })
   })
 
@@ -250,5 +252,52 @@ describe("the shell's settings", () => {
     const { agent } = story(shell({ settings: settings(() => "theirs") }, "/project/.baba", {}, { settings: settings(() => "unused") }))
 
     expect((agent.sees()!.surfaces as unknown[]).length).toBe(1)
+  })
+})
+
+describe("the archive of closed tabs in the settings", () => {
+  const measured = { session: { tabs: 2, sessions: 0, bytes: 12_000 }, project: { tabs: 5, sessions: 1, bytes: 3_400_000, running: 1 } }
+
+  it("says at /archive its window, the person's in every project, what each clear would free, and the project it acts on", async () => {
+    const { agent, world } = story(settings(() => "unused", () => "/work/app/.babavoss/sessions/S"))
+
+    expect(world.commands()).toContainEqual({ kind: "measure" })
+    await world.settle((c: Command) => c.kind === "measure", { kind: "measured", measure: measured })
+    expect(agent.sees("/archive")).toMatchObject({
+      title: "Closed tabs",
+      project: "/work/app",
+      window: { days: 30, megabytes: 200 },
+      session: { tabs: 2, size: "12.0 KB" },
+      wholeProject: { tabs: 5, sessions: 1, size: "3.4 MB", running: "1 other session runs now, and is left as it is" },
+    })
+    expect(agent.offered("/archive")).toEqual(["keep", "measure", "clear", "clear"])
+
+    const view = agent.sees("/archive") as Record<string, { description: string }>
+
+    expect(view.clearSession!.description).toBe("clear this session's 2 closed tabs, 12.0 KB")
+    expect(view.clearProject!.description).toBe("clear the project's, /work/app, 5 closed tabs and 1 session over, 3.4 MB")
+  })
+
+  it("clears when called, offering no second clear meanwhile, and says what it freed", async () => {
+    const { agent, world } = story(settings(() => "unused", () => "/work/app/.babavoss/sessions/S"))
+
+    await world.settle((c: Command) => c.kind === "measure", { kind: "measured", measure: measured })
+    expect(await agent.call("/archive", "clear", { scope: "session" })).toMatchObject({ outcome: "written" })
+    expect(world.commands().at(-1)).toEqual({ kind: "clear", scope: "session", window: { days: 30, megabytes: 200 } })
+    expect(agent.sees("/archive")).toMatchObject({ clearing: "session" })
+    expect(agent.offered("/archive")).toEqual(["keep", "measure"])
+    await world.settle((c: Command) => c.kind === "clear", { kind: "cleared", scope: "session", freed: { tabs: 2, sessions: 0, bytes: 12_000 } })
+    expect(agent.noticed()).toEqual(["Cleared 2 closed tabs, 12.0 KB, from this session's archive"])
+    expect(world.commands().at(-1)).toEqual({ kind: "measure" })
+  })
+
+  it("keeps the window the person sets, within its bounds, written to their file", async () => {
+    const { agent, world } = story(settings(() => "unused", () => undefined))
+
+    expect(await agent.call("/archive", "keep", { days: 0, megabytes: 200 })).toEqual({ outcome: "refused", reason: "days is a whole number from 1 to 3650, not 0" })
+    expect(await agent.call("/archive", "keep", { days: 7, megabytes: 50 })).toMatchObject({ outcome: "written" })
+    expect(world.commands().filter(writing).at(-1)).toMatchObject({ settings: { archive: { days: 7, megabytes: 50 } } })
+    expect(agent.sees("/archive")).toMatchObject({ project: "none: this tab runs in no session", window: { days: 7, megabytes: 50 } })
+    expect(agent.offered("/archive")).toEqual(["keep"])
   })
 })

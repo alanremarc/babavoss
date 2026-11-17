@@ -2,11 +2,11 @@
 // says (rail.ts). Its menu floats at its head as the island (island.tsx), and its activity fills it as a thread
 // (thread.ts): newest at the foot, where it opens and stays as entries arrive unless the person scrolled up, its head kept
 // clear so the oldest entry can be scrolled out from under the island, earlier entries read as the person scrolls up. A
-// notice is a message bubble under its author and time, the person's at the right, tinted, what was done under it; calls
-// in a row by one author, or events by one hearer of the world, are one small centred line that opens to them; a refusal
-// and a tab entry are each one small centred line. What the tab needs, or that it is
-// broken, is pinned at the foot with its one action; on home, what of the person's waits for the agent's next turn, and
-// that the session's hooks are not heard. The notices that were new as it opened keep a dot while it stays. Escape, a
+// notice is a message bubble under its author and time, the person's at the right, tinted, what was done under it; a
+// highlight stands out, ringed and named; calls in a row by one author, or events by one hearer of the world, are one small
+// centred line that opens to them; a refusal and a tab entry are each one small centred line. That the tab is broken is
+// pinned at the foot with Reload; on home, what of the person's waits for the agent's next turn. The highlights the person
+// had not opened as it opened keep a dot while it stays. Escape, a
 // click outside, or the gesture that opened it closes it; the shell gives focus back to the tab. It opens with the cursor
 // in its search.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
@@ -35,19 +35,18 @@ export type DrawerProps = {
   rows: Row[]
   loaded: boolean
   more?: () => void
-  /** The notices new as the drawer opened, which keep a dot while it stays. */
+  /** The highlights not opened before the drawer opened, which keep a dot while it stays. */
   stay: ReadonlySet<number>
   pinned?: Pinned
   /** On home, the person's calls that wait for the agent's next turn, newest first. */
   waiting?: Row[]
-  /** Goes where an entry happened, or to a place in the tab, as Go there does. */
+  /** Goes where an entry happened. */
   go: (row: Row) => void
-  goThere: (at: string) => void
   reload: () => void
   close: () => void
 }
 
-export function Drawer({ label, side, home = false, menu, rows, loaded, more, stay, pinned, waiting = [], go, goThere, reload, close }: DrawerProps) {
+export function Drawer({ label, side, home = false, menu, rows, loaded, more, stay, pinned, waiting = [], go, reload, close }: DrawerProps) {
   const thread = useRef<HTMLDivElement>(null)
   const top = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLInputElement | null>(null)
@@ -140,7 +139,7 @@ export function Drawer({ label, side, home = false, menu, rows, loaded, more, st
         {(pinned || waiting.length > 0) && (
           <div className="flex shrink-0 flex-col gap-2 px-3 pb-3">
             {waiting.length > 0 && <Waiting rows={waiting} />}
-            {pinned && <Pin pinned={pinned} reload={reload} goThere={goThere} />}
+            {pinned && <Pin pinned={pinned} reload={reload} />}
           </div>
         )}
       </aside>
@@ -192,7 +191,10 @@ export function Line({ item, label, home, fresh, go }: { item: Item; label: stri
   )
 }
 
-/** A notice as a message: its author and time above, its words in a bubble that goes where it happened; the person's at the right, tinted. */
+/**
+ * A notice as a message: its author and time above, its words in a bubble that goes where it happened; the person's at the
+ * right, tinted; a highlight ringed, and named so.
+ */
 export function Notice({ row, author, fresh, go }: { row: Row; author: string; fresh: boolean; go: () => void }) {
   const mine = row.who === "person"
 
@@ -200,6 +202,7 @@ export function Notice({ row, author, fresh, go }: { row: Row; author: string; f
     <div className={cn("flex flex-col gap-0.5", mine ? "items-end" : "items-start")}>
       <span className="flex items-center gap-1.5 px-1 text-meta text-muted-foreground">
         {fresh && <span aria-label="new" className="size-1.5 rounded-full bg-primary" />}
+        {row.highlight && <span className="font-medium text-primary">Highlight</span>}
         <span>{author}</span>
         <Ago when={row.when} />
       </span>
@@ -208,7 +211,8 @@ export function Notice({ row, author, fresh, go }: { row: Row; author: string; f
         title="Go where this happened"
         className={cn(
           "max-w-[85%] cursor-pointer rounded-2xl px-3 py-2 text-left leading-snug wrap-anywhere text-foreground outline-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring/60 dark:hover:brightness-125",
-          mine ? "rounded-br-md bg-primary/15" : "rounded-bl-md bg-foreground/6"
+          mine ? "rounded-br-md bg-primary/15" : "rounded-bl-md bg-foreground/6",
+          row.highlight && "bg-primary/10 ring-1 ring-primary/40"
         )}
         onClick={go}
       >
@@ -223,28 +227,22 @@ export function Notice({ row, author, fresh, go }: { row: Row; author: string; f
   )
 }
 
-/** What is pinned at the foot: why the tab is marked, and its one action. */
-export function Pin({ pinned, reload, goThere }: { pinned: Pinned; reload: () => void; goThere: (at: string) => void }) {
+/** What is pinned at the foot: that the tab is broken, and Reload. */
+export function Pin({ pinned, reload }: { pinned: Pinned; reload: () => void }) {
   const { does } = pinned
 
   return (
-    <div
-      role="status"
-      className={cn(
-        "flex items-start gap-2 rounded-2xl px-3 py-2",
-        pinned.tone === "broken" ? "bg-destructive/8 ring-1 ring-destructive/20" : pinned.tone === "person" ? "bg-primary/10 ring-1 ring-primary/20" : "bg-foreground/5"
-      )}
-    >
-      <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", pinned.tone === "broken" ? "bg-destructive" : pinned.tone === "person" ? "bg-primary" : "bg-muted-foreground/70")} />
+    <div role="status" className="flex items-start gap-2 rounded-2xl bg-destructive/8 px-3 py-2 ring-1 ring-destructive/20">
+      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive" />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={cn(pinned.tone === "broken" && "text-destructive")}>{pinned.text}</span>
+        <span className="text-destructive">{pinned.text}</span>
         {pinned.detail && <span className="text-meta break-words text-muted-foreground">{pinned.detail}</span>}
       </span>
       {does && (
         <button
           type="button"
           className="shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-meta font-medium text-primary outline-none hover:bg-foreground/6 focus-visible:ring-2 focus-visible:ring-ring/60"
-          onClick={() => (does.label === "Reload" ? reload() : goThere(does.at))}
+          onClick={reload}
         >
           {does.label}
         </button>

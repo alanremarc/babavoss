@@ -17,10 +17,12 @@ export interface Call {
 }
 
 /**
- * A notice: one short line saying what just happened, told once to each side and kept nowhere, neither in a view nor in the
- * model. `at` is the path it is about, where there is one; `from` names who says it, where one surface speaks for another.
+ * A notice: one short line saying what just happened, kept in its entry of the shell's log and told once to the agent, in no
+ * view and not in the model. `at` is the path it is about, where there is one; `from` names who says it, where one surface
+ * speaks for another. `highlight` marks it important to the person: a highlight, the one class of important entry, which
+ * marks its tab until they open its drawer.
  */
-export type Notice = string | { text: string; at?: string; from?: string }
+export type Notice = string | { text: string; at?: string; from?: string; highlight?: true }
 
 /**
  * What an update returns: the next model with the commands to start and the notices to tell, or a refusal that changes

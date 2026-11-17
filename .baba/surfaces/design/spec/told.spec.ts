@@ -25,7 +25,7 @@ const START = [
   "## The shell",
   "",
   "- An answer shows what is true now. Do not look for it in a surface's code, and never change either to get something done.",
-  "- `show` at `/` brings a path to the front of the person's page. Point them to a result, not to each step.",
+  "- `highlight` at `/` marks a place for the person. Mark a result or a decision, not each step.",
   "",
   "The shell of .baba/ was started for this session, and answered:",
   "page: http://127.0.0.1:4000",
@@ -56,9 +56,9 @@ test("what changed: a lead, sections, a heading per tab, additions, removals and
     "In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:",
     "notices:",
     "tasks /tabs/1/tasks/3: Task 3, Bump the version, is approved (by the person)",
-    "the person acted on /activity/notices",
+    "highlight build /tabs/2: The build failed (by the surface)",
     "changed by the person:",
-    "- need: the person, at /tabs/1 tasks, to review task 3",
+    "- note",
     '/tabs/1 tasks "Tasks"',
     '/tabs/1/tasks/3: status "review" → "done"',
     "runs: 0 → 4",
@@ -82,6 +82,12 @@ test("what changed: a lead, sections, a heading per tab, additions, removals and
     ["who", " (by the person)"],
   ])
   expect(lines[2]!.spans.find((s) => s.kind === "who")!.who).toBe("person")
+  // A highlight is marked by its first word, before who says it and where.
+  expect(kinds(lines[3]!.spans).slice(0, 3)).toEqual([
+    ["keyword", "highlight"],
+    ["surface", "build"],
+    ["path", "/tabs/2"],
+  ])
   expect(kinds(lines[7]!.spans)).toEqual([
     ["path", "/tabs/1/tasks/3"],
     ["plain", ": "],

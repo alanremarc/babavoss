@@ -275,7 +275,7 @@ function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?:
         <div className="flex h-6 shrink-0 items-center gap-0.5 overflow-hidden border-b px-1">
           <span className={`flex h-5 shrink-0 items-center rounded-sm px-1.5 text-meta ${front ? "text-muted-foreground/70" : "bg-muted text-foreground"}`}>Home</span>
           {tabs.map((t) => {
-            const view = (t.view ?? {}) as { title?: string; attention?: { who?: string } }
+            const view = (t.view ?? {}) as { title?: string }
             const isNew = !earlier.some((e) => e.at === t.at)
 
             return (
@@ -286,7 +286,6 @@ function PageScreen({ step, before, peek }: { step?: Step; before?: Step; peek?:
               >
                 {PAGES[t.surface]?.icon}
                 {view.title ?? t.surface}
-                {view.attention && <span className={`size-1.5 rounded-full ${view.attention.who === "person" ? "bg-warning" : "bg-primary"}`} aria-label={`needs the ${view.attention.who}`} />}
               </span>
             )
           })}

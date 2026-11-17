@@ -1,9 +1,9 @@
-// The mark's specimens: home's tab in each standing, and with its dot while the session's hooks are not heard, at the
+// The mark's specimens: home's tab in each standing, and with its dot, the highlight that the session's hooks are not heard, at the
 // rail's size and enlarged so its motion can be judged, side by side and live; and its moves, one at a time or one after
 // another as while the agent works.
 import { useState, type ComponentType } from "react"
 import { RailEntry } from "../../../../framework/shell/ui/rail.tsx"
-import { homeMarkOf } from "../../../../framework/shell/ui/rail.ts"
+import { markOf } from "../../../../framework/shell/ui/rail.ts"
 import { unheardLine } from "../../../../framework/shell/ui/thread.ts"
 import type { Unheard } from "../../../../framework/shell/ui/client.ts"
 import { Logo } from "../../../../framework/shell/ui/mark.tsx"
@@ -21,7 +21,7 @@ const STANDINGS: { label: string; standing: Standing; animate?: false; lost?: st
   { label: "working, animation off", standing: standingOf({ agent: "working", waiting: 0 }), animate: false },
   { label: "waiting: 2 changes", standing: standingOf({ agent: "idle", waiting: 2 }) },
   { label: "lost: reconnecting", standing: standingOf(undefined), lost: "Reconnecting" },
-  { label: "hooks not heard: its dot", standing: standingOf({ agent: "idle", waiting: 0 }), unheard: { ever: true, since: 0 } },
+  { label: "hooks not heard: its highlight's dot", standing: standingOf({ agent: "idle", waiting: 0 }), unheard: { ever: true, since: 0 } },
 ]
 /** How much bigger the enlarged mark is than the strip's. */
 const LARGE = 5
@@ -30,7 +30,7 @@ const LARGE = 5
 type Shown = { standing: Standing; animate?: boolean; lost?: string; unheard?: Unheard; zoom?: number }
 
 function Tab({ standing, animate = true, lost, unheard, zoom = 1 }: Shown) {
-  const mark = homeMarkOf(unheard)
+  const mark = markOf({ highlights: unheard ? [unheardLine(unheard)] : [] })
 
   return (
     <div className="grid place-items-center rounded-md bg-sidebar p-1" style={{ zoom }}>

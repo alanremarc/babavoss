@@ -9,7 +9,7 @@ describe("pointing", () => {
     expect(placeOf("/queue/issues/14")).toEqual({ key: "/queue", route: "/issues/14" })
     expect(placeOf("/settings")).toEqual({ key: "/settings", route: "/" })
     expect(placeOf("/")).toEqual({ key: "home", route: "/" })
-    expect(placeOf("/activity/notices")).toEqual({ key: "home", route: "/" })
+    expect(placeOf("/activity/highlights")).toEqual({ key: "home", route: "/" })
     expect(placeOf("/Elsewhere")).toEqual({ key: "home", route: "/" })
   })
 

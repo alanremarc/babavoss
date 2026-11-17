@@ -10,6 +10,7 @@ describe("the settings a file keeps", () => {
       preferences: { motion: "system", scale: 1, side: "right" },
       keys: {},
       logo: { animate: true },
+      archive: { days: 30, megabytes: 200 },
     })
   })
 
@@ -20,12 +21,14 @@ describe("the settings a file keeps", () => {
         preferences: { motion: "reduced", scale: 3 },
         keys: { drawer: "Cmd+H", next: "banana", gone: "mod+x" },
         logo: { animate: false },
+        archive: { days: 7, megabytes: 0.5 },
       })
     ).toEqual({
       appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: "clay" }, rail: { side: "top", from: "bottom", drawer: "left" } },
       preferences: { motion: "reduced", scale: 1, side: "right" },
       keys: { drawer: "mod+h" },
       logo: { animate: false },
+      archive: { days: 7, megabytes: 200 },
     })
   })
 
@@ -79,6 +82,7 @@ describe("the settings a file keeps", () => {
       preferences: { motion: "reduced", scale: 1.5, side: "left" },
       keys: { drawer: "mod+shift+d", next: "alt+f2" },
       logo: { animate: false },
+      archive: { days: 90, megabytes: 1000 },
     }
 
     for (const settings of [DEFAULTS, changed]) expect(settingsFromView(viewOf(settings))).toEqual(settings)

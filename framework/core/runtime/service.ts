@@ -70,16 +70,20 @@ export const deniedState = (error: unknown, dir: string): unknown =>
 const failedWith = (error: unknown, code: string) =>
   error instanceof TypeError && [error, error.cause].some((e) => (e as { code?: string } | undefined)?.code === code)
 
-/** BSD flock locks follow the open descriptor across the short-lived locking utility and release on process death. */
-export function ownService(dir: string) {
-  ownState(dir, true)
-
-  const file = join(dir, "service.lock")
+/**
+ * Takes the lock of `file`, made where it is not, without waiting: the open descriptor it returns holds it until closed, or
+ * until the process dies. Undefined where another holds it. BSD flock locks follow the open descriptor across the
+ * short-lived locking utility and release on process death.
+ */
+export function holdLock(file: string): number | undefined {
   const fd = openSync(file, "a+", 0o600)
   const actual = fstatSync(fd)
   const expected = statSync(file)
 
-  if (actual.dev !== expected.dev || actual.ino !== expected.ino) throw new Error("The service lock changed under us")
+  if (actual.dev !== expected.dev || actual.ino !== expected.ino) {
+    closeSync(fd)
+    throw new Error("The service lock changed under us")
+  }
 
   const bsd = ["darwin", "freebsd", "openbsd"].includes(process.platform)
   const result = spawnSync(bsd ? "/usr/bin/lockf" : "flock", bsd ? ["-s", "-t", "0", "3"] : ["-n", "3"], {
@@ -95,6 +99,17 @@ export function ownService(dir: string) {
       `its runtime needs a file lock and ${bsd ? "/usr/bin/lockf" : "flock"} cannot take one: ${(result.error?.message ?? result.stderr).trim()}`
     )
   }
+
+  return fd
+}
+
+/** Owns the session's state directory: its lock, held while this process lives; undefined where another process holds it. */
+export function ownService(dir: string) {
+  ownState(dir, true)
+
+  const fd = holdLock(join(dir, "service.lock"))
+
+  if (fd === undefined) return undefined
 
   const identity: Identity = { dir, token: randomUUID(), pid: process.pid, instance: randomUUID().slice(0, 8) }
   let released = false

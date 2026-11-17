@@ -116,7 +116,7 @@ describe("the shell surface", () => {
       expect(r.read("/tabs/1")).toBeUndefined()
       expect(await r.call("/tabs/1", "bump", { by: 1 }, "agent")).toEqual({
         outcome: "refused",
-        reason: "/tabs/1, the counter tab 1, was closed by the agent: open one with open surface=counter at /, and it is at /counter",
+        reason: "/tabs/1, the counter tab 1, was closed by the agent, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter",
       })
     } finally {
       await r.stop()
@@ -358,28 +358,37 @@ describe("the shell surface", () => {
     expect(await agent.call("/", "open", { surface: "counter" })).toMatchObject({ outcome: "written", view: { tabs: [{ at: "/counter" }] } })
   })
 
-  it("lets the agent point the person to a place in a tab: shown at / to both, and refused with why where there is none", async () => {
+  it("lets the agent highlight a place in a tab for the person, in its thread, and bring it to the front where asked; refused with why where there is none", async () => {
     const { agent, person, world } = story(shell({ counter }, BABA))
 
-    expect(agent.offered("/")).not.toContain("show")
+    expect(agent.offered("/")).not.toContain("highlight")
     await agent.call("/", "open", { surface: "counter" })
     await world.settle({ kind: "tab", n: 1, event: { kind: "bumped" } })
-    expect(agent.offered("/")).toContain("show")
-    // The person is not offered it: home's menu, drawn from the view at /, has no way to point them at themselves.
-    expect(person.offered("/")).not.toContain("show")
-    expect(await agent.call("/", "show", { at: "/tabs/1/n/" })).toMatchObject({ outcome: "written" })
-    // Pointed by number or by name, it is said by the tab's address.
+    expect(agent.offered("/")).toContain("highlight")
+    // The person is not offered it: home's menu, drawn from the view at /, has no way to highlight for themselves.
+    expect(person.offered("/")).not.toContain("highlight")
+    person.noticed()
+    expect(await agent.call("/", "highlight", { at: "/tabs/1/n/", why: "n is ready", front: false })).toMatchObject({ outcome: "written" })
+    expect(person.sees("/")).not.toHaveProperty("pointed")
+    expect(person.noticed()).toEqual(["highlight: n is ready"])
+    expect((person.sees("/activity/highlights")!.entries as { at: string; did: string; said: string[] }[])[0]).toMatchObject({ at: "/counter/n", said: ["n is ready"] })
+    // Brought to the front, by number or by name, it is said by the tab's address.
+    await agent.call("/", "highlight", { at: "/tabs/1/n", why: "look here", front: true })
     expect(person.sees("/")!.pointed).toEqual({ at: "/counter/n", n: 1 })
     expect(agent.sees("/")!.pointed).toEqual({ at: "/counter/n", n: 1 })
-    await agent.call("/", "show", { at: "/counter/n" })
+    await agent.call("/", "highlight", { at: "/counter/n", why: "again", front: true })
     expect(person.sees("/")!.pointed).toEqual({ at: "/counter/n", n: 2 })
-    expect(await agent.call("/", "show", { at: "/counter/nope" })).toEqual({ outcome: "refused", reason: "nothing at /counter/nope: the counter surface has no such path" })
-    expect(await agent.call("/", "show", { at: "/tabs/7" })).toEqual({ outcome: "refused", reason: "nothing at /tabs/7" })
-    expect(await agent.call("/", "show", { at: "/settings" })).toEqual({
+    expect(await agent.call("/", "highlight", { at: "/counter/n", why: " ", front: true })).toEqual({ outcome: "refused", reason: "a highlight says why, in one line" })
+    expect(await agent.call("/", "highlight", { at: "/counter/nope", why: "x", front: false })).toEqual({
+      outcome: "refused",
+      reason: "nothing at /counter/nope: the counter surface has no such path",
+    })
+    expect(await agent.call("/", "highlight", { at: "/tabs/7", why: "x", front: false })).toEqual({ outcome: "refused", reason: "nothing at /tabs/7" })
+    expect(await agent.call("/", "highlight", { at: "/settings", why: "x", front: false })).toEqual({
       outcome: "refused",
       reason: "no settings tab is open: open one with open surface=settings at /, and it is at /settings",
     })
-    expect(await agent.call("/", "show", { at: "/activity" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("not in a tab") })
+    expect(await agent.call("/", "highlight", { at: "/activity", why: "x", front: false })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("not in a tab") })
     expect(person.sees("/")!.pointed).toEqual({ at: "/counter/n", n: 2 })
   })
 
@@ -389,61 +398,21 @@ describe("the shell surface", () => {
     expect(shell({ counter }, BABA).restore!(kept).pointed).toBeUndefined()
   })
 
-  it("gathers who each tab needs first at /, as needs, and no longer among the tab's facts", async () => {
-    type Calling = { calling?: "person" | "agent" | "both" | "bad" }
-    const call = action({
-      name: "call",
-      description: "call for someone",
-      subject: {},
-      inputs: { who: "string" },
-      update: (_m: Calling, { who }): Update<Calling, never> => ({ model: who ? { calling: who as Calling["calling"] } : {} }),
-    })
-    const needing = view([call], {
-      "/": (m) => ({
-        title: "Asker",
-        ...(m.calling === "person" && { attention: { who: "person", why: "to decide" } }),
-        ...(m.calling === "both" && { attention: [{ who: "person", why: "to decide" }, { who: "agent", why: "to draft" }] }),
-        ...(m.calling === "bad" && { attention: "someone" }),
-        call: call.bind({}),
-      }),
-    })
-    const asker = surface<Calling, { kind: "none" }, never>({
+  it("gathers nothing at / of who is needed: a fact a surface says of it is one of its tab's facts", async () => {
+    const asking = view([], { "/": () => ({ title: "Asker", attention: { who: "person", why: "to decide" } }) })
+    const asker = surface<object, { kind: "none" }, never>({
       description: "asks",
       init: () => ({}),
-      update: (m, msg) => (msg.kind === "call" ? needing.update(m, msg) : { model: m }),
-      view: needing.view,
+      update: (m) => ({ model: m }),
+      view: asking.view,
       run: async () => {},
       failed: () => ({ kind: "none" }),
     })
-    const { agent } = story(shell({ asker, counter }, BABA))
+    const { agent } = story(shell({ asker }, BABA))
 
-    await agent.call("/", "open", { surface: "counter" })
     await agent.call("/", "open", { surface: "asker" })
-    expect(agent.sees()).not.toHaveProperty("needs")
-    await agent.call("/tabs/2", "call", { who: "person" })
-    expect(Object.keys(agent.sees()!)).toEqual(["title", "needs", "surfaces", "tabs", "show", "activity"])
-    expect(agent.sees()).toMatchObject({ needs: [{ at: "/asker", surface: "asker", who: "person", why: "to decide" }] })
-    expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({})
-    // The tab's own path still says it.
-    expect(agent.sees("/tabs/2")).toMatchObject({ attention: { who: "person", why: "to decide" } })
-    await agent.call("/tabs/2", "call", { who: "both" })
-    expect(agent.sees()!.needs).toEqual([
-      { at: "/asker", surface: "asker", who: "person", why: "to decide" },
-      { at: "/asker", surface: "asker", who: "agent", why: "to draft" },
-    ])
-    // What is not attention is not gathered, and stays a fact of its tab.
-    await agent.call("/tabs/2", "call", { who: "bad" })
-    expect(agent.sees()).not.toHaveProperty("needs")
-    expect((agent.sees()!.tabs as { facts: object }[])[1]!.facts).toEqual({ attention: "someone" })
-    await agent.call("/tabs/2", "call", { who: "" })
-    agent.told()
-    await agent.call("/tabs/2", "call", { who: "person" })
-    // A need is told as an event on it: who is needed, where and why, one line each.
-    expect(agent.told()).toEqual(["+ need: the person, at /asker, to decide"])
-    await agent.call("/tabs/2", "call", { who: "both" })
-    expect(agent.told()).toEqual(["+ need: you, at /asker, to draft"])
-    await agent.call("/tabs/2", "call", { who: "" })
-    expect(agent.told()).toEqual(["- need: the person, at /asker, to decide", "- need: you, at /asker, to draft"])
+    expect(Object.keys(agent.sees()!)).toEqual(["title", "surfaces", "tabs", "highlight", "activity"])
+    expect((agent.sees()!.tabs as { facts: object }[])[0]!.facts).toEqual({ attention: { who: "person", why: "to decide" } })
   })
 
   it("reads a tab the same for the agent and the person: its surface is never told who reads, and either may call what it offers", async () => {
@@ -545,7 +514,7 @@ describe("the shell surface", () => {
 })
 
 describe("a tab's address", () => {
-  it("is its surface's name: a read, a call and show at /NAME go to the tab, and / says it first, with the tab's number", async () => {
+  it("is its surface's name: a read, a call and a highlight at /NAME go to the tab, and / says it first, with the tab's number", async () => {
     const { agent, person } = story(shell({ counter }, BABA))
 
     await agent.call("/", "open", { surface: "counter" })
@@ -556,7 +525,7 @@ describe("a tab's address", () => {
     expect(await agent.call("/counter", "bump", { by: 2 })).toMatchObject({ outcome: "written", view: { n: 2 } })
     // The number still reaches it, and what it names is said by the address.
     expect(agent.sees("/tabs/1")).toMatchObject({ n: 2, detail: { at: "/counter/n" } })
-    expect(await agent.call("/", "show", { at: "/counter/n" })).toMatchObject({ outcome: "written" })
+    expect(await agent.call("/", "highlight", { at: "/counter/n", why: "n moved", front: true })).toMatchObject({ outcome: "written" })
     expect(person.sees("/")!.pointed).toEqual({ at: "/counter/n", n: 1 })
     agent.told()
     await person.call("/counter", "bump", { by: 1 })
@@ -571,19 +540,19 @@ describe("a tab's address", () => {
     agent.told()
     await person.call("/", "close", { n: 1 })
     // Closed: the name and the number say what happened, and how to open it again, in place of nothing.
-    const closed = "/tabs/1, the counter tab 1, was closed by the person: open one with open surface=counter at /, and it is at /counter"
+    const closed = "/tabs/1, the counter tab 1, was closed by the person, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter"
 
     expect(await agent.call("/tabs/1", "bump", { by: 1 })).toEqual({ outcome: "refused", reason: closed })
     expect(await agent.call("/counter", "bump", { by: 1 })).toEqual({
       outcome: "refused",
-      reason: "/counter, the counter tab 1, was closed by the person: open one with open surface=counter at /, and it is at /counter",
+      reason: "/counter, the counter tab 1, was closed by the person, its log kept at /activity/closed/1: open one with open surface=counter at /, and it is at /counter",
     })
     await person.call("/", "open", { surface: "counter" })
     // Opened again, it is at the name, under another number: what was written down with the name works on.
     expect(await agent.call("/counter", "bump", { by: 1 })).toMatchObject({ outcome: "written", view: { n: 1 } })
     expect(await agent.call("/tabs/1", "bump", { by: 1 })).toEqual({
       outcome: "refused",
-      reason: "/tabs/1, the counter tab 1, was closed by the person; counter is now at /counter (tab 2)",
+      reason: "/tabs/1, the counter tab 1, was closed by the person, its log kept at /activity/closed/1; counter is now at /counter (tab 2)",
     })
     // With the person's next message, the tab closed and the tab opened, each once by its number.
     expect(agent.told()[0]).toBe('- /counter "Counter" (tab 1) closed')
@@ -606,7 +575,7 @@ describe("a tab's address", () => {
     await person.call("/", "close", { n: 1 })
     expect(await agent.call("/counter", "bump", { by: 1 })).toEqual({
       outcome: "refused",
-      reason: "/counter, the counter tab 1, was closed by the person; the counter tab open is /tabs/2, and open surface=counter at / opens one at /counter",
+      reason: "/counter, the counter tab 1, was closed by the person, its log kept at /activity/closed/1; the counter tab open is /tabs/2, and open surface=counter at / opens one at /counter",
     })
     expect(agent.sees("/tabs/2")).toMatchObject({ n: 6 })
     await agent.call("/", "open", { surface: "counter" })
@@ -687,7 +656,7 @@ describe("a surface whose code does not load", () => {
       ])
       expect(await broken.call("/tabs/1", "bump", { by: 1 }, "agent")).toMatchObject({ outcome: "refused", reason: expect.stringContaining("does not load") })
       // A commit while it is broken saves the tab as it was kept.
-      expect(await broken.call("/activity/notices", "seen", { n: 0 }, "person")).toMatchObject({ outcome: "written" })
+      expect(await broken.call("/activity/highlights", "opened", { n: 0 }, "person")).toMatchObject({ outcome: "written" })
     } finally {
       await broken.stop()
     }
