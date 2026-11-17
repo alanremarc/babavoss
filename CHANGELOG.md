@@ -2,6 +2,22 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.76.0
+
+**Baba's words are rewritten: the agent holds the state and carries the intent.** They say that the present is given whole once and every change after it as a change, so the agent does not read again to check; that a surface says what is true and what can be done, never what to do; that values from a surface are read by the program that uses them; that what is printed is the whole of the syntax; that a refusal is news about the state.
+
+- **Breaking: no more reminder.** `skill/reminder.md` is removed. After a compaction, a resume or a fork the agent is given the same words and the whole present as at a start. A project that copied the reminder anywhere removes the copy.
+- **Each open tab's actions are printed with their commands at `/`,** and the actions every row of a list offers at its own path once, as a pattern, `/NAME/items/N ACTION n=N`: acting on a row needs no read. For a surface's action to be in the pattern, give each row its own path under `at`, and offer the action there with the same inputs and the row's value as its argument. The shell's `/` view carries `actions` as `[{ at, offers }]`, where it was a list of names.
+- **Opening a tab answers with the tab whole.** A short change in a tab the agent is not working in is told in full, where it was "read it". A program's `read(path)` of a fact's path returns that fact, as the command does.
+- **`baba new` copies the template's own files only,** not what a file manager left beside them.
+
+**Adapt each surface to mechanics only.** Its `how`, descriptions and facts say what things are, what actions do and what must hold for them: never when to act, how to run the work, or who decides. A standing behaviour a project wants is the person's to write in the project's own instructions to its agent; babavoss writes it nowhere.
+
+- Before: `how: "Start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged"`
+- After: `how: "Each of the 5 lanes holds one issue at a time. Done means the issue's work is merged into main. A note is one line on where an issue stands."`
+
+Measured, on 23 tasks against the release before it: every run passed where 5 of 115 had failed; a single action is one call and no read, where it was a read of a whole view and a call; what an agent is told after a session's start is down by more than half. A `how` that dictated made agents take actions nobody asked for, whatever the words said.
+
 ## 0.75.0
 
 **Breaking: handles are printed once a view, descriptions follow one convention, and inputs declare what they mean.**

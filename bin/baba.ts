@@ -2,7 +2,7 @@
 // baba, the package's command: makes a project's .baba/ directory, makes a surface in it from the template, and provisions:
 // each harness made aware by its adapter, and the root. It works on the .baba/ it is run in, or the nearest one above.
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, basename } from "node:path"
 import { fileURLToPath } from "node:url"
 import { loadConfig, sectionOf } from "../framework/core/config.ts"
 import { ADAPTERS } from "../framework/core/harness/index.ts"
@@ -74,7 +74,8 @@ async function create(args: string[]) {
   const dir = join(baba, SURFACES_DIR, name)
 
   if (existsSync(dir)) throw new Refusal(`${dir} is there already: name the surface otherwise`)
-  cpSync(TEMPLATE, dir, { recursive: true })
+  // Only the template's own files: what a file manager leaves beside them, as .DS_Store, is no part of a surface.
+  cpSync(TEMPLATE, dir, { recursive: true, filter: (from) => !basename(from).startsWith(".") })
   console.log(`made ${dir}`)
   report(await provision(baba))
 }

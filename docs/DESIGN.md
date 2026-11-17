@@ -86,7 +86,7 @@ conventions  How the person wants pages to be, from their settings and the machi
            where the rail stands, the mode. Handed to every page, which follows them by its own code; expected, never enforced.
 border     What a project may import: the framework's entries, core/index.ts for a surface, kit/index.ts and
            shell/ui/index.tsx for a page; nothing else resolves.
-present    The shell at /: every open tab's facts.
+present    The shell at /: every open tab's facts and actions, each with its command, a list's rows' as one pattern.
 ```
 
 What the shell offers, it offers twice: on the page for the person, in the present for the agent.
@@ -111,7 +111,7 @@ health          what is broken, and why; a page that lost its runtime says so an
 
 ```text
    session starts ── hook ──► baba's words + the whole present ──────────► agent
-   resumed, compacted ── hook ──► the words in short + the whole present ─► agent
+   resumed, compacted ── hook ──► the same words + the whole present ─────► agent
 
    agent ── baba ──► action ──► surface changes ──► page follows ────────► person
 
@@ -163,7 +163,8 @@ framework  One version, named in .baba/. The agent is told of a later one, takes
 
 ```text
 shared    both act on the surface, at any time. A change by the person is a move to take up, never to undo
-learned   a surface is all an agent learns of it: its description to choose it, its views to work it
+learned   a surface is all an agent learns of how it works: its description to choose it, its views to work it; never
+          what to do, which the person and their instructions say
 dynamic   a surface made, changed or removed runs once the shell restarts: at once in dev mode, else when the agent
           restarts it, the present saying the code changed until then
 soft      hooks add context and never block; a surface offers both sides the same and locks nothing: what is the
