@@ -209,19 +209,28 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
 
     return out.length ? ["notices:", ...out] : []
   }
-  /** Changes as a boundary tells them: in full where the agent works, and a tab it does not work in as one line, who changed it. */
+  /**
+   * Changes as a boundary tells them: in full where the agent works, and in a tab it does not work in where they take no more
+   * than ASIDE lines, since a line that says to read the tab would cost a whole view; more there, as one line, who changed it.
+   */
   const weighed = (changes: Change[], now: Json | undefined): string[] => {
     const at = working()
     const tabs = new Map(tabsIn(now).map((t) => [t.heading, t.at]))
     const full: Change[] = []
-    const aside = new Map<string, Set<string>>()
+    const elsewhere = new Map<string, Change[]>()
 
     for (const change of changes) {
       const tab = change.tab === undefined ? undefined : tabs.get(change.tab)
 
       if (tab === undefined || at.has(tab)) full.push(change)
-      else aside.set(change.tab!, new Set([...(aside.get(change.tab!) ?? []), ...whose(change)!]))
+      else elsewhere.set(change.tab!, [...(elsewhere.get(change.tab!) ?? []), change])
     }
+
+    const aside = new Map<string, Set<string>>()
+
+    for (const [heading, list] of elsewhere)
+      if (list.reduce((n, c) => n + c.line.split("\n").length, 0) <= ASIDE) full.push(...list)
+      else aside.set(heading, new Set(list.flatMap((c) => [...whose(c)!])))
 
     return [...tell(full, head), ...[...aside].map(([heading, who]) => `${heading}: changed by ${names(who)}; read it`)]
   }
@@ -267,6 +276,9 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     },
   }
 }
+
+/** How many lines of changes in a tab the agent does not work in are told in full; more are told as one line. */
+const ASIDE = 3
 
 /** One tab in two versions of /: a tab is its path and its number, so one closed and another opened at its path are two. */
 const same = (a: { at: string; n?: number }, b: { at: string; n?: number }) => a.at === b.at && a.n === b.n

@@ -415,7 +415,7 @@ it("tells one event in one line: a notice stands for what its call changed, unle
   )
 })
 
-it("weighs by attention: a tab the agent did not read or call in this turn or the last is one line, who changed it; its notices are still told", async () => {
+it("weighs by attention: a tab the agent did not read or call in this turn or the last is told in full where its changes are a few lines, else one line, who changed it; its notices are still told", async () => {
   const { request, turn } = await started()
 
   await request("/?open")
@@ -427,7 +427,7 @@ it("weighs by attention: a tab the agent did not read or call in this turn or th
   await request("/tabs/1", { handle: "note", args: { text: "aside" } }, true)
   await request("/tabs/1", { handle: "bump", args: { by: 2 } }, true)
   await request("/tabs/2", { handle: "add", args: { title: "one" } }, true)
-  // Read in the last turn, the board is told in full; the counter, opened two turns ago, in one line, its notice still told.
+  // Read in the last turn, the board is told in full; the counter, opened two turns ago, in full too, its change one line.
   expect(await request("/_/wait?seconds=0")).toBe(
     [
       "notices:",
@@ -436,10 +436,11 @@ it("weighs by attention: a tab the agent did not read or call in this turn or th
       "changed by the person:",
       '/board "Board" (tab 2)',
       '+ /board/items/1: n 1, title "one", done false',
-      '/counter "Counter" (tab 1): changed by the person; read it',
+      '/counter "Counter" (tab 1)',
+      "n: 0 → 2",
     ].join("\n")
   )
-  // Two turns on, neither is one it works in: each is one line, its notices still told.
+  // Two turns on, neither is one it works in: the counter's one change is told, the board's several are one line; notices still told.
   await turn("started")
   await turn("started")
   await request("/tabs/2/items/1", { handle: "finish", args: { n: 1 } }, true)
@@ -450,7 +451,9 @@ it("weighs by attention: a tab the agent did not read or call in this turn or th
       "notices:",
       "/board/items/1: item 1 is finished (by the person)",
       "the person acted on /counter",
-      '/counter "Counter" (tab 1): changed by the person; read it',
+      "changed by the person:",
+      '/counter "Counter" (tab 1)',
+      "n: 2 → 3",
       '/board "Board" (tab 2): changed by the person; read it',
     ].join("\n")
   )
