@@ -234,7 +234,12 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
     symlinkSync(join(FRAMEWORK, "node_modules"), join(dir, "node_modules"))
   } else symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
 
-  const own = (text: string) => text.replaceAll(dir, PROJECT).trimEnd()
+  // The page's key is the demo session's secret, never recorded: masked at its own length, so what a telling costs stays true.
+  const own = (text: string) =>
+    text
+      .replaceAll(dir, PROJECT)
+      .replace(/([?&]key=)([\w-]+)/g, (_, at: string, key: string) => at + "K".repeat(key.length))
+      .trimEnd()
   /** Time let pass within a step, cut short once the play is stopped. */
   const nap = (ms: number) => sleep(ms, undefined, signal && { signal })
   /** A process of the demo's, killed once the play is stopped, unless it is what tidies up after it. */

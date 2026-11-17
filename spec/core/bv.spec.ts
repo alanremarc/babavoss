@@ -48,8 +48,10 @@ function setup(dev = false) {
   const open = () => run([], entry)
   const endpoint = () =>
     JSON.parse(readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/service.json"), "utf8")) as { pid: number; port: number; token: string; instance: string }
+  /** The session's page key, which the link the agent is given carries. */
+  const key = () => readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/page.key"), "utf8")
 
-  return { entry, root, bin, env, run, open, endpoint }
+  return { entry, root, bin, env, run, open, endpoint, key }
 }
 afterEach(async () => {
   for (const root of roots.splice(0)) {
@@ -319,11 +321,11 @@ describe("changed code", () => {
 it("an open names the page each time, and calls it new only once", () => {
   const s = setup()
 
-  expect(s.open().out).toContain(`page: http://127.0.0.1:${s.endpoint().port}  a new address\n`)
+  expect(s.open().out).toContain(`page: http://127.0.0.1:${s.endpoint().port}/?key=${s.key()}  a new address\n`)
 
   const again = s.open().out
 
-  expect(again).toContain(`page: http://127.0.0.1:${s.endpoint().port}\n`)
+  expect(again).toContain(`page: http://127.0.0.1:${s.endpoint().port}/?key=${s.key()}\n`)
   expect(again).not.toContain("a new address")
 })
 it("takes another address where the session's last one is taken, and announces it", async () => {
@@ -372,7 +374,8 @@ it("prints the full help", () => expect(setup().run(["help"]).out).toContain("St
 it("opens with the page and the command, and of the command's words only what the skill does not say; no pointer to a fuller guide", () => {
   const out = setup().open().out
 
-  expect(out).toMatch(/^page: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: demo; demo wait \[SECONDS\] waits for the person, then tells what changed\n/)
+  expect(out).toMatch(/^page: http:\/\/127\.0\.0\.1:\d+\/\?key=[\w-]{43}  a new address\n/)
+  expect(out).toContain("\ncommand: demo; demo wait [SECONDS] waits for the person, then tells what changed\n")
   expect(out).not.toContain("help")
 })
 it("door installs bv", () => {
