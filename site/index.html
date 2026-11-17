@@ -118,15 +118,43 @@
       .chat {
         display: flex;
         flex-direction: column;
-        min-height: 19rem;
+        min-height: 0;
         padding: 1rem;
         border-right: 1px solid var(--line);
         font-size: 0.875rem;
       }
+      /* What was said, the newest at the foot: as more is said the oldest leaves at the top, and the window keeps its height. */
       .log {
         display: flex;
+        flex: 1 1 0;
         flex-direction: column;
+        justify-content: flex-end;
         gap: 0.5rem;
+        min-height: 0;
+        overflow: hidden;
+        mask-image: linear-gradient(to bottom, transparent, #000 1.5rem);
+      }
+      .say,
+      .used {
+        flex: none;
+      }
+      /* The agent using the surface: one small line, as a harness shows a tool's use. */
+      .used {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0 0.25rem;
+        color: var(--muted);
+        font: 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        animation: arrive 0.3s ease-out;
+      }
+      .used::before {
+        content: "";
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
       }
       .say {
         max-width: 92%;
@@ -147,7 +175,8 @@
         animation: blink 1s steps(2) infinite;
       }
       .ask {
-        margin-top: auto;
+        flex: none;
+        margin-top: 0.75rem;
         min-height: 2.25rem;
         padding: 0.5rem 0.75rem;
         border: 1px solid var(--line);
@@ -185,28 +214,50 @@
         position: relative;
         aspect-ratio: 16 / 7;
         border-radius: 10px;
-        background: linear-gradient(135deg, #2b2440, #5a3b63 55%, #c9826b);
         overflow: hidden;
+        background: #111;
       }
-      .video[data-shot="1"] {
-        background: linear-gradient(135deg, #17324a, #2f6f86 55%, #9fd0c8);
+      /* The photo shown: a sky over a hill, in the colours of its shot. */
+      .shot {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, var(--a, #2b2440), var(--b, #5a3b63) 55%, var(--c, #c9826b));
       }
-      .video[data-shot="2"] {
-        background: linear-gradient(135deg, #4a2a17, #a55f2c 55%, #f0c27a);
-      }
-      .video[data-shot="3"] {
-        background: linear-gradient(135deg, #1d3a24, #4f8a4a 55%, #d3e08e);
-      }
-      .video[data-shot="4"] {
-        background: linear-gradient(135deg, #3d1836, #9a3f78 55%, #f0a3b4);
-      }
-      .video::before {
+      .shot::before {
         content: "";
         position: absolute;
         inset: auto -10% -45% -10%;
         height: 80%;
         border-radius: 50%;
         background: rgb(20 16 30 / 0.5);
+      }
+      .video[data-shot="1"] .shot { --a: #17324a; --b: #2f6f86; --c: #9fd0c8; }
+      .video[data-shot="2"] .shot { --a: #4a2a17; --b: #a55f2c; --c: #f0c27a; }
+      .video[data-shot="3"] .shot { --a: #1d3a24; --b: #4f8a4a; --c: #d3e08e; }
+      .video[data-shot="4"] .shot { --a: #3d1836; --b: #9a3f78; --c: #f0a3b4; }
+      .video[data-shot="5"] .shot { --a: #12263f; --b: #3f5fa8; --c: #b9c8f2; }
+      .video[data-shot="6"] .shot { --a: #40201c; --b: #b0483c; --c: #f3b08f; }
+      .video[data-shot="7"] .shot { --a: #1f2f33; --b: #4d8a8f; --c: #e6d39a; }
+      .video[data-shot="8"] .shot { --a: #2f1d47; --b: #6f4bb3; --c: #e1b7f0; }
+      /* A collage: four photos at once. */
+      .tiles {
+        position: absolute;
+        inset: 0;
+        display: none;
+        grid-template-columns: 1.4fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 3px;
+        background: #111;
+      }
+      .tiles i:nth-child(1) { grid-row: span 2; background: linear-gradient(135deg, #17324a, #2f6f86 55%, #9fd0c8); }
+      .tiles i:nth-child(2) { background: linear-gradient(135deg, #4a2a17, #a55f2c 55%, #f0c27a); }
+      .tiles i:nth-child(3) { background: linear-gradient(135deg, #1d3a24, #4f8a4a 55%, #d3e08e); }
+      .video.collage .tiles {
+        display: grid;
+      }
+      /* A slow zoom in, for as long as its photo shows. */
+      .video.zoom .shot {
+        animation: zoom 1.1s ease-in forwards;
       }
       .video.flash::after {
         content: "";
@@ -298,7 +349,11 @@
       .wave i.hit {
         animation: hit 0.3s ease-out;
       }
-      /* The video's track: one clip, the range the person selects, and the cuts the agent makes in it, each on a beat. */
+      /* The video's track: the photos, a cut where one gives way to the next; the parts the person selects, each lettered;
+         and what the agent makes of each: a collage, a cut on every beat, a zoom. */
+      .lane.video-lane {
+        margin-top: 0.875rem;
+      }
       .clip {
         position: absolute;
         inset: 0;
@@ -310,15 +365,33 @@
         position: absolute;
         top: -3px;
         bottom: -3px;
-        left: 25%;
         width: 0;
         border-radius: 6px;
-        background: color-mix(in srgb, var(--accent) 28%, transparent);
-        outline: 1.5px solid var(--accent);
-        opacity: 0;
-        transition: opacity 0.3s;
+        outline: 1.5px solid transparent;
+        transition: background 0.3s, outline-color 0.3s;
       }
       .sel.on {
+        background: color-mix(in srgb, var(--accent) 28%, transparent);
+        outline-color: var(--accent);
+      }
+      .sel::before {
+        content: attr(data-letter);
+        position: absolute;
+        left: 0;
+        top: -1.0625rem;
+        min-width: 1rem;
+        padding: 0 0.25rem;
+        border-radius: 4px;
+        background: var(--accent);
+        color: var(--card);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1rem;
+        text-align: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .sel.named::before {
         opacity: 1;
       }
       .split {
@@ -336,6 +409,29 @@
       .split.on {
         opacity: 1;
         transform: none;
+      }
+      .fx {
+        position: absolute;
+        top: 1px;
+        bottom: 1px;
+        border-radius: 5px;
+        opacity: 0;
+        transition: opacity 0.35s;
+      }
+      .fx.on {
+        opacity: 1;
+      }
+      /* A collage, drawn as its tiles. */
+      .fx.tiled {
+        background:
+          linear-gradient(var(--card), var(--card)) 58% 0 / 2px 100% no-repeat,
+          linear-gradient(var(--card), var(--card)) 100% 50% / 42% 2px no-repeat,
+          color-mix(in srgb, var(--accent) 45%, var(--accent-soft));
+      }
+      /* A zoom, drawn as a wedge that grows. */
+      .fx.grows {
+        background: color-mix(in srgb, var(--accent) 45%, var(--accent-soft));
+        clip-path: polygon(0 50%, 100% 0, 100% 100%);
       }
       .head {
         position: absolute;
@@ -440,6 +536,11 @@
           transform: scaleY(1.6);
         }
       }
+      @keyframes zoom {
+        to {
+          transform: scale(1.35);
+        }
+      }
 
       /* The line to copy. */
       .copy {
@@ -517,12 +618,9 @@
           grid-template-columns: 1fr;
         }
         .chat {
-          min-height: 0;
+          height: 17rem;
           border-right: 0;
           border-bottom: 1px solid var(--line);
-        }
-        .ask {
-          margin-top: 0.75rem;
         }
         .steps {
           flex-wrap: wrap;
@@ -543,40 +641,49 @@
       <h1>Baba Voss</h1>
       <p class="lede">Baba is a work surface you share with your agent.</p>
 
-      <div class="picture" id="demo" role="img" aria-label="A demo in three steps. One: on the surface, a video and its timeline, you select a part of the video. Two: in the chat you ask your agent to cut it and line the cuts up with the beat of the music; the agent makes five cuts in the part you selected. Three: you play it, and each cut falls on a beat.">
+      <div class="picture" id="demo" role="img" aria-label="A demo. In the chat, you asked your agent for a slideshow of your newest photos with a soundtrack, and it made one on a surface: the video, the music, and a track of the photos. Then, in three steps. One: you select three parts of the track, lettered A, B and C. Two: you ask for A as a collage, B with a cut on every beat, and C zooming in, and the agent does each. Three: you play it.">
         <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="cols" aria-hidden="true">
           <div class="chat">
             <p class="label">Chat</p>
             <div class="log" id="log">
-              <div class="say you">Cut this part, and line the cuts up with the beat.</div>
-              <div class="say">Done. Five cuts, each on a beat.</div>
+              <div class="say you" data-keep>Make a slideshow from my newest photos in Pictures/Lisbon. Use “Sunday Drive” as the soundtrack.</div>
+              <div class="used" data-keep>slideshow · new project</div>
+              <div class="say" data-keep>Made “Lisbon”: 8 photos, one every two beats of Sunday Drive.</div>
+              <div class="say you">A as a collage. B with a cut on every beat. C zooming in.</div>
+              <div class="used">slideshow · collage A</div>
+              <div class="used">slideshow · cut B on every beat</div>
+              <div class="used">slideshow · zoom in C</div>
+              <div class="say">Done. A is a collage, B changes on every beat, and C zooms in.</div>
             </div>
             <div class="ask" id="ask"><span id="typed"></span><span class="hint">Ask your agent…</span></div>
           </div>
           <div class="surface">
-            <p class="label">Surface</p>
-            <div class="video" id="video"><span class="play" id="play"></span></div>
-            <div class="controls"><span id="time">0:00 / 0:32</span><span class="push">120 beats a minute</span></div>
+            <p class="label">Surface · Lisbon</p>
+            <div class="video" id="video">
+              <span class="shot"></span><span class="tiles"><i></i><i></i><i></i></span><span class="play" id="play"></span>
+            </div>
+            <div class="controls"><span id="time">0:00 / 0:32</span><span class="push">Sunday Drive · 120 beats a minute</span></div>
             <div class="track">
               <span>Music</span>
               <div class="lane wave" id="wave"></div>
             </div>
             <div class="track">
-              <span>Video</span>
-              <div class="lane" id="lane">
-                <span class="clip"></span><span class="sel" id="sel"></span>
-                <span class="split on" style="left: 25%"></span><span class="split on" style="left: 37.5%"></span><span class="split on" style="left: 50%"></span
-                ><span class="split on" style="left: 62.5%"></span><span class="split on" style="left: 75%"></span><span class="head" id="head"></span>
+              <span>Photos</span>
+              <div class="lane video-lane" id="lane">
+                <span class="clip"></span>
+                <span class="fx tiled on" id="fx-a" style="left: 12.5%; width: 25%"></span><span class="fx grows on" id="fx-c" style="left: 87.5%; width: 12.5%"></span>
+                <span class="sel named" id="sel-a" data-letter="A" style="left: 12.5%; width: 25%"></span><span class="sel named" id="sel-b" data-letter="B" style="left: 50%; width: 25%"></span
+                ><span class="sel named" id="sel-c" data-letter="C" style="left: 87.5%; width: 12.5%"></span><span class="head" id="head"></span>
               </div>
             </div>
-            <div class="note on" id="note">5 cuts, each on a beat.</div>
+            <div class="note on" id="note">A a collage, B on every beat, C zooming in.</div>
           </div>
         </div>
         <svg class="cursor" id="cursor" viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 7 2.8-1.2-3-6.9H15z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round" /></svg>
       </div>
       <p class="steps" id="steps" aria-hidden="true">
-        <span data-step="1">1 · Select a part</span><span data-step="2">2 · Ask</span><span data-step="3">3 · Play</span><button type="button" id="replay" hidden>Replay demo</button>
+        <span data-step="1">1 · Select</span><span data-step="2">2 · Ask</span><span data-step="3">3 · Play</span><button type="button" id="replay" hidden>Replay demo</button>
       </p>
 
       <h2>How it works</h2>
@@ -639,17 +746,23 @@
         setTimeout(() => (button.textContent = "Copy"), 2000)
       })
 
-      // The demo, played: the person selects a part, asks, the agent cuts, the person plays. The page as served is its
-      // last state; this plays it from the start, once as it comes into view, and again when asked.
+      // The demo, played. The page as served is its last state. This plays it from where the chat left the slideshow just
+      // made: the person selects three parts, asks for something of each, the agent does each on the surface, the person
+      // plays it. Once as it comes into view, and again when asked.
       const $ = (id) => document.getElementById(id)
       const demo = $("demo")
       const cursor = $("cursor")
-      const [log, ask, typed, video, play, time, wave, lane, sel, head, note, steps, replay] = [
-        "log", "ask", "typed", "video", "play", "time", "wave", "lane", "sel", "head", "note", "steps", "replay",
+      const [log, ask, typed, video, play, time, wave, lane, head, note, steps, replay] = [
+        "log", "ask", "typed", "video", "play", "time", "wave", "lane", "head", "note", "steps", "replay",
       ].map($)
-      const splits = [...lane.querySelectorAll(".split")]
-      const ASK = "Cut this part, and line the cuts up with the beat."
+      const ASK = "A as a collage. B with a cut on every beat. C zooming in."
       const BARS = 64
+      // The parts the person selects, by where they start and end on the track, from 0 to 1.
+      const PARTS = [
+        { letter: "A", from: 0.125, to: 0.375, sel: $("sel-a") },
+        { letter: "B", from: 0.5, to: 0.75, sel: $("sel-b") },
+        { letter: "C", from: 0.875, to: 1, sel: $("sel-c") },
+      ]
       const still = matchMedia("(prefers-reduced-motion: reduce)").matches
       let run = 0
 
@@ -664,7 +777,22 @@
         wave.append(bar)
       }
 
+      // The cuts: one where each photo gives way to the next, every two beats, from the start; and those the agent adds in B.
+      const cutAt = (at, kind) => {
+        const cut = document.createElement("span")
+
+        cut.className = `split ${kind} on`
+        cut.style.left = `${at * 100}%`
+        cut.dataset.at = String(at)
+        lane.insertBefore(cut, head)
+
+        return cut
+      }
+      const first = [1, 2, 3, 4, 5, 6, 7].map((n) => cutAt(n / 8, "first"))
+      const added = [0.5625, 0.6875].map((at) => cutAt(at, "added"))
+      const inCollage = first.find((cut) => cut.dataset.at === "0.25")
       const bars = [...wave.children]
+      const kept = [...log.querySelectorAll("[data-keep]")]
       const wait = (ms, id) => new Promise((done, stop) => setTimeout(() => (id === run ? done() : stop(new Error("replayed"))), ms))
       const step = (n) => steps.querySelectorAll("span").forEach((s) => s.classList.toggle("on", Number(s.dataset.step) === n))
       // A point of an element, as the cursor's place in the window: fx and fy from 0 to 1 across it.
@@ -674,33 +802,51 @@
 
         cursor.style.transform = `translate(${box.left - frame.left + box.width * fx}px, ${box.top - frame.top + box.height * fy}px)`
       }
-      const say = (text, kind = "") => {
-        const line = document.createElement("div")
+      const line = (text, kind) => {
+        const said = document.createElement("div")
 
-        line.className = `say ${kind}`
-        line.textContent = text
-        log.append(line)
+        said.className = kind
+        said.textContent = text
+        log.append(said)
 
-        return line
+        return said
       }
       const clock = (p) => `0:${String(Math.floor(p * 32)).padStart(2, "0")} / 0:32`
-      const shotAt = (p) => (p < 0.25 || p >= 0.75 ? 0 : 1 + Math.floor((p - 0.25) / 0.125))
+      // What shows at a moment of the play: which photo, and whether as a collage or zooming in.
+      const showing = (p) => {
+        if (p >= 0.125 && p < 0.375) return { shot: 1, collage: true }
+        if (p >= 0.5 && p < 0.75) return { shot: 4 + Math.floor((p - 0.5) / 0.0625) }
+        if (p >= 0.875) return { shot: 8, zoom: true }
+
+        return { shot: Math.floor(p * 8) % 4 }
+      }
+      const show = ({ shot, collage, zoom }) => {
+        video.dataset.shot = String(shot)
+        video.classList.toggle("collage", !!collage)
+        video.classList.toggle("zoom", !!zoom)
+      }
 
       function reset() {
-        log.replaceChildren()
+        log.replaceChildren(...kept)
         typed.textContent = ""
         ask.className = "ask"
         demo.classList.remove("playing")
-        video.dataset.shot = "0"
+        show({ shot: 0 })
+        video.classList.remove("flash")
         time.textContent = clock(0)
-        sel.classList.remove("on")
-        sel.style.transition = "none"
-        sel.style.width = "0"
-        for (const s of splits) s.classList.remove("on")
-        for (const b of bars) b.classList.remove("on", "hit")
+        for (const { sel } of PARTS) {
+          sel.classList.remove("on", "named")
+          sel.style.transition = "none"
+          sel.style.width = "0"
+        }
+        for (const cut of added) cut.classList.remove("on")
+        inCollage.classList.add("on")
+        $("fx-a").classList.remove("on")
+        $("fx-c").classList.remove("on")
+        for (const bar of bars) bar.classList.remove("on", "hit")
         head.style.left = "0"
-        note.textContent = ""
-        note.classList.remove("on")
+        note.textContent = "8 photos, one every two beats."
+        note.classList.add("on")
         cursor.classList.remove("on", "drag")
         replay.hidden = true
         step(0)
@@ -711,102 +857,117 @@
 
         reset()
         try {
-          await wait(500, id)
+          await wait(900, id)
 
-          // 1. The person selects a part of the video.
+          // 1. The person selects three parts of the track: A, B and C.
           step(1)
-          to(video, 0.7, 0.8)
+          to(video, 0.3, 0.85)
           cursor.classList.add("on")
-          await wait(500, id)
-          to(lane, 0.25, 0.55)
-          await wait(850, id)
-          sel.classList.add("on")
-          sel.style.transition = "opacity 0.3s, width 1s linear"
-          cursor.classList.add("drag")
-          to(lane, 0.75, 0.55)
-          sel.style.width = "50%"
-          await wait(1150, id)
-          cursor.classList.remove("drag")
-          note.textContent = "0:08 to 0:24 selected."
-
-          // 2. They ask, in the chat; the agent cuts, on the surface.
-          step(2)
           await wait(400, id)
+          for (const { letter, from, to: end, sel } of PARTS) {
+            to(lane, from, 0.55)
+            await wait(700, id)
+            sel.classList.add("on", "named")
+            sel.style.transition = "background 0.3s, outline-color 0.3s, width 0.6s linear"
+            cursor.classList.add("drag")
+            to(lane, end, 0.55)
+            sel.style.width = `${(end - from) * 100}%`
+            await wait(700, id)
+            cursor.classList.remove("drag")
+            note.textContent = `${letter} selected.`
+            await wait(150, id)
+          }
+          note.textContent = "A, B and C selected."
+
+          // 2. They ask, in the chat; the agent does each, on the surface.
+          step(2)
+          await wait(350, id)
           to(ask, 0.3, 0.5)
-          await wait(850, id)
+          await wait(800, id)
           ask.classList.add("on")
           for (const letter of ASK) {
             typed.textContent += letter
-            await wait(24, id)
+            await wait(22, id)
           }
           await wait(350, id)
           typed.textContent = ""
           ask.classList.remove("on")
-          say(ASK, "you")
-          await wait(500, id)
-
-          const busy = say("Cutting", "busy")
-
-          to(ask, 0.85, 1.6)
+          line(ASK, "say you")
+          to(ask, 0.85, 1.7)
           await wait(700, id)
-          for (const [n, split] of splits.entries()) {
-            split.classList.add("on")
-            note.textContent = `${n + 1} cut${n ? "s" : ""}, each on a beat.`
-            note.classList.add("on")
-            await wait(300, id)
-          }
-          sel.classList.remove("on")
-          await wait(350, id)
-          busy.remove()
-          say("Done. Five cuts, each on a beat.")
-          await wait(900, id)
 
-          // 3. They play it: the music as a wave, each cut on a beat.
+          line("slideshow · collage A", "used")
+          inCollage.classList.remove("on")
+          $("fx-a").classList.add("on")
+          PARTS[0].sel.classList.remove("on")
+          note.textContent = "A is a collage."
+          await wait(800, id)
+
+          line("slideshow · cut B on every beat", "used")
+          for (const cut of added) {
+            cut.classList.add("on")
+            await wait(220, id)
+          }
+          PARTS[1].sel.classList.remove("on")
+          note.textContent = "B changes on every beat."
+          await wait(650, id)
+
+          line("slideshow · zoom in C", "used")
+          $("fx-c").classList.add("on")
+          PARTS[2].sel.classList.remove("on")
+          note.textContent = "C zooms in."
+          await wait(800, id)
+
+          line("Done. A is a collage, B changes on every beat, and C zooms in.", "say")
+          note.textContent = "A a collage, B on every beat, C zooming in."
+          await wait(1000, id)
+
+          // 3. They play it: the music as a wave, each photo changing on a beat.
           step(3)
           to(play, 0.5, 0.5)
-          await wait(850, id)
+          await wait(800, id)
           play.classList.add("down")
           await wait(160, id)
           play.classList.remove("down")
           demo.classList.add("playing")
-          to(video, 0.85, 1.12)
+          to(video, 0.88, 1.12)
           await wait(300, id)
           await new Promise((done, stop) => {
-            const length = 6400
+            const length = 8000
             const began = performance.now()
-            let shot = 0
+            let now = showing(0)
             let beat = -1
 
-            const frame = (now) => {
+            const frame = (t) => {
               if (id !== run) return stop(new Error("replayed"))
 
-              const p = Math.min(1, (now - began) / length)
+              const p = Math.min(0.9999, (t - began) / length)
               const at = Math.floor(p * BARS)
-              const next = shotAt(p)
+              const next = showing(p)
 
               head.style.left = `${p * 100}%`
               time.textContent = clock(p)
               bars.forEach((bar, i) => bar.classList.toggle("on", i <= at))
-              if (at % 4 === 0 && at !== beat && bars[at]) {
+              if (at % 4 === 0 && at !== beat) {
                 beat = at
                 bars[at].classList.remove("hit")
                 void bars[at].offsetWidth
                 bars[at].classList.add("hit")
               }
-              if (next !== shot) {
-                shot = next
-                video.dataset.shot = String(shot)
+              if (next.shot !== now.shot || !!next.collage !== !!now.collage) {
+                now = next
+                show(now)
                 video.classList.remove("flash")
                 void video.offsetWidth
                 video.classList.add("flash")
               }
-              if (p < 1) requestAnimationFrame(frame)
+              if (t - began < length) requestAnimationFrame(frame)
               else done()
             }
 
             requestAnimationFrame(frame)
           })
-          await wait(500, id)
+          await wait(600, id)
           demo.classList.remove("playing")
           video.classList.remove("flash")
           cursor.classList.remove("on")
@@ -819,6 +980,9 @@
       }
 
       replay.addEventListener("click", playDemo)
+      // As served, the track shows what the agent made: the collage has no cut in it.
+      inCollage.classList.remove("on")
+      show({ shot: 8 })
       if (still) {
         // Where motion is reduced the demo stands in its last state, and plays only when asked.
         replay.textContent = "Play demo"
