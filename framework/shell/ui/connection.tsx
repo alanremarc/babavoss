@@ -1,13 +1,14 @@
 // What the page says when it lost the runtime, said under the mark; and what stands over a tab's content without moving
 // it, the shell's alerts. The page is served whole, so a normal load says nothing of connecting; only a stream that was up and is lost
-// for more than a moment says so, or one that never came up after a while.
+// for more than a moment says so, or one that never came up after a while. A runtime that went to sleep says so as it goes,
+// and the page says it at once: the agent wakes it, never the page, which finds it again once it is back.
 import { useEffect, useState, type ReactNode } from "react"
 import { CircleAlertIcon, LocateFixedIcon, XIcon } from "lucide-react"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../../kit/components/alert"
 import { Button } from "../../kit/components/button"
 
-/** The page's stream: not yet up since the page loaded, up, or lost after it was. */
-export type Connected = "connecting" | "up" | "lost"
+/** The page's stream: not yet up since the page loaded, up, lost after it was, or ended by its runtime going to sleep. */
+export type Connected = "connecting" | "up" | "lost" | "asleep"
 
 /** How long a lost stream goes unsaid, as a runtime that starts again comes back within it. */
 export const LOST_MS = 700
@@ -16,6 +17,7 @@ export const CONNECTING_MS = 4000
 
 /** What the page says of its stream after `ms` in a state: nothing while it is up, or too soon to tell. */
 export function said(state: Connected, ms: number): string | undefined {
+  if (state === "asleep") return "Asleep; it wakes when the agent next works with it"
   if (state === "lost" && ms >= LOST_MS) return "Reconnecting"
   if (state === "connecting" && ms >= CONNECTING_MS) return "Connecting"
 
@@ -30,7 +32,7 @@ export function useSaid(state: Connected): string | undefined {
     setShown(undefined)
     if (state === "up") return
 
-    const timer = setTimeout(() => setShown(said(state, Infinity)), state === "lost" ? LOST_MS : CONNECTING_MS)
+    const timer = setTimeout(() => setShown(said(state, Infinity)), state === "asleep" ? 0 : state === "lost" ? LOST_MS : CONNECTING_MS)
 
     return () => clearTimeout(timer)
   }, [state])

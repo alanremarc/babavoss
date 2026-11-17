@@ -27,7 +27,7 @@ export type Step =
   | { kind: "build"; line: string }
   /** The agent's turn ends: the Stop hook. */
   | { kind: "stop" }
-  /** The root goes to sleep, as when nothing called it for a while; the next command wakes it. */
+  /** The root goes to sleep, as the agent's `sleep` puts it, or nothing used it for a while; the next command wakes it. */
   | { kind: "sleep" }
   /** The person marks every notice seen, or opens the drawer of the newest notice's tab, which marks it seen: the page's `seen` or `looked`. */
   | { kind: "look"; mark: "seen" | "looked" }

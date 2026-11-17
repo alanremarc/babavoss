@@ -299,7 +299,7 @@ export async function midTurn(hooks: Hooks) {
   const runtime = await startRuntime(root, ["--session", "S"], {
     entry: join(dir, "scripts/open.ts"),
     env: { BABAVOSS_HOME: dir },
-    idleMs: 60_000,
+    strengths: { weak: 60_000 },
     watch: [],
     log: () => {},
     exit: () => {},

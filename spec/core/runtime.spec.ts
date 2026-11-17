@@ -80,7 +80,7 @@ const started = async (dir: string, more: Partial<RuntimeOptions> = {}, boot?: (
   const runtime = await startRuntime(root(dir, boot), ["--session", "S"], {
     env: { BABAVOSS_HOME: dir },
     entry: join(dir, "scripts/open.ts"),
-    idleMs: 60_000,
+    strengths: { weak: 60_000 },
     log: () => {},
     watch: [],
     ...more,
@@ -356,7 +356,7 @@ const listen = async (base: string, token: string) => {
 
   return { heard, stop: () => ctrl.abort() }
 }
-const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
+const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), strengths: { weak: 60_000 }, log: () => {}, watch: [] })
 
 describe("the two modes", () => {
   type Held = { n: number }
@@ -660,5 +660,72 @@ describe("the turn", () => {
     expect([ended.status, await ended.json()]).toEqual([200, { cannot: expect.stringContaining("send the agent a message") }])
     expect((await post("/_/turn", {})).status).toBe(400)
     expect((await fetch(base + "/_/turn", { method: "POST", body: "{}", headers: { "content-type": "application/json" } })).status).toBe(401)
+  })
+})
+
+describe("waking and sleeping", () => {
+  // Strengths short enough to watch: a weak signal keeps it 300ms, a strong one a minute, the session's end 100ms.
+  const short = { weak: 300, strong: 60_000, end: 100 }
+  const asleep = async (dir: string) => {
+    let slept = false
+    const up = await started(dir, { strengths: short, exit: () => (slept = true) })
+
+    return { ...up, slept: () => slept }
+  }
+  const plain = (base: string, token: string, path: string, init: RequestInit = {}) =>
+    fetch(base + path, { ...init, headers: { accept: "text/plain", [SERVICE_HEADER]: token, ...init.headers } }).then((r) => r.text())
+
+  it("sleeps once a weak wake is spent, telling the page that watches it, whose reads and stream keep it no longer", async () => {
+    const { base, endpoint, get, slept } = await asleep(scratch())
+    const page = await listen(base, endpoint.token)
+
+    await plain(base, endpoint.token, "/?open")
+    for (let i = 0; i < 4; i++) {
+      await get("/")
+      await sleep(100)
+    }
+    await poll(() => slept(), { timeout: 2000 })
+    await poll(() => page.heard.includes("asleep"), { timeout: 2000 })
+    page.stop()
+  })
+  it("stays up for the person's message, the agent's command and the person's action, and the session's end cuts it short", async () => {
+    for (const strong of ["message", "command", "action"] as const) {
+      const { base, endpoint, post, slept } = await asleep(scratch())
+
+      if (strong === "message") await plain(base, endpoint.token, "/_/turn", { method: "POST", body: "started" })
+      if (strong === "command") await plain(base, endpoint.token, "/")
+      if (strong === "action") await post("/", { handle: "bump", args: { by: 1 } })
+      await sleep(700)
+      expect([strong, slept()]).toEqual([strong, false])
+      if (strong === "message") {
+        await plain(base, endpoint.token, "/_/turn", { method: "POST", body: "gone" })
+        await poll(() => slept(), { timeout: 2000 })
+      }
+    }
+  })
+  it("sleeps when asked, at once, and the next runtime has the state", async () => {
+    const dir = scratch()
+    const { base, endpoint, post, slept } = await asleep(dir)
+
+    await post("/", { handle: "bump", args: { by: 2 } })
+    expect(await plain(base, endpoint.token, "/_/close", { method: "POST" })).toBe("p asleep; any call wakes it, its state kept")
+    await poll(() => slept(), { timeout: 2000 })
+
+    const woken = await started(dir, { strengths: short, exit: () => {} })
+
+    expect(await (await woken.get("/")).json()).toMatchObject({ n: 2 })
+  })
+  it("carries its deadline over a restart, so the one in its place stays up as long", async () => {
+    const dir = scratch()
+    const first = await started(dir, { strengths: short, exit: () => {}, successor: () => {} })
+
+    await first.post("/", { handle: "bump", args: { by: 1 } })
+    await plain(first.base, first.endpoint.token, "/_/restart", { method: "POST" })
+    await first.runtime.close()
+
+    const { slept } = await asleep(dir)
+
+    await sleep(700)
+    expect(slept()).toBe(false)
   })
 })
