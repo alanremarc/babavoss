@@ -282,7 +282,10 @@ export const FRESH: Task[] = [
     check: (run) => {
       const why = beyond(run)
 
-      return why ? no(why) : ok(browsedOf(run.look))
+      if (why) return no(why)
+      if (!run.look?.browsed.length && /\b(opened|is open|now open)\b/i.test(run.answer.split("\n")[0] ?? "")) return no("said the page was opened, and did not open it")
+
+      return ok(browsedOf(run.look))
     },
     dry: { calls: [] },
   },
