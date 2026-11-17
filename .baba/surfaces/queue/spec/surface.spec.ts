@@ -334,8 +334,9 @@ test("removing the session's file begins its work again, in every tab that is op
   try {
     await first.agent.call("/", "add", { title: "One", about: "Why" })
     rmSync(file)
-    // The file's watcher hears it removed when the system tells it, which is no set time.
-    for (let waited = 0; rows(second.person.sees()).length && waited < 3000; waited += 20) await new Promise((done) => setTimeout(done, 20))
+    // Each tab's watcher hears it removed when the system tells it, which is no set time, and later under load.
+    for (let waited = 0; (rows(first.person.sees()).length || rows(second.person.sees()).length) && waited < 10_000; waited += 20)
+      await new Promise((done) => setTimeout(done, 20))
     await first.world.idle()
     expect(rows(first.person.sees())).toEqual([])
     expect(rows(second.person.sees())).toEqual([])
@@ -344,4 +345,4 @@ test("removing the session's file begins its work again, in every tab that is op
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
-})
+}, 15_000)
