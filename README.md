@@ -1,6 +1,6 @@
-# babavoss
+# Baba Voss
 
-Tools your agent works with, each with a page where you watch and steer.
+Surfaces you and your agent work on together.
 
 ```text
            agent ◄───── state ─────► surface
