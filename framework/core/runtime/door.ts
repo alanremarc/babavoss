@@ -195,7 +195,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
     said = undefined
 
-    return line === undefined ? answer : `${line}\n${answer}`
+    return line === undefined ? answer : answer ? `${line}\n${answer}` : line
   }
   const change = () => `event: change\ndata: ${JSON.stringify({ version: running.version(), jobs: running.jobs() })}\n\n`
   const notice = (value: { text: string; at?: string; from?: string; by?: string }) => `event: notice\ndata: ${JSON.stringify(value)}\n\n`
@@ -374,7 +374,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (res.destroyed) return
 
           // Answered even when nothing is told: what only the agent's own calls changed is passed over, not kept for later.
-          return reply(200, told((heard ? text.heard() : text.tell()) || "nothing changed"))
+          return reply(200, told((heard ? text.heard() : text.tell()) || (said === undefined ? "nothing changed" : "")))
         }
         if (req.method === "GET") {
           const view = running.read(path, actorText) ?? factAt(path)

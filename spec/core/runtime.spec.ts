@@ -378,7 +378,8 @@ describe("the two modes", () => {
 
       expect(await read("/?open")).toStartWith("h 1.0\nn: 0")
       edit()
-      await poll(() => read("/n")).toContain("its code changed on disk")
+      // As the hooks ask it, with nothing else to tell: the line alone.
+      await poll(() => read("/_/wait?seconds=0")).toBe("h: its code changed on disk; it runs once restarted: bv h restart")
       expect(await read("/?open")).toStartWith(`h 1.0\ncode: changed on disk since instance ${runtime.instance} started; it runs once restarted: bv h restart\n`)
       expect(await read("/")).toStartWith("code: changed on disk")
       expect(await read("/")).not.toContain("its code changed on disk")
