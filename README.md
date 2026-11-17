@@ -28,6 +28,16 @@ I want a surface that matches each month's payments to our invoices.
 
 The agent writes it in `.baba/surfaces/`, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up. When a later babavoss is out, the agent is told as it works, and updates `.baba/`.
 
+## Installing by hand
+
+You need [Bun](https://bun.sh) 1.4 or later. In your project's directory, or in your home directory for surfaces in every project:
+
+```sh
+bunx github:alanremarc/babavoss init
+```
+
+This makes `.baba/`, where the surfaces' code lives, and sets up your agent's harness beside it. A new session begins with the surfaces in view, on one page.
+
 ## Status
 
 Early, and being reshaped. The design is in [docs/DESIGN.md](docs/DESIGN.md).
