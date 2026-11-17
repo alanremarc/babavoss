@@ -1,6 +1,6 @@
 ---
 name: baba
-description: Work through the surfaces of this project, tools with a page the person watches and steers on, and make new ones. Use when a surface fits the task, when the person opens one, or when a task deserves a tool of its own before it is done.
+description: The surfaces of this project, tools read and acted on through a command while the person watches and acts on them on a page, and how one is made. Applies when a surface is worked, opened or made.
 compatibility: Requires Bun 1.4 or later
 ---
 
@@ -34,6 +34,6 @@ Its answer names the page's address, the command to use, the surfaces and the op
 
 ## Surfaces
 
-The shell lists every surface with what it does, and offers to open each; opening one answers with its tab whole. Open the one the task needs, a second time for a second piece of work. The person may open one too, on the page, and then it is yours to take up.
+The shell lists every surface with what it does, and offers to open each; opening one answers with its tab whole, and the same surface may be open in several tabs. Whether a surface serves the work is yours to judge, with the person and the project's own instructions; a task that needs none is done without one. The person may open one too, on the page, and you hear that they did.
 
-To make a surface or change one, read `.baba/node_modules/babavoss/skill/making-surfaces.md` first. When an answer says a later babavoss is out, that file says how to take it.
+How a surface is made or changed is in `.baba/node_modules/babavoss/skill/making-surfaces.md`: read it before doing either. When an answer says a later babavoss is out, that file says how it is taken.

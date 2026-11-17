@@ -4,7 +4,7 @@ Read this before making or changing a surface. Run the commands from the `.baba/
 
 ## The loop
 
-1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, what they see in its tab, and what they want of the agent that works it, which belongs in the project's instructions, not in the surface.
+1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, what they see in its tab, and what they want of the agent that works it, which is theirs to say, never the surface's.
 2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
 3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
 
@@ -22,7 +22,7 @@ surfaces/NAME/
 
 Everything an agent learns of how a surface works, it learns from the surface. There is no file of instructions beside it.
 
-A surface teaches mechanics, never intent. Its `how`, its descriptions and its facts say what a thing is, what an action does and what must hold for it: "a lane holds one issue at a time", "moves the draft into the backlog". They never say when the agent ought to act, how it should run its work, or who should decide: not "start an issue when a subagent takes it", not "note where it stands as you go", not "ask the person first". What to do comes from the person and the task, and the agent carries it; a surface that dictates is obeyed where nobody asked, as an agent told a lane is a subagent launched one for every start. Where a project wants a standing behaviour, as keeping its queue true while the work moves, that belongs in the project's own instructions to its agent, its AGENTS.md or CLAUDE.md, beside the surfaces and not in them.
+A surface teaches mechanics, never intent. Its `how`, its descriptions and its facts say what a thing is, what an action does and what must hold for it: "a lane holds one issue at a time", "moves the draft into the backlog". They never say when the agent ought to act, how it should run its work, or who should decide: not "start an issue when a subagent takes it", not "note where it stands as you go", not "ask the person first". What to do comes from the person and the task, and the agent carries it; a surface that dictates is obeyed where nobody asked, as an agent told a lane is a subagent launched one for every start. A standing behaviour, as keeping a queue true while the work moves, is the person's to ask for, in the conversation or in the instructions they keep for their agents; never in the surface.
 
 - `description` is how the shell lists it, and so how an agent chooses it: what it does and when it fits, a phrase and a "use when", as "Use when the work's issues are read or moved".
 - `how` at `/` says what always holds: what its things are and how its actions move them. Say what depends on the state where the state is, as a fact; what waits on the person is a highlight, below. Keep it short, since it is read each time.
@@ -195,4 +195,4 @@ export default config({
 
 ## Updating
 
-When an answer says a later babavoss is out, take it with the command it gives, unless the person said not to. Then read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up, adapt the surfaces to what changed, and run their specs. Installing provisions again; restart the shell to run the version taken.
+When an answer says a later babavoss is out, it gives the command that takes it; whether and when is the person's. Once taken, read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up, adapt the surfaces to what changed, and run their specs. Installing provisions again; restart the shell to run the version taken.
