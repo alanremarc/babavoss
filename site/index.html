@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- The site's one page, babavoss.org, for a person who has an agent and has not heard of Baba Voss: what it is in a line,
-     a picture of it, built of markup, with the person, the chat they ask in and the page they see, and the line they copy to
+     a picture of it, built of markup, one window with the chat they ask in and the surface they see, and the line they copy to
      their agent. It says what the README says, without the parts for someone who installs by hand. -->
 <html lang="en">
   <head>
@@ -47,7 +47,7 @@
         -webkit-font-smoothing: antialiased;
       }
       main {
-        max-width: 46rem;
+        max-width: 54rem;
         margin: 0 auto;
         padding: 4rem 1rem 3rem;
       }
@@ -77,67 +77,14 @@
         color: inherit;
       }
 
-      /* The picture: the agent and the surface above, joined by the state; the chat and the page, two screens; the person below. */
+      /* The picture: one window of two columns, the chat the person asks in and the surface they see: a video being cut. */
       .picture {
         margin: 2.5rem 0 0;
-      }
-      .top {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        align-items: center;
-        position: relative;
-      }
-      .top::before {
-        content: "";
-        position: absolute;
-        left: 25%;
-        right: 25%;
-        top: 50%;
-        border-top: 1.5px dashed var(--line);
-      }
-      .node {
-        justify-self: center;
-        position: relative;
-        padding: 0.25rem 0.875rem;
         border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--card);
-        font-size: 0.875rem;
-        font-weight: 600;
-      }
-      .state {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        padding: 0 0.5rem;
-        background: var(--bg);
-        color: var(--muted);
-        font-size: 0.8125rem;
-      }
-      .stems {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        height: 1.25rem;
-      }
-      .stems span {
-        justify-self: center;
-        border-left: 1.5px dashed var(--line);
-      }
-      .screens {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-      }
-      .screen {
-        display: flex;
-        flex-direction: column;
-        min-height: 15rem;
-        border: 1px solid var(--line);
-        border-radius: 12px;
+        border-radius: 14px;
         background: var(--card);
         overflow: hidden;
-        box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -16px rgb(0 0 0 / 0.18);
       }
       .bar {
         display: flex;
@@ -145,35 +92,37 @@
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
         border-bottom: 1px solid var(--line);
-        color: var(--muted);
-        font-size: 0.8125rem;
       }
-      .bar b {
-        color: var(--fg);
-        font-weight: 600;
-      }
-      .dots {
-        display: flex;
-        gap: 4px;
-      }
-      .dots i {
-        width: 7px;
-        height: 7px;
+      .bar i {
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: var(--line);
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+      }
+      .label {
+        margin: 0 0 0.75rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
       }
 
       /* The chat: what the person asks, what the agent says. */
       .chat {
         display: flex;
-        flex: 1;
         flex-direction: column;
         gap: 0.5rem;
-        padding: 0.75rem;
+        padding: 1rem;
+        border-right: 1px solid var(--line);
         font-size: 0.875rem;
       }
       .say {
-        max-width: 88%;
+        max-width: 92%;
         padding: 0.5rem 0.75rem;
         border-radius: 12px;
         background: var(--soft);
@@ -191,124 +140,130 @@
         font-size: 0.8125rem;
       }
 
-      /* The page: the tabs at its side, one with a dot, and the surface: what is left before a launch, one thing just done. */
-      .page {
-        display: flex;
-        flex: 1;
+      /* The surface: the video, its few controls, and its timeline: the beats of the music, and the clips with their cuts. */
+      .surface {
+        padding: 1rem;
+        min-width: 0;
       }
-      .rail {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        padding: 0.75rem 0.5rem;
-        border-right: 1px solid var(--line);
-      }
-      .tab {
+      .video {
         position: relative;
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: var(--soft);
+        aspect-ratio: 16 / 7;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #2b2440, #5a3b63 55%, #c9826b);
+        overflow: hidden;
       }
-      .tab.on {
-        background: var(--accent-soft);
-        outline: 1.5px solid var(--accent);
-      }
-      .tab.on::after {
+      .video::before {
         content: "";
         position: absolute;
-        top: -2px;
-        right: -2px;
-        width: 8px;
-        height: 8px;
+        inset: auto -10% -45% -10%;
+        height: 80%;
         border-radius: 50%;
-        background: var(--accent);
-        border: 2px solid var(--card);
+        background: rgb(20 16 30 / 0.55);
       }
-      .surface {
-        flex: 1;
-        min-width: 0;
-        padding: 0.75rem;
-        font-size: 0.875rem;
+      .play {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: rgb(255 255 255 / 0.9);
       }
-      .surface h3 {
-        margin: 0 0 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 600;
+      .play::after {
+        content: "";
+        position: absolute;
+        left: 18px;
+        top: 13px;
+        border: 9px solid transparent;
+        border-left: 14px solid #2b2440;
+        border-right: 0;
       }
-      .row {
+      .controls {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 0.75rem;
+        margin: 0.625rem 0 0.75rem;
+        color: var(--muted);
+        font-size: 0.8125rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .controls b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .controls .push {
+        margin-left: auto;
+      }
+      .track {
+        display: grid;
+        grid-template-columns: 3.25rem minmax(0, 1fr);
+        align-items: center;
         gap: 0.5rem;
-        padding: 0.4375rem 0.5rem;
-        border-radius: 8px;
-      }
-      .row + .row {
-        margin-top: 2px;
-      }
-      .row span:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .pill {
-        flex: none;
-        padding: 0.0625rem 0.5rem;
-        border-radius: 999px;
-        background: var(--soft);
         color: var(--muted);
         font-size: 0.75rem;
       }
-      .row.done {
-        background: var(--good-soft);
+      .track + .track {
+        margin-top: 0.375rem;
       }
-      .row.done .pill {
-        background: transparent;
-        color: var(--good);
-        font-weight: 600;
+      .lane {
+        position: relative;
+        height: 1.75rem;
+      }
+      /* Sixteen beats: a tick each, across the lane. */
+      .beats {
+        height: 0.875rem;
+        background: repeating-linear-gradient(to right, var(--muted) 0 1.5px, transparent 1.5px 6.25%);
+        opacity: 0.55;
+      }
+      .clip {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 6px;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent);
+      }
+      .clip.a {
+        left: 0;
+        width: calc(31.25% - 2px);
+      }
+      .clip.b {
+        left: 50%;
+        width: calc(18.75% - 2px);
+      }
+      .clip.c {
+        left: 68.75%;
+        width: calc(18.75% - 2px);
+      }
+      .clip.d {
+        left: 87.5%;
+        width: 12.5%;
+      }
+      /* What the person selected, now cut: its place stays, empty. */
+      .cut {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 31.25%;
+        width: calc(18.75% - 2px);
+        display: grid;
+        place-items: center;
+        border: 1.5px dashed var(--muted);
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 0.6875rem;
       }
       .note {
-        margin-top: 0.625rem;
-        padding: 0.4375rem 0.625rem;
+        margin-top: 0.75rem;
+        padding: 0.375rem 0.625rem;
         border-left: 2px solid var(--accent);
         color: var(--muted);
         font-size: 0.8125rem;
       }
 
-      /* The person, below both screens: they ask in one and see the other. */
-      .feet {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        color: var(--muted);
-        font-size: 0.8125rem;
-      }
-      .feet span {
-        justify-self: center;
-        padding: 0.375rem 0 0;
-      }
-      .bracket {
-        margin: 0.25rem 25% 0;
-        height: 0.875rem;
-        border: 1.5px dashed var(--line);
-        border-top: 0;
-        border-radius: 0 0 10px 10px;
-      }
-      .you {
-        display: flex;
-        justify-content: center;
-        margin-top: -0.125rem;
-      }
-      .you span {
-        padding: 0.25rem 0.875rem;
-        border-radius: 999px;
-        background: var(--fg);
-        color: var(--bg);
-        font-size: 0.875rem;
-        font-weight: 600;
-      }
-
-      /* The picture plays once through as it is first seen: the ask, the answer, the thing ticked off, the note. Still where motion is reduced. */
+      /* The picture plays once as it is first seen: the ask, the answer, then the cut made and the clips moved onto the beats.
+         Still, in its last state, where motion is reduced. */
       @media (prefers-reduced-motion: no-preference) {
         .step {
           opacity: 0;
@@ -319,18 +274,52 @@
           animation-delay: 0.6s;
         }
         .step.s2 {
-          animation-delay: 1.8s;
-        }
-        .step.s3 {
-          animation-delay: 2.6s;
+          animation-delay: 3.4s;
         }
         .step.s4 {
-          animation-delay: 3.2s;
+          animation-delay: 3.8s;
         }
         @keyframes arrive {
           to {
             opacity: 1;
             transform: none;
+          }
+        }
+        /* The cut: the selected part, whole at first, empties. */
+        .cut {
+          animation: empty 0.5s ease-out 1.8s both;
+        }
+        @keyframes empty {
+          from {
+            background: var(--accent);
+            border-style: solid;
+            border-color: var(--accent);
+            color: transparent;
+          }
+        }
+        /* The clips after it start a little off the beat, and move onto it. */
+        .clip.b {
+          animation: snap-b 0.45s ease-out 2.5s both;
+        }
+        .clip.c {
+          animation: snap-c 0.45s ease-out 2.7s both;
+        }
+        .clip.d {
+          animation: snap-d 0.45s ease-out 2.9s both;
+        }
+        @keyframes snap-b {
+          from {
+            transform: translateX(7px);
+          }
+        }
+        @keyframes snap-c {
+          from {
+            transform: translateX(-9px);
+          }
+        }
+        @keyframes snap-d {
+          from {
+            transform: translateX(6px);
           }
         }
       }
@@ -406,18 +395,16 @@
         main {
           padding-top: 2.5rem;
         }
-        .screens,
+        .cols,
         .wishes {
           grid-template-columns: 1fr;
         }
-        .top,
-        .stems,
-        .feet,
-        .bracket {
-          display: none;
+        .chat {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
         }
-        .you {
-          margin-top: 0.75rem;
+        .ask {
+          margin-top: 0.25rem;
         }
         .copy {
           flex-direction: column;
@@ -434,46 +421,32 @@
       <h1>Baba Voss</h1>
       <p class="lede">Baba is a work surface you share with your agent.</p>
 
-      <div class="picture" role="img" aria-label="You ask your agent in the chat. The agent works on the surface directly. You see the surface on a page: here, what is left before a launch, one thing just ticked off.">
-        <div class="top" aria-hidden="true">
-          <span class="node">agent</span>
-          <span class="state">works on it directly</span>
-          <span class="node">surface</span>
-        </div>
-        <div class="stems" aria-hidden="true"><span></span><span></span></div>
-
-        <div class="screens" aria-hidden="true">
-          <div class="screen">
-            <div class="bar">
-              <span class="dots"><i></i><i></i><i></i></span><b>Chat</b>
-            </div>
-            <div class="chat">
-              <div class="say you step s1">The pricing page is live. What's left before launch?</div>
-              <div class="say step s2">I ticked it off. Two left: the welcome email and the terms.</div>
-              <div class="ask">Ask your agent…</div>
-            </div>
+      <div class="picture" role="img" aria-label="One window. On the left, the chat: you ask your agent to cut the part of the video you selected and line the cuts up with the beat of the music. On the right, the surface: the video, and its timeline, where the part is cut and the clips now start on the beats.">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="cols" aria-hidden="true">
+          <div class="chat">
+            <p class="label">Chat</p>
+            <div class="say you step s1">Cut the part I selected, and line the cuts up with the beat.</div>
+            <div class="say step s2">Done. I cut 0:10 to 0:16 and moved three cuts onto the beat.</div>
+            <div class="ask">Ask your agent…</div>
           </div>
-
-          <div class="screen">
-            <div class="bar">
-              <span class="dots"><i></i><i></i><i></i></span><b>Page</b>
+          <div class="surface">
+            <p class="label">Surface</p>
+            <div class="video"><span class="play"></span></div>
+            <div class="controls"><b>▶</b><span>0:10 / 0:32</span><span class="push">120 beats a minute</span></div>
+            <div class="track">
+              <span>Beats</span>
+              <div class="lane beats"></div>
             </div>
-            <div class="page">
-              <div class="rail"><span class="tab on"></span><span class="tab"></span><span class="tab"></span></div>
-              <div class="surface">
-                <h3>Launch</h3>
-                <div class="row done step s3"><span>Pricing page</span><span class="pill">Done</span></div>
-                <div class="row"><span>Welcome email</span><span class="pill">Open</span></div>
-                <div class="row"><span>Terms reviewed</span><span class="pill">Open</span></div>
-                <div class="note step s4">Pricing page went live today.</div>
+            <div class="track">
+              <span>Clips</span>
+              <div class="lane">
+                <span class="clip a"></span><span class="cut">cut</span><span class="clip b"></span><span class="clip c"></span><span class="clip d"></span>
               </div>
             </div>
+            <div class="note step s4">3 cuts moved onto the beat.</div>
           </div>
         </div>
-
-        <div class="feet" aria-hidden="true"><span>you ask here</span><span>you see it here</span></div>
-        <div class="bracket" aria-hidden="true"></div>
-        <div class="you" aria-hidden="true"><span>you</span></div>
       </div>
 
       <h2>How it works</h2>
