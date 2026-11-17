@@ -13,12 +13,14 @@
 // and the call answers 11 and 328; after, 22 and 1177, and 11 and 338, a highlight told first and marked so.
 // Before a view's handles were one block, the command said once, and a description one clause: the whole present 26 lines
 // and 1823 characters, the session's start 22 and 1381. After: 28 and 1823; 25 and 1349.
+// Before each tab's actions were printed with their commands at /, its rows' as one pattern, they were named alone: the
+// whole present 28 lines and 1823 characters, the session's start 25 and 1349. After: 34 and 2128; 31 and 1523.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { action, defineRoot, surface, view as routes, type Update } from "../../framework/core/index.ts"
 import { handle, type Json } from "../../framework/core/surface/view.ts"
-import { diff, tell, whole } from "../../framework/core/present/present.ts"
+import { diff, offers, tell, whole } from "../../framework/core/present/present.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
@@ -48,6 +50,9 @@ const TITLES = [
   "Draft: a dark palette for the lab",
   "Draft: a changelog view",
 ]
+
+const ISSUE = { title: { type: "string", kind: "line" }, about: { type: "string", kind: "markdown" } } as const
+const LANE = { lane: { type: "number" as const, range: [1, 5] as [number, number] } }
 
 /** The queue's facts at /, as the shell lists them for tab 3: lanes first, then the backlog, the drafts and what is done. */
 function view(m: Model): Json {
@@ -85,7 +90,11 @@ function view(m: Model): Json {
         surface: "queue",
         close: handle("close", "its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 3 }),
         title: "Queue",
-        actions: ["add", "draft"],
+        // Its actions with what each takes: its own, and every issue's at its own path as one pattern.
+        actions: [
+          { at: "/tabs/3", offers: offers({ add: handle("add", "", {}, ISSUE), draft: handle("draft", "theirs to look at", {}, ISSUE) }) },
+          { at: "/tabs/3/issues/N", offers: offers({ start: handle("start", "puts it in the lane, which must be free", { n: "N" }, LANE), done: handle("done", "its work is merged into main", { n: "N" }), drop: handle("drop", "it will not be done", { n: "N" }) }).map((o) => ({ ...o, fixed: { n: "N" } })) },
+        ],
         facts: {
           how: m.how,
           lanes: 5,
@@ -218,7 +227,7 @@ const rename = action({
 const taskViews = routes<Tasks, { n: number }>([add, begin, finish, rename], {
   "/": (m) => ({
     title: "Tasks",
-    how: "Add what the person asks for, begin one at a time; checks run by themselves; finish a task only once its checks passed.",
+    how: "A task is todo, doing or done. Beginning one starts its checks, which run by themselves and report running, then passed.",
     tasks: m.tasks.map(({ n, title, status, checks }) => ({ at: `/tasks/${n}`, n, title, status, ...(checks && { checks }) })),
     add: add.bind({}),
   }),

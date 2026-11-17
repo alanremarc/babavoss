@@ -94,15 +94,15 @@ test("a read's answer is the door's text of the view, and what is heard after a 
   expect(heard.text).toContain("the person acted on /tasks")
 })
 
-test("the person's decision: the agent is told it is theirs, takes it on their word, and is told when they take it on the page", async () => {
+test("the person's decision: the agent's call tells it the task waits on approval, it takes it on their word, and is told when they take it on the page", async () => {
   await played()
 
   const told = (did: string) => stepOf("decision", did).step.tellings.map((t) => t.text).join("\n")
 
-  // The task in review: the agent is offered approve and reopen, as the person is; whose decision it is, its how says.
+  // The task in review, told by the call's answer alone: the agent is offered approve and reopen, as the person is; whose
+  // decision it is, the person said in the conversation, never the surface.
   expect(told(`${WORD} /tabs/1/tasks/1 done`)).toContain("+ action approve")
-  expect(told(`${WORD} /tabs/1`)).toContain("Approving it is the person's decision")
-  expect(told(`${WORD} /tabs/1`)).toContain('"/tasks/tasks/1"\t1\t"Write the notes"\t"review"')
+  expect(told(`${WORD} /tabs/1/tasks/1 done`)).toContain('status: "todo" → "review"')
   // On the person's word, said in the conversation, the agent approves.
   expect(told(`${WORD} /tabs/1/tasks/1 approve`)).not.toContain("refused")
   // Taken on the page, it is told with the person's next message, by them.
@@ -183,7 +183,7 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
   // An action's description is said of any task, not of the one the exploration reached.
   expect(tasks.views[1]!.actions.map((a) => a.description)).toEqual([
     "what was done or found",
-    "the person reviews it",
+    "it goes to review",
     "",
     "it is not done",
   ])

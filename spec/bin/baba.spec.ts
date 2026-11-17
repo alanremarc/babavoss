@@ -383,7 +383,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const word = join(project, ".babavoss/bin/baba")
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
-    expect(started.stdout).toContain('"desk"\t"Keep a greeting the person has agreed to. Use when the greeting is to be changed."')
+    expect(started.stdout).toContain('"desk"\t"The greeting in use, and one proposed in its place. Use when the greeting is read or changed."')
     // Two surfaces, one open action: its argument is the table's name column.
     expect(started.stdout).toContain("actions: .babavoss/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
 
@@ -427,11 +427,11 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const tab = /\+ (\/desk) "Greeting"/.exec(opened)![1]!
 
-    expect(call(tab).stdout).toContain('how: "Propose a greeting when the person asks for another.')
+    expect(call(tab).stdout).toContain('how: "The greeting in use, and one proposed, if any')
     expect(call(tab).stdout).toContain('greeting: "hello"')
 
     // The tab's own path offers its actions, the command once and a line each, an input as what it means.
-    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   a greeting, for the person to decide on`)
+    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   a greeting, which stands beside the one in use until accepted or declined`)
 
     // The page holds the surface's component in its tab.
     // At its bare address: no link, no key, no cookie.
@@ -462,19 +462,21 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(hook("SessionEnd", { reason: "other" })).toMatchObject({ status: 0, stdout: "" })
     expect(await turn()).toMatchObject({ agent: "unknown" })
 
-    // A session resumed or compacted had the words: it is given their reminder, then the present whole; once a boundary, so
-    // a compaction at once after a resume is given nothing again, and one after a message is given them.
-    const reminder = readFileSync(join(checkout, "skill/reminder.md"), "utf8").trim()
-
-    for (const source of ["resume", "compact"]) {
+    // A session resumed, compacted or forked lost what it held: it is given the same as a start, the words and the present
+    // whole, every tab's actions with their commands among it; once a boundary, so a compaction at once after a resume is
+    // given nothing again, and one after a message is given them.
+    for (const source of ["resume", "compact", "fork"]) {
       const again = hook("SessionStart", { source }).stdout
 
-      expect(again).toStartWith(`${reminder}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
+      expect(again).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
       expect(again).toContain(`${tab} "Greeting" (tab `)
+      expect(again).toContain(`actions: .babavoss/bin/baba ${tab} ACTION`)
       expect(hook("SessionStart", { source: "compact" })).toMatchObject({ status: 0, stdout: "" })
       hook("UserPromptSubmit")
+      // The same present a start gives at the same moment.
+      expect(hook("SessionStart", { source: "clear" }).stdout).toBe(again)
+      hook("UserPromptSubmit")
     }
-    expect(hook("SessionStart", { source: "clear" }).stdout).toStartWith(body)
 
     // The agent's own calls, through a program, are not told back to it: the program's answers told it.
     expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)
@@ -490,7 +492,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
       expect(answer.stdout, answer.stderr).toMatch(/^baba: instance [0-9a-f]+ restarts\nbaba: instance [0-9a-f]+ answers\n$/)
     }
 
-    writeFileSync(code, readFileSync(code, "utf8").replace("Keep a greeting the person has agreed to.", "Keep the house greeting."))
+    writeFileSync(code, readFileSync(code, "utf8").replace("The greeting in use, and one proposed in its place.", "Keep the house greeting."))
     await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
     expect(call("/").stdout).not.toContain("Keep the house greeting.")
     restarted()

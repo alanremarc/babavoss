@@ -6,8 +6,11 @@
 //       [--budget USD] [--cap USD] [--turns N] [--minutes N] [--out DIR] [--dry]
 //
 //   --variant   a babavoss checkout; this one where none is given. The first is the baseline the others are compared with.
+//               PATH#WORDS runs it with the fixture queue's words from words/WORDS.ts, as dictating, in place of its own.
 //   --tasks     the tasks by name, all by default: done-one, add-one, note-one, start-oldest, move-drafts, lanes-read,
-//               open-count, note-backlog, note-parents, done-list, create-eight (tasks.ts)
+//               open-count, note-backlog, note-parents, done-list, create-eight; and the probes open-release, retitle,
+//               busy-lane, about-26, highlight-13, second-turn, done-then-lanes, link-cycle, release-ready, compact-then-act,
+//               no-surface, done-sleep (tasks.ts)
 //   --model     the model Claude Code runs, claude-sonnet-5-5 by default; the one it reports is recorded beside it
 //   --runs      runs of each task on each variant, 3 by default
 //   --budget    optional: the most the campaign may spend in dollars as the harness counts them; refused before it starts
@@ -25,7 +28,7 @@ import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 import { claudeCode } from "babavoss/core/index.ts"
 import { campaign, dryHarness, MODEL, REPO, table, tally, variantOf, type Options } from "./rig.ts"
-import { tasksNamed } from "./tasks.ts"
+import { scriptFor, tasksNamed } from "./tasks.ts"
 
 const { values } = parseArgs({
   options: {
@@ -84,7 +87,7 @@ try {
   process.on("SIGINT", stopping)
   process.on("SIGTERM", stopping)
 
-  const harness = options.dry ? dryHarness((prompt) => options.tasks.find((task) => task.prompt === prompt)!.dry) : claudeCode()
+  const harness = options.dry ? dryHarness(scriptFor(options.tasks)) : claudeCode()
 
   mkdirSync(options.out, { recursive: true })
 

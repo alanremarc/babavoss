@@ -21,11 +21,12 @@
 // Laid out as a surface is, src/surface.ts with its page in ui/index.tsx, it differs in two ways: it is made from the
 // project's surfaces, so this is a function of them rather than a default export, and its page is the whole page rather
 // than a component in a tab. scripts/open.ts makes it from the surfaces of the .baba/ it finds.
-import { action, handles, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
+import { action, isPerson, revealed, surface, view, type AnySurface, type Call, type Json, type Notice, type Surface, type Update, type View } from "../../core/index.ts"
 import settings from "../settings/src/surface.ts"
 import { ACTIVITY, activityView, entryOf, HIGHLIGHTS, openedFrom, openUpto, PAGE, record, refusalOf, restored, stamp, unopenedIn, without } from "./activity.ts"
 import type { Entry, Opened, Tabs } from "./activity.ts"
 import { sized, type Archive } from "./archive.ts"
+import { offers, type Offer, type Offered } from "../../core/present/present.ts"
 
 /**
  * `broken`: why the tab's surface could not restore its kept model, or does not load, which is then kept as it was saved.
@@ -151,6 +152,68 @@ export function whole<V extends Json | undefined>(value: V, address: string): V 
   return Object.fromEntries(
     Object.entries(value).map(([k, v]) => [k, k === "at" && typeof v === "string" && v.startsWith("/") ? address + (v === "/" ? "" : v) : whole(v, address)])
   ) as V
+}
+
+type Row = { [key: string]: Json | undefined }
+const isRow = (v: Json | undefined): v is Row => !!v && typeof v === "object" && !Array.isArray(v) && !isHandle(v)
+const isScalar = (v: Json | undefined) => v === null || (v !== undefined && typeof v !== "object")
+
+/** Every list of rows in a view whose rows each name their own path under `at`. */
+function placed(value: Json | undefined, out: Row[][] = []): Row[][] {
+  if (Array.isArray(value)) {
+    if (value.length && value.every((v) => isRow(v) && typeof v.at === "string" && v.at.startsWith("/"))) out.push(value as Row[])
+    for (const v of value) placed(v, out)
+  } else if (isRow(value)) for (const v of Object.values(value)) placed(v, out)
+
+  return out
+}
+
+/** A row's path with the segment that is its value of `column` named by the column in capitals; undefined where none is. */
+const template = (row: Row, column: string) => {
+  const segments = String(row.at).split("/")
+  const i = segments.lastIndexOf(String(row[column]))
+
+  return i > 0 && isScalar(row[column]) ? segments.map((s, j) => (j === i ? column.toUpperCase() : s)).join("/") : undefined
+}
+
+/**
+ * The actions every row of a list offers at its own path, as one pattern: the path with a column's name in capitals where
+ * each row's value stands, as `/issues/N`, and each action with its fixed arguments so named, `n=N`. An action whose
+ * inputs or words differ from row to row, or whose fixed argument is no column's value, is left out: its row's path is
+ * read for it. `offersAt` gives a row's actions by its path; undefined where there is no pattern or no action.
+ */
+export function patterned(rows: Row[], offersAt: (path: string) => Offer[]): { at: string; offers: Offer[] } | undefined {
+  if (rows.length < 2) return undefined
+
+  const column = Object.keys(rows[0]!).find((c) => c !== "at" && template(rows[0]!, c) !== undefined && rows.every((r) => template(r, c) === template(rows[0]!, c)))
+
+  if (!column) return undefined
+
+  const at = template(rows[0]!, column)!
+  const found = new Map<string, Offer | false>()
+
+  for (const row of rows)
+    for (const o of offersAt(String(row.at))) {
+      const fixed = Object.entries(o.fixed).map(([k, v]) => {
+        const named = [column, ...Object.keys(row).filter((c) => c !== column && c !== "at")].find((c) => isScalar(row[c]) && JSON.stringify(row[c]) === v)
+
+        return named && ([k, named.toUpperCase()] as const)
+      })
+      const said = String(row[column])
+      const general: Offer | false = fixed.every(Boolean) && {
+        ...o,
+        fixed: Object.fromEntries(fixed as (readonly [string, string])[]),
+        description: said.length > 1 ? o.description.split(said).join(column.toUpperCase()) : o.description,
+      }
+      const known = found.get(o.name)
+
+      if (known === undefined) found.set(o.name, general)
+      else if (known && (!general || JSON.stringify(known) !== JSON.stringify(general))) found.set(o.name, false)
+    }
+
+  const kept = [...found.values()].filter((o): o is Offer => !!o)
+
+  return kept.length ? { at, offers: kept } : undefined
 }
 
 /** A view's facts: what it says, without the handles it offers. */
@@ -465,15 +528,30 @@ export function shell(
       ...(earlier !== undefined && { earlier: { at: `${base}/${String((earlier as { at: string }).at).split("/").at(-1)}` } }),
     }
   }
-  /** A tab as the desktop lists it: its surface's title, actions and facts at /, the paths whole; or why it is broken. */
-  const said = (tab: Tab): { title?: string; actions?: string[]; facts?: Json; broken?: string } => {
+  /**
+   * A tab as the desktop lists it: its surface's title, actions and facts at /, the paths whole; or why it is broken. Its
+   * actions are each path's they are offered at, with what each takes: its own, and the actions its rows offer at their own
+   * paths as one pattern, so the agent acts on any of them from what / told it, without a read.
+   */
+  const said = (tab: Tab): { title?: string; actions?: Offered[]; facts?: Json; broken?: string } => {
     const seen = shown(tab, "/")
 
     if ("broken" in seen) return { broken: seen.broken }
 
     const { title, ...rest } = seen.ok ?? {}
-    // What can be done in the tab, by name: their commands are at the tab's path, so what is possible is known from / alone.
-    const actions = [...new Set(handles(rest).map((h) => h.name))]
+    const address = addressOf(tab)
+    const at = (path: string) => {
+      const there = shown(tab, path)
+
+      return "ok" in there ? offers(there.ok) : []
+    }
+    const own = offers(rest)
+    const rows = placed(revealed(rest)).flatMap((list) => {
+      const p = patterned(list, at)
+
+      return p ? [{ at: address + p.at, offers: p.offers }] : []
+    })
+    const actions: Offered[] = [...(own.length ? [{ at: address, offers: own }] : []), ...rows]
 
     return { ...(typeof title === "string" && { title }), ...(actions.length && { actions }), facts: facts(whole(rest, addressOf(tab))) }
   }

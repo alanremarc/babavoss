@@ -1,11 +1,13 @@
 // The eval's fixture: a copy of the queue's shape, issues in the backlog, in a lane, done or drafts, each on a narrative with
 // the issues it came out of and a note, kept in its tab and seeded the same at every run's start (seed.ts). The eval copies
-// this folder into each run's project as its surface `queue`, so a variant that changes how a surface is told to the agent,
-// in the framework or in these descriptions, brings its own copy. No store, no outline, no iterations: what the tasks need.
+// this folder from its own checkout into each run's project as its surface `queue`, so every variant runs the same queue;
+// its words, the description, `how` and the actions' descriptions, are in words.ts, which a variant may replace
+// (../../../words/). No store, no outline, no iterations: what the tasks need.
 import { action, detail, surface, view, type Update } from "babavoss/core/index.ts"
 import { seed } from "./seed.ts"
+import { LANES, words } from "./words.ts"
 
-export const LANES = 5
+export { LANES }
 
 export type Status = "draft" | "backlog" | "lane" | "done"
 export type Narrative = { id: string; title: string; about: string }
@@ -82,49 +84,49 @@ const ISSUE = { title: { type: "string", kind: "line" }, about: { type: "string"
 const BRANCH = { ...ISSUE, from: { type: "string", kind: "issues" }, narrative: { type: "string", kind: "id" } } as const
 const add = action({
   name: "add",
-  description: "one the person asked for, to the backlog's bottom; title short and imperative, about on what changes and why",
+  description: words.actions.add,
   subject: {},
   inputs: ISSUE,
   update: (w: Work, args): Result => made(w, args, "backlog"),
 })
 const addFrom = action({
   name: "add_from",
-  description: "as add, with the issues it came out of, a comma list, or none; narrative empty for its first parent's",
+  description: words.actions.add_from,
   subject: {},
   inputs: BRANCH,
   update: (w: Work, args): Result => made(w, args, "backlog"),
 })
 const draft = action({
   name: "draft",
-  description: "an issue the person has not asked for, theirs to look at, on the page or with you",
+  description: words.actions.draft,
   subject: {},
   inputs: ISSUE,
   update: (w: Work, args): Result => made(w, args, "draft"),
 })
 const approve = action({
   name: "approve",
-  description: "into the backlog: the person does on the page, and you once they say to go ahead",
+  description: words.actions.approve,
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, (issue) => ({ ...issue, status: "backlog" })), notices: [said(w, n, "approved: it joins the backlog")] }),
 })
 const describe = action({
   name: "describe",
-  description: "",
+  description: words.actions.describe,
   subject: { n: "number" },
   inputs: { about: { type: "string", kind: "markdown" } },
   update: (w: Work, { n, about }): Result => (about.trim() ? { model: changed(w, n, (issue) => ({ ...issue, about: about.trim() })) } : { refused: "Say what it is about" }),
 })
 const note = action({
   name: "note",
-  description: "what is being done or waited for; empty clears it",
+  description: words.actions.note,
   subject: { n: "number" },
   inputs: { text: { type: "string", kind: "line" } },
   update: (w: Work, { n, text }): Result => ({ model: changed(w, n, (issue) => ({ ...issue, note: text.trim() })) }),
 })
 const start = action({
   name: "start",
-  description: "when a subagent begins on it, a draft the person said to build too",
+  description: words.actions.start,
   subject: { n: "number" },
   inputs: { lane: { type: "number", range: [1, LANES] } },
   update(w: Work, { n, lane }): Result {
@@ -137,21 +139,21 @@ const start = action({
 })
 const done = action({
   name: "done",
-  description: "its work is merged into main",
+  description: words.actions.done,
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "done" })), notices: [said(w, n, "is done")] }),
 })
 const back = action({
   name: "back",
-  description: "to the backlog",
+  description: words.actions.back,
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "backlog" })) }),
 })
 const drop = action({
   name: "drop",
-  description: "it will not be done",
+  description: words.actions.drop,
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({
@@ -161,7 +163,7 @@ const drop = action({
 })
 const link = action({
   name: "link",
-  description: "it came out of that one as well",
+  description: words.actions.link,
   subject: { n: "number" },
   inputs: { from: { type: "number", kind: "issue" } },
   update(w: Work, { n, from }): Result {
@@ -175,7 +177,7 @@ const link = action({
 })
 const unlink = action({
   name: "unlink",
-  description: "it did not come out of that one",
+  description: words.actions.unlink,
   subject: { n: "number" },
   inputs: { from: { type: "number", kind: "issue" } },
   update: (w: Work, { n, from }): Result =>
@@ -185,7 +187,7 @@ const unlink = action({
 })
 const move = action({
   name: "move",
-  description: "to another narrative",
+  description: words.actions.move,
   subject: { n: "number" },
   inputs: { narrative: { type: "string", kind: "id" } },
   update: (w: Work, { n, narrative }): Result =>
@@ -250,12 +252,7 @@ const pages = view(actions, {
 
     return {
       title: "Queue",
-      how:
-        "The session's work as the person follows it, so it is worth keeping true as the work moves. What the person asks for is added " +
-        "as an issue; what you would suggest is a draft, theirs to look at. Once they say to go ahead with a draft, on the page or in " +
-        "the conversation, it is as good as approved: start it like any issue. A lane is a subagent delivering one issue; a note says " +
-        "where an issue stands. Done means merged into main. add_from also names what an issue came out of and its narrative, an effort " +
-        `going its own way. An issue's path has the rest. There are ${LANES} lanes; the backlog's top is next.`,
+      how: words.how,
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       narratives: w.narratives.map((x) => {
@@ -285,9 +282,7 @@ const pages = view(actions, {
 type Event = { kind: "none" }
 
 export default surface<Work, Event, never>({
-  description:
-    "Track the session's work as issues, each in the backlog, in a lane or done, on a narrative with what it came out of. " +
-    "Use when work is asked for, starts, moves, branches or lands.",
+  description: words.description,
   init: seed,
   update: (w, message) => (message.kind === "call" ? pages.update(w, message) : { model: w }),
   view: pages.view,

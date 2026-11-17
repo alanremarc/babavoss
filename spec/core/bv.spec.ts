@@ -422,11 +422,14 @@ describe("the program door", () => {
       const view: { notes: { at: string; remind: { handle: string; args: object; inputs: object } }[] } = await read("notes")
       print(view.notes.length, view.notes[0].remind)
       for (const note of view.notes) await call(note.at, note.remind.handle, { seconds: 60 })
+      // One fact of a view by its path, as the command's own read gives it: its value alone.
+      const fact = (await read("/notes/notes")) as unknown[]
+      print("fact", fact.length)
     `
     const answer = s.run(["/", "-e", "-"], client, program)
 
     expect(answer.status, answer.err).toBe(0)
-    expect(answer.out).toContain('3 {"handle":"remind","args":{"n":1},"inputs":{"seconds":{"type":"number"}}}\n6 calls done\n')
+    expect(answer.out).toContain('3 {"handle":"remind","args":{"n":1},"inputs":{"seconds":{"type":"number"}}}\nfact 3\n6 calls done\n')
     expect(answer.out).toMatch(/\n\/notes\/\{1,2,3\} remind ×3: .*due/)
     expect(answer.out).not.toContain("refused")
   })

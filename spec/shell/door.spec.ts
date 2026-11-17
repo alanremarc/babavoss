@@ -173,8 +173,16 @@ it("says a tab's change once in the answer to a call there, and still tells at /
   const { request } = await started()
 
   expect(await request("/?open")).toContain("actions: bv tabs / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
-  // A tab opened is one line: its heading, its actions by name, and where to read the rest.
-  expect(await request("/", { handle: "open", args: { surface: "counter" } })).toBe('+ /counter "Counter" (tab 1), actions: bump, note, grow; read /counter')
+  // A tab the agent opened is told whole in the answer, as it has not seen it: its facts and its actions with their commands.
+  expect((await request("/", { handle: "open", args: { surface: "counter" } })).split("\n").slice(0, 7)).toEqual([
+    '+ /counter "Counter" (tab 1)',
+    "n: 0",
+    'note: ""',
+    "actions: bv tabs /counter ACTION name=value…",
+    "  bump by=number   add",
+    "  note text=string   note",
+    "  grow   add six, by a command",
+  ])
   // The agent's own call: its change is in the answer once, not again under the tab's heading.
   expect(await request("/tabs/1", { handle: "bump", args: { by: "2" } })).toBe("n: 0 → 2")
   // The person acts in the tab; the agent's next call there says its own change and what was heard; what the person
@@ -407,7 +415,7 @@ it("tells one event in one line: a notice stands for what its call changed, unle
   )
 })
 
-it("weighs by attention: a tab the agent did not read or call in this turn or the last is one line, who changed it; its notices are still told", async () => {
+it("weighs by attention: a tab the agent did not read or call in this turn or the last is told in full where its changes are a few lines, else one line, who changed it; its notices are still told", async () => {
   const { request, turn } = await started()
 
   await request("/?open")
@@ -419,7 +427,7 @@ it("weighs by attention: a tab the agent did not read or call in this turn or th
   await request("/tabs/1", { handle: "note", args: { text: "aside" } }, true)
   await request("/tabs/1", { handle: "bump", args: { by: 2 } }, true)
   await request("/tabs/2", { handle: "add", args: { title: "one" } }, true)
-  // Read in the last turn, the board is told in full; the counter, opened two turns ago, in one line, its notice still told.
+  // Read in the last turn, the board is told in full; the counter, opened two turns ago, in full too, its change one line.
   expect(await request("/_/wait?seconds=0")).toBe(
     [
       "notices:",
@@ -428,10 +436,11 @@ it("weighs by attention: a tab the agent did not read or call in this turn or th
       "changed by the person:",
       '/board "Board" (tab 2)',
       '+ /board/items/1: n 1, title "one", done false',
-      '/counter "Counter" (tab 1): changed by the person; read it',
+      '/counter "Counter" (tab 1)',
+      "n: 0 → 2",
     ].join("\n")
   )
-  // Two turns on, neither is one it works in: each is one line, its notices still told.
+  // Two turns on, neither is one it works in: the counter's one change is told, the board's several are one line; notices still told.
   await turn("started")
   await turn("started")
   await request("/tabs/2/items/1", { handle: "finish", args: { n: 1 } }, true)
@@ -442,7 +451,9 @@ it("weighs by attention: a tab the agent did not read or call in this turn or th
       "notices:",
       "/board/items/1: item 1 is finished (by the person)",
       "the person acted on /counter",
-      '/counter "Counter" (tab 1): changed by the person; read it',
+      "changed by the person:",
+      '/counter "Counter" (tab 1)',
+      "n: 2 → 3",
       '/board "Board" (tab 2): changed by the person; read it',
     ].join("\n")
   )
@@ -483,11 +494,11 @@ it("keeps detail out of the present at /, counted in one line with where to read
   )
 })
 
-it("answers a call by its outcome alone: a tab opened in one line, an action by its name; and reads one fact of a view by its path", async () => {
+it("answers a call by its outcome alone: a tab opened whole, an action by its name; and reads one fact of a view by its path", async () => {
   const { request } = await started()
 
   await request("/?open")
-  expect(await request("/", { handle: "open", args: { surface: "board" } })).toBe('+ /board "Board" (tab 1), actions: add, reset, mark; read /board')
+  expect(await request("/", { handle: "open", args: { surface: "board" } })).toStartWith('+ /board "Board" (tab 1)\nitems: []')
   await request("/tabs/1", { handle: "add", args: { title: "one" } })
   expect(await request("/board/items/1", { handle: "finish", args: {} })).toBe("done: false → true\n+ action review\n- action finish")
   expect(await request("/tabs/1/marked")).toBe("marked: []")

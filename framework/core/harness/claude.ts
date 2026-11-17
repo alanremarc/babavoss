@@ -300,6 +300,7 @@ export const PLUGIN = fileURLToPath(new URL("../../../plugin/claude", import.met
 export const PLUGIN_LINK = ".claude/skills/baba"
 /** Claude Code's settings beside .baba/: the person's, where older provisioning wrote the framework's hooks. */
 const SETTINGS = ".claude/settings.json"
+/** The plugin's files; reminder.md, which an earlier plugin carried, still marks a copied folder as baba's. */
 const PLUGIN_FILES = ["SKILL.md", "reminder.md", ".claude-plugin", "hooks"]
 
 /** Whether the skill folder at `link` is baba's: a link to a babavoss plugin, or a folder of baba's files alone whose skill is baba. */

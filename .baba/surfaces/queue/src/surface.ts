@@ -71,7 +71,7 @@ const ISSUE = { title: { type: "string", kind: "line" }, about: { type: "string"
 const BRANCH = { ...ISSUE, from: { type: "string", kind: "issues" }, narrative: { type: "string", kind: "id" } } as const
 const add = action({
   name: "add",
-  description: "one the person asked for, to the backlog's bottom; title short and imperative, about on what changes and why",
+  description: "to the backlog's bottom; title short and imperative, about on what changes and why",
   subject: {},
   inputs: ISSUE,
   update: (w: Work, args): Result => made(w, args, "backlog"),
@@ -85,7 +85,7 @@ const addFrom = action({
 })
 const draft = action({
   name: "draft",
-  description: "an issue the person has not asked for, theirs to look at, on the page or with you",
+  description: "an issue proposed, outside the backlog until approved, and highlighted for the person",
   subject: {},
   inputs: ISSUE,
   update: (w: Work, args): Result => made(w, args, "draft"),
@@ -112,7 +112,7 @@ const narrate = action({
 })
 const approve = action({
   name: "approve",
-  description: "into the backlog: the person does on the page, and you once they say to go ahead",
+  description: "moves the draft into the backlog",
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, (issue) => ({ ...issue, status: "backlog" })), notices: [said(w, n, "approved: it joins the backlog")] }),
@@ -133,7 +133,7 @@ const note = action({
 })
 const post = action({
   name: "post",
-  description: "to its channel, as its lane's worker: what was just found, done or decided, for the person to follow",
+  description: "to its channel: a line of what was found, done or decided, shown under the issue in order",
   subject: { n: "number" },
   inputs: { text: { type: "string", kind: "markdown" } },
   update: (w: Work, { n, text }, call): Result =>
@@ -143,7 +143,7 @@ const post = action({
 })
 const start = action({
   name: "start",
-  description: "when a subagent begins on it, a draft the person said to build too",
+  description: "puts it in the lane, which must be free; a draft too",
   subject: { n: "number" },
   inputs: { lane: { type: "number", range: [1, LANES] } },
   update(w: Work, { n, lane }): Result {
@@ -343,12 +343,11 @@ const pages = view(actions, {
     return {
       title: "Queue",
       how:
-        "The session's work as the person follows it, so it is worth keeping true as the work moves. What the person asks for is added " +
-        "as an issue; what you would suggest is a draft, theirs to look at. Once they say to go ahead with a draft, on the page or in " +
-        "the conversation, it is as good as approved: start it like any issue. A lane is a subagent delivering one issue; a note says " +
-        "where an issue stands, and its worker can post to it as it goes. Done means merged into main. add_from and draft_from also name " +
-        "what an issue came out of and its narrative, an effort going its own way; another pass at an issue is an iteration, with why, " +
-        `what was decided and how it ended. An issue's path has the rest. There are ${LANES} lanes; the backlog's top is next.`,
+        "Issues on narratives, efforts each going its own way: each issue a draft, in the backlog, in a lane or done, with the issues it " +
+        `came out of. A draft is outside the backlog until approved. Each of the ${LANES} lanes holds one issue at a time. A note is one ` +
+        "line on where an issue stands; its channel, the lines posted to it in order. Done means its work is merged into main. Another " +
+        "pass at an issue is an iteration, with why, what was decided and how it ended. The backlog is listed oldest first. An issue's " +
+        "path has the rest.",
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       narratives: w.narratives.map((x) => {
@@ -384,7 +383,7 @@ export function queue(work: Store): Surface<Model, Event, Command> {
   return surface<Model, Event, Command>({
     description:
       "Track the session's work as issues, each in the backlog, in a lane or done, on a narrative with what it came out of and the reasoning of each pass, " +
-      "seen as a list or by narrative. Use when work is asked for, starts, moves, branches, needs another pass or lands.",
+      "seen as a list or by narrative. Use when the work's issues are read or moved.",
     init: () => ({ work: empty(), reading: true }),
     // A tab kept from before holds the queue's issues itself: they are brought into the session's work. State that is
     // neither, as when the surface was still the template it began as, starts empty.
