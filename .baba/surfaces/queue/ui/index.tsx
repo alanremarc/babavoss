@@ -1,5 +1,5 @@
 // The queue's page: the session's work in three views, switched from the toolbar at its foot. The list has the open
-// issues as one-liners in the sidebar on the right, grouped by where they stand, and the selected one in the content;
+// issues as one-liners in the sidebar, at the side the person prefers for one, grouped by where they stand, and the selected one in the content;
 // the archive is the same over the issues that are done, grouped by narrative; the narratives are a list, and a page for
 // each with its issues as an outline (narratives.tsx), from which an issue opens in the list. Which view and what is
 // selected is the tab's route, the same as the views' paths, so a refresh and the agent's pointing land on it: /issues/N
@@ -249,7 +249,7 @@ export default function Queue() {
     )
 
   return (
-    <div className="relative flex min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1 side-left:flex-row-reverse">
       <Modes lens={lens} onLens={switchTo} />
       <main className="flex min-w-0 flex-1 flex-col overflow-auto">
         {(shown && (
@@ -265,7 +265,7 @@ export default function Queue() {
         )) ??
           (!issues.length && empty)}
       </main>
-      <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l" aria-label={lens === "archive" ? "Archive" : "Issues"}>
+      <aside className="bg-muted/30 flex w-80 shrink-0 flex-col overflow-auto border-l side-left:border-r side-left:border-l-0" aria-label={lens === "archive" ? "Archive" : "Issues"}>
         {heard && <Stack root={heard} sections={sections} {...(lens === "archive" && { none: "Nothing is done yet" })} picked={picked} colorOf={colorOf} go={go} />}
       </aside>
     </div>

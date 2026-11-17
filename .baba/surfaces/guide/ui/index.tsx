@@ -1,7 +1,7 @@
-// The guide's page: the groups and their specimens down the left, the one group shown at the right, each specimen the
+// The guide's page: the groups and their specimens down a sidebar at the side the person prefers, the one group shown beside it, each specimen the
 // framework's real component drawn with sample data in its states. Where the page is, the group and the specimen, is the
 // tab's route, /GROUP/ENTRY, so the agent's pointing and a refresh land on it; scrolling marks the specimen in view on
-// the left without moving the route. What each specimen draws is in the group's own module.
+// the sidebar without moving the route. What each specimen draws is in the group's own module.
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react"
 import { SwatchBookIcon } from "lucide-react"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
@@ -51,7 +51,7 @@ export default function Guide() {
     return () => clearTimeout(later)
   }, [group.at, entry, shown])
 
-  // The specimen nearest the top of the content is the one marked on the left.
+  // The specimen nearest the top of the content is the one marked in the sidebar.
   useEffect(() => {
     const sections = [...(main.current?.querySelectorAll<HTMLElement>("section[id^=specimen]") ?? [])]
     const seen = new Map<string, boolean>()
@@ -69,8 +69,8 @@ export default function Guide() {
   }, [shown])
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <nav aria-label="Specimens" className="flex w-52 shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 py-3">
+    <div className="flex min-h-0 flex-1 side-right:flex-row-reverse">
+      <nav aria-label="Specimens" className="flex w-52 shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 py-3 side-right:border-r-0 side-right:border-l">
         {root!.groups.map((g) => {
           const open = g.at === group.at
 

@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../
 import type { Rail as Placed } from "../settings/src/settings.ts"
 import { doesOf, MARK, onScreen, opensDrawer, stepOf, upright, type Gesture, type Mark } from "./rail.ts"
 import { tabScrollOffset } from "./tab-scroll.ts"
+import { useConventions } from "./tab.tsx"
 
 /** A tab's button, by its address: what a drawer gives focus back to, and what a bubble stands beside. */
 export const tabId = (key: string) => `tab-${key.replaceAll("/", "-")}`
@@ -305,6 +306,7 @@ function Title({ label, engaged }: { label: string; engaged: boolean }) {
   const moving = useRef<HTMLSpanElement>(null)
   const content = useRef<HTMLSpanElement>(null)
   const [distance, setDistance] = useState(0)
+  const still = useConventions().motion === "reduced"
 
   useLayoutEffect(() => {
     const measure = () => setDistance(Math.max(0, content.current!.offsetWidth - viewport.current!.clientWidth))
@@ -319,17 +321,15 @@ function Title({ label, engaged }: { label: string; engaged: boolean }) {
 
   useLayoutEffect(() => {
     const text = moving.current!
-    const reduced = matchMedia("(prefers-reduced-motion: reduce)")
     let frame: number | undefined
     const stop = () => {
       if (frame !== undefined) cancelAnimationFrame(frame)
       frame = undefined
       text.style.transform = "translateX(0)"
     }
-    const sync = () => {
-      stop()
-      if (!engaged || distance <= 1 || reduced.matches) return
 
+    stop()
+    if (engaged && distance > 1 && !still) {
       const began = performance.now()
       const tick = (now: number) => {
         text.style.transform = `translateX(-${tabScrollOffset(now - began - 100, content.current!.offsetWidth)}px)`
@@ -339,14 +339,8 @@ function Title({ label, engaged }: { label: string; engaged: boolean }) {
       frame = requestAnimationFrame(tick)
     }
 
-    sync()
-    reduced.addEventListener("change", sync)
-
-    return () => {
-      reduced.removeEventListener("change", sync)
-      stop()
-    }
-  }, [distance, engaged])
+    return stop
+  }, [distance, engaged, still])
 
   return (
     <span ref={viewport} data-slot="tab-label" className={cn("block min-w-0 overflow-clip pl-[3px] whitespace-nowrap", distance > 1 && "mask-r-from-[calc(100%-24px)]")}>

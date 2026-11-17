@@ -15,13 +15,14 @@ const watching = (c: Command) => c.kind === "watch"
 const writing = (c: Command) => c.kind === "write"
 
 describe("the settings", () => {
-  it("say at / the appearance with where the rail stands, the shortcuts and the mark, small, with the place that holds the shortcuts", () => {
+  it("say at / the appearance with where the rail stands, the preferences, the shortcuts and the mark, small, with the place that holds the shortcuts", () => {
     const { agent } = story(settings(() => "unused"))
 
     expect(agent.sees()).toEqual({
       title: "Settings",
       how: expect.any(String),
       appearance: { mode: "system", same: true, theme: "neutral", rail: { side: "left", from: "bottom", drawer: "left" } },
+      preferences: { motion: "system", scale: 1, side: "right" },
       shortcuts: { at: "/shortcuts", drawer: "mod+p", next: "mod+k", previous: "mod+j" },
       logo: { animate: true },
       mode: expect.anything(),
@@ -29,9 +30,12 @@ describe("the settings", () => {
       dynamic: expect.anything(),
       same: expect.anything(),
       rail: expect.anything(),
+      motion: expect.anything(),
+      scale: expect.anything(),
+      side: expect.anything(),
       animate: expect.anything(),
     })
-    expect(agent.offered()).toEqual(["mode", "theme", "dynamic", "same", "rail", "animate"])
+    expect(agent.offered()).toEqual(["mode", "theme", "dynamic", "same", "rail", "motion", "scale", "side", "animate"])
     expect(agent.offered("/shortcuts")).toEqual(["bind", "reset"])
     expect(agent.sees("/shortcuts")).toMatchObject({ commands: [{ command: "drawer", keys: "mod+p", does: expect.any(String) }, {}, {}] })
   })
@@ -62,8 +66,26 @@ describe("the settings", () => {
     expect(agent.sees()).toMatchObject({ appearance: { mode: "dark", same: true, theme: "clay" }, logo: { animate: false } })
     expect(world.commands().filter(writing).at(-1)).toEqual({
       kind: "write",
-      settings: { appearance: { ...DEFAULTS.appearance, mode: "dark", same: true, themes: { light: "clay", dark: "neutral" } }, keys: {}, logo: { animate: false } },
+      settings: {
+        appearance: { ...DEFAULTS.appearance, mode: "dark", same: true, themes: { light: "clay", dark: "neutral" } },
+        preferences: DEFAULTS.preferences,
+        keys: {},
+        logo: { animate: false },
+      },
     })
+    expect(agent.noticed()).toEqual([])
+  })
+
+  it("set each preference by the action of its name, to one of its choices, and refuse any other", async () => {
+    const { agent, world } = story(settings(() => "unused"))
+
+    expect(await agent.call("/", "motion", { motion: "reduced" })).toMatchObject({ outcome: "written" })
+    expect(await agent.call("/", "scale", { scale: 1.25 })).toMatchObject({ outcome: "written" })
+    expect(await agent.call("/", "side", { side: "left" })).toMatchObject({ outcome: "written" })
+    expect(await agent.call("/", "scale", { scale: 7 })).toMatchObject({ outcome: "refused", reason: "scale is 0.9, 1, 1.1, 1.25, 1.5, not 7" })
+    expect(await agent.call("/", "side", { side: "top" })).toMatchObject({ outcome: "refused" })
+    expect(agent.sees()).toMatchObject({ preferences: { motion: "reduced", scale: 1.25, side: "left" } })
+    expect(world.commands().filter(writing).at(-1)).toMatchObject({ settings: { preferences: { motion: "reduced", scale: 1.25, side: "left" } } })
     expect(agent.noticed()).toEqual([])
   })
 
