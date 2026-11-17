@@ -21,7 +21,8 @@ framework/shell/            the shell, the root of a .baba/, laid out as a surfa
                             surfaces; ui/ its whole page, the tabs, home, the shortcuts and the tab hooks; scripts/open.ts its door,
                             which finds, generates and follows .baba/; src/hosting.ts and scripts/build.ts host and build any root's page;
                             settings/ the settings, a surface of its own that comes with it, kept in the person's ~/.babavoss/settings.json
-framework/kit/              the kit: the components, layouts and design language every page is built with; it imports no shell
+framework/kit/              the kit: shadcn's primitives with one layer of opinions, the parts of a content, and the design language every
+                            page is built with; it imports no shell
 skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
 plugin/claude/              Claude Code's plugin: the manifest, of the package's version; hooks/hooks.json, the hook for each event; SKILL.md,
                             skill/SKILL.md's words, which a spec keeps equal
