@@ -1,18 +1,18 @@
 // The resident process as its clients see it: http in, views and answers out; the door's rules; the doors reach a surface
 // only through it, and say so in one line where the environment refuses it.
 import { poll } from "../support/poll.ts"
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, describe, expect, it } from "bun:test"
 import { defineRoot } from "../../framework/core/root.ts"
 import { reach } from "../../framework/core/runtime/reach.ts"
-import { startRuntime, rootVersion, RELOAD_MS, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
-import { admitted, type UiHosting } from "../../framework/core/runtime/door.ts"
+import { devMode, startRuntime, rootVersion, LOOK_MS, RELOAD_MS, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
+import { admitted } from "../../framework/core/runtime/door.ts"
 import { BOOT_ID, island } from "../../framework/core/runtime/boot.ts"
-import { ACTOR_HEADER, SERVICE_HEADER, STALE_HEADER, endpointFile, findService, logFile, type Endpoint } from "../../framework/core/runtime/service.ts"
-import { request as httpRequest, type IncomingMessage, type Server } from "node:http"
+import { ACTOR_HEADER, SERVICE_HEADER, STALE_HEADER, endpointFile, findService, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { request as httpRequest, type IncomingMessage } from "node:http"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { action, surface, view, type Update } from "../../framework/core/surface/index.ts"
 
@@ -292,39 +292,7 @@ const listen = async (base: string, token: string) => {
 }
 const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), idleMs: 60_000, log: () => {}, watch: [] })
 
-it("takes changed code in place: the same process, address and token, the state as it was saved, and open pages told, and a waiting agent when its wait ends", async () => {
-  const dir = scratch()
-  const { runtime, endpoint, base, get, post } = await started(dir)
-
-  await post("/", { handle: "bump", args: { by: 3 } }, { [ACTOR_HEADER]: "agent" })
-
-  const page = await listen(base, endpoint.token)
-
-  await poll(() => page.heard).toEqual(["change", "turn"])
-  await (await get("/?open", { accept: "text/plain" })).text()
-
-  // Changed code is no event in the work: it ends no wait, and what it changes is told to no one.
-  const waiting = get("/_/wait?seconds=1", { accept: "text/plain" }).then((response) => response.text())
-  // The code as edited: the same surface, saying one fact more. Its entry runs again in this process, as under bun --hot.
-  const edited = defineRoot({
-    name: "p",
-    ui: join(dir, "ui"),
-    surface: {
-      ...counter,
-      view: (m, path, actor) => (path === "/" ? { ...counter.view(m, path, actor), doubled: m.n * 2 } : counter.view(m, path, actor)),
-    },
-  })
-  const again = await startRuntime(edited, ["--session", "S"], options(dir))
-
-  expect(again!.port).toBe(runtime.port)
-  expect(readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))).toEqual(endpoint)
-  expect(await (await get("/")).json()).toMatchObject({ n: 3, doubled: 6 })
-  expect(await waiting).toBe("nothing changed")
-  expect(page.heard.filter((event) => event === "change").length).toBeGreaterThan(1)
-  page.stop()
-})
-
-describe("changed code while work runs", () => {
+describe("the two modes", () => {
   type Held = { n: number }
   const releases: (() => void)[] = []
   const hold = action({
@@ -349,325 +317,204 @@ describe("changed code while work runs", () => {
     },
     failed: (_c, error) => ({ kind: "failed", error }),
   })
-  const edited = (dir: string) =>
-    defineRoot({ name: "h", ui: join(dir, "ui"), surface: { ...holder, view: (m, path) => (path === "/" ? { ...holding.view(m, path), edited: true } : undefined) } })
-  const begun = async (swapWaitMs?: number) => {
+  /**
+   * A runtime of the holding surface whose process does not end, as in a spec: what ending it and waking its successor would
+   * do is recorded, as are its log's lines. Its entry is a file of its own, the code it loaded that a spec changes.
+   */
+  const begun = async (more: Partial<RuntimeOptions> = {}) => {
     const dir = scratch()
-    const lines: string[] = []
-    const opts = { ...options(dir), log: (line: string) => lines.push(line), swapWaitMs }
-
-    root(dir)
-
-    const runtime = await startRuntime(defineRoot({ name: "h", ui: join(dir, "ui"), surface: holder }), ["--session", "S"], opts)
-
-    closers.push(() => runtime!.close())
-
-    const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "h")))!
-    const headers = { accept: "text/plain", [SERVICE_HEADER]: endpoint.token }
-    const base = `http://127.0.0.1:${runtime!.port}`
-    const read = async () => (await fetch(`${base}/`, { headers })).text()
-    const call = async (handle: string) => (await fetch(`${base}/`, { method: "POST", body: JSON.stringify({ handle, args: {} }), headers })).text()
-
-    return { dir, lines, opts, read, call, base, token: endpoint.token }
-  }
-
-  it("logs once that it waits, holds what the agent asks meanwhile, and answers it with the new code once the work ends, saying nothing of it", async () => {
-    const { dir, lines, opts, read, call } = await begun()
-
-    await read()
-    await call("hold")
-
-    const again = startRuntime(edited(dir), ["--session", "S"], opts)
-
-    await poll(() => lines.filter((line) => line.includes("waiting")).length).toBe(1)
-    await sleep(RELOAD_MS * 2)
-    expect(lines.filter((line) => line.includes("waiting"))).toEqual([
-      expect.stringMatching(/^\d{4}-\d\d-\d\dT\S+Z h: its code changed; waiting for 1 job to finish before loading it, at most 30s: hold by agent:S$/),
-    ])
-
-    let answered = ""
-    const held = read().then((text) => (answered = text))
-
-    await sleep(RELOAD_MS)
-    expect(answered).toBe("")
-    releases.splice(0).forEach((release) => release())
-    await again
-    await held
-    expect(lines.at(-1)).toMatch(/Z h: its code changed and was loaded in place$/)
-    expect(answered).toContain("edited: true")
-    expect(answered).not.toContain("its changed code")
-  })
-
-  it("gives the new code a call that reached the code before it as that code stopped, which did nothing", async () => {
-    const dir = scratch()
-    const opts = { ...options(dir), log: () => {} }
-    // A session command that takes a while to end once told to, as a watcher closing its files does.
-    const slow = surface<Held, { kind: "released" } | { kind: "failed"; error: string }, { kind: "hold" }>({
-      ...holder,
-      start: () => [{ kind: "hold" }],
-      session: () => true,
-      async run(_c, _send, signal) {
-        await new Promise<void>((done) => signal.addEventListener("abort", () => setTimeout(done, 600)))
-      },
-    })
-
-    root(dir)
-
-    const runtime = await startRuntime(defineRoot({ name: "h", ui: join(dir, "ui"), surface: slow }), ["--session", "S"], opts)
-
-    closers.push(() => runtime!.close())
-
-    const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "h")))!
-    // The call is let in before the code changes, and its body arrives while the code before it stops.
-    const answer = new Promise<string>((done) => {
-      const req = httpRequest({ host: "127.0.0.1", port: runtime!.port, path: "/", method: "POST", headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token } }, (res) => {
-        let text = ""
-
-        res.on("data", (chunk) => (text += chunk))
-        res.on("end", () => done(text))
-      })
-
-      req.flushHeaders()
-      setTimeout(() => req.end(JSON.stringify({ handle: "hold", args: {} })), 300)
-    })
-
-    await sleep(100)
-
-    const again = startRuntime(
-      defineRoot({ name: "h", ui: join(dir, "ui"), surface: { ...slow, update: (m) => ({ model: { n: m.n + 10 } }) } }),
-      ["--session", "S"],
-      opts,
-    )
-
-    expect(await answer).toBe("n: 0 → 10")
-    await again
-  })
-
-  it("tells the open pages what it says of its code, as notices, and a page that connects soon after", async () => {
-    const { dir, opts, read, call, base, token } = await begun(300)
-    const open = await listen(base, token)
-
-    await read()
-    await call("hold")
-    await startRuntime(edited(dir), ["--session", "S"], opts)
-    // That it waits, and then what it cut.
-    await poll(() => open.heard.filter((event) => event === "notice").length).toBe(2)
-
-    const later = await listen(base, token)
-
-    await poll(() => later.heard).toEqual(["change", "turn", "notice"])
-    open.stop()
-    later.stop()
-    releases.splice(0)
-  })
-
-  it("cuts work that does not end after the bounded wait, loads the new code, and names what it cut", async () => {
-    const { dir, lines, opts, read, call } = await begun(300)
-
-    await read()
-    await call("hold")
-    await startRuntime(edited(dir), ["--session", "S"], opts)
-    expect(lines.at(-1)).toMatch(/Z h: its code changed and was loaded in place, after 0.3s, cutting hold by agent:S$/)
-
-    const after = await read()
-
-    expect(after).toStartWith("h: its changed code was loaded after 0.3s, cutting what still ran: hold by agent:S\n")
-    expect(after).toContain("edited: true")
-    expect(after).toContain("n: 0")
-    releases.splice(0)
-  })
-})
-
-it("starts again in place when the framework's own code changed: the same address, the state as saved, a new token for pages to take", async () => {
-  const dir = scratch()
-  const first = await startRuntime(root(dir), ["--session", "S"], { ...options(dir), stamp: 1 })
-  const before = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))!
-  const call = (endpoint: Endpoint, by: number) =>
-    fetch(`http://127.0.0.1:${endpoint.port}/`, {
-      method: "POST",
-      body: JSON.stringify({ handle: "bump", args: { by } }),
-      headers: { "content-type": "application/json", [SERVICE_HEADER]: endpoint.token, [ACTOR_HEADER]: "agent" },
-    })
-
-  expect((await call(before, 3)).status).toBe(200)
-
-  const again = await startRuntime(root(dir), ["--session", "S"], { ...options(dir), stamp: 2 })
-
-  closers.push(() => again!.close())
-
-  const after = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "p")))!
-
-  expect(again!.port).toBe(first!.port)
-  expect(after.token).not.toBe(before.token)
-  expect((await call(before, 1)).status).toBe(401)
-  expect(await (await call(after, 1)).json()).toMatchObject({ outcome: "written", view: { n: 4 } })
-})
-
-describe("never deaf", () => {
-  const state = (dir: string, name = "p") => join(dir, "sessions", "S", name)
-  /** A runtime whose process does not end, as in a spec: what ending it would do is recorded, as are its log's lines. */
-  const ending = (dir: string) => {
     const ended: (number | undefined)[] = []
-    const lines: string[] = []
     const successors: number[] = []
-
-    return { ended, lines, successors, opts: { ...options(dir), log: (line: string) => lines.push(line), exit: (code?: number) => void ended.push(code) } }
-  }
-
-  it("gives way after code was loaded in place when its door no longer answers, letting go of the session with its state", async () => {
-    const dir = scratch()
-    const { ended, lines, opts } = ending(dir)
-    let server: Server | undefined
-    // A page whose hosting is handed the runtime's server: here, to take its listener away, as nothing in the runtime would.
-    const ui: UiHosting = async (given) => {
-      server = given
-
-      return { page: async () => "<head></head>", assets: (_req, _res, next) => next(), close: async () => {} }
-    }
-    const hosted = (surface = counter) => defineRoot({ name: "p", ui, surface })
+    const lines: string[] = []
+    const entry = join(dir, "scripts/open.ts")
 
     root(dir)
+    mkdirSync(join(dir, "scripts"))
+    writeFileSync(entry, "// the root's entry\n")
 
-    const runtime = (await startRuntime(hosted(), ["--session", "S"], opts))!
-    const endpoint = readJsonFile<Endpoint>(endpointFile(state(dir)))!
-    const base = `http://127.0.0.1:${runtime.port}`
-
-    await fetch(`${base}/`, { method: "POST", body: JSON.stringify({ handle: "bump", args: { by: 3 } }), headers: { [SERVICE_HEADER]: endpoint.token } })
-    await (await fetch(`${base}/`, { headers: { accept: "text/html" } })).text()
-    await new Promise<void>((done) => {
-      server!.close(() => done())
-      server!.closeAllConnections()
-    })
-    await startRuntime(hosted({ ...counter, view: (m, path, actor) => ({ ...counter.view(m, path, actor), edited: true }) }), ["--session", "S"], opts)
-
-    await poll(() => ended.length).toBe(1)
-    expect(lines.some((line) => line.includes(`p: its door no longer answered on 127.0.0.1:${runtime.port} after its changed code was loaded;`))).toBe(true)
-    expect(existsSync(endpointFile(state(dir)))).toBe(false)
-
-    const fresh = await started(dir)
-
-    expect(await (await fresh.get("/")).json()).toMatchObject({ n: 3 })
-  })
-
-  it("ends, saying why, when its framework's changed code does not start where the runtime before it closed", async () => {
-    const dir = scratch()
-    const { ended, lines, opts } = ending(dir)
-    const first = (await startRuntime(root(dir), ["--session", "S"], { ...opts, stamp: 1 }))!
-
-    // The lock cannot be opened again: the code that would serve the session throws, past the door it closed.
-    chmodSync(join(state(dir), "service.lock"), 0o000)
-    expect(await startRuntime(root(dir), ["--session", "S"], { ...opts, stamp: 2 })).toBeUndefined()
-    chmodSync(join(state(dir), "service.lock"), 0o600)
-    expect(ended).toEqual([1])
-    expect(lines.at(-1)).toMatch(/Z p: its runtime closed for its framework's changed code and did not start again: .*EACCES.*; it ends$/)
-    await expect(fetch(`http://127.0.0.1:${first.port}/`)).rejects.toThrow()
-    expect(existsSync(endpointFile(state(dir)))).toBe(false)
-  })
-
-  describe("after bun said a hot reload failed, when its timers may never fire again", () => {
-    const hot = async () => {
-      const dir = scratch()
-      const { ended, lines, successors, opts } = ending(dir)
-      const hotOpts = { ...opts, successor: () => void successors.push(Date.now()) }
-      const runtime = (await startRuntime(root(dir), ["--session", "S"], hotOpts))!
-
-      closers.push(() => runtime.close())
-      // What bun writes where the process logs, as a reload fails.
-      appendFileSync(logFile(state(dir)), "1 | export const broken = (\nerror: Unexpected end of file\n")
-
-      return { dir, runtime, ended, lines, successors, hotOpts, token: readJsonFile<Endpoint>(endpointFile(state(dir)))!.token }
+    const opts: RuntimeOptions = {
+      ...options(dir),
+      entry,
+      log: (line) => lines.push(line),
+      exit: (code) => void ended.push(code),
+      successor: () => void successors.push(Date.now()),
+      ...more,
     }
+    const runtime = (await startRuntime(defineRoot({ name: "h", ui: join(dir, "ui"), surface: holder }), ["--session", "S"], opts))!
 
-    it("gives way to a fresh process at the next reload, rather than close and start again in this one", async () => {
-      const { dir, ended, lines, successors, hotOpts } = await hot()
+    closers.push(() => runtime.close())
 
-      expect(await startRuntime(root(dir), ["--session", "S"], { ...hotOpts, stamp: 2 })).toBeUndefined()
-      expect(successors.length).toBe(1)
-      expect(ended).toEqual([undefined])
-      expect(lines.at(-1)).toMatch(/Z p: a hot reload of its code failed; its runtime started again with the code as it is$/)
-      expect(existsSync(endpointFile(state(dir)))).toBe(false)
+    const state = join(dir, "sessions", "S", "h")
+    const endpoint = readJsonFile<Endpoint>(endpointFile(state))!
+    const headers = { accept: "text/plain", [SERVICE_HEADER]: endpoint.token }
+    const base = `http://127.0.0.1:${runtime.port}`
+    const read = async (path = "/") => (await fetch(`${base}${path}`, { headers })).text()
+    const call = async (handle: string) => {
+      const response = await fetch(`${base}/`, { method: "POST", body: JSON.stringify({ handle, args: {} }), headers })
+
+      return { status: response.status, text: await response.text() }
+    }
+    const restart = async () => {
+      const response = await fetch(`${base}/_/restart`, { method: "POST", headers })
+
+      return { status: response.status, text: await response.text() }
+    }
+    const edit = () => writeFileSync(entry, `// the root's entry, edited ${Math.random()}\n`)
+
+    return { dir, state, runtime, endpoint, ended, successors, lines, opts, read, call, restart, edit, base }
+  }
+  const again = (dir: string, opts: RuntimeOptions) => startRuntime(defineRoot({ name: "h", ui: join(dir, "ui"), surface: holder }), ["--session", "S"], opts)
+
+  afterEach(() => void releases.splice(0))
+
+  it("is normal unless configured dev, and BABAVOSS_DEV overrides either way", () => {
+    expect([devMode(undefined, {}), devMode(false, {}), devMode(true, {})]).toEqual([false, false, true])
+    expect([devMode(false, { BABAVOSS_DEV: "1" }), devMode(true, { BABAVOSS_DEV: "0" }), devMode(true, { BABAVOSS_DEV: "" })]).toEqual([true, false, true])
+  })
+
+  describe("normal", () => {
+    it("runs the code it started with, and says the code changed: once to the agent, and as a fact of / until it restarts", async () => {
+      const { runtime, read, edit, successors, ended } = await begun()
+
+      expect(await read("/?open")).toStartWith("h 1.0\nn: 0")
+      edit()
+      await poll(() => read("/n")).toContain("its code changed on disk")
+      expect(await read("/?open")).toStartWith(`h 1.0\ncode: changed on disk since instance ${runtime.instance} started; it runs once restarted: bv h restart\n`)
+      expect(await read("/")).toStartWith("code: changed on disk")
+      expect(await read("/")).not.toContain("its code changed on disk")
+      expect([successors, ended]).toEqual([[], []])
     })
 
-    it("gives way at the next request, which a client asks again of the one in its place", async () => {
-      const { runtime, successors, token } = await hot()
-      const response = await fetch(`http://127.0.0.1:${runtime.port}/`, { headers: { accept: "text/plain", [SERVICE_HEADER]: token } })
+    it("restarts at once where nothing is under way: it answers, lets go of the session and wakes the one in its place, which keeps the state", async () => {
+      const { dir, state, runtime, opts, restart, successors, ended } = await begun()
+
+      expect(await restart()).toEqual({ status: 200, text: `h: instance ${runtime.instance} restarts` })
+      await poll(() => ended.length).toBe(1)
+      expect(successors.length).toBe(1)
+      expect(existsSync(endpointFile(state))).toBe(false)
+
+      const next = (await again(dir, opts))!
+
+      closers.push(() => next.close())
+      expect(next.port).toBe(runtime.port)
+      expect(next.instance).not.toBe(runtime.instance)
+    })
+
+    it("drains where work is under way: it refuses new calls, names the instance to follow, and restarts once the work ended", async () => {
+      const { runtime, call, restart, read, successors, ended, lines } = await begun()
+
+      expect((await call("hold")).status).toBe(200)
+
+      const draining = await restart()
+
+      expect(draining.status).toBe(202)
+      expect(draining.text).toBe(
+        `h: instance ${runtime.instance} is draining to restart: it takes no new calls and restarts once hold by agent:S ended. Wait for it: bv h follow ${runtime.instance}`,
+      )
+      expect(await restart()).toEqual(draining)
+      expect(await call("hold")).toEqual({ status: 409, text: `refused: ${draining.text}` })
+      expect(await read("/")).toContain("n: 0")
+      await sleep(LOOK_MS * 2)
+      expect(ended).toEqual([])
+      releases.splice(0).forEach((release) => release())
+      await poll(() => ended.length).toBe(1)
+      expect(successors.length).toBe(1)
+      expect(lines.at(-1)).toMatch(/Z h: it restarted once its work ended$/)
+    })
+  })
+
+  describe("dev", () => {
+    it("restarts at once when its code changes, cutting what runs; the one in its place tells the agent what was cut", async () => {
+      const { dir, call, edit, successors, ended, opts } = await begun({ dev: true })
+
+      expect((await call("hold")).status).toBe(200)
+      edit()
+      await poll(() => ended.length, { timeout: 3000 }).toBe(1)
+      expect(successors.length).toBe(1)
+
+      const next = (await again(dir, opts))!
+      const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "S", "h")))!
+
+      closers.push(() => next.close())
+
+      const answer = await (await fetch(`http://127.0.0.1:${next.port}/n`, { headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token } })).text()
+
+      expect(answer).toMatch(/^h: its code changed \(.*scripts\/open\.ts\) and it restarted; the restart cut hold by agent:S\n/)
+    })
+
+    it("answers nothing from code that is no longer on disk: a request after a change is asked again of the one in its place", async () => {
+      const { base, endpoint, edit, successors } = await begun({ dev: true })
+
+      edit()
+
+      const response = await fetch(`${base}/`, { headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token } })
 
       expect(response.status).toBe(503)
       expect(response.headers.has(STALE_HEADER)).toBe(true)
       await poll(() => successors.length).toBe(1)
     })
+
+    it("restarts when asked, at once, cutting what runs", async () => {
+      const { runtime, call, restart, ended } = await begun({ dev: true })
+
+      await call("hold")
+      expect(await restart()).toEqual({ status: 200, text: `h: instance ${runtime.instance} restarts, cutting hold by agent:S` })
+      await poll(() => ended.length).toBe(1)
+    })
+
+    it("tells open pages to load again when the page's own files change, and not when another file does", async () => {
+      const dir = scratch()
+      const src = join(dir, "src")
+
+      mkdirSync(src)
+
+      const runtime = await startRuntime(root(dir), ["--session", "W"], { ...options(dir), dev: true, watch: [src, join(dir, "ui")] })
+
+      closers.push(() => runtime!.close())
+
+      const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "W", "p")))!
+      const base = `http://127.0.0.1:${runtime!.port}`
+
+      // A page was loaded, and holds its stream.
+      await (await fetch(`${base}/`, { headers: { accept: "text/html" } })).text()
+
+      const page = await listen(base, endpoint.token)
+
+      await poll(() => page.heard).toEqual(["change", "turn"])
+      writeFileSync(join(src, "root.ts"), "// edited")
+      await sleep(RELOAD_MS + 400)
+      expect(page.heard).not.toContain("page")
+      writeFileSync(join(dir, "ui", "root.js"), "// a new page")
+      await poll(() => page.heard, { timeout: 5000 }).toContain("page")
+      page.stop()
+    })
+  })
+
+  it("ends when its state directory is gone, as a spec's or a removed project's is", async () => {
+    const { dir, ended } = await begun()
+
+    rmSync(dir, { recursive: true, force: true })
+    await poll(() => ended.length).toBe(1)
   })
 })
 
-it("goes on with the code before it when changed code does not start from what was saved", async () => {
-  const dir = scratch()
-  const { runtime, get, post } = await started(dir)
-
-  await post("/", { handle: "bump", args: { by: 3 } }, { [ACTOR_HEADER]: "agent" })
-
-  const broken = defineRoot({
-    name: "p",
-    ui: join(dir, "ui"),
-    surface: {
-      ...counter,
-      restore: () => {
-        throw new Error("cannot read what was saved")
-      },
-    },
-  })
-
-  expect((await startRuntime(broken, ["--session", "S"], options(dir)))!.port).toBe(runtime.port)
-  expect(await (await get("/")).json()).toMatchObject({ n: 3 })
-  expect((await post("/", { handle: "bump", args: { by: 1 } }, { [ACTOR_HEADER]: "agent" })).status).toBe(200)
-})
-
-it("tells open pages to load again when the page's own files change, and not when another file does", async () => {
-  const dir = scratch()
-  const src = join(dir, "src")
-
-  mkdirSync(src)
-
-  const runtime = await startRuntime(root(dir), ["--session", "W"], { ...options(dir), watch: [src, join(dir, "ui")] })
-
-  closers.push(() => runtime!.close())
-
-  const endpoint = readJsonFile<Endpoint>(endpointFile(join(dir, "sessions", "W", "p")))!
-  const base = `http://127.0.0.1:${runtime!.port}`
-
-  // A page was loaded, and holds its stream.
-  await (await fetch(`${base}/`, { headers: { accept: "text/html" } })).text()
-
-  const page = await listen(base, endpoint.token)
-
-  await poll(() => page.heard).toEqual(["change", "turn"])
-  writeFileSync(join(src, "root.ts"), "// edited")
-  await sleep(RELOAD_MS + 400)
-  expect(page.heard).not.toContain("page")
-  writeFileSync(join(dir, "ui", "root.js"), "// a new page")
-  await poll(() => page.heard, { timeout: 5000 }).toContain("page")
-  page.stop()
-})
-
-it("tells the version the package says when it is told, not the one the runtime started with", async () => {
+it("tells the version it started with, the code it runs, whatever the package says since", async () => {
   const dir = scratch()
   const { get, base } = await started(dir)
   const opened = async () => (await get("/?open", { accept: "text/plain" })).text()
 
   expect(await opened()).toStartWith("p 1.0\n")
   writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1.1" }))
-  expect(await opened()).toStartWith("p 1.1\n")
-  expect(await (await fetch(base + "/", { headers: { accept: "text/html" } })).text()).toContain('<meta name="babavoss:version" content="1.1">')
+  expect(await opened()).toStartWith("p 1.0\n")
+  expect(await (await fetch(base + "/", { headers: { accept: "text/html" } })).text()).toContain('<meta name="babavoss:version" content="1.0">')
 })
 
-it("says a later release is out against the version it runs, so a package taken while it runs is no longer told as later", async () => {
+it("says a later release is out against the version it runs", async () => {
   const dir = scratch()
   const { base } = await started(dir, { latest: async () => "1.1" })
   const page = async () => (await fetch(base + "/", { headers: { accept: "text/html" } })).text()
 
   await poll(page).toContain('<meta name="babavoss:update" content="1.1">')
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "1.1" }))
-  expect(await page()).toContain('<meta name="babavoss:version" content="1.1">')
-  expect(await page()).not.toContain("babavoss:update")
 })
 
 it("reads the version from the package beside the root entry", () => {
