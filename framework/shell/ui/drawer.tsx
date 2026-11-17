@@ -13,7 +13,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { cn } from "../../kit/cn.ts"
 import type { MenuItem } from "../../kit/layouts/menu.tsx"
 import { Island } from "./island.tsx"
-import { agoOf, authorOf, callsLine, didOf, itemsOf, keyOf, lineOf, refusedLine, tabLine, type Item, type Pinned, type Row } from "./thread.ts"
+import { agoOf, authorOf, callsLine, didOf, itemsOf, keyOf, lineOf, programRowOf, refusedLine, tabLine, type Item, type Pinned, type Row } from "./thread.ts"
 
 /** How far the thread's head is kept clear of entries, so the oldest can be scrolled out from under the open island. */
 const HEAD = "pt-[372px]"
@@ -182,7 +182,7 @@ export function Line({ item, label, home, fresh, go }: { item: Item; label: stri
         <div className="flex w-full flex-col gap-0.5 rounded-lg bg-foreground/4 px-2.5 py-1.5">
           {[...item.rows].reverse().map((row) => (
             <span key={row.n} className="font-mono text-meta break-words text-muted-foreground">
-              {didOf(row)}
+              {item.program ? programRowOf(row) : didOf(row)}
             </span>
           ))}
         </div>

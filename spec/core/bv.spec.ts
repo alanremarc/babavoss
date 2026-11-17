@@ -7,10 +7,11 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
 import type { Subprocess } from "bun"
-import { ACTOR_HEADER, CALL_HEADER, DEAF_MS, ENDPOINT_FILE, ownRun, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, DEAF_MS, ENDPOINT_FILE, ownRun, SERVICE_HEADER, shaped, summed, under, VERSION } from "../../framework/core/bv/bv.ts"
 import {
   ACTOR_HEADER as actorHeader,
   CALL_HEADER as callHeader,
+  CALL_ID_HEADER as callIdHeader,
   DEAF_MS as deafMs,
   SERVICE_HEADER as serviceHeader,
   endpointFile,
@@ -368,7 +369,94 @@ it("reads program code from stdin", () => {
   s.open()
   expect(s.run(["-e", "-"], client, 'console.log(await root.read("/"))').out).toContain("count: 0")
 })
-it("prints the full help", () => expect(setup().run(["help"]).out).toContain("Stop at the first refusal"))
+it("prints the full help", () => expect(setup().run(["help"]).out).toContain("A refusal ends the program unless it catches it"))
+describe("the program door", () => {
+  it("names the call's header as the runtime does", () => expect(CALL_ID_HEADER).toBe(callIdHeader))
+  it("sums calls up: the same change once, its places together, past ten elided; each refusal with its inputs; what was heard once", () => {
+    const calls = Array.from({ length: 12 }, (_, i) => ({ path: `/queue/issues/${i + 3}`, handle: "note", args: { text: "x" }, changed: '+ note: "x"\nnotices:\nheard once' }))
+
+    expect(summed([...calls, { path: "/queue/issues/20", handle: "note", args: { text: "a long note, said in more words than forty" }, refused: "refused: issue 20 is done" }], true)).toBe(
+      [
+        "12 calls done, 1 refused",
+        '/queue/issues/{3,4,5,6,7,8,9,10,…} note ×12: + note: "x"',
+        'refused: /queue/issues/20 note text="a long note, said in more words than fo…": issue 20 is done',
+        "the refusal ended the program: no call after it was made",
+        "notices:",
+        "heard once",
+      ].join("\n"),
+    )
+    expect(summed([{ path: "/a", handle: "go", args: {}, changed: "" }, { path: "/b/c", handle: "go", args: {}, changed: "" }])).toBe("2 calls done\n/a /b/c go ×2: nothing changed")
+  })
+  it("reads a view as data: each action as its handle, its fixed args and its inputs, each input an object that can say more later", () => {
+    expect(shaped({ n: 1, rows: [{ done: { kind: "handle", name: "done", args: { n: 1 }, open: { why: "string" }, description: "Mark it done" } }] })).toEqual({
+      n: 1,
+      rows: [{ done: { handle: "done", args: { n: 1 }, inputs: { why: { type: "string" } } } }],
+    })
+  })
+  it("takes a relative path under the path given before -e", () => {
+    expect([under("/queue", "issues/3"), under("/queue", "/notes"), under("/queue/issues", "../lanes"), under("/queue"), under("/", "./a/")]).toEqual([
+      "/queue/issues/3",
+      "/notes",
+      "/queue/lanes",
+      "/queue",
+      "/a",
+    ])
+  })
+  it("runs a program on standard input, under the path before -e, and answers what it printed, then one summary of its calls", () => {
+    const s = setup()
+
+    s.open()
+
+    const program = `
+      for (const text of ["a", "b", "c"]) await call("/", "add", { text })
+      const view: { notes: { at: string; remind: { handle: string; args: object; inputs: object } }[] } = await read("notes")
+      print(view.notes.length, view.notes[0].remind)
+      for (const note of view.notes) await call(note.at, note.remind.handle, { seconds: 60 })
+    `
+    const answer = s.run(["/", "-e", "-"], client, program)
+
+    expect(answer.status, answer.err).toBe(0)
+    expect(answer.out).toContain('3 {"handle":"remind","args":{"n":1},"inputs":{"seconds":{"type":"number"}}}\n6 calls done\n')
+    expect(answer.out).toMatch(/\n\/notes\/\{1,2,3\} remind ×3: .*due/)
+    expect(answer.out).not.toContain("refused")
+  })
+  it("ends the program at a refusal: the calls before it stay done, and the summary says what was not", () => {
+    const s = setup()
+
+    s.open()
+
+    const answer = s.run(["-e", "-"], client, 'await call("/", "add", { text: "a" })\nawait call("/", "add", { text: "" })\nawait call("/", "add", { text: "b" })')
+
+    expect(answer.status).toBe(1)
+    expect(answer.out).toContain('1 call done, 1 refused\n')
+    expect(answer.out).toContain('refused: / add text="": A note needs text\nthe refusal ended the program: no call after it was made')
+    expect(s.run(["/"]).out).toContain("notes.count: 1")
+  })
+  it("goes on past a refusal the program catches", () => {
+    const s = setup()
+
+    s.open()
+
+    const answer = s.run(["-e", "-"], client, 'for (const text of ["a", "", "b"]) await call("/", "add", { text }).catch((e) => print(e.message))')
+
+    expect(answer.status).toBe(0)
+    expect(answer.out).toStartWith("refused: / add: A note needs text\n2 calls done, 1 refused\n")
+    expect(answer.out).not.toContain("ended the program")
+  })
+  it("refuses a program that came as more than one word, saying why, and runs one that came as one", () => {
+    const s = setup()
+
+    s.open()
+
+    const split = s.run(["-e", 'await call("/", "add", { text: "it', 's" })'])
+
+    expect(split.status).toBe(2)
+    expect(split.err).toContain("the program came as 2 words, not one: a quote inside it ended the shell's. Give it on standard input: demo -e - <<'EOF'")
+    expect(s.run(["-e", 'await call("/", "add", { text: "one" })']).out).toBe("1 call done\n/ add: notes.count: 0 → 1; latest: null → \"one\"; + action clear\n")
+    expect(s.run(["/", "add", "-e", "-"]).err).toContain("-e follows a path alone: demo / -e - <<'EOF' with the program")
+    expect(s.run(["-e", `await call("/", "add", { text: "its })`]).err).toContain("a quote inside it may have ended the shell's")
+  })
+})
 it("opens with the page and the command, and of the command's words only what the skill does not say; no pointer to a fuller guide", () => {
   const out = setup().open().out
 

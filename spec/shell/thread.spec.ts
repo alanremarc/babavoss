@@ -15,6 +15,7 @@ import {
   knownAfter,
   pinnedOf,
   placeIn,
+  programRowOf,
   refusedLine,
   shellEntries,
   tabIn,
@@ -44,6 +45,29 @@ const ROWS: Row[] = [
 ]
 
 describe("a thread", () => {
+  it("folds one program's entries into one line, its calls, its refusal and the lines its calls gave, and says which was refused", () => {
+    const one = { id: "program:3f2a9c1b" }
+    const rows = [
+      row(20, { did: "note n=9" }),
+      row(19, { ...one, did: "note n=8", refused: "issue 8 is done" }),
+      row(18, { ...one, did: "note n=7", said: ["Issue 7 noted"] }),
+      ...[17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7].map((n) => row(n, { ...one, did: `note n=${n - 11}` })),
+      row(6, { id: "lab:act-1", did: "note n=1" }),
+    ]
+    const items = itemsOf(rows)
+
+    expect(items.map((i) => (i.kind === "calls" ? [i.program ?? "", i.rows.length] : [i.kind, 1]))).toEqual([
+      ["", 1],
+      ["program:3f2a9c1b", 13],
+      ["", 1],
+    ])
+    expect(callsLine(items[1] as Extract<(typeof items)[number], { kind: "calls" }>)).toBe("Agent made 13 calls in one command, the 13th refused")
+    expect(programRowOf(rows[1]!)).toBe("note n=8: refused, issue 8 is done")
+    expect(programRowOf(rows[2]!)).toBe("note n=7: Issue 7 noted")
+    expect(callsLine({ kind: "calls", who: "agent", rows: [rows[3]!, rows[4]!], program: "program:1" })).toBe("Agent made 2 calls in one command")
+    expect(itemsOf([row(3, { ...one }), row(2, { ...one, said: ["Look here"], highlight: true }), row(1, { ...one })]).map((i) => i.kind)).toEqual(["calls", "notice", "calls"])
+  })
+
   it("is a tab's entries and the shell's lines about it; home's is the shell's own", () => {
     expect(entriesIn(ROWS, "/queue").map((r) => r.n)).toEqual([12, 11, 10, 9, 8, 7, 6, 5, 2])
     expect(entriesIn(ROWS, "/tabs/3").map((r) => r.n)).toEqual([4, 3])

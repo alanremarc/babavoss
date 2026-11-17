@@ -288,6 +288,29 @@ it("carries the name a call's caller gave it, in the header, into the activity, 
   ])
 })
 
+it("carries a program's one name for its calls through the text door into each entry, a refusal's too, so the log keeps them as one move", async () => {
+  const { request, runtime, endpoint } = await started()
+  const named = (path: string, call: unknown) =>
+    fetch(`http://127.0.0.1:${runtime.port}${path}`, {
+      method: "POST",
+      headers: { accept: "text/plain", [SERVICE_HEADER]: endpoint.token, [CALL_ID_HEADER]: "program:3f2a9c1b" },
+      body: JSON.stringify(call),
+    })
+
+  await request("/", { handle: "open", args: { surface: "counter" } })
+  expect((await named("/tabs/1", { handle: "bump", args: { by: "1" } })).status).toBe(200)
+  expect((await named("/tabs/1", { handle: "drop", args: {} })).status).toBe(409)
+  await request("/tabs/1", { handle: "bump", args: { by: "1" } })
+
+  const rows = JSON.parse(await request("/activity", undefined, true)) as { entries: { did: string; refused?: string; id?: string }[] }
+
+  expect(rows.entries.slice(0, 3).map(({ did, refused, id }) => ({ did, refused: refused !== undefined, id }))).toEqual([
+    { did: "bump by=1", refused: false, id: undefined },
+    { did: "drop", refused: true, id: "program:3f2a9c1b" },
+    { did: "bump by=1", refused: false, id: "program:3f2a9c1b" },
+  ])
+})
+
 it("tells more than twenty notices waiting as the newest twenty, after one line that counts the older and says where to read them", async () => {
   const { request } = await started()
 
