@@ -86,14 +86,37 @@ const kindOf = (input: Declared) => (typeof input === "string" ? undefined : inp
  * range's numbers; a number, bounded by its range; markdown in a box of several lines, where Enter breaks a line and
  * ⌘ or Ctrl with Enter submits; any other text a line that grows, where Enter submits and Shift+Enter breaks a line.
  */
-function Field({ input, value, set, first, send }: { input: Declared; value: string | boolean | undefined; set: (value: string | boolean) => void; first: boolean; send: () => void }) {
+function Field({
+  name,
+  input,
+  value,
+  set,
+  first,
+  send,
+}: {
+  name: string
+  input: Declared
+  value: string | boolean | undefined
+  set: (value: string | boolean) => void
+  first: boolean
+  send: () => void
+}) {
   const choices = picked(input)
   const range = typeof input === "string" ? undefined : input.range
 
   if (typeOf(input) === "boolean") return <input type="checkbox" autoFocus={first} checked={value === true} onChange={(e) => set(e.target.checked)} />
   if (choices)
     return (
-      <ToggleGroup type="single" variant="outline" size="sm" spacing={0} className="flex-wrap" value={String(value ?? "")} onValueChange={(v) => v && set(v)}>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        spacing={0}
+        className="flex-wrap"
+        aria-label={name}
+        value={String(value ?? "")}
+        onValueChange={(v) => v && set(v)}
+      >
         {choices.map((c, i) => (
           <ToggleGroupItem key={String(c)} value={String(c)} autoFocus={first && i === 0}>
             {String(c)}
@@ -123,6 +146,10 @@ function Field({ input, value, set, first, send }: { input: Declared; value: str
   )
 }
 
+/** A field's frame: a label around one control, a plain box around a picker's group. */
+const Wrap = ({ picked, className, children }: { picked: boolean; className: string; children: ReactNode }) =>
+  picked ? <div className={className}>{children}</div> : <label className={className}>{children}</label>
+
 /** The fields the shell makes for an action's inputs, one each by what it is declared to be. */
 function Form({ action, submit, close, refusal }: { action: Offered; submit: (args: Args) => Promise<unknown>; close: () => void; refusal: ReactNode }) {
   const [fields, setFields] = useState<Record<string, string | boolean>>({})
@@ -144,10 +171,11 @@ function Form({ action, submit, close, refusal }: { action: Offered; submit: (ar
       }}
     >
       {Object.entries(action.handle.open).map(([field, input], i) => (
-        <label key={field} className="flex flex-col gap-1">
+        // A picker is a group of its own, named by the field; a label around it would name its first choice.
+        <Wrap key={field} picked={picked(input) !== undefined} className="flex flex-col gap-1">
           <span className="text-meta text-muted-foreground">{named(field)}</span>
-          <Field input={input} value={fields[field]} set={(value) => set(field, value)} first={i === 0} send={() => void send()} />
-        </label>
+          <Field name={named(field)} input={input} value={fields[field]} set={(value) => set(field, value)} first={i === 0} send={() => void send()} />
+        </Wrap>
       ))}
       {refusal}
       <DialogFooter>
