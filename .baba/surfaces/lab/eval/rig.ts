@@ -154,7 +154,7 @@ export function makePlace(variant: Variant, session: string): Place {
   return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
-type Saved = { model?: { tabs?: { surface: string; named?: boolean; model: unknown }[]; activity?: { who?: string; surface?: string; what?: string }[] } }
+type Saved = { model?: { tabs?: { surface: string; named?: boolean; model: unknown }[]; activity?: { who?: string; surface?: string; own?: boolean; refused?: string }[] } }
 const saved = (place: Place): Saved => {
   try {
     return JSON.parse(readFileSync(join(place.state, "model.json"), "utf8")) as Saved
@@ -441,7 +441,7 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     model: options.model,
     run: n,
     ...measured,
-    root_calls: (activity.model?.activity ?? []).filter((e) => e.who === "agent" && e.surface === SURFACE && e.what !== "opened").length,
+    root_calls: (activity.model?.activity ?? []).filter((e) => e.who === "agent" && e.surface === SURFACE && !e.own && e.refused === undefined).length,
     pass: verdict.pass && !ending.ended,
     reason: ending.ended ? `${ending.ended}; ${verdict.reason}` : verdict.reason,
     wall_ms: Date.now() - began,
