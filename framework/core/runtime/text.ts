@@ -228,8 +228,8 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
 
   return {
     root,
-    /** What a call changed at `path`, as its answer says it. */
-    diff: (old: Json | undefined, now: Json | undefined, path: string) => tell(diff(old, now, { command, path })),
+    /** What a call changed at `path`, as its answer says it: a tab it opened whole, as the agent has not seen it. */
+    diff: (old: Json | undefined, now: Json | undefined, path: string) => tell(diff(old, now, { command, path, opened: "whole" })),
     /** How much was heard and waits to be told. */
     noticed: () => heard.size(),
     /** How many of the person's calls changed / since the present was last told: what waits for the agent's next boundary. */

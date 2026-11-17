@@ -3,7 +3,7 @@
 import { setTimeout as sleep } from "node:timers/promises"
 import { describe, expect, it } from "bun:test"
 import { action, run, story, surface, view, type Ports, type Saved, type Update } from "../../framework/core/index.ts"
-import { addressed, EMPTY, MISSING, PATHS, shell, whole, within } from "../../framework/shell/src/surface.ts"
+import { addressed, EMPTY, MISSING, PATHS, patterned, shell, whole, within } from "../../framework/shell/src/surface.ts"
 import { RESERVED } from "../../framework/core/provision.ts"
 import { own } from "../../framework/shell/ui/tab.tsx"
 
@@ -167,14 +167,14 @@ describe("the shell surface", () => {
     ])
   })
 
-  it("tells the agent at / what changes in a tab: each tab carries its surface's facts, without its handles, and its actions by name", async () => {
+  it("tells the agent at / what changes in a tab: each tab carries its surface's facts, without its handles, and its actions with what each takes", async () => {
     const { agent, person, world } = story(shell({ counter }, BABA))
 
     await agent.call("/", "open", { surface: "counter" })
     await world.settle({ kind: "tab", n: 1, event: { kind: "bumped" } })
     expect(agent.sees("/")!.tabs).toMatchObject([{ at: "/counter", surface: "counter", title: "Counter", facts: { n: 1, detail: { at: "/counter/n" } } }])
     expect(JSON.stringify((agent.sees("/")!.tabs as { facts: unknown }[])[0]!.facts)).not.toContain("bump")
-    expect(agent.sees("/")!.tabs).toMatchObject([{ actions: ["bump", "later"] }])
+    expect(agent.sees("/")!.tabs).toMatchObject([{ actions: [{ at: "/counter", offers: [{ name: "bump" }, { name: "later" }] }] }])
     agent.told()
     await person.call("/tabs/1", "bump", { by: 2 })
     expect(agent.told()).toEqual(['/counter "Counter" (tab 1)', "n: 1 → 3"])
@@ -519,7 +519,7 @@ describe("a tab's address", () => {
 
     await agent.call("/", "open", { surface: "counter" })
     agent.told()
-    expect(agent.sees("/")!.tabs).toMatchObject([{ at: "/counter", n: 1, facts: { detail: { at: "/counter/n" } }, actions: ["bump", "later"] }])
+    expect(agent.sees("/")!.tabs).toMatchObject([{ at: "/counter", n: 1, facts: { detail: { at: "/counter/n" } }, actions: [{ at: "/counter", offers: [{ name: "bump" }, { name: "later" }] }] }])
     expect(agent.sees("/counter")).toMatchObject({ title: "Counter", detail: { at: "/counter/n" } })
     expect(agent.sees("/counter/n")).toEqual({ at: "/counter/n", n: 0 })
     expect(await agent.call("/counter", "bump", { by: 2 })).toMatchObject({ outcome: "written", view: { n: 2 } })
@@ -669,5 +669,31 @@ describe("a surface whose code does not load", () => {
     } finally {
       await mended.stop()
     }
+  })
+})
+
+describe("a pattern of a list's actions", () => {
+  const offer = (name: string, fixed: Record<string, string>, open: Record<string, string> = {}, description = "") => ({ name, fixed, open, description })
+  const rows = [3, 5, 12].map((n) => ({ at: `/issues/${n}`, n, title: `Issue ${n}` }))
+
+  it("folds the actions every row offers at its own path into one, the path and its fixed arguments by the column in capitals", () => {
+    const at = (path: string) => {
+      const n = path.split("/").at(-1)!
+
+      return [offer("note", { n }, { text: "line" }, "replaces its note"), ...(n === "5" ? [offer("approve", { n })] : [])]
+    }
+
+    expect(patterned(rows, at)).toEqual({ at: "/issues/N", offers: [offer("note", { n: "N" }, { text: "line" }, "replaces its note"), offer("approve", { n: "N" })] })
+  })
+  it("leaves out an action whose inputs differ by row, or whose fixed argument is no column's value, and finds none in a list of one", () => {
+    const at = (path: string) => {
+      const n = path.split("/").at(-1)!
+
+      return [offer("start", { n }, { lane: n === "3" ? "1..5" : "1..3" }), offer("tag", { n, tag: '"x"' })]
+    }
+
+    expect(patterned(rows, at)).toBeUndefined()
+    expect(patterned(rows.slice(0, 1), () => [offer("done", { n: "3" })])).toBeUndefined()
+    expect(patterned([{ at: "/a" }, { at: "/b" }], () => [offer("done", {})])).toBeUndefined()
   })
 })

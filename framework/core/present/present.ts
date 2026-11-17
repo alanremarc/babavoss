@@ -17,13 +17,16 @@ export const CAP = 40
 
 const CUT = 100
 
-/** How handles are said: as the command that calls them at `path`; without a command, as their name and arguments. */
-export type Say = { command?: string; path?: string }
 /**
- * One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; and its tab's
- * heading.
+ * How handles are said: as the command that calls them at `path`; without a command, as their name and arguments. `opened`:
+ * a tab the change opens is told whole, as the answer to the agent's own call that opened it; otherwise in one line.
  */
-export type Change = { line: string; keys: string[]; where: string; tab?: string }
+export type Say = { command?: string; path?: string; opened?: "whole" }
+/**
+ * One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; its tab's
+ * heading; and `whole`, a tab told whole, never cut.
+ */
+export type Change = { line: string; keys: string[]; where: string; tab?: string; whole?: true }
 
 type Row = { [key: string]: Json | undefined }
 
@@ -49,6 +52,29 @@ const act = (h: Handle): Act => ({
   description: h.description,
 })
 const pair = ([k, v]: [string, string]) => `${k}=${v}`
+
+/**
+ * A handle as plain data, as a block says it: its name; its fixed arguments, each as said after `name=`, a value as JSON or a
+ * column's name in capitals where a pattern stands for many; its inputs as what they mean; what it does.
+ */
+export type Offer = { name: string; fixed: Record<string, string>; open: Record<string, string>; description: string }
+/** The actions a tab offers at a path, as plain data the shell lists at /: `at` its whole path, a pattern where it names many. */
+export type Offered = { at: string; offers: Offer[] }
+
+const offer = (a: Act): Offer => ({ name: a.name, fixed: Object.fromEntries(a.fixed), open: Object.fromEntries(a.open), description: a.description })
+const fromOffer = (o: Offer): Act => ({ name: o.name, fixed: Object.entries(o.fixed), open: Object.entries(o.open), description: o.description })
+
+/** A view's handles as its block says them, as plain data: each offered once, a handle every row of a table has folded into one. */
+export function offers(value: Json | undefined): Offer[] {
+  const acts: Act[] = []
+
+  said(value, { command: "" }, "", [], acts)
+
+  return acts.map(offer)
+}
+/** Whether a value is the plain data of a tab's actions at its paths. */
+const isOffered = (v: Json | undefined): v is Offered[] =>
+  Array.isArray(v) && v.every((x) => isRow(x) && typeof x.at === "string" && Array.isArray(x.offers))
 const tail = (description: string) => (description ? `   ${description}` : "")
 
 /** What stands in a block's head for each handle's own arguments: the syntax of every one of them. */
@@ -270,7 +296,6 @@ export const heading = (tab: Tab) =>
   ]
     .filter(Boolean)
     .join(" ")
-const names = (v: Json | undefined) => (Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ") : "")
 const SAID = new Set(["at", "n", "surface", "title", "actions", "facts"])
 
 /** What was left out as detail, by where: a list's label with how many of its rows, and each fact's label; and their keys. */
@@ -312,21 +337,27 @@ function told(value: Json | undefined, say: Say, where: string, label = "", out:
 }
 
 /**
- * A tab under its heading, as the whole present says it: its actions by name, read at its path; the rest of its row; its
- * facts relative to it; then the root's handles its row offers, as the tab's close, in a block of their own.
+ * A tab under its heading, as the whole present says it: the rest of its row; its facts relative to it; its actions, a block
+ * for each path they are offered at, its own and a pattern for its rows', each with its command, so acting needs no read;
+ * then the root's handles its row offers, as the tab's close, in a block of their own.
  */
 function tabLines(tab: Tab, say: Say): string[] {
   const out: string[] = []
   const acts: Act[] = []
   const gather = say.command === undefined ? undefined : acts
 
-  if (Array.isArray(tab.actions) && tab.actions.length) out.push(`actions at ${tab.at}: ${names(tab.actions)}`)
   for (const [k, v] of Object.entries(tab)) if (!SAID.has(k) && v !== undefined) said(revealed(v), say, k, out, gather)
   if (tab.facts !== undefined) told(tab.facts, say, tab.at, "", out)
+  if (isOffered(tab.actions))
+    for (const at of tab.actions)
+      if (say.command === undefined) out.push(`actions at ${at.at}: ${at.offers.map((o) => o.name).join(", ")}`)
+      else out.push(...block(at.offers.map(fromOffer), { ...say, path: at.at }))
   out.push(...block(acts, say))
 
   return out
 }
+/** The names of the actions a tab offers at its own path, for a line that tells it opened. */
+const ownNames = (tab: Tab) => (isOffered(tab.actions) ? (tab.actions.find((a) => a.at === tab.at)?.offers.map((o) => o.name) ?? []) : [])
 
 /**
  * The present whole: the root's own facts, then each open tab under its heading. A view not shaped as the shell's is told
@@ -596,7 +627,12 @@ function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
     const key = keyOf("tabs", t.at)
 
     if (!old) {
-      const actions = Array.isArray(t.actions) && t.actions.length ? `, actions: ${names(t.actions)}` : ""
+      if (say.opened === "whole") {
+        out.push({ line: [`+ ${heading(t)}`, ...tabLines(t, say)].join("\n"), keys: [key], where: t.at, whole: true })
+        continue
+      }
+
+      const actions = ownNames(t).length ? `, actions: ${ownNames(t).join(", ")}` : ""
 
       out.push({ line: `+ ${heading(t)}${actions}; read ${t.at}`, keys: [key], where: t.at })
       continue
@@ -607,12 +643,21 @@ function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
 
     for (const k of [...Object.keys(t), ...Object.keys(old).filter((k) => !Object.hasOwn(t, k))]) {
       if (k === "facts" || same(old[k], t[k])) continue
-      if (k === "actions" && Array.isArray(old[k]) && Array.isArray(t[k])) {
-        const was = (old[k] as Json[]).map(String)
-        const is = (t[k] as Json[]).map(String)
-        const moved = [...is.filter((x) => !was.includes(x)).map((x) => `+ ${x}`), ...was.filter((x) => !is.includes(x)).map((x) => `- ${x}`)]
+      if (k === "actions" && isOffered(old[k]) && isOffered(t[k])) {
+        const was = old[k] as Offered[]
 
-        out.push({ line: `actions: ${moved.join(", ") || `order now ${is.join(", ")}`}`, keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
+        for (const place of t[k] as Offered[]) {
+          const before = was.find((p) => p.at === place.at)?.offers ?? []
+
+          // An action offered now, or changed, is told with its command, so acting on it needs no read; one withdrawn, by its name.
+          const fresh = place.offers.filter((o) => !before.some((b) => same(b as Json, o as Json)))
+          const gone = before.filter((b) => !place.offers.some((o) => o.name === b.name)).map((b) => `- ${b.name}`)
+          const lines = [...(gone.length ? [`actions at ${place.at}: ${gone.join(", ")}`] : []), ...block(fresh.map(fromOffer), { ...say, path: place.at })]
+
+          if (lines.length) out.push({ line: lines.join("\n"), keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
+        }
+        for (const place of was.filter((p) => !(t[k] as Offered[]).some((x) => x.at === p.at)))
+          out.push({ line: `actions at ${place.at}: none now`, keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
       } else walk(old[k], t[k], { ...at, label: k, key: `${key}.${k}` }, out)
     }
 
@@ -673,7 +718,7 @@ export function tell(changes: Change[], group: (change: Change) => string | unde
       for (const [i, change] of items.entries()) {
         const take = [...(!headed && head !== undefined ? [head] : []), ...(i === 0 && tab !== undefined ? [tab] : []), change.line].join("\n").split("\n")
 
-        if (room && out.length + take.length <= cap) {
+        if (change.whole || (room && out.length + take.length <= cap)) {
           out.push(...take)
           headed = true
         } else {

@@ -5,6 +5,13 @@ import { detail, handle, type Json } from "../../framework/core/surface/index.ts
 
 const say = { command: "baba" }
 const HOW = "Keep this true as the work moves."
+/** An action as the shell lists it for a tab, as plain data. */
+const offer = (name: string, fixed: Record<string, string> = {}, open: Record<string, string> = {}, description = "") => ({ name, fixed, open, description })
+/** The queue tab's actions: its own at its path, and those every issue offers at its own, as one pattern. */
+const ACTIONS = [
+  { at: "/tabs/3", offers: [offer("add", {}, { title: "line" }), offer("draft", {}, { title: "line" }, "theirs to look at")] },
+  { at: "/tabs/3/issues/N", offers: [offer("note", { n: "N" }, { text: "line" }), offer("done", { n: "N" }, {}, "its work is merged into main")] },
+]
 const issue = (n: number, status = "backlog", more: Record<string, Json> = {}) => ({ at: `/tabs/3/issues/${n}`, n, title: `Issue ${n}`, status, ...more })
 /** The shell's / with one queue tab holding `issues`. */
 const root = (issues: Json[], facts: Record<string, Json> = {}, tab: Record<string, Json> = {}): Json => ({
@@ -17,7 +24,7 @@ const root = (issues: Json[], facts: Record<string, Json> = {}, tab: Record<stri
       surface: "queue",
       close: handle("close", "its state is dropped", { n: 3 }),
       title: "Queue",
-      actions: ["add", "draft"],
+      actions: ACTIONS,
       ...tab,
       facts: { how: HOW, free: [1, 2], issues, ...facts },
     },
@@ -73,7 +80,7 @@ describe("whole", () => {
       "  add title=line",
     ])
   })
-  it("says each open tab under one heading, with its actions by name, its facts relative to it", () => {
+  it("says each open tab under one heading, its facts relative to it, then its actions with their commands: its own, and its rows' as one pattern", () => {
     const text = whole(root([issue(1)]), say)
 
     expect(text).toEqual([
@@ -83,10 +90,15 @@ describe("whole", () => {
       '  open surface="queue"   in a new tab',
       "",
       '/tabs/3 queue "Queue"',
-      "actions at /tabs/3: add, draft",
       `how: ${JSON.stringify(HOW)}`,
       "free: [1, 2]",
       'issues: at\tn\ttitle\tstatus\n"/tabs/3/issues/1"\t1\t"Issue 1"\t"backlog"',
+      "actions: baba /tabs/3 ACTION name=value…",
+      "  add title=line",
+      "  draft title=line   theirs to look at",
+      "actions: baba /tabs/3/issues/N ACTION n=N name=value…",
+      "  note text=line",
+      "  done   its work is merged into main",
       "actions: baba / ACTION name=value…",
       "  close n=3   its state is dropped",
     ])
@@ -94,7 +106,9 @@ describe("whole", () => {
   it("leaves detail out, a list's rows and a fact, and says in one line how much there is and where it is read", () => {
     const view = root([issue(1), detail(issue(2, "done", { note: "merged" })), detail(issue(3, "done"))], { tokens: detail(1200) })
 
-    expect(whole(view, say).slice(-5)).toEqual([
+    const text = whole({ ...(view as Record<string, Json>), tabs: [{ ...(view as { tabs: Record<string, Json>[] }).tabs[0]!, actions: [] }] }, say)
+
+    expect(text.slice(-5)).toEqual([
       "free: [1, 2]",
       'issues: at\tn\ttitle\tstatus\n"/tabs/3/issues/1"\t1\t"Issue 1"\t"backlog"',
       "+2 more in issues, tokens in detail; read /tabs/3",
@@ -171,15 +185,32 @@ describe("diff", () => {
     ])
     expect(told({ about: long }, { about: `${long}!` })).toEqual([`about → ${JSON.stringify(long.slice(0, 100))}… (${long.length + 1} chars; read /)`])
   })
-  it("tells a tab opened in one line, its heading, its actions by name and where to read it, and a tab closed in one line", () => {
+  it("tells a tab opened in one line, its heading, its own actions by name and where to read it, and a tab closed in one line", () => {
     const empty = { title: "baba", surfaces: [], tabs: [] }
-    const opened = { ...empty, tabs: [{ at: "/tabs/4", n: 4, surface: "queue", title: "Queue", actions: ["add"], facts: { how: HOW, lanes: 5 } }] }
+    const opened = { ...empty, tabs: [{ at: "/tabs/4", n: 4, surface: "queue", title: "Queue", actions: [{ at: "/tabs/4", offers: [offer("add")] }], facts: { how: HOW, lanes: 5 } }] }
 
     expect(told(empty, opened)).toEqual(['+ /tabs/4 queue "Queue", actions: add; read /tabs/4'])
     expect(told(opened, empty)).toEqual(['- /tabs/4 queue "Queue" closed'])
   })
-  it("tells a tab's actions by what was offered or withdrawn", () => {
-    expect(told(root([]), root([], {}, { actions: ["add", "approve"] }))).toEqual(['/tabs/3 queue "Queue"', "actions: + approve, - draft"])
+  it("tells a tab the agent's own call opened whole, as it has not seen it, and never cuts it", () => {
+    const empty = { title: "baba", surfaces: [], tabs: [] }
+    const opened = { ...empty, tabs: [{ at: "/tabs/4", n: 4, surface: "queue", title: "Queue", actions: [{ at: "/tabs/4", offers: [offer("add")] }], facts: { how: HOW, lanes: 5 } }] }
+
+    expect(tell(diff(empty, opened, { ...say, opened: "whole" }), () => undefined, 2)).toEqual([
+      '+ /tabs/4 queue "Queue"',
+      `how: ${JSON.stringify(HOW)}`,
+      "lanes: 5",
+      "actions: baba /tabs/4 ACTION",
+      "  add",
+    ])
+  })
+  it("tells a tab's actions by what was offered, with its command, or withdrawn, by its name", () => {
+    const now = [ACTIONS[0]!, { ...ACTIONS[1]!, offers: [ACTIONS[1]!.offers[0]!, offer("start", { n: "N" }, { lane: "1..5" })] }]
+
+    expect(told(root([]), root([], {}, { actions: now }))).toEqual([
+      '/tabs/3 queue "Queue"',
+      "actions at /tabs/3/issues/N: - done\nactions: baba /tabs/3/issues/N ACTION name=value…\n  start n=N lane=1..5",
+    ].flatMap((l) => l.split("\n")))
   })
   it("counts detail that stays detail, and tells a row that became detail, or stopped being it, by what changed in it", () => {
     const rows = (...r: Json[]) => root([], { issues: r, tokens: detail(5) })
