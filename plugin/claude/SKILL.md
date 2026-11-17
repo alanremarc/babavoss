@@ -15,7 +15,7 @@ Its answer names the page's address, the command to use, the surfaces and the op
 ## Working with it
 
 - An answer shows what is true now. Do not look for it in a surface's code or in what it keeps on disk, and never change either to get something done.
-- A line that ends in a description is an action offered now, printed as the exact command. Copy it and give a value where it says `name=string`. An action that is not printed is not offered.
+- `actions:` is the command for the actions offered now, one a line below: put its name for `ACTION` and its line's arguments for `name=value…`, a value of each kind. An action not printed is not offered.
 - A fact named `at` is a path with more behind it: read it with the command for its detail and the actions offered there; a path also reads one fact of the view above it, as `/queue/issues`. At `/` each open tab is a heading: its path, its title and its number. The path is `/NAME`, its surface's name, for the tab that holds it, and `/tabs/N` for a second tab of one; its facts are under it, what it calls detail counted, its actions by name, and their commands at its path. A path by the name works on after the person closes the tab and opens it again: write that one down.
 - `show` at `/` brings a path to the front of the person's page. Point them to a result or a decision waiting on them, not to each step.
 - A surface is shared and live: the person acts on the page while you work, and is meant to, and a surface's own work changes it too. What moved between two looks is that, not an error or a stale read.
