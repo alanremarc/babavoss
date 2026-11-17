@@ -219,8 +219,82 @@
 
       /* The surface: the video, its few controls, and two tracks: the music, and the video with its cuts. */
       .surface {
+        position: relative;
         padding: 1rem;
         min-width: 0;
+      }
+      /* Its stages: 0, no surface yet; 1, the first version the agent makes; 2, with what it adds when more is asked of it.
+         What a later stage adds keeps its room from the start, so the window never changes its height. */
+      .empty {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 0.25rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.875rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s;
+      }
+      .empty b {
+        color: var(--fg);
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .built {
+        transition: opacity 0.5s;
+      }
+      .more {
+        opacity: 0;
+        transition: opacity 0.5s;
+      }
+      .surface[data-stage="0"] .empty {
+        opacity: 1;
+      }
+      .surface[data-stage="0"] .built {
+        opacity: 0;
+      }
+      .surface[data-stage="2"] .more {
+        opacity: 1;
+      }
+      /* What the fuller version has more: its tools, and a track of the effects. */
+      .tools {
+        display: flex;
+        gap: 0.375rem;
+        margin: 0 0 0.75rem;
+      }
+      .tools span {
+        padding: 0.125rem 0.5rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .lane.effects {
+        height: 1.25rem;
+      }
+      .effect {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 5px;
+        background: color-mix(in srgb, var(--accent) 55%, var(--accent-soft));
+        color: var(--card);
+        font-size: 0.6875rem;
+        font-weight: 650;
+        white-space: nowrap;
+        opacity: 0;
+        transform: scaleX(0.6);
+        transition: opacity 0.3s, transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+      }
+      .effect.on {
+        opacity: 1;
+        transform: none;
       }
       .video {
         position: relative;
@@ -308,7 +382,7 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin: 0.625rem 0 0.75rem;
+        margin: 0.625rem 0 0.5rem;
         color: var(--muted);
         font-size: 0.8125rem;
         font-variant-numeric: tabular-nums;
@@ -636,7 +710,7 @@
         }
         .steps {
           flex-wrap: wrap;
-          gap: 0.5rem 0.75rem;
+          gap: 0.25rem 0.75rem;
         }
         .copy {
           flex-direction: column;
@@ -653,16 +727,18 @@
       <h1>Baba Voss</h1>
       <p class="lede">Baba is a work surface you share with your agent.</p>
 
-      <div class="picture" id="demo" role="img" aria-label="A demo. In the chat, you asked your agent for a slideshow of your newest photos with a soundtrack, and it made one on a surface: the video, the music, and a track of the photos. Then, in three steps. One: you select three parts of the track, lettered A, B and C. Two: you ask for A as a collage, B with a cut on every beat, and C zooming in, and the agent does each. Three: you play it.">
+      <div class="picture" id="demo" role="img" aria-label="A demo, in your harness: a chat beside Baba, which is empty at first. You say you make slideshows with music and want the photos to change on the beat. Your agent makes a first surface for it: a video, the music, and a track of photos that change every two beats. You select three parts of the track, A, B and C, and ask for A as a collage, B with a cut on every beat, and C zooming in. The agent says the surface cannot do those yet, adds them to it, does each, and says so. Then you play it.">
         <div class="bar" aria-hidden="true"><i></i><i></i><i></i><b>Your harness</b><span>Claude Code, Codex, OpenCode…</span></div>
         <div class="cols" aria-hidden="true">
           <div class="chat">
             <p class="label">Chat</p>
             <div class="log" id="log">
-              <div class="say you" data-keep>Make a slideshow from my newest photos in Pictures/Lisbon. Use “Sunday Drive” as the soundtrack.</div>
-              <div class="used" data-keep>slideshow · new project</div>
-              <div class="say" data-keep>Made “Lisbon”: 8 photos, one every two beats of Sunday Drive.</div>
+              <div class="say you">I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”.</div>
+              <div class="used">baba · new surface: slideshow</div>
+              <div class="say">Made a slideshow surface, and “Lisbon” on it: 8 photos, one every two beats.</div>
               <div class="say you">A as a collage. B with a cut on every beat. C zooming in.</div>
+              <div class="say">The surface can't do those yet. I'll add layouts, cuts by beat and motion to it.</div>
+              <div class="used">baba · slideshow: add layouts, beat cuts, motion</div>
               <div class="used">slideshow · collage A</div>
               <div class="used">slideshow · cut B on every beat</div>
               <div class="used">slideshow · zoom in C</div>
@@ -670,32 +746,43 @@
             </div>
             <div class="ask" id="ask"><span id="typed"></span><span class="hint">Ask your agent…</span></div>
           </div>
-          <div class="surface">
-            <p class="label">Surface · Lisbon</p>
-            <div class="video" id="video">
-              <span class="shot"></span><span class="tiles"><i></i><i></i><i></i></span><span class="play" id="play"></span>
-            </div>
-            <div class="controls"><span id="time">0:00 / 0:32</span><span class="push">Sunday Drive · 120 beats a minute</span></div>
-            <div class="track">
-              <span>Music</span>
-              <div class="lane wave" id="wave"></div>
-            </div>
-            <div class="track">
-              <span>Photos</span>
-              <div class="lane video-lane" id="lane">
-                <span class="clip"></span>
-                <span class="fx tiled on" id="fx-a" style="left: 12.5%; width: 25%"></span><span class="fx grows on" id="fx-c" style="left: 87.5%; width: 12.5%"></span>
-                <span class="sel named" id="sel-a" data-letter="A" style="left: 12.5%; width: 25%"></span><span class="sel named" id="sel-b" data-letter="B" style="left: 50%; width: 25%"></span
-                ><span class="sel named" id="sel-c" data-letter="C" style="left: 87.5%; width: 12.5%"></span><span class="head" id="head"></span>
+          <div class="surface" id="surface" data-stage="2">
+            <p class="label" id="title">Baba · Slideshow</p>
+            <div class="empty"><b>Nothing here yet</b><span>What your agent makes for you shows here.</span></div>
+            <div class="built">
+              <div class="video" id="video">
+                <span class="shot"></span><span class="tiles"><i></i><i></i><i></i></span><span class="play" id="play"></span>
               </div>
+              <div class="controls"><span id="time">0:00 / 0:32</span><span class="push">Sunday Drive · 120 beats a minute</span></div>
+              <div class="tools more"><span>Layout</span><span>Cuts</span><span>Motion</span></div>
+              <div class="track">
+                <span>Music</span>
+                <div class="lane wave" id="wave"></div>
+              </div>
+              <div class="track">
+                <span>Photos</span>
+                <div class="lane video-lane" id="lane">
+                  <span class="clip"></span><span class="fx tiled on" id="fx-a" style="left: 12.5%; width: 25%"></span>
+                  <span class="sel named" id="sel-a" data-letter="A" style="left: 12.5%; width: 25%"></span><span class="sel named" id="sel-b" data-letter="B" style="left: 50%; width: 25%"></span
+                  ><span class="sel named" id="sel-c" data-letter="C" style="left: 87.5%; width: 12.5%"></span><span class="head" id="head"></span>
+                </div>
+              </div>
+              <div class="track more">
+                <span>Effects</span>
+                <div class="lane effects">
+                  <span class="effect on" id="effect-a" style="left: 12.5%; width: 25%">Collage</span><span class="effect on" id="effect-b" style="left: 50%; width: 25%">Every beat</span
+                  ><span class="effect on" id="effect-c" style="left: 87.5%; width: 12.5%">Zoom</span>
+                </div>
+              </div>
+              <div class="note on" id="note">A a collage, B on every beat, C zooming in.</div>
             </div>
-            <div class="note on" id="note">A a collage, B on every beat, C zooming in.</div>
           </div>
         </div>
         <svg class="cursor" id="cursor" viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 7 2.8-1.2-3-6.9H15z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round" /></svg>
       </div>
       <p class="steps" id="steps" aria-hidden="true">
-        <span data-step="1">1 · Select</span><span data-step="2">2 · Ask</span><span data-step="3">3 · Play</span><button type="button" id="replay" hidden>Replay demo</button>
+        <span data-step="1">1 · Say what you need</span><span data-step="2">2 · Your agent makes it</span><span data-step="3">3 · Ask for more</span><span data-step="4">4 · It grows</span
+        ><span data-step="5">5 · Play</span><button type="button" id="replay" hidden>Replay demo</button>
       </p>
 
       <h2>How it works</h2>
@@ -758,22 +845,23 @@
         setTimeout(() => (button.textContent = "Copy"), 2000)
       })
 
-      // The demo, played. The page as served is its last state. This plays it from where the chat left the slideshow just
-      // made: the person selects three parts, asks for something of each, the agent does each on the surface, the person
-      // plays it. Once as it comes into view, and again when asked.
+      // The demo, played. The page as served is its last state. This plays it from an empty Baba: the person says what
+      // they need, the agent makes a first surface, the person selects three parts and asks for more, the agent adds to
+      // the surface what it lacked and does each, and the person plays it. Once as it comes into view, and again when asked.
       const $ = (id) => document.getElementById(id)
       const demo = $("demo")
       const cursor = $("cursor")
-      const [log, ask, typed, video, play, time, wave, lane, head, note, steps, replay] = [
-        "log", "ask", "typed", "video", "play", "time", "wave", "lane", "head", "note", "steps", "replay",
+      const [log, ask, typed, surface, title, video, play, time, wave, lane, head, note, steps, replay] = [
+        "log", "ask", "typed", "surface", "title", "video", "play", "time", "wave", "lane", "head", "note", "steps", "replay",
       ].map($)
-      const ASK = "A as a collage. B with a cut on every beat. C zooming in."
+      const NEED = "I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”."
+      const MORE = "A as a collage. B with a cut on every beat. C zooming in."
       const BARS = 64
-      // The parts the person selects, by where they start and end on the track, from 0 to 1.
+      // The parts the person selects, by where they start and end on the track, from 0 to 1, and the effect each is given.
       const PARTS = [
-        { letter: "A", from: 0.125, to: 0.375, sel: $("sel-a") },
-        { letter: "B", from: 0.5, to: 0.75, sel: $("sel-b") },
-        { letter: "C", from: 0.875, to: 1, sel: $("sel-c") },
+        { letter: "A", from: 0.125, to: 0.375, sel: $("sel-a"), effect: $("effect-a") },
+        { letter: "B", from: 0.5, to: 0.75, sel: $("sel-b"), effect: $("effect-b") },
+        { letter: "C", from: 0.875, to: 1, sel: $("sel-c"), effect: $("effect-c") },
       ]
       const still = matchMedia("(prefers-reduced-motion: reduce)").matches
       let run = 0
@@ -789,24 +877,26 @@
         wave.append(bar)
       }
 
-      // The cuts: one where each photo gives way to the next, every two beats, from the start; and those the agent adds in B.
-      const cutAt = (at, kind) => {
+      // The cuts: one where each photo gives way to the next, every two beats, in the first version; and those added in B.
+      const cutAt = (at) => {
         const cut = document.createElement("span")
 
-        cut.className = `split ${kind} on`
+        cut.className = "split on"
         cut.style.left = `${at * 100}%`
-        cut.dataset.at = String(at)
         lane.insertBefore(cut, head)
 
         return cut
       }
-      const first = [1, 2, 3, 4, 5, 6, 7].map((n) => cutAt(n / 8, "first"))
-      const added = [0.5625, 0.6875].map((at) => cutAt(at, "added"))
-      const inCollage = first.find((cut) => cut.dataset.at === "0.25")
+      const first = [1, 2, 3, 4, 5, 6, 7].map((n) => cutAt(n / 8))
+      const added = [0.5625, 0.6875].map(cutAt)
+      const inCollage = first[1]
       const bars = [...wave.children]
-      const kept = [...log.querySelectorAll("[data-keep]")]
       const wait = (ms, id) => new Promise((done, stop) => setTimeout(() => (id === run ? done() : stop(new Error("replayed"))), ms))
       const step = (n) => steps.querySelectorAll("span").forEach((s) => s.classList.toggle("on", Number(s.dataset.step) === n))
+      const stage = (n) => {
+        surface.dataset.stage = String(n)
+        title.textContent = n ? "Baba · Slideshow" : "Baba"
+      }
       // A point of an element, as the cursor's place in the window: fx and fy from 0 to 1 across it.
       const to = (el, fx = 0.5, fy = 0.5) => {
         const box = el.getBoundingClientRect()
@@ -822,6 +912,20 @@
         log.append(said)
 
         return said
+      }
+      // The person writes in the chat's field, and sends it.
+      const write = async (text, id) => {
+        to(ask, 0.3, 0.5)
+        await wait(800, id)
+        ask.classList.add("on")
+        for (const letter of text) {
+          typed.textContent += letter
+          await wait(16, id)
+        }
+        await wait(350, id)
+        typed.textContent = ""
+        ask.classList.remove("on")
+        line(text, "say you")
       }
       const clock = (p) => `0:${String(Math.floor(p * 32)).padStart(2, "0")} / 0:32`
       // What shows at a moment of the play: which photo, and whether as a collage or zooming in.
@@ -839,26 +943,26 @@
       }
 
       function reset() {
-        log.replaceChildren(...kept)
+        log.replaceChildren()
         typed.textContent = ""
         ask.className = "ask"
         demo.classList.remove("playing")
+        stage(0)
         show({ shot: 0 })
         video.classList.remove("flash")
         time.textContent = clock(0)
-        for (const { sel } of PARTS) {
+        for (const { sel, effect } of PARTS) {
           sel.classList.remove("on", "named")
           sel.style.transition = "none"
           sel.style.width = "0"
+          effect.classList.remove("on")
         }
-        for (const cut of added) cut.classList.remove("on")
-        inCollage.classList.add("on")
+        for (const cut of [...first, ...added]) cut.classList.remove("on")
         $("fx-a").classList.remove("on")
-        $("fx-c").classList.remove("on")
         for (const bar of bars) bar.classList.remove("on", "hit")
         head.style.left = "0"
-        note.textContent = "8 photos, one every two beats."
-        note.classList.add("on")
+        note.textContent = ""
+        note.classList.remove("on")
         cursor.classList.remove("on", "drag")
         replay.hidden = true
         step(0)
@@ -871,78 +975,100 @@
         try {
           await wait(900, id)
 
-          // 1. The person selects three parts of the track: A, B and C.
+          // 1. The person says what they need.
           step(1)
-          to(video, 0.3, 0.85)
+          to(surface, 0.3, 0.6)
           cursor.classList.add("on")
-          await wait(400, id)
-          for (const { letter, from, to: end, sel } of PARTS) {
-            to(lane, from, 0.55)
-            await wait(700, id)
-            sel.classList.add("on", "named")
-            sel.style.transition = "background 0.3s, outline-color 0.3s, width 0.6s linear"
-            cursor.classList.add("drag")
-            to(lane, end, 0.55)
-            sel.style.width = `${(end - from) * 100}%`
-            await wait(700, id)
-            cursor.classList.remove("drag")
-            note.textContent = `${letter} selected.`
-            await wait(150, id)
-          }
-          note.textContent = "A, B and C selected."
-
-          // 2. They ask, in the chat; the agent does each, on the surface.
-          step(2)
-          await wait(350, id)
-          to(ask, 0.3, 0.5)
-          await wait(800, id)
-          ask.classList.add("on")
-          for (const letter of ASK) {
-            typed.textContent += letter
-            await wait(22, id)
-          }
-          await wait(350, id)
-          typed.textContent = ""
-          ask.classList.remove("on")
-          line(ASK, "say you")
+          await wait(500, id)
+          await write(NEED, id)
           to(ask, 0.85, 1.7)
           await wait(700, id)
 
+          // 2. The agent makes a first surface for it, and the slideshow on it.
+          step(2)
+          line("baba · new surface: slideshow", "used")
+          await wait(500, id)
+          stage(1)
+          await wait(700, id)
+          for (const cut of first) {
+            cut.classList.add("on")
+            await wait(70, id)
+          }
+          note.textContent = "8 photos, one every two beats."
+          note.classList.add("on")
+          await wait(300, id)
+          line("Made a slideshow surface, and “Lisbon” on it: 8 photos, one every two beats.", "say")
+          await wait(1500, id)
+
+          // 3. The person selects three parts of the track, A, B and C, and asks for more of each.
+          step(3)
+          for (const { letter, from, to: end, sel } of PARTS) {
+            to(lane, from, 0.55)
+            await wait(650, id)
+            sel.classList.add("on", "named")
+            sel.style.transition = "background 0.3s, outline-color 0.3s, width 0.55s linear"
+            cursor.classList.add("drag")
+            to(lane, end, 0.55)
+            sel.style.width = `${(end - from) * 100}%`
+            await wait(650, id)
+            cursor.classList.remove("drag")
+            note.textContent = `${letter} selected.`
+            await wait(120, id)
+          }
+          note.textContent = "A, B and C selected."
+          await wait(250, id)
+          await write(MORE, id)
+          to(ask, 0.85, 1.7)
+          await wait(700, id)
+
+          // 4. The surface cannot do those yet: the agent adds them to it.
+          step(4)
+          line("The surface can't do those yet. I'll add layouts, cuts by beat and motion to it.", "say")
+          await wait(1300, id)
+          line("baba · slideshow: add layouts, beat cuts, motion", "used")
+          await wait(500, id)
+          stage(2)
+          note.textContent = "Layouts, cuts by beat and motion added."
+          await wait(1300, id)
+
+          // Then it does each.
           line("slideshow · collage A", "used")
           inCollage.classList.remove("on")
           $("fx-a").classList.add("on")
+          PARTS[0].effect.classList.add("on")
           PARTS[0].sel.classList.remove("on")
           note.textContent = "A is a collage."
-          await wait(800, id)
+          await wait(750, id)
 
           line("slideshow · cut B on every beat", "used")
           for (const cut of added) {
             cut.classList.add("on")
-            await wait(220, id)
+            await wait(200, id)
           }
+          PARTS[1].effect.classList.add("on")
           PARTS[1].sel.classList.remove("on")
           note.textContent = "B changes on every beat."
-          await wait(650, id)
+          await wait(600, id)
 
           line("slideshow · zoom in C", "used")
-          $("fx-c").classList.add("on")
+          PARTS[2].effect.classList.add("on")
           PARTS[2].sel.classList.remove("on")
           note.textContent = "C zooms in."
-          await wait(800, id)
+          await wait(750, id)
 
           line("Done. A is a collage, B changes on every beat, and C zooms in.", "say")
           note.textContent = "A a collage, B on every beat, C zooming in."
           await wait(1000, id)
 
-          // 3. They play it: the music as a wave, each photo changing on a beat.
-          step(3)
+          // 5. The person plays it: the music as a wave, each photo changing on a beat.
+          step(5)
           to(play, 0.5, 0.5)
           await wait(800, id)
           play.classList.add("down")
           await wait(160, id)
           play.classList.remove("down")
           demo.classList.add("playing")
-          to(video, 0.88, 1.12)
+          to(video, 0.88, 1.1)
           await wait(300, id)
           await new Promise((done, stop) => {
             const length = 8000
