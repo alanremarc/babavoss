@@ -28,8 +28,8 @@ agent      Does the work.
 harness    Hosts the agent: Claude Code, Codex.
 session    One conversation of the harness.
 runtime    Holds the surfaces of a session: one state, changed by either side.
-page       Shows the same surfaces to the person, at one address per session, opened by the link the agent gives:
-           the session's key, kept by the browser, so it outlives a restart.
+page       Shows the same surfaces to the person, at one address per session, opened as it is by a browser of this
+           machine; what another site starts there is refused, but a link to the page.
 ```
 
 ### A surface
@@ -39,7 +39,7 @@ page       Shows the same surfaces to the person, at one address per session, op
               │  view at /         view at /a/1 │
    agent ─────┤    facts             facts      ├───── ui ───── person
    reads,     │    actions           actions    │      shows,
-   calls      │    ask ·····························►  only the person
+   calls      │    whose decision: said in the view, raised in the conversation
               │                                 │
               │  update ──► notice ─────────────┼──► both, once
               └─────────────────────────────────┘
@@ -48,8 +48,7 @@ page       Shows the same surfaces to the person, at one address per session, op
 ```text
 surface    What is true now and what can be done now, as a program. Shared and live.
 view       What a surface says at a path: facts, and the actions offered there.
-action     Something that can be done now, by the agent or the person.
-ask        An action only the person may take; the agent waits for it.
+action     Something that can be done now, offered alike to the agent and the person.
 fact       What stands: true until the surface says otherwise.
 notice     What happened: one line an update gives, told once to each side, kept in no view.
 ui         A surface's part of the page: its views, shown to the person.
@@ -94,7 +93,9 @@ attention       a surface says who it needs, and why: a dot on its tab, the why 
 notifications   every notice: a bubble beside its tab for a moment, kept in the tab's thread; one line for the agent
 turn            whose move it is, said by the mark: its eyes look about while the agent works
 addresses       every place has a link, a tab by its surface's name, and the agent can point the person to it
-activity        who did what, kept with each tab and going with it: in its drawer; read on demand by the agent
+activity        a log of actions, for auditing and not replay: who, the person, the agent or the world; what was called,
+                with its inputs; done, or refused and why; the surface's lines about it. In each tab's drawer; read on
+                demand by the agent
 frame           title, menus and a surface's actions, in the same place for every surface: a tab's drawer
 theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
 settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
@@ -160,7 +161,8 @@ shared    both act on the surface, at any time. A change by the person is a move
 learned   a surface is all an agent learns of it: its description to choose it, its views to work it
 dynamic   a surface made, changed or removed runs once the shell restarts: at once in dev mode, else when the agent
           restarts it, the present saying the code changed until then
-soft      hooks add context and never block; hard limits stay the person's, in the harness
+soft      hooks add context and never block; a surface offers both sides the same and locks nothing: what is the
+          person's, the agent asks for in the conversation; hard limits stay the person's, in the harness
 ```
 
 ## Lab

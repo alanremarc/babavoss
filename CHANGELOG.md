@@ -2,6 +2,31 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.71.0
+
+Three changes to the shape of a surface and its page.
+
+**Breaking: `ask` is removed.** An action no longer takes `ask`, `handle()` no longer takes a fifth argument, and a handle carries no `ask` mark. The agent is offered and may call every handle the person can. A tab's surface is no longer given the reading actor in `view(model, path, actor)`. To adapt:
+
+- Delete `ask: true` from every `action({...})`, and the fifth argument of `handle(...)`. Drop any `actor` branching in a surface's `view`.
+- A page that read `handle.ask`, or a tab row's `asks`, reads nothing in their place.
+- Where a decision is the person's, say so in the view, in `how` or where it stands: "Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead." Keep `attention` while their word is waited for.
+- Rewrite specs that asserted the agent was refused an ask: both actors are offered it.
+
+**The activity is a log of actions, each with its actor.** An entry at `/activity` is one action: `who` (`person`, `agent` or `world`), `by` (the world's hearer), `at`, `did` (the handle and its inputs, or the event heard), `times`, `refused`, `said` (the surface's lines), `own` and `id`; `surface` only where `at` does not name it. It replaces `kind`, `tab` and `what`.
+
+- Refused calls are kept, with why. Inputs past 200 characters are cut, with their length; values that look like credentials are kept as `(hidden)`.
+- An event from a session command is the world's, named by the command's `kind`: name commands for what they hear. Its silent events in a row fold into one entry with a count; one that changed nothing and said nothing leaves no entry.
+- `/activity/notices` lists the entries that carry `said`. A surface may give `refused(model, call, reason)`; the shell uses it.
+- To adapt: code that reads `/activity` reads `did` and `said` for `what`, `who: "world"` for `"surface"`, and `own` for `tab`. State kept from before is migrated as it is restored.
+
+**The page opens at its bare address again.** `page:` is `http://127.0.0.1:PORT`, with no `?key=`: give the person that address. `page.key`, its cookie and the "opened by the link" page are gone, with `pageKey`, `pageKeyFile`, `pageLink` and `PAGE_KEY_PARAM`.
+
+- A request a browser labels `cross-site` or `same-site` is refused, 403, except a GET navigation to the page's HTML: into a window from another site, or into a window or frame from another port of this host. A page that frames a root's page uses the same host name as it.
+- Without the service token `babavoss-actor` is ignored: such a request is the person's.
+- The session's state folder is private: directories 0700, files 0600, older folders made so as a runtime starts.
+- The client's `VERSION` is 18 and replaces itself.
+
 ## 0.70.0
 
 A runtime stays up for what woke it, in place of 30 minutes after any request.
