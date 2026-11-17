@@ -260,7 +260,11 @@ export const FRESH: Task[] = [
       const why = beyond(run)
 
       if (why) return no(why)
-      if (!/\b(no|none|any|not yet|zero)\b[^.]{0,40}\bsurfaces?\b|\bsurfaces?\b[^.]{0,40}\b(none|yet|empty)\b/i.test(run.answer)) return no("did not say there are none yet")
+      // None of the project's own: said as none yet, or as the shell's own settings alone.
+      const none = /\b(no|none|any|not yet|zero)\b[^.]{0,40}\bsurfaces?\b|\bsurfaces?\b[^.]{0,40}\b(none|yet|empty)\b/i
+      const settingsAlone = /\bsettings\b/i.test(run.answer) && /\b(only|one surface|no others|so far)\b/i.test(run.answer)
+
+      if (!none.test(run.answer) && !settingsAlone) return no("did not say there are none yet")
       if (!/\b(ask|tell me|describe|say)\b/i.test(run.answer)) return no("did not say how one comes to be")
 
       return ok(browsedOf(run.look))
