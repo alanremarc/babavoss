@@ -1,4 +1,4 @@
-# BabaVoss
+# Baba Voss
 
 A framework for surfaces. A surface is a tool an agent works with for a person: the agent reads and acts on it through a command, the person watches and acts on it on a page. Both see the same thing, and both change it. A project's surfaces are code in `.baba/`. The shell is the desktop they run on.
 

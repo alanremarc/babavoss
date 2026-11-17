@@ -50,7 +50,7 @@ export async function updateNote(home: string, baba: string, now = Date.now()): 
   const ran = running()
 
   return version && later(version, ran)
-    ? `babavoss ${version} is out; these surfaces run on ${ran}. Update, unless the person said not to: run \`bun add babavoss@github:${REPOSITORY}#v${version}\` in ${baba}, ` +
-        `read node_modules/babavoss/CHANGELOG.md there from ${ran} up, adapt the surfaces to what changed, and run their specs`
+    ? `babavoss ${version} is out; these surfaces run on ${ran}. Whether to take it is the person's; it is taken by \`bun add babavoss@github:${REPOSITORY}#v${version}\` ` +
+        `in ${baba}, then node_modules/babavoss/CHANGELOG.md there is read from ${ran} up, the surfaces adapted to what changed, and their specs run`
     : undefined
 }

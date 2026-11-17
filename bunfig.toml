@@ -1,5 +1,5 @@
 [test]
 timeout = 30000
 preload = ["./spec/support/offline.ts"]
-# The template's own spec runs in a role made from it; here spec/bin/baba.spec.ts runs it.
+# The template's own spec runs in a surface made from it; here spec/bin/baba.spec.ts runs it.
 pathIgnorePatterns = ["template/**"]

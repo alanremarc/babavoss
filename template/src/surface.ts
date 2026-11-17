@@ -1,18 +1,22 @@
-// The surface: what is true and what can be done, made for the agent first. The shell runs it as a tab. It is all an
-// agent ever learns of this tool: `description` is how the shell lists it, and so how it is chosen; `how`, a fact at /,
-// says its mechanics: what each thing is, what each action does and what must hold for it, never when to act or who
-// decides, which the person and the project's own instructions say. Here a greeting is proposed, and accepted or
-// declined. Replace the greeting with the surface's own work and keep the shape: both sides are offered the same handles,
-// and a notice says what just happened, marked a highlight where it waits on the person, which marks the tab on their
-// page until they look.
+// The surface: what is true and what can be done, read by the agent through the command and by the person on the page.
+// Here a greeting is proposed, then accepted or declined. Replace the greeting with the surface's own work and keep the
+// shape, which node_modules/babavoss/skill/making-surfaces.md explains:
+// - Its words are mechanics only. `description` is how the shell lists it: a phrase and a "Use when …". `how`, a fact at
+//   /, says what the things are and what the actions do; never when to act or who decides.
+// - Both sides are offered the same actions. Whether the proposal is taken is the person's decision: the agent raises it
+//   in the conversation and acts on their word, or they take it on the page. Nothing here locks it.
+// - An action's description adds what its name does not say, in lower case with no full stop; an input declares what it
+//   means, here `kind: "line"`, one line of text.
+// - A notice says what just happened; marked a highlight, it is what the person should see, and marks the tab until they look.
 import { action, surface, view, type Update } from "babavoss/core/index.ts"
 
 export type Model = { greeting: string; proposed?: string }
+/** What its commands send. This surface runs none: a surface that hears a file or a process does, by a session command. */
 type Event = { kind: "none" }
 
 const propose = action({
   name: "propose",
-  description: "a greeting, which stands beside the one in use until accepted or declined",
+  description: "stands beside the greeting in use until accepted or declined",
   subject: {},
   inputs: { text: { type: "string", kind: "line" } },
   update: (m: Model, { text }): Update<Model, never> =>
@@ -22,18 +26,19 @@ const propose = action({
 })
 const accept = action({
   name: "accept",
-  description: "uses the proposed greeting",
+  description: "puts the proposed greeting in use",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed ?? m.greeting }, notices: [`The greeting is now "${m.proposed}"`] }),
 })
 const decline = action({
   name: "decline",
-  description: "keeps the greeting as it is",
+  description: "drops the proposed greeting",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, never> => ({ model: { greeting: m.greeting }, notices: [`"${m.proposed}" was declined`] }),
 })
+// Accept and decline are offered only while there is a proposal: an action that cannot be taken now is not offered.
 const pages = view([propose, accept, decline], {
   "/": (m) => ({
     title: "Greeting",
