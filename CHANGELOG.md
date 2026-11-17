@@ -2,6 +2,24 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.67.0
+
+Breaking: the shell no longer reloads its code under running work. There are two modes, each simple.
+
+- **Normal mode, the default.** A runtime runs the code it started with; it no longer runs under `bun --hot`. After changing `.baba/` or taking a release, run `<word> restart`. Until then `/` and the hooks say `code: changed on disk since instance … started; it runs once restarted`.
+- **Restart with work under way drains.** The runtime takes no new calls, restarts once the work has ended, and the command exits at once, naming the instance. `<word> follow ID [SECONDS]` returns when the next instance answers, or at once where that instance is already gone. `<word> close` cuts the work instead.
+- **Dev mode.** `dev: true` in `.baba/baba.config.ts`, or `BABAVOSS_DEV=1` (`0` turns it off). Any change to the code the runtime loaded restarts it at once and cuts running commands; the next answer says what was cut. Use it while surfaces are being built.
+- A restart, in either mode, is a fresh process at the same address with the state as saved; an open page reloads itself.
+- The version told is the one running. The client's `VERSION` is 15 and replaces itself.
+- A runtime ends within a moment of its state directory being removed, so none is left behind by a deleted project.
+
+To adapt a project's surfaces:
+
+- A cut command sends no event: make long work resumable from the model, and do not count running jobs in the model.
+- Nothing on `globalThis` survives a reload any more.
+- A spec that starts a real runtime and expects an edit to be live sets `BABAVOSS_DEV=1`.
+- Decide the project's mode: set `dev: true` while its surfaces are being made, and leave it out otherwise.
+
 ## 0.66.0
 
 Conventions: the shell hands every page, home included, how the person wants pages to be.
