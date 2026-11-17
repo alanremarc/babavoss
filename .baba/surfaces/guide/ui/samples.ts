@@ -8,7 +8,7 @@ import type { Door } from "../../../../framework/shell/ui/tab.tsx"
 const TITLES = ["Keep the present short", "Rename the picker", "Close a tab from its menu", "Show the present", "Fold the injections", "Pin the tellings", "Approve a draft", "Show whose move it is", "Name the lanes", "Count what waits"]
 const issue = (n: number) => ({ at: `/issues/${n}`, n, title: TITLES[n - 1]! })
 
-/** A queue's views, by path within its tab: issues to go to, actions at / and at an issue, an ask at issue 4 and at issue 7. */
+/** A queue's views, by path within its tab: issues to go to, actions at / and at an issue, approve at issue 4 and at issue 7. */
 export const VIEWS: Record<string, View> = {
   "/": {
     title: "Queue",
@@ -32,7 +32,7 @@ export const VIEWS: Record<string, View> = {
             { label: "Move", actions: ["start", "done"] },
             { label: "Edit", actions: ["describe", "note"] },
           ],
-          ...((n === 4 || n === 7) && { approve: handle("approve", `Approve draft ${n}: it joins the backlog`, subject, {}, true) }),
+          ...((n === 4 || n === 7) && { approve: handle("approve", `Approve draft ${n}: it joins the backlog`, subject) }),
           start: handle("start", `Give issue ${n} to a lane, 1 to 5`, subject, { lane: "number" }),
           done: handle("done", `Mark issue ${n} done`, subject),
           describe: handle("describe", `Rewrite what issue ${n} is about, as brief markdown`, subject, { about: "string" }),

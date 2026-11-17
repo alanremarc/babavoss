@@ -1,4 +1,4 @@
-// The tasks page: its view at /, live, drawn by the page in view.tsx, the asks called from it.
+// The tasks page: its view at /, live, drawn by the page in view.tsx, approve and reopen called from it.
 import { ListChecksIcon } from "lucide-react"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 import TasksPage, { type TasksView } from "./view.tsx"

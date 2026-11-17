@@ -275,7 +275,7 @@ describe("what the person has seen", () => {
 })
 
 describe("the person's notifications", () => {
-  it("are counted for the person alone, and marked seen by asks offered to the person alone", async () => {
+  it("are counted of the person, the same for every reader, and marked seen by the page's quiet actions, which tell the agent nothing", async () => {
     const { agent, person } = story(shell({ things }))
 
     await person.call("/", "open", { surface: "things" })
@@ -285,15 +285,16 @@ describe("the person's notifications", () => {
 
     expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 3] })
     expect(person.offered("/activity/notices")).toEqual(["seen", "looked"])
-    expect(agent.sees("/activity/notices")).not.toHaveProperty("unseen")
-    expect(agent.sees("/activity/notices")).not.toHaveProperty("fresh")
-    expect(agent.offered("/activity/notices")).toEqual([])
-    expect(await agent.call("/activity/notices", "seen", { n: 4 })).toMatchObject({ outcome: "refused" })
+    expect(agent.sees("/activity/notices")).toEqual(person.sees("/activity/notices"))
+    agent.told()
+    agent.noticed()
 
     await person.call("/activity/notices", "looked", { n: 3 })
     expect(person.sees("/activity/notices")).toMatchObject({ unseen: 1, fresh: [2] })
     await person.call("/activity/notices", "seen", { n: 4 })
     expect(person.sees("/activity/notices")!.unseen).toBe(0)
+    expect(agent.told()).toEqual([])
+    expect(agent.noticed()).toEqual([])
   })
 
   it("see exactly the one looked at alone, by opening its tab's drawer, once however often, and the rest stay unseen until a mark passes them", async () => {

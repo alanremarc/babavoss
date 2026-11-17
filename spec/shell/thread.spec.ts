@@ -95,8 +95,7 @@ describe("what a thread's foot pins", () => {
     ]
 
     expect(pinnedOf({ broken: "it fails", needs })).toEqual({ tone: "broken", text: "This tab is broken", detail: "it fails", does: { label: "Reload" } })
-    expect(pinnedOf({ needs, ask: { label: "Approve", at: "/issues/4" } })).toEqual({ tone: "person", text: "Approve or drop 1 draft", does: { label: "Go there", at: "/issues/4" } })
-    expect(pinnedOf({ ask: { label: "Approve…", at: "/issues/7" } })).toEqual({ tone: "person", text: "Approve waits for you", does: { label: "Go there", at: "/issues/7" } })
+    expect(pinnedOf({ needs })).toEqual({ tone: "person", text: "Approve or drop 1 draft", does: { label: "Go there", at: "/" } })
     expect(pinnedOf({ needs: [needs[0]!] })).toEqual({ tone: "agent", text: "Waits for the agent: rerun the build" })
     expect(pinnedOf({})).toBeUndefined()
   })
@@ -163,7 +162,7 @@ describe("opening a drawer", () => {
     expect(freshIn(shellEntries(ROWS), fresh)).toEqual([])
   })
 
-  it("marks them seen quietly, by the person's asks, which tell the agent nothing and keep no entry", async () => {
+  it("marks them seen quietly, by the page's actions, which tell the agent nothing and keep no entry", async () => {
     const ring = action({ name: "ring", description: "ring", subject: {}, inputs: {}, update: (m: { n: number }): Update<{ n: number }, never> => ({ model: m, notices: ["Rang"] }) })
     const pages = view([ring], { "/": () => ({ title: "Bell", ring: ring.bind({}) }) })
     const bell = surface<{ n: number }, never, never>({ description: "a bell", init: () => ({ n: 0 }), update: (m, msg) => pages.update(m, msg as never), view: pages.view, run: async () => {}, failed: () => undefined as never })

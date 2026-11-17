@@ -220,7 +220,7 @@ const pages = view<Model, Command>([replay, pin, unpin], {
   "/demo": (m) => ({
     about:
       "The demo project the scenarios are played on: a .baba/ with these surfaces, made afresh for each play and removed after it. " +
-      "Each place gives these facts and offers these actions; an ask is the person's alone; itself: the commands a surface starts, which change it with no call.",
+      "Each place gives these facts and offers these actions, to both sides alike; itself: the commands a surface starts, which change it with no call.",
     surfaces: demoView(m) ?? "not played yet",
   }),
   "/scenarios/:name": (m, { name }) => scenarioView(m, name!),

@@ -2,13 +2,13 @@
 // boundary as a story runs it, and explored as the person would. From its first state every handle offered is called once
 // per place, an input filled with a sample, and each state reached is looked at along the paths its views name under `at`.
 // What is kept is each place by its pattern, /tasks/:n, with the names of the facts it gives and the actions offered there:
-// their inputs, whether one is an ask, the person's alone, and whether a call gives a notice. What a surface's own
+// their inputs, and whether a call gives a notice. What a surface's own
 // commands change is read from what it starts.
 import { readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { story, type Args, type Handle, type Json, type Schema, type Surface, type View } from "babavoss/core/index.ts"
 
-export type Action = { name: string; description: string; inputs: string[]; ask?: true; notice?: true }
+export type Action = { name: string; description: string; inputs: string[]; notice?: true }
 export type Place = { path: string; facts: string[]; actions: Action[] }
 /** A surface as the demo has it: what it says of itself, its places, and the commands it starts, which change it by itself. */
 export type Shape = { name: string; description: string; views: Place[]; itself?: string[] }
@@ -141,7 +141,6 @@ export async function explore<M, E extends { kind: string }, C>(name: string, su
           name: h.name,
           description: described(h),
           inputs: Object.keys(h.open),
-          ...(h.ask && { ask: true as const }),
           ...(probe.agent.noticed().length > 0 && { notice: true as const }),
         })
         queue.push([...calls, { path, handle: h.name, args }])

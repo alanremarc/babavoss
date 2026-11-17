@@ -174,11 +174,11 @@ export function changes(before: Json | undefined, after: Json | undefined): stri
 const quoted = (s: string) => (/^[\w./=:@-]+$/.test(s) ? s : `'${s.replaceAll("'", "'\\''")}'`)
 const argsOf = (args: Record<string, string> = {}) => Object.entries(args).map(([k, v]) => `${k}=${v}`)
 
-/** A tab's view as its page draws it: its paths within the tab, as the shell gives them to a page, and a handle by its name, description, inputs and whether it is an ask. */
+/** A tab's view as its page draws it: its paths within the tab, as the shell gives them to a page, and a handle by its name, description and inputs. */
 function drawn(value: Json | undefined, address: string): Json {
   if (Array.isArray(value)) return value.map((v) => drawn(v, address))
   if (!value || typeof value !== "object") return value ?? null
-  if (value.kind === "handle") return { kind: "handle", name: value.name ?? "", description: value.description ?? "", open: value.open ?? {}, ...(value.ask === true && { ask: true }) }
+  if (value.kind === "handle") return { kind: "handle", name: value.name ?? "", description: value.description ?? "", open: value.open ?? {} }
 
   return Object.fromEntries(
     Object.entries(value).map(([k, v]) => [k, k === "at" && typeof v === "string" && (v === address || v.startsWith(`${address}/`)) ? v.slice(address.length) || "/" : drawn(v, address)]),
