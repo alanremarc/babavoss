@@ -148,6 +148,9 @@ describe("the page's stream", () => {
     expect([said("up", 60_000), said("connecting", 1000), said("lost", 500)]).toEqual([undefined, undefined, undefined])
     expect([said("lost", 700), said("connecting", 4000)]).toEqual(["Reconnecting", "Connecting"])
   })
+  it("says at once that its runtime is asleep, and that the agent wakes it", () => {
+    expect(said("asleep", 0)).toBe("Asleep; it wakes when the agent next works with it")
+  })
 })
 
 describe("a runtime out of reach", () => {

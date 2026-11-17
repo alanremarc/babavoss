@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 15
+export const VERSION = 16
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -74,7 +74,7 @@ NAME PATH                  read a view: demo /notes (or bv demo /notes)
 NAME PATH HANDLE name=value  call: demo / add text=Pharmacy; text=@- reads standard input, text=@./note.md a file
 bv NAME PATH               select a root: bv demo /notes
 bv wait [SECONDS]          wait for the person: until something is heard or who is needed changes, then what changed: bv wait 60
-bv close                   close: bv close; the next call wakes the root
+bv sleep                   put the root to sleep once your work with it is over: its state is kept, the next call wakes it
 bv restart                 restart, to run changed code: at once, or once the work under way ended, naming the instance
 bv follow INSTANCE [SECONDS]  wait until that instance restarted, and say which one answers: bv follow 3f2a9c1b
 bv -e CODE                 async program: bv -e 'for (let i=0;i<3;i++) console.log(await root.call("/", "add", {text:String(i)}))'
@@ -141,8 +141,9 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     const program = path === "-e"
 
     if (program && (args.length !== 2 || !handle)) throw new SyntaxError(`${command} -e CODE | ${command} -e -`)
-    if (path === "close") {
-      if (args.length !== 1) throw new SyntaxError(`${command} close`)
+    // `close` is the word's old name, kept.
+    if (path === "sleep" || path === "close") {
+      if (args.length !== 1) throw new SyntaxError(`${command} sleep`)
       route = "/_/close"
       method = "POST"
     } else if (path === "restart") {
@@ -362,7 +363,7 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
     }
     // An open always names the page; any other answer names it only when the address is not the one last named.
     const announce = () => {
-      if (path === "close") return
+      if (path === "sleep" || path === "close") return
       if (root.page !== page) {
         console.log(`page: ${page}  a new address`)
         root.page = page

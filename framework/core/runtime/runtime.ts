@@ -1,5 +1,5 @@
 // The resident process of one session: owns the session's state directory, runs the surface with its start commands, serves the
-// door, publishes the endpoint, exits when idle or when its state directory is gone. It is woken in the directory the session
+// door, publishes the endpoint, sleeps when what woke it is spent or when its state directory is gone. It is woken in the directory the session
 // runs in, which is its cwd. The root's runtime entry hands startRuntime its arguments and nothing else.
 // A runtime runs the code it started with, and takes changed code only by starting again: a fresh process in its place, at its
 // address, with the state as saved. When is the mode's:
@@ -11,6 +11,9 @@
 // Each runtime has an instance, a short id in its endpoint, by which a restart is followed: the client waits until another
 // instance answers. Each line it logs begins with its time. Where the environment refuses it a lock or loopback, it logs why
 // as its last line and ends with DENIED_EXIT, for the waker to say the root does not run here.
+// It stays up for what woke it (wake.ts): each request gives a deadline by its strength, and it sleeps, ends with its state
+// kept, once the furthest has passed and nothing runs; asked to, at once. A restart carries the deadline to the one in its
+// place: a restart is no use of its own, and the explicit one is the agent's command, which renewed it already.
 import { existsSync, readFileSync, realpathSync, rmSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs"
 import { dirname, join, resolve, sep } from "node:path"
 import { modelPorts, stateDir } from "../state/state.ts"
@@ -19,12 +22,14 @@ import type { RootDefinition } from "../root.ts"
 import { later } from "../update.ts"
 import { door } from "./door.ts"
 import { DENIED_EXIT, Denied, lastPort, ownService } from "./service.ts"
+import { strengthsOf, wakeful, type Strength } from "./wake.ts"
 
 export type RuntimeOptions = {
   command?: string
   entry?: string
   port?: number
-  idleMs?: number
+  /** How long each strength keeps it up, where not as STRENGTHS or BABAVOSS_WAKE_MS says; for specs. */
+  strengths?: Partial<Record<Exclude<Strength, "none">, number>>
   env?: NodeJS.ProcessEnv
   log?: (line: string) => void
   /** Directories whose change may change the page; default: the root's src and its ui. */
@@ -40,7 +45,6 @@ export type RuntimeOptions = {
   /** The latest release, asked once as the runtime starts: the page says so, quietly, while it is later than the version running. */
   latest?: () => Promise<string | undefined>
 }
-export const IDLE_MS = 30 * 60_000
 export const CLOSE_MS = 8000
 /** How often the runtime looks whether its code changed on disk, and, while it drains, whether its work ended. */
 export const LOOK_MS = 250
@@ -102,7 +106,7 @@ const isSpec = (file: string) => file.split(sep).includes("spec") || /\.spec\.ts
 
 /** What a runtime that restarted tells the one in its place: a line for the pages, and for the agent too where it cut work. */
 const handoffFile = (dir: string) => join(dir, "restarted")
-type Handoff = { line: string; cut: boolean }
+type Handoff = { line: string; cut: boolean; until?: number }
 const handoff = (dir: string): Handoff | undefined => {
   try {
     return JSON.parse(readFileSync(handoffFile(dir), "utf8")) as Handoff
@@ -171,14 +175,13 @@ export async function startRuntime(
   const running = run(root.surface, { ...modelPorts(dir), log })
   const code = loaded(entry)
   const watchers: FSWatcher[] = []
-  let idle: ReturnType<typeof setTimeout> | undefined
+  const wake = wakeful({ ...strengthsOf(options.env), ...options.strengths }, Date.now())
   let looking: ReturnType<typeof setInterval> | undefined
   let closing: Promise<void> | undefined
   // The lock is let go within CLOSE_MS of the decision, whatever refuses to close: it must not outlive the service. The
   // service file says from when its door is closing, so a client tells a runtime closing from one whose door is gone.
   const close = () =>
     (closing ??= (async () => {
-      clearTimeout(idle)
       clearInterval(looking)
       for (const w of watchers) w.close()
       owner.closing()
@@ -200,6 +203,10 @@ export async function startRuntime(
   let ending: Promise<void> | undefined
   const end = () =>
     void (ending ??= (async () => {
+      if (!leaving && !closing) {
+        log(`${root.name}: instance ${instance} sleeps, its state kept; any call wakes it`)
+        entrance.asleep()
+      }
       await close()
       if (leaving) options.successor?.()
       exit()
@@ -220,7 +227,7 @@ export async function startRuntime(
     leaving = `${root.name}: ${why}${cut && `; the restart cut ${cut}`}`
     log(leaving)
     try {
-      writeFileSync(handoffFile(dir), JSON.stringify({ line: leaving, cut: !!cut } satisfies Handoff))
+      writeFileSync(handoffFile(dir), JSON.stringify({ line: leaving, cut: !!cut, until: wake.until } satisfies Handoff))
     } catch {}
 
     return leaving
@@ -249,6 +256,7 @@ export async function startRuntime(
 
       return end()
     }
+    if (Date.now() >= wake.until && running.active() === 0) return end()
     if (stale) return
     loaded(entry, code)
 
@@ -293,14 +301,6 @@ export async function startRuntime(
     // The door answers that it is asked again, and then ends this runtime.
     if (file && existsSync(entry)) return leave(`its code changed (${file}) and it restarted`)
   }
-  const touch = () => {
-    clearTimeout(idle)
-    idle = setTimeout(() => {
-      if (running.active() === 0) end()
-      else touch()
-    }, options.idleMs ?? IDLE_MS)
-    idle.unref()
-  }
   // The version is the one it started with, the code it runs; the latest release is told as an update while it is later.
   const version = rootVersion(options.entry)
   let released: string | undefined
@@ -323,7 +323,7 @@ export async function startRuntime(
     identity: owner.identity,
     ui: root.ui,
     ...(root.boot && { boot: root.boot }),
-    touched: touch,
+    woken: (signal) => wake.signal(signal, Date.now()),
     end,
     about,
     command,
@@ -356,7 +356,6 @@ export async function startRuntime(
   const port = (entrance.server.address() as { port: number }).port
 
   owner.publish(port)
-  touch()
   log(`${root.name} runtime for session ${session}, instance ${instance}, ${dev ? "dev" : "normal"} mode, on 127.0.0.1:${port}, in ${process.cwd()}, state in ${dir}`)
   // A change in a file the page may be made of: in dev mode the door builds the page again and tells the open ones if it
   // differs; in normal mode it is changed code, said.
@@ -400,6 +399,7 @@ export async function startRuntime(
   const told = handoff(dir)
 
   rmSync(handoffFile(dir), { force: true })
+  if (typeof told?.until === "number") wake.carry(told.until)
   if (told?.line) entrance.note(told.line, told.cut)
   for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, end)
 

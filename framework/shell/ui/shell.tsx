@@ -166,12 +166,12 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
         if (settingsOpen.current) settingsAgain()
         for (const fn of listeners) fn()
       },
-      (connected) => {
+      (connected, asleep) => {
         // Coming up the first time changes nothing; going down, or coming back, is told.
         if (up.current !== connected && ever) for (const fn of listeners) fn()
         ever ||= connected
         up.current = connected
-        setConnected((was) => (connected ? "up" : was === "connecting" ? "connecting" : "lost"))
+        setConnected((was) => (connected ? "up" : asleep ? "asleep" : was === "connecting" ? "connecting" : "lost"))
       },
       (notice) => {
         for (const fn of hearers) fn(notice)

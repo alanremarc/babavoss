@@ -58,7 +58,7 @@ const setup = async () => {
     const runtime = await startRuntime(root, ["--session", "S"], {
       entry: join(dir, "scripts/open.ts"),
       env: { BABAVOSS_HOME: dir },
-      idleMs: 60_000,
+      strengths: { weak: 60_000 },
       watch: [],
       log: () => {},
       exit: () => {
@@ -159,11 +159,11 @@ it("5: wait listens for a person's call and times out", async () => {
   expect(await (await waiting).text()).toBe("notices:\nthe person acted on /one\nchanged by the person:\nn: 0 → 4")
   expect(await (await request("/_/wait?seconds=0.01")).text()).toBe("nothing changed")
 })
-it("6 and 7: closes, drains and carries the told view into the next runtime", async () => {
+it("6 and 7: sleeps, drains and carries the told view into the next runtime", async () => {
   const { request, runtime, start } = await setup()
 
   await request("/?open")
-  expect(await (await request("/_/close", {})).text()).toBe("text closed; any call wakes it")
+  expect(await (await request("/_/close", {})).text()).toBe("text asleep; any call wakes it, its state kept")
   await runtime.close()
 
   const next = await start()

@@ -7,11 +7,15 @@
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
 //                                 turn { agent, since, waiting, drivable, harness?, unheard? }, whose move it is (turn.ts), as it
 //                                 changes and on connect; `unheard` while the hooks' silence the agent was told of lasts, for the person
+//                                 asleep {}, as the runtime goes to sleep: the page says so, and finds it again when it is woken
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
 //   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it
 //   POST /_/restart text/plain      the runtime restarts, at once or once its work ended (runtime.ts): 200 at once, 202 draining
+//   POST /_/close text/plain        the runtime goes to sleep, its state kept: the agent's word `sleep`, or `close`
+// Each request is a signal of how long it keeps the runtime up (wake.ts), classified as it enters; a hook's word on the turn
+// once its event is read.
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view. And with what it shows first, so its first frame is whole: an island of JSON, the root's state as the
@@ -32,6 +36,7 @@ import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
+import { signalOf, type Request, type Signal } from "./wake.ts"
 import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unheardOf, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
@@ -49,8 +54,8 @@ export type DoorOptions = {
   command?: string
   identity: Identity
   ui: Ui
-  /** Called on every request, so an idle timer can be reset. */
-  touched?: () => void
+  /** Each request the service token admits, as the signal it is, so the runtime knows how long to stay up for it. */
+  woken?: (signal: Signal) => void
   end?: () => void
   /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
   current?: () => Promise<string | undefined>
@@ -132,6 +137,8 @@ export type Door = {
    * `agent` is false, as for what does not change what the agent should do; a later one takes its place.
    */
   note(line: string, agent?: boolean): void
+  /** The runtime goes to sleep: the open pages are told, before their streams end. */
+  asleep(): void
 }
 
 export function door<M>(running: Running<M>, options: DoorOptions): Door {
@@ -276,7 +283,6 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   })
 
   const server = createServer(async (req, res) => {
-    options.touched?.()
     res.setHeader(SERVICE_HEADER, options.identity.token)
 
     const port = (server.address() as { port: number } | null)?.port ?? 0
@@ -286,6 +292,21 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     const url = new URL(req.url ?? "/", "http://127.0.0.1")
     const path = url.pathname
     const html = req.method === "GET" && wants(req, "text/html") && !wants(req, "application/json")
+    const request: Request = {
+      method: req.method ?? "GET",
+      path,
+      open: url.searchParams.has("open"),
+      plain: wants(req, "text/plain"),
+      stream: wants(req, "text/event-stream"),
+      html,
+      probe: req.headers[PROBE_HEADER] !== undefined,
+      agent: req.headers[ACTOR_HEADER] === actorText,
+    }
+    const wake = (r: Request) => {
+      if (tokenOf(req, port) === options.identity.token) options.woken?.(signalOf(r))
+    }
+
+    if (!(request.plain && request.method === "POST" && path === "/_/turn")) wake(request)
     const why = req.headers[PROBE_HEADER] === undefined && (!path.startsWith("/_/") || path === "/_/wait") ? await options.current?.() : undefined
 
     if (why !== undefined) {
@@ -307,6 +328,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         const event = (await body(req)).trim() as TurnEvent
 
         if (!TURN_EVENTS.includes(event)) return reply(400, `the turn is told as one of ${TURN_EVENTS.join(", ")}`)
+        wake({ ...request, turn: event })
         // The hook says whose it is: the session's harness is the one last heard, and kept where a hook does not say.
         keepHooks(hooksHeard(harnessOf(req.headers[HARNESS_HEADER]) ?? hooks.harness))
         turn = turned(turn, event, Date.now())
@@ -334,7 +356,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         if (req.method === "POST" && path === "/_/close") {
           res.once("finish", () => options.end?.())
 
-          return reply(200, `${options.about?.root} closed; any call wakes it`)
+          return reply(200, `${options.about?.root} asleep; any call wakes it, its state kept`)
         }
         if (req.method === "POST" && path === "/_/restart") {
           const asked = options.restart?.()
@@ -552,6 +574,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       health = { line, at: Date.now() }
       for (const res of streams) res.write(notice({ text: line, ...(options.about?.root && { from: options.about.root }) }))
       for (const finish of Array.from(noted)) finish()
+    },
+    asleep() {
+      for (const res of streams) res.write("event: asleep\ndata: {}\n\n")
     },
     // Streams and keep-alive connections are cut first, or a browser that reconnects keeps the server open forever.
     close: async () => {

@@ -212,14 +212,18 @@ it("finds the hooks quiet only where the session's own agent went unheard: a run
   await Bun.sleep(HUSH_MS + 500)
   expect(s.run(["/notes"]).out).not.toContain(QUIET_LINE)
 }, 30_000)
-it("close then call, at once, wakes the runtime at the address the session had, so nothing is announced", async () => {
+it("sleep then call, at once, wakes the runtime at the address the session had, so nothing is announced; close is sleep's old name", async () => {
   const s = setup()
 
   s.open()
 
   const port = s.endpoint().port
+  const slept = s.run(["sleep"])
 
-  expect(s.run(["close"]).out).not.toContain("page:")
+  expect(slept.out).toContain("asleep; any call wakes it")
+  expect(slept.out).not.toContain("page:")
+  expect(s.run(["/"]).status).toBe(0)
+  expect(s.run(["close"]).out).toContain("asleep; any call wakes it")
   // No pause: the runtime before it may still be letting go of the session, and the call waits that out.
   expect(s.run(["/"])).toMatchObject({ status: 0, out: expect.not.stringContaining("page:") })
   expect(s.endpoint().port).toBe(port)

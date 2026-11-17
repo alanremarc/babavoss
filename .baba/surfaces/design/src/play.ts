@@ -488,10 +488,10 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
       case "stop":
         return { who: "harness", did: "the agent's turn ends", tellings: await hook("Stop", { stop_hook_active: false }) }
       case "sleep":
-        await run([join(dir, WORD), "close"])
+        await run([join(dir, WORD), "sleep"])
         for (let i = 0; endpoint() && i < 100; i++) await nap(20)
 
-        return { who: "root", did: "the root goes to sleep, as when nothing called it for a while", tellings: [] }
+        return { who: "root", did: "the root goes to sleep, as when its work is over or nothing used it for a while", tellings: [] }
     }
   }
 
