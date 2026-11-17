@@ -227,7 +227,7 @@ export async function startRuntime(
     leaving = `${root.name}: ${why}${cut && `; the restart cut ${cut}`}`
     log(leaving)
     try {
-      writeFileSync(handoffFile(dir), JSON.stringify({ line: leaving, cut: !!cut, until: wake.until } satisfies Handoff))
+      writeFileSync(handoffFile(dir), JSON.stringify({ line: leaving, cut: !!cut, until: wake.until } satisfies Handoff), { mode: 0o600 })
     } catch {}
 
     return leaving

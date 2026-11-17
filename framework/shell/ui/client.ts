@@ -1,5 +1,5 @@
 // The browser side of the door: the surface's paths are the URLs, GET reads, POST calls, the event stream tells of change.
-// The page's cookie carries the service token, so nothing here does.
+// The page proves nothing: the runtime admits a browser on this machine at its own address, so nothing here carries a secret.
 import type { Args, View } from "../../core/index.ts"
 
 export type Answer<V = View> = { outcome: "written"; view: V } | { outcome: "refused"; reason: string }

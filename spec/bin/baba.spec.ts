@@ -369,16 +369,14 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(started.status).toBe(0)
     expect(started.stdout).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
-    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+\/\?key=[\w-]{43}  a new address\n/)
-    expect(started.stdout).toContain("  a new address\ncommand: .babavoss/bin/baba, from the project's directory; ")
+    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.babavoss\/bin\/baba, from the project's directory; /)
     // Where the command was put is no part of it: the answer names the command.
     expect(started.stdout).not.toContain("is now a command")
 
     // By hand it is the same runtime, at the same address, wherever in the project it is started from.
     const address = /http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0]
-    const link = /page: (\S+)/.exec(started.stdout)![1]!
 
-    expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${link}\n`)
+    expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
     expect(existsSync(join(baba, ".babavoss"))).toBe(false)
 
     // The shell lists the surface at / with what it says it is for, and offers to open it, to the agent and to the person.
@@ -436,16 +434,11 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
 
     // The page holds the surface's component in its tab.
-    // Opened by the link the agent was given: its key becomes the page's cookie, and the page and what it loads are served by it.
-    const linked = await fetch(link, { headers: { accept: "text/html" } })
-    const cookie = linked.headers.get("set-cookie")!.split(";")[0]!
-
-    expect(await linked.text()).toContain(`location.replace("/")`)
-
-    const html = await (await fetch(address, { headers: { accept: "text/html", cookie } })).text()
+    // At its bare address: no link, no key, no cookie.
+    const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
     const script = /\/_\/[^"]*\.js/.exec(html)![0]
 
-    expect(await (await fetch(address + script, { headers: { cookie } })).text()).toContain("The agent proposes")
+    expect(await (await fetch(address + script)).text()).toContain("The agent proposes")
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
 
     // The person proposes there: a call the agent did not make.

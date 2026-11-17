@@ -88,7 +88,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   // its own; and which of them a commit changed that gave no notice, so no notice stands for them.
   const by = new Map<string, Set<string>>(Object.entries(kept?.by ?? {}).map(([k, w]) => [k, new Set(w)]))
   const plain = new Set<string>(kept?.plain ?? [])
-  const keep = () => writeJsonFile(byFile, { by: Object.fromEntries([...by].map(([k, w]) => [k, [...w]])), plain: [...plain] })
+  const keep = () => writeJsonFile(byFile, { by: Object.fromEntries([...by].map(([k, w]) => [k, [...w]])), plain: [...plain] }, { own: true })
   // What was heard since it was last told; the places the person acted in, each heard once, and not where their notice was.
   const heard = heardRecord(dir)
   const place = (path: string) => {
@@ -148,7 +148,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
     // What the agent's own call changed, it knows: the present as told takes it, so only what others change stays to be told.
     if (who === "you" && before !== undefined) {
       before = rebase(before, last, view)
-      if (before !== undefined) writeJsonFile(file, before)
+      if (before !== undefined) writeJsonFile(file, before, { own: true })
     }
     // A tab the agent opened is one it works in.
     if (who === "you") for (const t of tabsIn(view)) if (!tabsIn(last).some((x) => same(x, t))) touched.add(t.at)
@@ -200,7 +200,7 @@ export function textSession<M>(running: Running<M>, dir: string, actor: string, 
   }
   // The present told: what changes is counted from `now`.
   const seen = (now: Json | undefined) => {
-    if (now !== undefined) writeJsonFile(file, now)
+    if (now !== undefined) writeJsonFile(file, now, { own: true })
     before = now
     by.clear()
     plain.clear()

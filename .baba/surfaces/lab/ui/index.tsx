@@ -651,7 +651,8 @@ function UnderTest({ page, gone, side, show, narrow }: { page?: string; gone?: s
         )}
       </div>
       {page ? (
-        <iframe key={`${page}-${loads}`} src={page} title="The page under test" className="min-h-0 flex-1 border-0 bg-background" />
+        // On this page's own host name: a frame from another host is another site's, and the runtime refuses it.
+        <iframe key={`${page}-${loads}`} src={page.replace("//127.0.0.1:", `//${location.hostname}:`)} title="The page under test" className="min-h-0 flex-1 border-0 bg-background" />
       ) : (
         <div className="grid flex-1 place-items-center p-6 text-center text-muted-foreground">
           <p className="max-w-64">

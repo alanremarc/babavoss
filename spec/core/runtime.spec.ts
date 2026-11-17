@@ -1,7 +1,7 @@
 // The resident process as its clients see it: http in, views and answers out; the door's rules; the doors reach a surface
 // only through it, and say so in one line where the environment refuses it.
 import { poll } from "../support/poll.ts"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -9,18 +9,9 @@ import { afterEach, describe, expect, it } from "bun:test"
 import { defineRoot } from "../../framework/core/root.ts"
 import { reach } from "../../framework/core/runtime/reach.ts"
 import { devMode, startRuntime, rootVersion, LOOK_MS, RELOAD_MS, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
-import { admitted } from "../../framework/core/runtime/door.ts"
+import { admitted, foreign } from "../../framework/core/runtime/door.ts"
 import { BOOT_ID, island } from "../../framework/core/runtime/boot.ts"
-import {
-  ACTOR_HEADER,
-  SERVICE_HEADER,
-  STALE_HEADER,
-  endpointFile,
-  findService,
-  pageKeyFile,
-  pageLink,
-  type Endpoint,
-} from "../../framework/core/runtime/service.ts"
+import { ACTOR_HEADER, SERVICE_HEADER, STALE_HEADER, endpointFile, findService, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { request as httpRequest, type IncomingMessage } from "node:http"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { action, surface, view, type Update } from "../../framework/core/surface/index.ts"
@@ -142,68 +133,51 @@ describe("the door", () => {
     )
   })
 
-  it("serves the root's page only to who proves it is the session's: a program by the token, a browser by the page's key", async () => {
+  it("serves the root's page to a browser of this machine at its bare address, as the person, and gives it no token", async () => {
     const dir = scratch()
     const { base, endpoint, get, browse } = await started(dir)
-    const port = new URL(base).port
-    const state = join(dir, "sessions", "S", "p")
-    const key = readFileSync(pageKeyFile(state), "utf8")
+    const port = Number(new URL(base).port)
     const html = (path: string, headers: Record<string, string> = {}) => fetch(base + path, { headers: { accept: "text/html,*/*", ...headers } })
+    const json = (path: string, headers: Record<string, string> = {}) => fetch(base + path, { headers: { accept: "application/json", ...headers } })
 
-    // Kept beside the session's state, readable by its owner alone, and given in the link the agent is given.
-    expect(statSync(pageKeyFile(state)).mode & 0o777).toBe(0o600)
-    expect(pageLink(state, Number(port))).toBe(`http://127.0.0.1:${port}/?key=${key}`)
+    // A page that names the token is served it unread: the token is never written into a page.
+    writeFileSync(join(dir, "ui", "index.html"), "<head><meta name=t content=%TOKEN%></head><script src=/_/root.js></script>")
 
-    // A client that proves nothing is told how the page is opened, and nothing of the session: no token, no key, no state.
-    for (const stranger of [await html("/notes/2"), await html("/?key=wrong"), await html("/", { cookie: `babavoss-page-${port}=wrong` })]) {
-      const text = await stranger.text()
+    // The bare address, with no key and no cookie: the page, what it loads, what it reads, and its calls, as the person.
+    const page = await html("/notes/2")
+    const text = await page.text()
 
-      expect([stranger.status, stranger.headers.get("set-cookie"), stranger.headers.get(SERVICE_HEADER)]).toEqual([401, null, null])
-      expect(text).toContain("opened by the link its agent gives")
-      expect([text.includes(BOOT_ID), text.includes("babavoss:"), text.includes(endpoint.token), text.includes(key)]).toEqual([false, false, false, false])
+    expect([page.status, page.headers.get("content-type"), page.headers.get("set-cookie"), page.headers.get(SERVICE_HEADER)]).toEqual([200, "text/html", null, null])
+    expect(text).toContain(`<meta name="babavoss:root" content="p"><meta name="babavoss:version" content="1.0"><meta name="babavoss:session" content="S"></head>`)
+    expect([text.includes(endpoint.token), text.includes("%TOKEN%"), text.includes(BOOT_ID)]).toEqual([false, true, true])
+    expect(text).not.toContain("babavoss:update")
+    expect((await fetch(base + "/_/root.js")).headers.get("content-type")).toBe("text/javascript")
+    expect(await (await json("/n")).json()).toEqual({ n: 0 })
+    expect((await html("/", { host: `localhost:${port}` })).status).toBe(200)
+
+    const called = await fetch(base + "/", { method: "POST", body: JSON.stringify({ handle: "bump", args: { by: 1 } }), headers: { "content-type": "application/json", origin: base } })
+
+    expect([called.status, (await called.json()).outcome]).toEqual([200, "written"])
+
+    // Without the token no header makes a request the agent's, and the agent's door, which answers in text, stays shut.
+    expect(await (await json("/", { [ACTOR_HEADER]: "agent:S" })).json()).toMatchObject({ n: 1, person: true })
+    for (const [path, method] of [["/", "GET"], ["/?open", "GET"], ["/_/restart", "POST"], ["/_/close", "POST"], ["/_/turn", "POST"]] as const) {
+      const shut = await fetch(base + path, { method, body: method === "POST" ? "started" : undefined, headers: { accept: "text/plain", [ACTOR_HEADER]: "agent:S" } })
+
+      expect([path, shut.status, shut.headers.get(SERVICE_HEADER)]).toEqual([path, 401, null])
     }
-    for (const at of ["/", "/n", "/_/root.js"]) expect((await fetch(base + at, { headers: { accept: "application/json" } })).status).toBe(401)
+
     // The token is told back only to who sent it: a refusal, a wrong token or another host learns nothing.
     expect((await get("/", { [SERVICE_HEADER]: "wrong" })).headers.get(SERVICE_HEADER)).toBeNull()
     expect((await fetch(base + "/", { headers: { host: "evil.example" } })).headers.get(SERVICE_HEADER)).toBeNull()
     expect((await get("/")).headers.get(SERVICE_HEADER)).toBe(endpoint.token)
 
-    // The link: the key as a cookie only this port's page is sent, and a page that loads the address without the key.
-    const opened = await html(`/notes/2?key=${key}&q=1`)
-    const cookie = opened.headers.get("set-cookie")!
-    const loads = await opened.text()
-
-    expect(opened.status).toBe(200)
-    expect(cookie).toStartWith(`babavoss-page-${port}=${key}; Path=/;`)
-    expect(cookie).toContain("SameSite=Strict; HttpOnly")
-    expect(loads).toContain(`location.replace("/notes/2?q=1")`)
-    expect([loads.includes(key), loads.includes(BOOT_ID)]).toEqual([false, false])
-    expect(await (await html(`//evil.example/?key=${key}`)).text()).toMatch(/location\.replace\("\/[^/]/)
-
-    // By the cookie, the page, what it loads and what it reads; never the agent's door, which takes the token alone.
-    const by = { cookie: cookie.split(";")[0]! }
-    const page = await html("/notes/2", by)
-    const text = await page.text()
-
-    expect([page.status, page.headers.get("content-type"), page.headers.get("set-cookie")]).toEqual([200, "text/html", null])
-    expect(text).toContain(
-      `<meta name="babavoss:root" content="p"><meta name="babavoss:version" content="1.0"><meta name="babavoss:session" content="S"></head>`
-    )
-    expect([text.includes(endpoint.token), text.includes(key)]).toEqual([false, false])
-    expect(text).not.toContain("babavoss:update")
-    expect((await fetch(base + "/_/root.js", { headers: by })).headers.get("content-type")).toBe("text/javascript")
-    expect((await fetch(base + "/n", { headers: { accept: "application/json", ...by } })).status).toBe(200)
-    expect((await fetch(base + "/", { headers: { accept: "text/plain", ...by } })).status).toBe(401)
-    expect((await browse("/")).status).toBe(200)
-
     // fetch normalizes a traversal away; a raw request does not. The door's URL parsing does, so it is a surface path, never a file.
     const raw = await new Promise<number>((done) =>
-      httpRequest({ host: "127.0.0.1", port: Number(new URL(base).port), path: "/_/../index.html" }, (res) => done(res.statusCode ?? 0)).end()
+      httpRequest({ host: "127.0.0.1", port, path: "/_/../index.html" }, (res) => done(res.statusCode ?? 0)).end()
     )
 
-    expect(raw).toBe(401)
-
-    expect((await fetch(base + "/", { headers: { accept: "*/*" } })).status).toBe(401)
+    expect(raw).toBe(404)
 
     // A page that cannot be served is the error, to the browser and the log; never the view in its place.
     rmSync(join(dir, "ui", "index.html"))
@@ -213,27 +187,80 @@ describe("the door", () => {
     expect([broken.status, await broken.text()]).toEqual([500, "the root's ui has no index.html"])
 
     const request = (headers: Record<string, string>) => ({ headers }) as unknown as IncomingMessage
-    const at = Number(port)
 
-    expect(admitted(request({ host: `127.0.0.1:${at}` }), at)).toBe(true)
-    expect(admitted(request({ host: "evil.example:80" }), at)).toBe(false)
-    expect(admitted(request({ host: `localhost:${at}`, origin: "http://evil.example" }), at)).toBe(false)
+    expect(admitted(request({ host: `127.0.0.1:${port}` }), port)).toBe(true)
+    expect(admitted(request({ host: "evil.example:80" }), port)).toBe(false)
+    expect(admitted(request({ host: `localhost:${port}`, origin: "http://evil.example" }), port)).toBe(false)
+    expect(admitted(request({ host: `localhost:${port}`, origin: "null" }), port)).toBe(false)
     expect((await get("/_/missing.js")).status).toBe(404)
   })
 
-  it("keeps the page's key across its runtimes, so a page open in a browser outlives a restart, while the token changes", async () => {
+  it("refuses what the browser says another site started, but a navigation to the page itself, which changes and wakes nothing", async () => {
     const dir = scratch()
-    const first = await started(dir)
-    const key = readFileSync(pageKeyFile(join(dir, "sessions", "S", "p")), "utf8")
+    let slept = false
+    const { base, get } = await started(dir, { strengths: { weak: 300, strong: 60_000, end: 100 }, exit: () => (slept = true) })
+    const at = (path: string, site: string, mode: string, dest: string, more: RequestInit = {}) =>
+      fetch(base + path, {
+        ...more,
+        headers: { accept: dest === "image" ? "image/*" : "text/html,*/*;q=0.8", "sec-fetch-site": site, "sec-fetch-mode": mode, "sec-fetch-dest": dest, ...more.headers },
+      })
 
+    // Another site's image, script, read, frame, form and plain request, and another port's: refused before anything is done.
+    for (const site of ["cross-site", "same-site"]) {
+      for (const [path, mode, dest] of [["/?open", "no-cors", "image"], ["/_/root.js", "no-cors", "script"], ["/", "cors", "empty"], ["/_/root.js", "navigate", "document"]]) {
+        const refused = await at(path!, site, mode!, dest!)
+
+        expect([site, path, dest, refused.status]).toEqual([site, path, dest, 403])
+      }
+      const form = await at("/", site, "navigate", "document", { method: "POST", body: "handle=bump", headers: { "content-type": "application/x-www-form-urlencoded" } })
+
+      expect([site, form.status]).toEqual([site, 403])
+    }
+    expect((await at("/", "cross-site", "navigate", "iframe")).status).toBe(403)
+    expect((await at("/", "cross-site", "no-cors", "empty", { headers: { accept: "text/plain" } })).status).toBe(403)
+
+    // A link to the page clicked on another site opens it, and another port of this host may frame it; it acts on nothing.
+    for (const [site, dest] of [["cross-site", "document"], ["same-site", "document"], ["same-site", "iframe"]]) expect((await at("/notes/2", site!, "navigate", dest!)).status).toBe(200)
+    // What the person starts and what the page asks of its own origin are the page's.
+    expect((await at("/", "none", "navigate", "document")).status).toBe(200)
+    expect((await at("/n", "same-origin", "cors", "empty", { headers: { accept: "application/json" } })).status).toBe(200)
+
+    expect(await (await get("/n")).json()).toEqual({ n: 0 })
+    await poll(() => slept, { timeout: 2000 })
+
+    const request = (headers: Record<string, string>, method = "GET", url = "/") => ({ headers, method, url }) as unknown as IncomingMessage
+    const navigation = { accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" }
+
+    expect(foreign(request({}))).toBe(false)
+    expect(foreign(request({ "sec-fetch-site": "none" }))).toBe(false)
+    expect(foreign(request({ "sec-fetch-site": "same-origin", accept: "application/json" }, "POST"))).toBe(false)
+    expect(foreign(request({ ...navigation, "sec-fetch-site": "cross-site" }))).toBe(false)
+    expect(foreign(request({ ...navigation, "sec-fetch-site": "cross-site" }, "POST"))).toBe(true)
+    expect(foreign(request({ ...navigation, "sec-fetch-site": "cross-site" }, "GET", "/_/settings.json"))).toBe(true)
+    expect(foreign(request({ ...navigation, "sec-fetch-site": "cross-site", accept: "application/json" }))).toBe(true)
+  })
+
+  it("keeps the session's state its owner's alone: made so, and made so again as a runtime starts where an older one left it open", async () => {
+    const dir = scratch()
+    const state = join(dir, "sessions", "S", "p")
+    const mode = (path: string) => statSync(path).mode & 0o777
+
+    mkdirSync(join(state, "presented"), { recursive: true, mode: 0o755 })
+    writeFileSync(join(state, "hooks.json"), "{}", { mode: 0o644 })
+    writeFileSync(join(state, "presented", "text.json"), "{}", { mode: 0o644 })
+
+    const first = await started(dir)
+
+    await first.post("/", { handle: "bump", args: { by: 1 } })
+    for (const at of [join(dir, "sessions", "S"), state, join(state, "presented")]) expect([at, mode(at)]).toEqual([at, 0o700])
+    for (const file of ["hooks.json", "model.json", "service.json", "service.lock", "presented/text.json"]) expect([file, mode(join(state, file))]).toEqual([file, 0o600])
     await first.runtime.close()
 
+    // A page open in a browser outlives the restart: it needs nothing the runtime before gave it, while the token changes.
     const second = await started(dir)
-    const cookie = `babavoss-page-${new URL(second.base).port}=${key}`
 
     expect(second.endpoint.token).not.toBe(first.endpoint.token)
-    expect(readFileSync(pageKeyFile(join(dir, "sessions", "S", "p")), "utf8")).toBe(key)
-    expect((await fetch(second.base + "/", { headers: { accept: "text/html", cookie } })).status).toBe(200)
+    expect((await fetch(second.base + "/", { headers: { accept: "text/html" } })).status).toBe(200)
     expect((await fetch(second.base + "/", { headers: { accept: "text/plain", [SERVICE_HEADER]: first.endpoint.token } })).status).toBe(401)
   })
 
@@ -659,7 +686,7 @@ describe("the turn", () => {
 
     expect([ended.status, await ended.json()]).toEqual([200, { cannot: expect.stringContaining("send the agent a message") }])
     expect((await post("/_/turn", {})).status).toBe(400)
-    expect((await fetch(base + "/_/turn", { method: "POST", body: "{}", headers: { "content-type": "application/json" } })).status).toBe(401)
+    expect((await fetch(base + "/_/turn", { method: "POST", body: "{}", headers: { "content-type": "application/json", origin: "http://evil.example" } })).status).toBe(403)
   })
 })
 
