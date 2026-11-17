@@ -9,6 +9,7 @@
 import type { Json } from "babavoss/core/index.ts"
 import type { Issue, Work } from "./fixture/queue/src/surface.ts"
 import type { Checklist } from "./fixture/release/src/surface.ts"
+import { FRESH } from "./fresh.ts"
 
 export type Kind = "single" | "find" | "read" | "batch" | "probe"
 export type Verdict = { pass: boolean; reason: string }
@@ -16,8 +17,37 @@ export type Verdict = { pass: boolean; reason: string }
 export type Call = { tool: string; input: string; turn?: number; result?: string }
 /** The shell as the run left it: the highlights the agent raised, each place and why, and each tab's surface and model. */
 export type Shell = { highlights: { at: string; text: string }[]; tabs: { surface: string; model: unknown }[] }
-/** `files`, the task's own files as the run left them, by their path in the project. */
-export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[]; files?: Record<string, string> }
+/** A command's exit code and the end of what it said. */
+export type Ran = { code: number; out: string }
+/**
+ * What a fresh project held as the run left it: its surfaces by name; the files under .baba/surfaces/, its configuration
+ * and the task's own, by their path in the project; `stale`, where the root said its code changed and was not restarted;
+ * `bun check` and `bun test` in .baba/; each surface's answer to being opened after a
+ * restart; the root's page built; and the world's entries the log heard once the rig touched the task's files.
+ */
+export type Look = {
+  surfaces: string[]
+  files: Record<string, string>
+  stale: boolean
+  /** Whether each of the paths a set-up project has is there: .baba/, the harnesses' files, the root's command. */
+  there: Record<string, boolean>
+  /** The root's answer at `/`, read before anything else. */
+  present: string
+  check: Ran
+  test: Ran
+  opened: Record<string, string>
+  page: Ran
+  heard: { by: string; did: string; surface: string }[]
+}
+/**
+ * A project made by `baba init` alone, with no fixture: `files`, by their path in the project, written after it; `was`, the
+ * release they were written for, committed as such before the variant is taken; `touch`, files the rig changes by hand
+ * after the agent's turn, as the person would, each by a function of its text; `empty`, a repository where nothing was run,
+ * for the agent to install babavoss in, the public install's command sent to the variant.
+ */
+export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string>; empty?: true }
+/** `files`, the task's own files as the run left them, by their path in the project; `look`, a fresh project's. */
+export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[]; files?: Record<string, string>; look?: Look }
 /** What the dry run does in the agent's place: its command's arguments, one call each, files it writes in the project, and its last words. */
 export type Dry = { calls: string[][]; writes?: Record<string, string>; answer?: string }
 /** What the person does on the page: a handle called at a path of the root. */
@@ -34,6 +64,8 @@ export type Task = {
   before?: Act[]
   /** Later messages in the same session, each said once the turn before ends and the person has taken its `acts`. */
   then?: Later[]
+  /** A project made by `baba init` alone, in place of the fixture's. */
+  fresh?: Fresh
 }
 /** A later message: what the person does first, what they say, and the dry run's script for it; COMPACT compacts the session. */
 export type Later = { acts?: Act[]; prompt: string; dry: Dry }
@@ -481,6 +513,7 @@ export const TASKS: Task[] = [
     },
     dry: { calls: [["/queue/issues/27", "done", "n=27"], ["sleep"]] },
   },
+  ...FRESH,
 ]
 
 /** The dry script for a prompt, the first's or a second message's, of any of `tasks`. */
