@@ -173,7 +173,7 @@ const started = async (dir = mkdtempSync(join(tmpdir(), "shell-door-"))) => {
 it("says a tab's change once in the answer to a call there, and still tells at / what the person did in the tab", async () => {
   const { request } = await started()
 
-  expect(await request("/?open")).toContain("/ open surface=NAME   open a NAME tab")
+  expect(await request("/?open")).toContain("actions: bv tabs / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
   // A tab opened is one line: its heading, its actions by name, and where to read the rest.
   expect(await request("/", { handle: "open", args: { surface: "counter" } })).toBe('+ /counter "Counter" (tab 1), actions: bump, note, grow; read /counter')
   // The agent's own call: its change is in the answer once, not again under the tab's heading.

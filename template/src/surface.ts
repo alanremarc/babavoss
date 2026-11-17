@@ -12,21 +12,21 @@ type Event = { kind: "none" }
 
 const propose = action({
   name: "propose",
-  description: "Propose a greeting, for the person to decide on",
+  description: "a greeting, for the person to decide on",
   subject: {},
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (m: Model, { text }): Update<Model, never> => (text.trim() ? { model: { ...m, proposed: text.trim() } } : { refused: "A greeting needs text" }),
 })
 const accept = action({
   name: "accept",
-  description: "Use the proposed greeting",
+  description: "uses the proposed greeting",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed ?? m.greeting }, notices: [`The greeting is now "${m.proposed}"`] }),
 })
 const decline = action({
   name: "decline",
-  description: "Keep the greeting as it is",
+  description: "keeps the greeting as it is",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, never> => ({ model: { greeting: m.greeting }, notices: [`"${m.proposed}" was declined`] }),

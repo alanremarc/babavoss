@@ -82,7 +82,7 @@ describe("the settings", () => {
     expect(await agent.call("/", "motion", { motion: "reduced" })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/", "scale", { scale: 1.25 })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/", "side", { side: "left" })).toMatchObject({ outcome: "written" })
-    expect(await agent.call("/", "scale", { scale: 7 })).toMatchObject({ outcome: "refused", reason: "scale is 0.9, 1, 1.1, 1.25, 1.5, not 7" })
+    expect(await agent.call("/", "scale", { scale: 7 })).toMatchObject({ outcome: "refused", reason: "scale: scale must be one of 0.9, 1, 1.1, 1.25, 1.5, not 7" })
     expect(await agent.call("/", "side", { side: "top" })).toMatchObject({ outcome: "refused" })
     expect(agent.sees()).toMatchObject({ preferences: { motion: "reduced", scale: 1.25, side: "left" } })
     expect(world.commands().filter(writing).at(-1)).toMatchObject({ settings: { preferences: { motion: "reduced", scale: 1.25, side: "left" } } })
@@ -116,24 +116,24 @@ describe("the settings", () => {
   it("refuse a mode, a theme or numbers there are none of, and a mode that does not fit the modes being the same or distinct, saying why", async () => {
     const { agent } = story(settings(() => "unused"))
 
-    expect(await agent.call("/", "mode", { mode: "dim" })).toEqual({ outcome: "refused", reason: "no mode dim: it is light, dark, system" })
+    expect(await agent.call("/", "mode", { mode: "dim" })).toEqual({ outcome: "refused", reason: 'mode: mode must be one of light, dark, system, not "dim"' })
     expect(await agent.call("/", "theme", { mode: "both", theme: "sepia" })).toEqual({
       outcome: "refused",
-      reason: "no theme sepia: it is neutral, clay, slate, sand, moss, ocean, plum, dynamic",
+      reason: 'theme: theme must be one of neutral, clay, slate, sand, moss, ocean, plum, dynamic, not "sepia"',
     })
     expect(await agent.call("/", "theme", { mode: "dark", theme: "clay" })).toEqual({
       outcome: "refused",
       reason: "both modes use one theme: name both, or call same with on false first to give dark its own",
     })
-    expect(await agent.call("/", "dynamic", { mode: "both", hue: 361, tint: 0, vivid: 0 })).toEqual({ outcome: "refused", reason: "hue is 0 to 360, not 361" })
-    expect(await agent.call("/", "dynamic", { mode: "both", hue: 0, tint: 101, vivid: 0 })).toEqual({ outcome: "refused", reason: "tint is 0 to 100, not 101" })
-    expect(await agent.call("/", "dynamic", { mode: "both", hue: 0, tint: 0, vivid: -1 })).toEqual({ outcome: "refused", reason: "vivid is 0 to 100, not -1" })
+    expect(await agent.call("/", "dynamic", { mode: "both", hue: 361, tint: 0, vivid: 0 })).toEqual({ outcome: "refused", reason: "dynamic: hue must be a whole number from 0 to 360, not 361" })
+    expect(await agent.call("/", "dynamic", { mode: "both", hue: 0, tint: 101, vivid: 0 })).toEqual({ outcome: "refused", reason: "dynamic: tint must be a whole number from 0 to 100, not 101" })
+    expect(await agent.call("/", "dynamic", { mode: "both", hue: 0, tint: 0, vivid: -1 })).toEqual({ outcome: "refused", reason: "dynamic: vivid must be a whole number from 0 to 100, not -1" })
     await agent.call("/", "same", { on: false })
     expect(await agent.call("/", "theme", { mode: "both", theme: "clay" })).toEqual({
       outcome: "refused",
       reason: "the modes have themes of their own: name light or dark, or call same with on true first",
     })
-    expect(await agent.call("/", "theme", { mode: "dim", theme: "clay" })).toMatchObject({ outcome: "refused", reason: "a theme is of the light or the dark mode, or both, not dim" })
+    expect(await agent.call("/", "theme", { mode: "dim", theme: "clay" })).toMatchObject({ outcome: "refused", reason: 'theme: mode must be one of both, light, dark, not "dim"' })
   })
 
   it("place the rail by one action, all three of its parts given, written to the file, and refuse a part it has not", async () => {
@@ -142,9 +142,9 @@ describe("the settings", () => {
     expect(await agent.call("/", "rail", { side: "top", from: "bottom", drawer: "right" })).toMatchObject({ outcome: "written" })
     expect(agent.sees()).toMatchObject({ appearance: { rail: { side: "top", from: "bottom", drawer: "right" } } })
     expect(world.commands().filter(writing).at(-1)).toMatchObject({ settings: { appearance: { rail: { side: "top", from: "bottom", drawer: "right" } } } })
-    expect(await agent.call("/", "rail", { side: "middle", from: "top", drawer: "left" })).toEqual({ outcome: "refused", reason: "side is left, right, top, bottom, not middle" })
-    expect(await agent.call("/", "rail", { side: "left", from: "left", drawer: "left" })).toEqual({ outcome: "refused", reason: "from is top or bottom, not left" })
-    expect(await agent.call("/", "rail", { side: "left", from: "top", drawer: "top" })).toEqual({ outcome: "refused", reason: "drawer is left or right, not top" })
+    expect(await agent.call("/", "rail", { side: "middle", from: "top", drawer: "left" })).toEqual({ outcome: "refused", reason: 'rail: side must be one of left, right, top, bottom, not "middle"' })
+    expect(await agent.call("/", "rail", { side: "left", from: "left", drawer: "left" })).toEqual({ outcome: "refused", reason: 'rail: from must be one of top, bottom, not "left"' })
+    expect(await agent.call("/", "rail", { side: "left", from: "top", drawer: "top" })).toEqual({ outcome: "refused", reason: 'rail: drawer must be one of left, right, not "top"' })
     expect(agent.noticed()).toEqual([])
   })
 
@@ -159,7 +159,7 @@ describe("the settings", () => {
       reason: "mod+k is bound to next already: bind next to other keys first, or choose others",
     })
     expect(await agent.call("/shortcuts", "bind", { command: "drawer", keys: "h" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("types text") })
-    expect(await agent.call("/shortcuts", "bind", { command: "jump", keys: "mod+x" })).toMatchObject({ outcome: "refused", reason: expect.stringContaining("no command jump") })
+    expect(await agent.call("/shortcuts", "bind", { command: "jump", keys: "mod+x" })).toMatchObject({ outcome: "refused", reason: 'bind: command must be one of drawer, next, previous, not "jump"' })
   })
 
   it("reset one command, or all, to the defaults, unless a default is taken meanwhile", async () => {
@@ -239,7 +239,7 @@ describe("the shell's settings", () => {
     expect(Object.keys(OWN)).toEqual(["settings"])
     expect((agent.sees()!.surfaces as { name: string; open: { description: string } }[])[0]).toMatchObject({
       name: "settings",
-      open: { description: "open the settings tab, or show the one open" },
+      open: { name: "open", args: { surface: "settings" } },
     })
     await agent.call("/", "open", { surface: "settings" })
     expect(await agent.call("/", "open", { surface: "settings" })).toMatchObject({ outcome: "written" })

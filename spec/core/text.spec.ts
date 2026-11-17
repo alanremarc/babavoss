@@ -96,7 +96,7 @@ it("1: reads relative facts, quoted table rows and handle declarations; unknown 
 
   expect(response.headers.get("content-type")).toBe("text/plain")
   expect(text).toContain('rows: at\ttext\n"/one"\t"two words"')
-  expect(text).toContain("do: bv text /one set id=1 n=number yes=boolean   Set values")
+  expect(text).toContain("actions: bv text /one ACTION name=value…\n  later   Count one, by a command\n  say text=string   Notice a line\n  set id=1 n=number yes=boolean   Set values")
   expect(text).toContain("n: 0")
 
   const missing = await request("/missing")

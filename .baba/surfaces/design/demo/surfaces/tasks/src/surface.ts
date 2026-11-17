@@ -28,38 +28,38 @@ const row = (t: Task) => ({
 
 const add = action({
   name: "add",
-  description: "Add a task: a short title",
+  description: "",
   subject: {},
-  inputs: { title: "string" },
+  inputs: { title: { type: "string", kind: "line" } },
   update: (m: Model, { title }): Result =>
     title.trim() ? { model: { tasks: [...m.tasks, { n: m.next, title: title.trim(), status: "todo" }], next: m.next + 1 } } : { refused: "A task needs a title" },
 })
 const done = action({
   name: "done",
-  description: ({ n }) => `Mark task ${n} done; the person reviews it`,
+  description: "the person reviews it",
   subject: { n: "number" },
   inputs: {},
   update: (m: Model, { n }): Result => moved(m, n, "review", "waits for review"),
 })
 const approve = action({
   name: "approve",
-  description: ({ n }) => `Approve task ${n}`,
+  description: "",
   subject: { n: "number" },
   inputs: {},
   update: (m: Model, { n }): Result => moved(m, n, "done", "is approved"),
 })
 const reopen = action({
   name: "reopen",
-  description: ({ n }) => `Reopen task ${n}: it is not done`,
+  description: "it is not done",
   subject: { n: "number" },
   inputs: {},
   update: (m: Model, { n }): Result => moved(m, n, "todo", "is reopened"),
 })
 const annotate = action({
   name: "annotate",
-  description: ({ n }) => `Note on task ${n} what was done or found: a line`,
+  description: "what was done or found",
   subject: { n: "number" },
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (m: Model, { n, text }): Result => ({ model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, note: text.trim() } : t)) } }),
 })
 const pages = view([add, done, approve, reopen, annotate], {

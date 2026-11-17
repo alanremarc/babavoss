@@ -296,7 +296,7 @@ test("a message is refused while no run is up", async () => {
   expect(agent.sees("/injected")).toEqual({ run: null, injected: [] })
   expect(agent.offered()).toEqual(["start", "start_from"])
   expect(await agent.call("/", "say", { text: "hello" })).toMatchObject({ outcome: "refused" })
-  expect(await agent.call("/", "start", { model: "gpt" })).toEqual({ outcome: "refused", reason: "model is one of haiku, sonnet, opus" })
+  expect(await agent.call("/", "start", { model: "gpt" })).toEqual({ outcome: "refused", reason: 'start: model must be one of haiku, sonnet, opus, not "gpt"' })
 })
 
 test("close ends the process, takes back the login, deletes the project and home and keeps the record, with what was left changed", async () => {

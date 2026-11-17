@@ -39,14 +39,14 @@ const playing = (m: Model): Result => (m.playing ? { model: { ...m, again: true 
 
 const replay = action({
   name: "play",
-  description: "Play every scenario again, as it is played when the code changes",
+  description: "every scenario again, as when the code changes",
   subject: {},
   inputs: {},
   update: (m: Model): Result => playing(m),
 })
 const pin = action({
   name: "pin",
-  description: "Keep the current tellings of every scenario as the baseline the next ones are compared with",
+  description: "keeps every scenario's tellings now as the baseline the next are compared with",
   subject: {},
   inputs: {},
   update: (m: Model, _args, call): Result =>
@@ -56,7 +56,7 @@ const pin = action({
 })
 const unpin = action({
   name: "unpin",
-  description: "Drop the baseline",
+  description: "drops the baseline",
   subject: {},
   inputs: {},
   update: ({ pin: _pin, ...m }: Model): Result => ({ model: m }),

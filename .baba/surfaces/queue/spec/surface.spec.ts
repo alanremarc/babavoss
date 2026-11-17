@@ -45,7 +45,7 @@ test("a lane delivers one issue at a time, and there are five", async () => {
   await agent.call("/", "add", { title: "Two", about: "Why" })
   await agent.call("/issues/1", "start", { n: 1, lane: 1 })
   expect(await agent.call("/issues/2", "start", { n: 2, lane: 1 })).toEqual({ outcome: "refused", reason: "Lane 1 is delivering issue 1" })
-  expect(await agent.call("/issues/2", "start", { n: 2, lane: 6 })).toEqual({ outcome: "refused", reason: "There are lanes 1 to 5" })
+  expect(await agent.call("/issues/2", "start", { n: 2, lane: 6 })).toEqual({ outcome: "refused", reason: "start: lane must be a whole number from 1 to 5, not 6" })
 })
 
 test("a note says where an issue stands, an issue can go back, and a dropped one is gone", async () => {

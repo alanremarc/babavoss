@@ -13,8 +13,8 @@ export const VIEWS: Record<string, View> = {
   "/": {
     title: "Queue",
     issues: TITLES.map((_, i) => issue(i + 1)),
-    add: handle("add", "Add an issue the person asked for to the bottom of the backlog", {}, { title: "string", about: "string" }),
-    draft: handle("draft", "Suggest an issue the person has not asked for, as a draft", {}, { title: "string", about: "string" }),
+    add: handle("add", "one the person asked for, to the backlog's bottom", {}, { title: { type: "string", kind: "line" }, about: { type: "string", kind: "markdown" } }),
+    draft: handle("draft", "an issue the person has not asked for", {}, { title: { type: "string", kind: "line" }, about: { type: "string", kind: "markdown" } }),
   },
   ...Object.fromEntries(
     TITLES.map((title, i) => {
@@ -32,12 +32,12 @@ export const VIEWS: Record<string, View> = {
             { label: "Move", actions: ["start", "done"] },
             { label: "Edit", actions: ["describe", "note"] },
           ],
-          ...((n === 4 || n === 7) && { approve: handle("approve", `Approve draft ${n}: it joins the backlog`, subject) }),
-          start: handle("start", `Give issue ${n} to a lane, 1 to 5`, subject, { lane: "number" }),
-          done: handle("done", `Mark issue ${n} done`, subject),
-          describe: handle("describe", `Rewrite what issue ${n} is about, as brief markdown`, subject, { about: "string" }),
-          note: handle("note", `Say where issue ${n} stands in one line`, subject, { text: "string" }),
-          drop: handle("drop", `Remove issue ${n}: it will not be done`, subject),
+          ...((n === 4 || n === 7) && { approve: handle("approve", "into the backlog", subject) }),
+          start: handle("start", "when a subagent begins on it", subject, { lane: { type: "number", range: [1, 5] } }),
+          done: handle("done", "its work is merged into main", subject),
+          describe: handle("describe", "", subject, { about: { type: "string", kind: "markdown" } }),
+          note: handle("note", "what is being done or waited for", subject, { text: { type: "string", kind: "line" } }),
+          drop: handle("drop", "it will not be done", subject),
         },
       ]
     })

@@ -1,6 +1,6 @@
 export { surface, type AnySurface, type Call, type Notice, type Surface, type Update } from "./surface.ts"
-export { admit, detail, handle, handles, isDetail, revealed, text, type Args, type Detail, type Handle, type Json, type Schema, type View } from "./view.ts"
+export { admit, detail, handle, handles, isDetail, meant, revealed, text, typeOf, type Args, type Detail, type Handle, type Input, type Json, type Schema, type Type, type View } from "./view.ts"
 export { match, route, within, type Params, type Routes } from "./routes.ts"
-export { action, object, view, type Inputs } from "./authoring.ts"
+export { action, object, view, type Declared, type Inputs } from "./authoring.ts"
 export { run, STOP_MS, SURFACE_ACTOR, type Answer, type Cause, type Noticed, type Ports, type Running, type Saved } from "./run.ts"
 export { story } from "./story.ts"

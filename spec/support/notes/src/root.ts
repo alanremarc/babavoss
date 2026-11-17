@@ -11,14 +11,14 @@ type Event = { kind: "due"; n: number } | { kind: "failed"; n: number; error: st
 
 const add = action({
   name: "add",
-  description: "Keep a note",
+  description: "",
   subject: {},
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (m: Model, { text }): Update<Model, Command> => (text.trim() ? { model: { items: [...m.items, { text }] } } : { refused: "A note needs text" }),
 })
 const remove = action({
   name: "remove",
-  description: ({ n }) => `Forget note ${n}`,
+  description: "forgets it",
   subject: { n: "number" },
   inputs: {},
   update: (m: Model, { n }): Update<Model, Command> =>
@@ -26,7 +26,7 @@ const remove = action({
 })
 const remind = action({
   name: "remind",
-  description: ({ n }) => `Mark note ${n} due after a delay`,
+  description: "marks it due after a delay",
   subject: { n: "number" },
   inputs: { seconds: "number" },
   update: (m: Model, { n, seconds }): Update<Model, Command> =>
@@ -36,7 +36,7 @@ const remind = action({
 })
 const clear = action({
   name: "clear",
-  description: "Forget every note",
+  description: "forgets every note",
   subject: {},
   inputs: {},
   update: (): Update<Model, Command> => ({ model: { items: [] } }),

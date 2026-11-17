@@ -62,41 +62,43 @@ function made(w: Work, args: { title: string; about: string; from?: string; narr
   return { model: { ...placed, issues: [...placed.issues, issue], next: w.next + 1, clock: w.clock + 1 } }
 }
 
-const ABOUT = "a short imperative title, and about, brief markdown on what changes and why"
-const BRANCH = "; from, the issues it came out of as a comma list, or empty; narrative, its id, or empty for its first parent's"
+/** An issue's inputs: a short imperative title, and brief markdown on what changes and why. */
+const ISSUE = { title: { type: "string", kind: "line" }, about: { type: "string", kind: "markdown" } } as const
+/** And what it came out of, a comma list of issues, or none; and its narrative, or none for its first parent's. */
+const BRANCH = { ...ISSUE, from: { type: "string", kind: "issues" }, narrative: { type: "string", kind: "id" } } as const
 const add = action({
   name: "add",
-  description: `Add an issue the person asked for to the bottom of the backlog: ${ABOUT}`,
+  description: "one the person asked for, to the backlog's bottom; title short and imperative, about on what changes and why",
   subject: {},
-  inputs: { title: "string", about: "string" },
+  inputs: ISSUE,
   update: (w: Work, args): Result => made(w, args, "backlog"),
 })
 const addFrom = action({
   name: "add_from",
-  description: `Add an issue the person asked for, as add does, with what it came out of: ${ABOUT}${BRANCH}`,
+  description: "as add, with the issues it came out of, a comma list, or none; narrative empty for its first parent's",
   subject: {},
-  inputs: { title: "string", about: "string", from: "string", narrative: "string" },
+  inputs: BRANCH,
   update: (w: Work, args): Result => made(w, args, "backlog"),
 })
 const draft = action({
   name: "draft",
-  description: "Suggest an issue the person has not asked for, as a draft: title and about as for add; it is theirs to look at, on the page or with you",
+  description: "an issue the person has not asked for, theirs to look at, on the page or with you",
   subject: {},
-  inputs: { title: "string", about: "string" },
+  inputs: ISSUE,
   update: (w: Work, args): Result => made(w, args, "draft"),
 })
 const draftFrom = action({
   name: "draft_from",
-  description: `Suggest an issue as a draft, as draft does, with what it came out of: ${ABOUT}${BRANCH}`,
+  description: "as draft, with what it came out of, as add_from",
   subject: {},
-  inputs: { title: "string", about: "string", from: "string", narrative: "string" },
+  inputs: BRANCH,
   update: (w: Work, args): Result => made(w, args, "draft"),
 })
 const narrate = action({
   name: "narrate",
-  description: "Start a narrative, an effort going in its own direction: a short lower-case id, a title, and a line on what it is about",
+  description: "starts an effort going in its own direction, its id short and lower-case",
   subject: {},
-  inputs: { id: "string", title: "string", about: "string" },
+  inputs: { id: { type: "string", kind: "id" }, title: { type: "string", kind: "line" }, about: { type: "string", kind: "line" } },
   update(w: Work, { id, title, about }): Result {
     if (!/^[a-z][a-z0-9-]*$/.test(id.trim())) return { refused: "An id is lower-case letters, digits and dashes" }
     if (w.narratives.some((x) => x.id === id.trim())) return { refused: `There is a narrative ${id.trim()} already` }
@@ -107,30 +109,30 @@ const narrate = action({
 })
 const approve = action({
   name: "approve",
-  description: ({ n }) => `Approve draft ${n} into the backlog: the person does on the page, and you do once they tell you to go ahead with it`,
+  description: "into the backlog: the person does on the page, and you once they say to go ahead",
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, (issue) => ({ ...issue, status: "backlog" })), notices: [said(w, n, "approved: it joins the backlog")] }),
 })
 const describe = action({
   name: "describe",
-  description: ({ n }) => `Rewrite what issue ${n} is about, as brief markdown`,
+  description: "",
   subject: { n: "number" },
-  inputs: { about: "string" },
+  inputs: { about: { type: "string", kind: "markdown" } },
   update: (w: Work, { n, about }): Result => (about.trim() ? { model: changed(w, n, (issue) => ({ ...issue, about: about.trim() })) } : { refused: "Say what it is about" }),
 })
 const note = action({
   name: "note",
-  description: ({ n }) => `Say where issue ${n} stands in one line: what is being done, or what it waits for; empty text clears it`,
+  description: "what is being done or waited for; empty clears it",
   subject: { n: "number" },
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (w: Work, { n, text }): Result => ({ model: changed(w, n, (issue) => ({ ...issue, note: text.trim() })) }),
 })
 const post = action({
   name: "post",
-  description: ({ n }) => `Post an update on issue ${n} to its channel, as its lane's worker: a line or two on what was just found, done or decided; the person reads them to follow the work`,
+  description: "to its channel, as its lane's worker: what was just found, done or decided, for the person to follow",
   subject: { n: "number" },
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "markdown" } },
   update: (w: Work, { n, text }, call): Result =>
     text.trim()
       ? { model: changed(w, n, (issue) => ({ ...issue, updates: [...(issue.updates ?? []), { t: call.t, text: text.trim() }].slice(-KEPT) })) }
@@ -138,12 +140,10 @@ const post = action({
 })
 const start = action({
   name: "start",
-  description: ({ n }) => `Give issue ${n} to a lane, 1 to ${LANES}, when a subagent begins on it; a draft the person said to build starts the same way`,
+  description: "when a subagent begins on it, a draft the person said to build too",
   subject: { n: "number" },
-  inputs: { lane: "number" },
+  inputs: { lane: { type: "number", range: [1, LANES] } },
   update(w: Work, { n, lane }): Result {
-    if (!Number.isInteger(lane) || lane < 1 || lane > LANES) return { refused: `There are lanes 1 to ${LANES}` }
-
     const busy = w.issues.find((issue) => issue.status === "lane" && issue.lane === lane)
 
     if (busy) return { refused: `Lane ${lane} is delivering issue ${busy.n}` }
@@ -153,21 +153,21 @@ const start = action({
 })
 const done = action({
   name: "done",
-  description: ({ n }) => `Mark issue ${n} done: its work is merged into main, where the person can see it`,
+  description: "its work is merged into main",
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "done" })), notices: [said(w, n, "is done")] }),
 })
 const back = action({
   name: "back",
-  description: ({ n }) => `Return issue ${n} to the backlog`,
+  description: "to the backlog",
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "backlog" })) }),
 })
 const drop = action({
   name: "drop",
-  description: ({ n }) => `Remove issue ${n}: it will not be done`,
+  description: "it will not be done",
   subject: { n: "number" },
   inputs: {},
   // What came out of it no longer names it, so the graph keeps no edge to nothing.
@@ -178,9 +178,9 @@ const drop = action({
 })
 const link = action({
   name: "link",
-  description: ({ n }) => `Say issue ${n} came out of another issue as well`,
+  description: "it came out of that one as well",
   subject: { n: "number" },
-  inputs: { from: "number" },
+  inputs: { from: { type: "number", kind: "issue" } },
   update(w: Work, { n, from }): Result {
     if (!find(w, from)) return { refused: `There is no issue ${from}` }
     if (from === n) return { refused: "An issue cannot come out of itself" }
@@ -192,9 +192,9 @@ const link = action({
 })
 const unlink = action({
   name: "unlink",
-  description: ({ n }) => `Say issue ${n} did not come out of one of the issues it names`,
+  description: "it did not come out of that one",
   subject: { n: "number" },
-  inputs: { from: "number" },
+  inputs: { from: { type: "number", kind: "issue" } },
   update: (w: Work, { n, from }): Result =>
     find(w, n)!.from.includes(from)
       ? { model: changed(w, n, (issue) => ({ ...issue, from: issue.from.filter((x) => x !== from) })) }
@@ -202,9 +202,9 @@ const unlink = action({
 })
 const move = action({
   name: "move",
-  description: ({ n }) => `Move issue ${n} to another narrative, by its id`,
+  description: "to another narrative",
   subject: { n: "number" },
-  inputs: { narrative: "string" },
+  inputs: { narrative: { type: "string", kind: "id" } },
   update: (w: Work, { n, narrative }): Result =>
     w.narratives.some((x) => x.id === narrative.trim())
       ? { model: changed(w, n, (issue) => ({ ...issue, narrative: narrative.trim() })) }
@@ -212,9 +212,9 @@ const move = action({
 })
 const iterate = action({
   name: "iterate",
-  description: ({ n }) => `Begin another pass at issue ${n}: a short title, and why, one sentence on why another pass is needed`,
+  description: "begins another pass at it",
   subject: { n: "number" },
-  inputs: { title: "string", why: "string" },
+  inputs: { title: { type: "string", kind: "line" }, why: { type: "string", kind: "line" } },
   update: (w: Work, { n, title, why }): Result =>
     title.trim() && why.trim()
       ? {
@@ -227,9 +227,9 @@ const iterate = action({
 const latest = (name: "decide" | "conclude", part: "decided" | "outcome", says: string) =>
   action({
     name,
-    description: ({ n }) => `Say ${says} in the latest iteration of issue ${n}, in one sentence`,
+    description: `${says}, in the latest iteration`,
     subject: { n: "number" },
-    inputs: { text: "string" },
+    inputs: { text: { type: "string", kind: "line" } },
     update: (w: Work, { n, text }): Result =>
       text.trim()
         ? { model: changed(w, n, (issue) => ({ ...issue, iterations: issue.iterations.map((x, i, all) => (i === all.length - 1 ? { ...x, [part]: text.trim() } : x)) })) }

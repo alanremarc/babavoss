@@ -3,7 +3,7 @@
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
 import { diff, entries, placeOf, rebase, tabAt, tabsIn, tell, whole, type Change } from "../present/present.ts"
-import { handles, type Args, type Json } from "../surface/view.ts"
+import { handles, typeOf, type Args, type Json } from "../surface/view.ts"
 import type { Cause, Noticed, Running } from "../surface/run.ts"
 import { isPerson } from "../session.ts"
 import { heardRecord } from "./heard.ts"
@@ -16,7 +16,7 @@ export function textArgs(view: Json | undefined, name: string, input: unknown): 
   const args: Args = {}
 
   for (const [key, value] of Object.entries(input)) {
-    const types = offered.map((h) => h.open[key] ?? (Object.hasOwn(h.args, key) ? typeof h.args[key] : undefined)).filter(Boolean)
+    const types = offered.map((h) => (Object.hasOwn(h.open, key) ? typeOf(h.open[key]!) : undefined) ?? (Object.hasOwn(h.args, key) ? typeof h.args[key] : undefined)).filter(Boolean)
     const type = types[0] ?? "string"
 
     if (typeof value !== "string") throw new Error(`${key} must be text for ${type}`)

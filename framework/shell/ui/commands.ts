@@ -3,25 +3,37 @@
 // below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
 // input form's fields make of the inputs.
 import type { MenuItem } from "../../kit/layouts/menu.tsx"
-import { handles, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
+import { typeOf, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
 
-/** An action offered at a path: the handle. */
-export type Offered = { path: string; handle: Handle }
+/** An action offered at a path: the handle, and what the row it stands in is called, by its `title` or `name`, where it stands in one. */
+export type Offered = { path: string; handle: Handle; of?: string }
 /** A place a view names: its path within the tab, and what it is called, by its row's `title` or `name`, else its path's last part. */
 export type Place = { at: string; label: string }
 
 const key = (h: Handle) => `${h.name} ${JSON.stringify(h.args)}`
 
-/** The actions offered at `path` in its view, once each, in the view's order. */
+/** The actions offered at `path` in its view, once each, in the view's order, each with what its row is called. */
 export function offered(path: string, view: View | undefined): Offered[] {
   const seen = new Set<string>()
+  const out: Offered[] = []
+  const walk = (value: Json | undefined, of: string | undefined) => {
+    if (!value || typeof value !== "object") return
+    if (Array.isArray(value)) return value.forEach((v) => walk(v, of))
+    if (value.kind === "handle") {
+      const handle = value as Handle
 
-  return handles(view).flatMap((handle) => {
-    if (seen.has(key(handle))) return []
-    seen.add(key(handle))
+      if (!seen.has(key(handle))) out.push({ path, handle, ...(of !== undefined && { of }) })
+      seen.add(key(handle))
 
-    return [{ path, handle }]
-  })
+      return
+    }
+    for (const v of Object.values(value)) walk(v, called(value) ?? of)
+  }
+
+  // The view's own title names the place, not a row: its handles stand in none.
+  for (const v of Object.values(view ?? {})) walk(v, undefined)
+
+  return out
 }
 
 /** An action's name as a person reads it: `end_move` is "End move". */
@@ -31,25 +43,35 @@ export const named = (name: string): string => {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-/** A description as an entry's label reads it: as written, its first letter a capital. */
-const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+/** A handle's subject as words: the values it is bound to, "3" or "queue". */
+const subject = (h: Handle): string => Object.values(h.args).map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(" ")
 
 /**
- * Offered actions as entries of a menu: each by its name, or by its description where several share
- * one, the same handle bound to different subjects; with "…" where it asks for input first.
+ * Offered actions as entries of a menu, with "…" where one asks for input first. Each by its name; where several share
+ * one, the same handle bound to different subjects, by its name and what tells them apart: the row it stands in, by its
+ * title or name, as "Close Queue", else its subject, as "Close 3"; and both where rows share a title, "Close Queue (3)".
+ * Its description, which adds what the name does not say, is its hint.
  */
 export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; run: () => void }[] {
   const count = new Map<string, number>()
+  const tell = (a: Offered) => [named(a.handle.name), a.of ?? subject(a.handle)].filter(Boolean).join(" ")
+  const told = new Map<string, number>()
 
   for (const a of actions) count.set(a.handle.name, (count.get(a.handle.name) ?? 0) + 1)
+  for (const a of actions) told.set(tell(a), (told.get(tell(a)) ?? 0) + 1)
 
-  return actions.map((a) => ({
-    id: `${a.path} ${key(a.handle)}`,
-    name: a.handle.name,
-    label: ((count.get(a.handle.name) ?? 0) > 1 ? capital(a.handle.description) : named(a.handle.name)) + (Object.keys(a.handle.open).length ? "…" : ""),
-    hint: a.handle.description,
-    run: () => run(a),
-  }))
+  return actions.map((a) => {
+    const several = (count.get(a.handle.name) ?? 0) > 1
+    const label = !several ? named(a.handle.name) : (told.get(tell(a)) ?? 0) > 1 && a.of !== undefined ? `${tell(a)} (${subject(a.handle)})` : tell(a)
+
+    return {
+      id: `${a.path} ${key(a.handle)}`,
+      name: a.handle.name,
+      label: label + (Object.keys(a.handle.open).length ? "…" : ""),
+      hint: a.handle.description,
+      run: () => run(a),
+    }
+  })
 }
 
 /** A view's `menu` fact, how its actions are grouped and ordered: groups, each a label and the names of its actions. */
@@ -125,12 +147,13 @@ export function aboveOf(route: string, known: readonly (View | undefined)[]): st
   return up !== undefined && up !== "/" && known.some((view) => placesOf(view).some((p) => p.at === up)) ? up : undefined
 }
 
-/** What an input form's fields hold, as the action's arguments: each open input of its type, or undefined while one is not. */
+/** What an input form's fields hold, as the action's arguments: each open input of its base type, or undefined while one is not. */
 export function argsOf(open: Schema, fields: Record<string, string | boolean | undefined>): Args | undefined {
   const args: Args = {}
 
-  for (const [name, type] of Object.entries(open)) {
+  for (const [name, input] of Object.entries(open)) {
     const value = fields[name]
+    const type = typeOf(input)
 
     if (type === "boolean") args[name] = value === true
     else if (type === "number") {

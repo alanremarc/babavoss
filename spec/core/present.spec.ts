@@ -9,13 +9,13 @@ const issue = (n: number, status = "backlog", more: Record<string, Json> = {}) =
 /** The shell's / with one queue tab holding `issues`. */
 const root = (issues: Json[], facts: Record<string, Json> = {}, tab: Record<string, Json> = {}): Json => ({
   title: "baba",
-  surfaces: [{ name: "queue", description: "Track the work", open: handle("open", "open a queue tab", { surface: "queue" }) }],
+  surfaces: [{ name: "queue", description: "Track the work", open: handle("open", "in a new tab", { surface: "queue" }) }],
   tabs: [
     {
       at: "/tabs/3",
       n: 3,
       surface: "queue",
-      close: handle("close", "close tab 3", { n: 3 }),
+      close: handle("close", "its state is dropped", { n: 3 }),
       title: "Queue",
       actions: ["add", "draft"],
       ...tab,
@@ -26,12 +26,51 @@ const root = (issues: Json[], facts: Record<string, Json> = {}, tab: Record<stri
 const told = (before: Json, now: Json, cap?: number) => tell(diff(before, now, say), () => undefined, cap)
 
 describe("whole", () => {
-  it("says relative facts, lists of plain rows as tables with their handles after, and handles as commands", () => {
-    expect(lines({ count: 0, tags: [], add: handle("add", "Add one", {}, { text: "string" }), notes: [{ n: 1, text: "a" }, { n: 2 }] }, say)).toEqual([
+  it("says relative facts, lists of plain rows as tables, and the handles after them in one block, the command once", () => {
+    expect(lines({ count: 0, tags: [], add: handle("add", "keeps one", {}, { text: "string" }), notes: [{ n: 1, text: "a" }, { n: 2 }] }, say)).toEqual([
       "count: 0",
       "tags: []",
-      "add: baba / add text=string   Add one",
       'notes: n\ttext\n1\t"a"\n2\t',
+      "actions: baba / ACTION name=value…",
+      "  add text=string   keeps one",
+    ])
+  })
+  it("puts the arguments every handle shares in the block's head, says each input as what it means, and a handle by its name, never its key", () => {
+    const n = { n: 12 }
+    const view = {
+      title: "Issue 12",
+      note: "waits",
+      describe: handle("describe", "", n, { about: { type: "string", kind: "markdown" } }),
+      note_: handle("note", "empty clears it", n, { text: { type: "string", kind: "line" } }),
+      start: handle("start", "when a subagent begins on it", n, { lane: { type: "number", range: [1, 5] } }),
+      move: handle("move", "", n, { narrative: { type: "string", kind: "id" }, mode: { type: "string", choices: ["light", "dark"] } }),
+      link: handle("link", "", n, { from: { type: "number", kind: "issue" } }),
+      done: handle("done", "its work is merged into main", n),
+    }
+
+    expect(lines(view, { command: "baba", path: "/queue/issues/12" })).toEqual([
+      'title: "Issue 12"',
+      'note: "waits"',
+      "actions: baba /queue/issues/12 ACTION n=12 name=value…",
+      "  describe about=markdown",
+      "  note text=line   empty clears it",
+      "  start lane=1..5   when a subagent begins on it",
+      "  move narrative=id(string) mode=light|dark",
+      "  link from=issue(number)",
+      "  done   its work is merged into main",
+    ])
+    // One handle alone keeps its arguments on its line; none with arguments, and the head says no more than ACTION.
+    expect(lines({ done: handle("done", "", n) }, say)).toEqual(["actions: baba / ACTION name=value…", "  done n=12"])
+    expect(lines({ play: handle("play", ""), pin: handle("pin", "keeps them") }, say)).toEqual(["actions: baba / ACTION", "  play", "  pin   keeps them"])
+  })
+  it("folds a handle every row of a table offers into one line with the column for its argument", () => {
+    const rows = [1, 2].map((n) => ({ n, title: `Draft ${n}`, approve: handle("approve", "into the backlog", { n }) }))
+
+    expect(lines({ drafts: rows, add: handle("add", "", {}, { title: { type: "string", kind: "line" } }) }, say)).toEqual([
+      'drafts: n\ttitle\n1\t"Draft 1"\n2\t"Draft 2"',
+      "actions: baba / ACTION name=value…",
+      "  approve n=N   into the backlog",
+      "  add title=line",
     ])
   })
   it("says each open tab under one heading, with its actions by name, its facts relative to it", () => {
@@ -40,23 +79,27 @@ describe("whole", () => {
     expect(text).toEqual([
       'title: "baba"',
       'surfaces: name\tdescription\n"queue"\t"Track the work"',
-      'open: baba / open surface="queue"   open a queue tab',
+      "actions: baba / ACTION name=value…",
+      '  open surface="queue"   in a new tab',
       "",
       '/tabs/3 queue "Queue"',
-      "actions: add, draft   each one's command is at /tabs/3",
-      "close: baba / close n=3   close tab 3",
+      "actions at /tabs/3: add, draft",
       `how: ${JSON.stringify(HOW)}`,
       "free: [1, 2]",
       'issues: at\tn\ttitle\tstatus\n"/tabs/3/issues/1"\t1\t"Issue 1"\t"backlog"',
+      "actions: baba / ACTION name=value…",
+      "  close n=3   its state is dropped",
     ])
   })
   it("leaves detail out, a list's rows and a fact, and says in one line how much there is and where it is read", () => {
     const view = root([issue(1), detail(issue(2, "done", { note: "merged" })), detail(issue(3, "done"))], { tokens: detail(1200) })
 
-    expect(whole(view, say).slice(-3)).toEqual([
+    expect(whole(view, say).slice(-5)).toEqual([
       "free: [1, 2]",
       'issues: at\tn\ttitle\tstatus\n"/tabs/3/issues/1"\t1\t"Issue 1"\t"backlog"',
       "+2 more in issues, tokens in detail; read /tabs/3",
+      "actions: baba / ACTION name=value…",
+      "  close n=3   its state is dropped",
     ])
     expect(whole({ count: detail(3), name: "x" }, { ...say, path: "/tabs/1" })).toEqual(['name: "x"', "+count in detail; read /tabs/1"])
   })
@@ -65,7 +108,7 @@ describe("whole", () => {
     const view = {
       title: "baba",
       needs: [need],
-      surfaces: ["queue", "lab"].map((name) => ({ name, description: `the ${name}`, open: handle("open", `open a ${name} tab`, { surface: name }) })),
+      surfaces: ["queue", "lab"].map((name) => ({ name, description: `the ${name}`, open: handle("open", "in a new tab", { surface: name }) })),
       pointed: { at: "/tabs/3", n: 2 },
       tabs: [],
     }
@@ -74,8 +117,9 @@ describe("whole", () => {
       'title: "baba"',
       'needs: at\tsurface\twho\twhy\n"/tabs/3"\t"queue"\t"person"\t"to approve a draft"',
       'surfaces: name\tdescription\n"queue"\t"the queue"\n"lab"\t"the lab"',
-      "open: baba / open surface=NAME   open a NAME tab",
       'pointed: "/tabs/3"',
+      "actions: baba / ACTION name=value…",
+      "  open surface=NAME   in a new tab",
     ])
     // A need is an event on it, one line: who, where, why; where the person was pointed changes by its place alone.
     expect(told(view, { ...view, needs: [{ ...need, who: "agent", why: "to draft" }], pointed: { at: "/tabs/3", n: 3 } })).toEqual([
