@@ -3,12 +3,11 @@
 Tools your agent works with, each with a page where you watch and steer.
 
 ```text
-   you ────── talk ──────► agent
-    │                        │
-   page                   command
-    │                        │
-    └──────► surface ◄───────┘
-        one state, both change it
+   ┌─ chat: the input ─┐      ┌─ page: the face ──┐
+   │ you ask           │      │ you see           │
+   └─────────┬─────────┘      └─────────▲─────────┘
+             ▼                          │ ui
+           agent ◄───── state ─────► surface
 ```
 
 ## Getting started
