@@ -65,7 +65,7 @@ An action that is the page's own bookkeeping, of no event in the work, such as w
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
-The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
+The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its primitives from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
 
 A page reads its views with `useLive(path)` and is shown once its first reads have answered, those that depend on others too, as the queue's selected issue does on its list; until then its tab is its quiet ground. So a page draws no loading state of its own, and an empty state it draws is true. When a path it reads moves, as with the route, it keeps the view it had until the new one lands; a change by anyone replaces the view in place. `error` says why a read failed, beside the view it had. A refresh is served with the shell and the shown tab's views at `/` and at its route, so it is drawn whole at once.
 
@@ -88,13 +88,13 @@ menu: [{ label: "Move", actions: ["start", "done", "back"] }, { label: "Edit", a
 
 An action with inputs opens a modal. The shell makes a form of its inputs, one field each, under its description. Where the page module exports a drawer for the action by its name, the modal shows that instead: `export const drawers = { add: AddIssue }`, each a component given `{ handle, path, view, submit, close }`. `submit(args)` makes the call with the inputs and resolves with the reason where it is refused; the modal then shows the reason and stays open, and closes once the call is admitted. `close` gives up. A drawer is drawn outside the tab, so the surface's `ui/styles.css` does not reach it.
 
-What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
+What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. The kit's parts of a content, a toolbar with its segments and a page, are there for a page that wants them.
 
 Whose move it is is the shell's too: the mark on the rail moves while the agent works, and home's drawer says which of the person's changes wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
 
 ## A page's own
 
-A page is a React component the shell wraps in its tab. Inside the tab everything is the surface's: any library installed in `.baba/`, any pattern, its own CSS. The kit is where to start, and the project's own shadcn components stand beside it. The rail, a tab's drawer with its menu and thread, a modal's frame and the theme's tokens are the shell's.
+A page is a React component the shell wraps in its tab. Inside the tab everything is the surface's: any library installed in `.baba/`, any pattern, its own CSS. The kit is where to start: shadcn's primitives with one layer of opinions, and nothing more. What a page needs beyond them is the project's own shadcn components, or the surface's own in its folder, as the lab's thread and composer are in `surfaces/lab/ui/components/`. The rail, a tab's drawer with its menu and thread, a modal's frame and the theme's tokens are the shell's.
 
 - A library: `bun add NAME` in `.baba/`, then import it. The page has one React, the framework's, whatever a library brings. A library's own stylesheet is imported from the page, `import "NAME/dist/style.css"`; it is not scoped, so restyle it to the tokens in `ui/styles.css`.
 - A shadcn component: `bunx shadcn@latest add NAME` in `.baba/` writes it to `components/ui/`, shared by every surface, imported as `@/components/ui/NAME`. It reads the tokens the shell's theme defines, so it follows the palette and the mode. The css file `components.json` names is not part of the page: what the CLI writes there changes nothing.
@@ -117,7 +117,7 @@ export default function Home({ title, surfaces, tabs, foot }: HomeProps) {
 
 A page follows the person's palette, light or dark mode, by the shell's theming tokens, so it never needs to know which is chosen.
 
-- Use the kit's components and layouts first, then the project's shadcn components: they are already in the design language.
+- Use the kit's components first, then the project's shadcn components: they are already in the design language.
 - Then the tokens, through Tailwind classes; `framework/kit/defaults.css` defines them:
   - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the shell's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
   - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px; Tailwind's `text-sm` and up for headings.

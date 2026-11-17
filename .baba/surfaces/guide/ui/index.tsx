@@ -8,7 +8,6 @@ import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 import type { EntryOf, GroupId } from "../src/catalogue.ts"
 import { Specimen } from "./frame.tsx"
 import { foundations } from "./foundations.tsx"
-import { layouts } from "./layouts.tsx"
 import { mark } from "./mark.tsx"
 import { primitives } from "./primitives.tsx"
 import { shell } from "./shell.tsx"
@@ -16,7 +15,7 @@ import { shell } from "./shell.tsx"
 export const icon = <SwatchBookIcon aria-hidden />
 
 /** What each specimen draws, by group and entry: every entry of the catalogue has one. */
-const DRAWN: { [G in GroupId]: Record<EntryOf<G>, ComponentType> } = { mark, foundations, primitives, layouts, shell }
+const DRAWN: { [G in GroupId]: Record<EntryOf<G>, ComponentType> } = { mark, foundations, primitives, shell }
 
 type Row = { at: string; title: string; states: string[] }
 type Root = { groups: { at: string; title: string; about: string; specimens: number }[]; specimens: Row[] }
@@ -34,8 +33,8 @@ export default function Guide() {
   const [inView, setInView] = useState<string>()
   const draw = DRAWN[group.at.slice(1) as GroupId] as Record<string, ComponentType>
 
-  // The route's specimen is brought into view; a group alone, its top. Again a moment later: a command list scrolls its
-  // chosen item into view as it mounts, which would move the page.
+  // The route's specimen is brought into view; a group alone, its top. Again a moment later, once what mounts with the
+  // group has settled its size.
   useLayoutEffect(() => {
     const place = () => {
       const target = entry ? document.getElementById(idOf(`${group.at}/${entry}`)) : null

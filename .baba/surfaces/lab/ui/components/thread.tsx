@@ -3,7 +3,7 @@
 // turn ends, its figures sit quietly under it; what happened to the session itself is a quiet line in the middle. Every
 // fold follows the thread's "all" until it is toggled.
 import * as React from "react"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 
 import {
   MessageScroller,
@@ -12,8 +12,8 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
-} from "./message-scroller"
-import { Trace, TraceCollapsible, TraceCollapsibleContent, TraceCollapsibleTrigger, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "./trace"
+} from "./message-scroller.tsx"
+import { Trace, TraceCollapsible, TraceCollapsibleContent, TraceCollapsibleTrigger, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "./trace.tsx"
 
 /** Every fold open or closed at once: `all` is what they follow, `epoch` counts the times it was said. */
 export type ThreadDetail = { all?: boolean; epoch: number }

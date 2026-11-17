@@ -23,7 +23,6 @@ import type { Handle } from "babavoss/core/index.ts"
 import {
   Badge,
   Button,
-  Composer,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,6 +47,7 @@ import {
   useNarrow,
 } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+import { Composer } from "./components/composer.tsx"
 import { breakdown, k, MODELS, money, total, type Past, type Root, type Row, type Status } from "./parts.tsx"
 import { RunThread } from "./thread.tsx"
 

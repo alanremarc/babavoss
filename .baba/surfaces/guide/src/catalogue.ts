@@ -54,7 +54,7 @@ export const GROUPS = [
   {
     id: "primitives",
     title: "Primitives",
-    about: "The kit's components",
+    about: "The kit's components, and the parts of a content it has an opinion on",
     sections: [
       {
         title: "Actions",
@@ -67,8 +67,6 @@ export const GROUPS = [
         title: "Inputs",
         entries: [
           { id: "input", title: "Input", files: [C("input"), C("textarea")], states: ["empty", "filled", "invalid", "disabled", "textarea"] },
-          { id: "input-group", title: "Input group", files: [C("input-group")], states: ["addon start", "addon end", "button", "textarea"] },
-          { id: "command", title: "Command", files: [C("command")], states: ["search", "groups", "shortcut", "disabled", "empty"] },
           { id: "theme-picker", title: "Theme picker", files: [C("theme-picker"), `${KIT}/theme.ts`], states: ["live", "light and dark", "disabled"] },
         ],
       },
@@ -76,10 +74,8 @@ export const GROUPS = [
         title: "Feedback",
         entries: [
           { id: "badge", title: "Badge", files: [C("badge")], states: ["default", "secondary", "destructive", "outline", "ghost", "link"] },
-          { id: "marker", title: "Marker", files: [C("marker")], states: ["default", "icon", "separator", "border"] },
           { id: "alert", title: "Alert", files: [C("alert")], states: ["default", "destructive", "action"] },
           { id: "empty", title: "Empty", files: [C("empty")], states: ["text", "icon", "content"] },
-          { id: "toast", title: "Toast", files: [C("toast")], states: ["line", "from", "action", "meta"] },
         ],
       },
       {
@@ -89,46 +85,14 @@ export const GROUPS = [
           { id: "popover", title: "Popover", files: [C("popover")], states: ["open"] },
           { id: "dropdown-menu", title: "Dropdown menu", files: [C("dropdown-menu")], states: ["items", "check", "radio", "submenu", "shortcut", "destructive"] },
           { id: "dialog", title: "Dialog", files: [C("dialog")], states: ["open"] },
-          { id: "sheet", title: "Sheet", files: [C("sheet")], states: ["open"] },
         ],
       },
       {
-        title: "Structure",
+        title: "Layout",
         entries: [
-          { id: "collapsible", title: "Collapsible", files: [C("collapsible")], states: ["closed", "open"] },
           { id: "resizable", title: "Resizable", files: [C("resizable")], states: ["horizontal", "handle"] },
-          { id: "code-block", title: "Code block", files: [C("code-block")], states: ["header", "numbered", "diff", "wrap", "sm", "destructive"] },
-        ],
-      },
-      {
-        title: "Conversation",
-        entries: [
-          { id: "message", title: "Message", files: [C("message"), C("bubble")], states: ["agent", "person", "bubble variants", "group"] },
-          { id: "thread", title: "Thread", files: [C("thread"), C("trace"), C("message-scroller")], states: ["step", "steps", "running", "error", "end", "event"] },
-          { id: "composer", title: "Composer", files: [C("composer")], states: ["empty", "completions", "closed", "reopen"] },
-        ],
-      },
-    ],
-  },
-  {
-    id: "layouts",
-    title: "Layouts",
-    about: "The kit's frames and their parts",
-    sections: [
-      {
-        title: "Frames",
-        entries: [
-          { id: "workbench", title: "Workbench", files: [L("workbench.tsx"), L("arrange.ts")], states: ["toolbars", "documents", "collapsed", "floating"] },
-          { id: "plain", title: "Plain and welcome", files: [L("plain.tsx"), L("welcome.tsx")], states: ["scope open", "welcome"] },
-          { id: "menu", title: "Menu", files: [L("menu.tsx")], states: ["triggers", "search", "check", "choice", "submenu", "mark", "context"] },
-        ],
-      },
-      {
-        title: "Workbench parts",
-        entries: [
-          { id: "toolbar", title: "Toolbar", files: [L("parts.tsx")], states: ["button", "busy", "segments", "picker", "info", "spacer", "splitter"] },
-          { id: "page", title: "Page", files: [L("parts.tsx")], states: ["page", "section", "fold", "properties", "code", "setting", "notice"] },
-          { id: "rows", title: "Lists and trees", files: [L("parts.tsx")], states: ["list", "groups", "tree", "mark", "meter", "error", "empty"] },
+          { id: "toolbar", title: "Toolbar", files: [L("parts.tsx")], states: ["toolbar", "spacer", "segments"] },
+          { id: "page", title: "Page", files: [L("parts.tsx")], states: ["page", "empty", "narrow"] },
         ],
       },
     ],
@@ -148,7 +112,7 @@ export const GROUPS = [
       {
         title: "Drawer",
         entries: [
-          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`], states: ["a tab's", "home's", "home's, hooks not heard", "broken", "menu", "search", "pinned"] },
+          { id: "drawer", title: "Drawer", files: [`${SHELL}/drawer.tsx`, `${SHELL}/island.tsx`, `${SHELL}/actions.tsx`, `${SHELL}/commands.ts`, L("menu.tsx")], states: ["a tab's", "home's", "home's, hooks not heard", "broken", "menu", "search", "pinned"] },
           { id: "entries", title: "Entries", files: [`${SHELL}/thread.ts`, `${SHELL}/drawer.tsx`], states: ["notice", "calls", "tab entry", "on home"] },
           { id: "inputs", title: "Input modal", files: [`${SHELL}/inputs.tsx`], states: ["form", "refused"] },
         ],
