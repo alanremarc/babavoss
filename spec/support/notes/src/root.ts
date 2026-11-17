@@ -2,7 +2,7 @@
 // with a page the person sees it through.
 import { setTimeout as sleep } from "node:timers/promises"
 import { action, defineRoot, surface, view, type Update } from "babavoss/core/index.ts"
-import { shellUi } from "babavoss/shell/src/hosting.ts"
+import { shellUi } from "../../../../framework/shell/src/hosting.ts"
 
 type Note = { text: string; due?: "pending" | "due" }
 type Model = { items: Note[] }

@@ -1,9 +1,9 @@
 // What the shell's specimens are drawn from: a queue-like surface's views, as a tab's menu reads them, and a session's
 // activity, as a drawer's thread reads it. Sample data only; every list and dot made of it is the shell's own code's.
-import { handle, type View } from "babavoss/core/surface/view.ts"
-import type { Row } from "babavoss/shell/ui/thread.ts"
-import { liveCache } from "babavoss/shell/ui/live.ts"
-import type { Door } from "babavoss/shell/ui/tab.tsx"
+import { handle, type View } from "../../../../framework/core/surface/view.ts"
+import type { Row } from "../../../../framework/shell/ui/thread.ts"
+import { liveCache } from "../../../../framework/shell/ui/live.ts"
+import type { Door } from "../../../../framework/shell/ui/tab.tsx"
 
 const TITLES = ["Keep the present short", "Rename the picker", "Close a tab from its menu", "Show the present", "Fold the injections", "Pin the tellings", "Approve a draft", "Show whose move it is", "Name the lanes", "Count what waits"]
 const issue = (n: number) => ({ at: `/issues/${n}`, n, title: TITLES[n - 1]! })

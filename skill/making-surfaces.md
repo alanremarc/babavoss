@@ -65,7 +65,14 @@ An action that is the page's own bookkeeping, of no event in the work, such as w
 
 A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
 
-The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its primitives from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
+The framework is the package `babavoss`, in `node_modules/babavoss`, and it can be imported only by its entries:
+
+- `babavoss/core/index.ts`, for a surface's source and specs: `surface`, `view`, `action`, `story`, a harness and the rest; a page takes its types, as `Handle`.
+- `babavoss/kit/index.ts`, for a page: the primitives, `cn` and the theme.
+- `babavoss/shell/ui/index.tsx`, for a page: its tab, `useTab`, `useLive`, `useShell`, `useConventions`, with `DrawerProps` and `HomeProps`.
+- `babavoss/core/config.ts`, for `.baba/baba.config.ts` alone.
+
+Anything else, a file of the framework by its path, does not resolve. What a page needs beyond the entries it keeps in its own folder; read the framework's code in `framework/` there rather than guessing its interfaces.
 
 A page reads its views with `useLive(path)` and is shown once its first reads have answered, those that depend on others too, as the queue's selected issue does on its list; until then its tab is its quiet ground. So a page draws no loading state of its own, and an empty state it draws is true. When a path it reads moves, as with the route, it keeps the view it had until the new one lands; a change by anyone replaces the view in place. `error` says why a read failed, beside the view it had. A refresh is served with the shell and the shown tab's views at `/` and at its route, so it is drawn whole at once.
 
@@ -120,7 +127,7 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
 - Use the kit's components first, then the project's shadcn components: they are already in the design language.
 - Then the tokens, through Tailwind classes; `framework/kit/defaults.css` defines them:
   - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the shell's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
-  - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px; Tailwind's `text-sm` and up for headings.
+  - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px, the kit's whole scale; Tailwind's `text-sm` and up for a page's headings.
   - font: `font-sans`, `font-heading`, `font-mono`.
   - radius: `rounded-sm` to `rounded-4xl`, from the palette's `--radius`.
   - frame: `h-menubar`, `h-bar` and `h-row`, the heights of a compact header, a bar, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.

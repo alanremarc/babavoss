@@ -9,9 +9,7 @@ import {
   useMessageScrollerVisibility,
 } from "@shadcn/react/message-scroller"
 import { ArrowDownIcon } from "lucide-react"
-import { cn } from "babavoss/kit/cn.ts"
-
-import { Button } from "babavoss/kit/components/button.tsx"
+import { Button, cn } from "babavoss/kit/index.ts"
 
 function MessageScrollerProvider(props: React.ComponentProps<typeof MessageScrollerPrimitive.Provider>) {
   return <MessageScrollerPrimitive.Provider {...props} />

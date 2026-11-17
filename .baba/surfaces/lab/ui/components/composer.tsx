@@ -2,7 +2,7 @@
 // it is typed, from the first character; what the session runs under sits in the footer, quiet.
 import * as React from "react"
 import { SendHorizontalIcon, SquareIcon } from "lucide-react"
-import { cn } from "babavoss/kit/cn.ts"
+import { cn } from "babavoss/kit/index.ts"
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./input-group.tsx"
 

@@ -3,11 +3,7 @@
 
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "babavoss/kit/cn.ts"
-
-import { Button } from "babavoss/kit/components/button.tsx"
-import { Input } from "babavoss/kit/components/input.tsx"
-import { Textarea } from "babavoss/kit/components/textarea.tsx"
+import { Button, cn, Input, Textarea } from "babavoss/kit/index.ts"
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (

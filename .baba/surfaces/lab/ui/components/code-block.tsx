@@ -4,9 +4,7 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { CheckIcon, CopyIcon } from "lucide-react"
-import { cn } from "babavoss/kit/cn.ts"
-
-import { Button } from "babavoss/kit/components/button.tsx"
+import { Button, cn } from "babavoss/kit/index.ts"
 
 const codeBlockVariants = cva(
   "group/code-block relative flex w-full min-w-0 flex-col overflow-hidden rounded-md text-sm has-[>[data-slot=code-block-content]:focus-visible]:ring-2 has-[>[data-slot=code-block-content]:focus-visible]:ring-ring/30 data-[size=sm]:text-xs",

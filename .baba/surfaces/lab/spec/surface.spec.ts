@@ -1,8 +1,7 @@
 // The lab's rules, as stories, with its outside faked: the framework's fake harness, whose stream the story emits as Claude
 // Code's would be read, and a fake of where runs live, so nothing is copied, started or written for real.
 import { expect, test } from "bun:test"
-import { story, type Json } from "babavoss/core/index.ts"
-import { fakeHarness, type HarnessEvent } from "babavoss/core/harness/index.ts"
+import { fakeHarness, story, type HarnessEvent, type Json } from "babavoss/core/index.ts"
 import type { Heard, Made, Runs } from "../src/runs.ts"
 import { END_MOVE, lab, type Model } from "../src/surface.ts"
 

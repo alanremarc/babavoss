@@ -32,6 +32,8 @@ CHANGELOG.md                what each release changed; an agent reads it after t
 spec/{core,shell,kit,bin}/  the specs, mirroring the code
 spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network
 spec/surfaces.spec.ts       runs .baba/'s surfaces' specs with the framework's, as bun check checks their types with it
+spec/border.spec.ts         the border: the package exports only its entries, and what a project keeps imports nothing else; the
+                            internals this repository's own surfaces may reach, and why
 docs/DESIGN.md              the design
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
 .claude/skills/baba        provisioned from .baba/: a link to the plugin, which is this checkout's, so a harness started here runs it
@@ -56,7 +58,8 @@ A project that uses it:
 ## Code
 
 - Bun runs the TypeScript source: keep syntax erasable and import with `.ts` extensions.
-- A surface imports the framework only as the package, `babavoss/core/…`, the shell as `babavoss/shell/…` and the kit as `babavoss/kit/…`. Here the root package links itself.
+- A surface imports the framework only as the package, and the package exports only its entries: `babavoss/core/index.ts` for a surface's source and specs, `babavoss/kit/index.ts` and `babavoss/shell/ui/index.tsx` for a page, `babavoss/core/config.ts` for baba.config.ts, and `babavoss/shell/ui/styles.css` for the generated root's stylesheet. A file not exported does not resolve. Here the root package links itself.
+- This repository's own surfaces that show or run the framework's internals, the guide and the design document, reach them by a relative path into the checkout, and only those spec/border.spec.ts allows, each with why; a project cannot. The framework's specs import it by relative path.
 - In the core, a root is what a runtime serves: a name, a surface and a page. The shell, the root of a .baba/, is one; the specs' notes fixture is another, with the shell's hosting and none of its surface.
 - Production never imports spec.
 - The version is semantic, in package.json, set by hand. Every version on main is a release: a change to the package raises it and adds its section to CHANGELOG.md, written for the agent that adapts a project's surfaces to it. On main, the Release workflow tags a new version vX.Y.Z; tags are never moved.

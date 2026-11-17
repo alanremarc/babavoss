@@ -3,7 +3,7 @@
 // turn ends, its figures sit quietly under it; what happened to the session itself is a quiet line in the middle. Every
 // fold follows the thread's "all" until it is toggled.
 import * as React from "react"
-import { cn } from "babavoss/kit/cn.ts"
+import { cn } from "babavoss/kit/index.ts"
 
 import {
   MessageScroller,

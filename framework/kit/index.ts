@@ -1,5 +1,6 @@
 // The kit: shadcn's primitives with one layer of opinions, the parts of a content and the design language a page is built
 // with; the shell's page and every surface's own use it.
+export { cn } from "./cn.ts"
 export type { MenuItem } from "./layouts/menu.tsx"
 export { WorkbenchToolbar, WorkbenchSpacer, WorkbenchSegments, WorkbenchPage, WorkbenchEmpty, useNarrow } from "./layouts/parts.tsx"
 export { Button } from "./components/button"
@@ -10,6 +11,7 @@ export { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./components/dialog"
 export { Popover, PopoverContent, PopoverTrigger } from "./components/popover"
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip"
+export { Toggle, toggleVariants } from "./components/toggle"
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group"
 export { Badge, badgeVariants } from "./components/badge"
 export { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/resizable"
