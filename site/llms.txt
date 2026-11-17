@@ -13,8 +13,8 @@ Run these in the project the person wants it in.
 
    It makes `.baba/`, installs the framework in it, and sets up this harness beside it. If `.baba/` is there already, run `bun install` in it instead.
 3. Read `.baba/node_modules/babavoss/skill/SKILL.md`. It says how surfaces are worked.
-4. Start the shell: `cd .baba && bun run baba start`. Give the person the address of the page it prints.
-5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on.
+4. Start the shell: `cd .baba && bun run baba start`. It returns at once with the page's address, and the shell runs on by itself: run it in the foreground, and give the person the address.
+5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on. This session began before that was set up: it is told nothing, so read before acting on a surface.
 
 Do not make a surface as part of installing. The person says what they want next.
 
