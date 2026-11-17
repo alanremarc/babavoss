@@ -10,13 +10,13 @@
 // project is one that only ran `baba init` from the variant, with the task's files, and what the agent left there is
 // looked at before it is deleted: the surfaces' files, their checks and specs, each surface opened and its page built,
 // and what the log heard once the rig, as the person, touched the files the task names.
-import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
+import { chmodSync, existsSync, statSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, cpSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { fakeHarness, sessionEnv, serviceClient, NONE, type Harness, type HarnessEvent, type HarnessSession, type Tokens } from "babavoss/core/index.ts"
 import type { Work } from "./fixture/queue/src/surface.ts"
-import { COMPACT, type Act, type Call, type Dry, type Fresh, type Kind, type Look, type Ran, type Shell, type Task } from "./tasks.ts"
+import { COMPACT, SITE, type Act, type Call, type Dry, type Fresh, type Kind, type Look, type Ran, type Shell, type Task } from "./tasks.ts"
 
 /** The checkout running the rig: the default variant, and where campaigns are written. */
 export const REPO = realpathSync(fileURLToPath(new URL("../../../../", import.meta.url)))
@@ -196,9 +196,8 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
     writeFileSync(join(project, "README.md"), "# App\n\nA small app.\n")
     sh(["git", "init", "-q"], project)
     commit(project, "the project")
+    shim(dir, variant)
     if (fresh.empty) {
-      shim(dir, variant)
-
       return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
     }
     // The person's own package cache, read and filled by the install, so a run does not download the framework's dependencies.
@@ -223,7 +222,8 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
       writeFileSync(file, now)
       commit(project, `take babavoss ${variant.version}`)
     } else commit(project, "baba init")
-    sh(["bun", "run", "baba", "start", "--session", session], baba, env)
+    // A person who ran `init` by hand starts no shell: the session's own hook starts it.
+    if (!fresh.cold) sh(["bun", "run", "baba", "start", "--session", session], baba, env)
   } catch (error) {
     rmSync(dir, { recursive: true, force: true })
     throw error
@@ -232,6 +232,29 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
   return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
+/** The variant's site/ on a free loopback port, as it is published: index.html at /, every other file at its path; each path asked for is kept. */
+function serveSite(variant: Variant) {
+  const root = join(variant.path, "site")
+  const fetched: string[] = []
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      const path = new URL(request.url).pathname
+      const file = join(root, path === "/" ? "index.html" : path)
+
+      fetched.push(path)
+      if (!file.startsWith(`${root}/`) || !statSync(file, { throwIfNoEntry: false })?.isFile()) return new Response("not found", { status: 404 })
+
+      return new Response(Bun.file(file))
+    },
+  })
+
+  return { url: `http://127.0.0.1:${server.port}`, fetched, stop: () => server.stop(true) }
+}
+
+/** Where the eval's `open` writes what it was given, in a run's directory. */
+const OPENED = "opened.txt"
 /** The package as the public install names it, which the shim sends to the variant. */
 export const PUBLIC = "github:alanremarc/babavoss"
 
@@ -239,6 +262,8 @@ export const PUBLIC = "github:alanremarc/babavoss"
  * A `bunx` first on the agent's PATH, in the run's `bin/`: `bunx github:alanremarc/babavoss ARGS…` runs the variant's own
  * command with the variant as the framework, copied as a release is; anything else goes to the real bunx. The public
  * repository may not carry the variant's release, so an instruction to install it is tried on the variant, word for word.
+ * Beside it an `open` and an `xdg-open` that only write what they were given to `opened.txt`: a page the agent opens is
+ * counted, and no browser of the person's is opened on a scratch runtime.
  */
 function shim(dir: string, variant: Variant) {
   const bin = join(dir, "bin")
@@ -257,9 +282,13 @@ function shim(dir: string, variant: Variant) {
     `exec '${bunx}' "$@"`,
   ]
 
+  const open = ["#!/bin/sh", "# The eval's open: what the agent opens, written down and not opened.", `echo "$*" >> '${join(dir, OPENED)}'`]
+
   mkdirSync(bin, { recursive: true })
-  writeFileSync(join(bin, "bunx"), `${lines.join("\n")}\n`)
-  chmodSync(join(bin, "bunx"), 0o755)
+  for (const [name, text] of [["bunx", lines], ["open", open], ["xdg-open", open]] as const) {
+    writeFileSync(join(bin, name), `${text.join("\n")}\n`)
+    chmodSync(join(bin, name), 0o755)
+  }
 }
 
 /** A command's exit code and the end of what it said. */
@@ -298,6 +327,7 @@ const filesUnder = (dir: string, from: string): Record<string, string> => {
  */
 async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
   const baba = join(place.project, ".baba")
+  const left = { up: up(place), address: address(place), outside: outside(place), strays: strays(place), browsed: browsed(place) }
   const env = { ...place.env, TMPDIR: mkdtempSync(join(place.dir, "tmp-")) }
   const word = (...args: string[]) => ran([".babavoss/bin/baba", "--session", place.session, ...args], place.project, place.env)
   const surfaces = (() => {
@@ -346,7 +376,82 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
   })
   const files = { ...filesUnder(join(baba, "surfaces"), place.project), ...Object.fromEntries(own) }
 
-  return { surfaces, files, stale, there, present, check, test, opened, page, heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })) }
+  const framework = (() => {
+    try {
+      return (JSON.parse(readFileSync(join(baba, "node_modules/babavoss/package.json"), "utf8")) as { version?: string }).version ?? ""
+    } catch {
+      return ""
+    }
+  })()
+
+  return {
+    surfaces,
+    files,
+    stale,
+    there,
+    present,
+    check,
+    test,
+    opened,
+    page,
+    heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })),
+    framework,
+    fetched: [],
+    ...left,
+  }
+}
+
+/** Whether the session's root runs, as the agent left it: its endpoint written and its process alive. */
+const up = (place: Place) => {
+  try {
+    return alive((JSON.parse(readFileSync(join(place.state, "service.json"), "utf8")) as { pid: number }).pid)
+  } catch {
+    return false
+  }
+}
+/** The page's address, by the port the session's root keeps for it: the root says it in full only once. */
+const address = (place: Place) => {
+  try {
+    return `http://127.0.0.1:${readFileSync(join(place.state, "port"), "utf8").trim()}`
+  } catch {
+    return undefined
+  }
+}
+/** What in the agent's home Claude Code keeps, the login's link, the shell's settings, and the package caches: none of it the agent's doing. */
+const HOME_OWN = /^(\.claude|Library|\.babavoss|\.bun\/install\/cache|\.cache)(\/|\.|$)/
+/** What the run changed outside its project: files in the agent's home but those, and anything in the run's directory beside its parts. */
+function outside(place: Place): string[] {
+  const parts = new Set(["project", "home", "bin", OPENED])
+  const home: string[] = []
+  const walk = (at: string, rel: string) => {
+    for (const e of readdirSync(at, { withFileTypes: true })) {
+      const path = rel ? `${rel}/${e.name}` : e.name
+
+      if (HOME_OWN.test(path)) continue
+      if (e.isDirectory()) walk(join(at, e.name), path)
+      else home.push(`~/${path}`)
+    }
+  }
+
+  try {
+    walk(place.home, "")
+  } catch {}
+
+  return [...readdirSync(place.dir).filter((n) => !parts.has(n)), ...home]
+}
+/** The project's changes outside what babavoss keeps: .baba/, the harnesses' files, the sessions' state. */
+const strays = (place: Place) =>
+  ran(["git", "status", "--porcelain", "--untracked-files=normal"], place.project, place.env)
+    .out.split("\n")
+    .map((l) => l.slice(3))
+    .filter((p) => p && !/^(\.baba|\.claude|\.agents|\.codex|\.babavoss)\//.test(p))
+/** What the agent opened with the eval's `open`, a line each. */
+const browsed = (place: Place) => {
+  try {
+    return readFileSync(join(place.dir, OPENED), "utf8").split("\n").filter(Boolean)
+  } catch {
+    return []
+  }
 }
 
 type Entry = {
@@ -714,6 +819,8 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   const name = `${task.name}.${variant.label}.${n}.jsonl`
   const transcript = join(dir, "transcripts", name)
   const place = task.fresh ? makeFresh(variant, session, task.fresh, task.files) : makePlace(variant, session, task.files)
+  const site = task.fresh?.site ? serveSite(variant) : undefined
+  const prompt = site ? task.prompt.replaceAll(SITE, site.url) : task.prompt
   let ending: Ending = { events: [] }
   let look: Look | undefined
   let seed: Work | undefined
@@ -726,10 +833,10 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     seed = task.fresh ? BLANK : await openFixture(place, task.before)
     harness.home(place.home)
 
-    // An empty project's agent finds the eval's bunx first, as it starts; the rig's own PATH is put back at once.
+    // A fresh project's agent finds the eval's bunx and open first, as it starts; the rig's own PATH is put back at once.
     const path = process.env.PATH
 
-    if (task.fresh?.empty) process.env.PATH = `${join(place.dir, "bin")}:${path}`
+    if (task.fresh) process.env.PATH = `${join(place.dir, "bin")}:${path}`
 
     const agent = (() => {
       try {
@@ -741,7 +848,7 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     const timeout = AbortSignal.timeout(options.minutes * 60_000)
 
     try {
-      ending.ended = await converse(agent, task.prompt, options, stop, transcript, ending.events, timeout)
+      ending.ended = await converse(agent, prompt, options, stop, transcript, ending.events, timeout)
       // A second message in the same session, after the person acted on the root between the two.
       for (const later of task.then ?? []) {
         if (ending.ended) break
@@ -756,6 +863,8 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     ending = { ...ending, ended: `the run failed: ${error instanceof Error ? error.message : String(error)}` }
   } finally {
     if (task.fresh) look = await lookAt(place, task.fresh, task).catch(() => undefined)
+    site?.stop()
+    if (look && site) look.fetched = site.fetched
     await closeRoot(place).catch(() => {})
     activity = saved(place)
     for (const path of Object.keys(task.files ?? {}))

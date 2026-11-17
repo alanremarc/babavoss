@@ -148,7 +148,6 @@ const WORDED = /(\.babavoss\/bin\/(baba|bv)|\bbv\b|bun run baba|\bbaba (new|star
 const usedSurfaces = (calls: Call[] = []) => calls.filter((c) => c.tool === "Bash" && WORDED.test(c.input))
 /** Whether the agent read the changelog, by a tool or the shell. */
 const readChangelog = (calls: Call[] = []) => calls.some((c) => /CHANGELOG\.md/.test(c.input) && (c.tool === "Read" || c.tool === "Grep" || c.tool === "Bash"))
-const PAGE = /https?:\/\/(127\.0\.0\.1|localhost):\d+/
 /** What it looks like to leave surfaces alone: none made, the command never run. */
 const leftAlone = ({ look, calls }: Checked): string | undefined => {
   if (!look) return "the project could not be looked at"
@@ -192,54 +191,103 @@ const CODE = {
 }
 const SHOTS = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`screenshots/screen-${String(i + 1).padStart(2, "0")}.png`, ""]))
 
-/** The instruction the install task gives by default: a plain one, in place of the README's block until it is pointed there. */
+/** The instruction the install task gives with --instruction: a plain one, which says each step. */
 export const INSTALL = join(HERE, "fresh/install.md")
+/** The README's line to copy to an agent, the block under Getting started, word for word: the install task's prompt by default. */
+export const README_LINE = /Copy this to your agent:\s*```text\n([\s\S]*?)\n```/.exec(readFileSync(join(HERE, "../../../../README.md"), "utf8"))?.[1] ?? ""
 /** The install task's prompt, the text of the instruction at `path`. */
 export const withInstruction = (tasks: Task[], path: string): Task[] =>
   tasks.map((t) => (t.name === "install" ? { ...t, prompt: readFileSync(path, "utf8").trim() } : t))
 /** What a set-up project has: .baba/ with its framework, the harnesses' files, the root's command. */
 const SET_UP = [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".babavoss/bin/baba"]
+/**
+ * Why a run on a just-installed project did more than it was asked, or did not give the page's address the root says:
+ * a surface made, a file of the project's changed, anything outside it changed, or another address given.
+ */
+const beyond = ({ look, answer }: Checked): string | undefined => {
+  if (!look) return "the project could not be looked at"
+  if (look.surfaces.length) return `made ${look.surfaces.join(", ")}`
+  if (look.strays.length) return `changed ${look.strays.join(", ")}`
+  if (look.outside.length) return `changed outside the project: ${look.outside.slice(0, 5).join(", ")}`
+  if (!look.up) return "no shell runs for the session"
+
+  const page = look.address
+
+  if (!page || !answer.includes(page)) return `gave no page's address, or not ${page}`
+
+  return undefined
+}
+/** What a run opened, said in a verdict's reason. */
+const browsedOf = (look?: Look) => `opened ${look?.browsed.join(" ") || "nothing"}`
 
 export const FRESH: Task[] = [
   {
-    // An instruction to install babavoss, given in a repository where nothing was run: it installs, provisions, starts
-    // the shell and gives the page's address, and makes no surface. Its text is a file's, --instruction to the eval.
+    // The README's line, as a person copies it to an agent in a repository where nothing was run: it fetches llms.txt from
+    // the site, served for the run, installs, provisions, starts the shell and gives the page's address, and makes no
+    // surface. --instruction gives another text.
     name: "install",
     kind: "probe",
-    prompt: readFileSync(INSTALL, "utf8").trim(),
-    fresh: { empty: true },
-    check: ({ look, answer }) => {
+    prompt: README_LINE,
+    fresh: { empty: true, site: true },
+    check: (run) => {
+      const { look, answer } = run
+
       if (!look) return no("the project could not be looked at")
+      if (look.fetched.length && !look.fetched.includes("/llms.txt")) return no(`fetched ${look.fetched.join(", ")}, not /llms.txt`)
 
       const missing = SET_UP.filter((p) => !look.there[p])
 
       if (missing.length) return no(`missing ${missing.join(", ")}`)
       if (look.check.code !== 0) return no(`bun check in .baba/ fails: ${look.check.out.split("\n").slice(-2).join(" ")}`)
-      if (!/^page: /m.test(look.present)) return no(`the shell does not answer: ${look.present.slice(0, 120)}`)
-      if (look.surfaces.length) return no(`made ${look.surfaces.join(", ")}`)
-      if (!PAGE.test(answer)) return no("gave no page's address")
+
+      const why = beyond(run)
+
+      if (why) return no(why)
       if (!/\.baba|shell|installed|set up/i.test(answer)) return no("did not say what was set up")
 
-      return ok()
+      return ok(`babavoss ${look.framework}; fetched ${look.fetched.join(" ") || "nothing"}; ${browsedOf(look)}`)
     },
     dry: { calls: [] },
   },
   {
-    // The first question in a project with no surfaces: what is there, truthfully, the page's address, and nothing made.
+    // The first question after a person installed by hand: what is there, truthfully, how a surface comes to be, the page's
+    // address, and nothing made. The session's own hook starts the shell.
     name: "first-contact",
     kind: "probe",
-    prompt: "What can I do with this project's surfaces?",
-    fresh: {},
+    prompt: "What can I do with this?",
+    fresh: { cold: true },
     check: (run) => {
-      const { answer, look } = run
+      const why = beyond(run)
 
-      if (!look) return no("the project could not be looked at")
-      if (look.surfaces.length) return no(`made ${look.surfaces.join(", ")}`)
-      if (!PAGE.test(answer)) return no("gave no page's address")
-      if (!/\b(no|none|any|not yet|zero)\b[^.]{0,40}\bsurfaces?\b|\bsurfaces?\b[^.]{0,40}\b(none|yet|empty)\b/i.test(answer)) return no("did not say there are none yet")
+      if (why) return no(why)
+      if (!/\b(no|none|any|not yet|zero)\b[^.]{0,40}\bsurfaces?\b|\bsurfaces?\b[^.]{0,40}\b(none|yet|empty)\b/i.test(run.answer)) return no("did not say there are none yet")
+      if (!/\b(ask|tell me|describe|say)\b/i.test(run.answer)) return no("did not say how one comes to be")
 
-      return ok()
+      return ok(browsedOf(run.look))
     },
+    dry: { calls: [] },
+  },
+  {
+    // The page asked for after installing by hand: its address, opened where the harness can, and nothing else.
+    name: "open-page",
+    kind: "probe",
+    prompt: "Open the page.",
+    fresh: { cold: true },
+    check: (run) => {
+      const why = beyond(run)
+
+      return why ? no(why) : ok(browsedOf(run.look))
+    },
+    dry: { calls: [] },
+  },
+  {
+    // A surface asked for in the person's words, in a project installed by hand a moment ago: the path end to end.
+    name: "books-first",
+    kind: "probe",
+    prompt: "Make me a surface for tracking the books I'm reading.",
+    fresh: { cold: true },
+    check: ({ look }) =>
+      look ? judged(rules(look, made(look)), look, `tab ${/books/.test(look.present) ? "open" : "not open"}; ${browsedOf(look)}`) : no("the project could not be looked at"),
     dry: { calls: [] },
   },
   {
