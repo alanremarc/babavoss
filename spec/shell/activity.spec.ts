@@ -11,7 +11,7 @@ import { shell, type ShellCommand, type ShellModel } from "../../framework/shell
 import type { Row } from "../../framework/shell/ui/thread.ts"
 
 type Model = { n: number }
-type Event = { kind: "rang" } | { kind: "changed"; loud?: boolean }
+type Event = { kind: "rang" } | { kind: "changed"; loud?: boolean } | { kind: "echoed" }
 type Command = { kind: "ring" } | { kind: "watch" }
 
 const bump = action({
@@ -45,7 +45,7 @@ const things = surface<Model, Event, Command>({
   start: () => [{ kind: "watch" }],
   session: (c) => c.kind === "watch",
   update: (m, msg) =>
-    msg.kind === "call" ? pages.update(m, msg) : msg.kind === "rang" ? { model: m, notices: ["Rang"] } : { model: m, ...(msg.loud && { notices: ["Changed outside"] }) },
+    msg.kind === "call" ? pages.update(m, msg) : msg.kind === "rang" ? { model: m, notices: ["Rang"] } : msg.kind === "echoed" ? { model: { ...m } } : { model: { n: m.n + 1 }, ...(msg.loud && { notices: ["Changed outside"] }) },
   view: pages.view,
   run: async () => {},
   failed: () => ({ kind: "rang" }),
@@ -280,6 +280,14 @@ describe("the shell's activity", () => {
       [2, "person", undefined, "ring", undefined, undefined],
       [1, "agent", undefined, "open surface=things", undefined, undefined],
     ])
+  })
+
+  it("keeps no entry for an event of the world that changed nothing in its tab and said nothing, as a watcher hearing the surface's own write", async () => {
+    const { agent, world } = story(shell({ things }))
+
+    await agent.call("/", "open", { surface: "things" })
+    await world.send({ kind: "tab", n: 1, event: { kind: "echoed" }, heard: "watch" })
+    expect(agent.sees("/activity")).toMatchObject({ kept: 1 })
   })
 
   it("gives a tab's events whose they are as its run hears them: the caller's who started the work, the world's for a session command", async () => {

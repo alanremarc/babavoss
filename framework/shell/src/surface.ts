@@ -71,6 +71,13 @@ export const LOOK = { views: 60, depth: 4 }
 /** How many closed tabs are remembered, so a path into one says where its surface went. */
 const REMEMBERED = 20
 
+/** Whether tab n holds the same in both models: the same model, or one equal to it. */
+const same = (before: ShellModel, after: ShellModel, n: number): boolean => {
+  const a = before.tabs.find((t) => t.n === n)?.model
+  const b = after.tabs.find((t) => t.n === n)?.model
+
+  return a === b || JSON.stringify(a) === JSON.stringify(b)
+}
 /** Whose a command's events are: the caller's, or the world's, by what heard it. */
 type Origin = { actor?: string; heard?: string }
 /** Whose an event is, as it arrives: as its command said, the world's where it says nothing. */
@@ -575,7 +582,10 @@ export function shell(
               ...(message.handle === "show" && typeof message.args.at === "string" && { args: { ...message.args, at: kept(model, message.args.at) } }),
             }
       const notices = result.notices?.map((n) => (typeof n === "string" || typeof n.at !== "string" ? n : { ...n, at: kept(model, n.at) }))
-      const line = entryOf(model, numbered, message.t ?? log.at(-1)?.when ?? 0, notices)
+      // An event of the world that changed nothing in its tab and said nothing is no action, as a watcher hearing the
+      // surface's own write comes back to what the tab holds.
+      const echo = message.kind !== "call" && message.actor === undefined && !notices?.length && same(model, result.model, message.n)
+      const line = echo ? undefined : entryOf(model, numbered, message.t ?? log.at(-1)?.when ?? 0, notices)
       // A closed tab's entries go with it, once its own line is kept: that line is the newest, so numbers never repeat.
       const gone = (n: number) => model.tabs.some((t) => t.n === n) && !result.model.tabs.some((t) => t.n === n)
       const activity = without(record(log, line), gone)
