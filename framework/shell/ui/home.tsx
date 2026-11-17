@@ -1,5 +1,5 @@
 // Home: what a click on the mark shows, and the page where no tab is. By default a desktop: an icon a surface with its name,
-// Open or how many tabs under it, marked where a tab of it waits on someone; a click goes to its newest tab, or opens one.
+// Open or how many tabs under it, marked where a tab of it is broken or holds a highlight; a click goes to its newest tab, or opens one.
 // A surface that does not load is shown faint, and says why on hover. A project may draw its own home, `.baba/home.tsx`,
 // given the same (HomeProps in home.ts). At the desktop's foot, and given to a project's home to place, one muted line:
 // the root and its version, the session, the harness, and a later release where one is out.

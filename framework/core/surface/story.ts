@@ -87,13 +87,16 @@ export function story<M, E extends { kind: string }, C>(surface: Surface<M, E, C
 
         return lines
       },
-      /** The notices since this actor was last asked, as its side is told them: what its own calls alone gave is not told back. */
+      /**
+       * The notices since this actor was last asked, as its side is told them: what its own calls alone gave is not told back;
+       * a highlight as `highlight: ` and its text.
+       */
       noticed: () => {
         const lines = heard.slice(since).filter((n) => !(n.cause.call && n.cause.actor === identity && identity !== "person"))
 
         since = heard.length
 
-        return lines.map((n) => n.text)
+        return lines.map((n) => (n.highlight ? `highlight: ${n.text}` : n.text))
       },
     }
   }

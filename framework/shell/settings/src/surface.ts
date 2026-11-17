@@ -4,7 +4,7 @@
 // person's, not a tab's nor a session's: its state is their file (store.ts), which every settings tab, in any session,
 // watches and follows; the model is what the file said last, with what this tab changed and is writing. A change is
 // written by a command, and a read while one is being written waits for it, so the tab never shows an older value back.
-// The shell's page applies what they say. Nothing is noticed but a write that failed, and every change is quiet: the page's
+// The shell's page applies what they say. Nothing is said but a write that failed, a highlight, and every change is quiet: the page's
 // own, of no event in the agent's work, so it is told to the agent in no way; the agent reads the tab when asked to change one.
 import { action, surface, view, type Schema, type Update } from "../../../core/index.ts"
 import { clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
@@ -249,7 +249,7 @@ export function settings(file: () => string = () => settingsFile()) {
 
       return {
         model: { ...m, writing: Math.max(0, m.writing - (message.writing ? 1 : 0)), unsaved: message.why },
-        notices: [message.writing ? `The settings were not saved: ${message.why}` : message.why],
+        notices: [{ text: message.writing ? `The settings were not saved: ${message.why}` : message.why, highlight: true }],
       }
     },
     view: pages.view,

@@ -31,7 +31,7 @@ describe("home", () => {
     const icons = iconsOf(
       [{ name: "queue" }, { name: "lab" }, { name: "notes" }],
       [
-        { at: "/tabs/4", surface: "lab", mark: "agent" as const },
+        { at: "/tabs/4", surface: "lab", mark: "highlight" as const },
         { at: "/queue", surface: "queue" },
         { at: "/lab", surface: "lab", mark: "broken" as const },
       ]
@@ -56,7 +56,7 @@ describe("home", () => {
       title: "baba",
       tabs: [
         { at: "/tabs/2", label: "Counter 2" },
-        { at: "/counter", label: "Counter", mark: "person" },
+        { at: "/counter", label: "Counter", mark: "highlight" },
       ],
       start: () => {},
       navigate: () => {},

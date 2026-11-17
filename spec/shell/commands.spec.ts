@@ -14,7 +14,7 @@ import {
   labelOf,
   MANY,
   named,
-  noticesIn,
+  highlightsIn,
   offered,
   parentOf,
   placesOf,
@@ -185,10 +185,10 @@ describe("the tab's menu", () => {
     expect([...dotted(["/issues/4"], "/", [{ at: "/issues/4" }, { at: "/issues/5" }])]).toEqual(["/issues/4"])
   })
 
-  it("knows which unseen notices are about a tab, as paths within it, one about no place as its root", () => {
-    const notices = [{ at: "/tabs/2/issues/4" }, { at: "/tabs/2" }, { at: "/tabs/21/issues/1" }, { at: null }, { at: "/tabs/3" }]
+  it("knows which highlights are about a tab, as paths within it, one about no place as its root", () => {
+    const highlights = [{ at: "/tabs/2/issues/4" }, { at: "/tabs/2" }, { at: "/tabs/21/issues/1" }, { at: null }, { at: "/tabs/3" }]
 
-    expect(noticesIn("/tabs/2", notices)).toEqual(["/issues/4", "/"])
+    expect(highlightsIn("/tabs/2", highlights)).toEqual(["/issues/4", "/"])
   })
 
   it("makes what the search finds entries that go to a place or start an action, each naming where it is", () => {

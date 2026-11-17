@@ -49,7 +49,7 @@ export type TabChoice = { at: string; label: string; mark?: Mark }
 
 /**
  * Home's menu, as a tab's is drawn: the shell's actions at /, in its view's order and grouping; then Go, the open tabs as
- * its places, each dotted where it waits on the person. It has no controls of its own: home is never closed or reloaded.
+ * its places, each dotted where it holds a highlight not opened. It has no controls of its own: home is never closed or reloaded.
  */
 export function homeMenu({
   view,
@@ -67,7 +67,7 @@ export function homeMenu({
   return tabMenu({
     surface: { label: title, actions: offered("/", view), menu: view?.menu },
     go: tabs.map((t) => ({ at: t.at, label: t.label })),
-    dots: new Set(tabs.filter((t) => t.mark === "person").map((t) => t.at)),
+    dots: new Set(tabs.filter((t) => t.mark === "highlight").map((t) => t.at)),
     start,
     navigate,
     controls: [],

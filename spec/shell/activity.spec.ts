@@ -1,12 +1,12 @@
 // The shell's activity, a log of actions: one entry per call, by who made it, where, with its inputs and what came of it,
 // done or refused and why, and the surface's lines about it; the world's events, named by what heard them, folded in a
 // row; a caller's follow-up only where its surface said a line; inputs cut past BOUND and credentials never kept; the
-// shell's own open, close and show; the bound; what is kept from before, in this shape or the one before; /activity and
-// /activity/notices and their pages; what the agent is told of it; what the person has seen of the lines, one by one or up
-// to a mark, by the page's quiet actions; a closed tab's entries going with it.
+// shell's own open and close, and the agent's highlight in the tab it marks; the bound; what is kept from before, in this
+// shape or the one before; /activity and /activity/highlights and their pages; what the agent is told of it; which
+// highlights the person opened, by the page's quiet mark of a drawer opened; a closed tab's entries going with it.
 import { describe, expect, it } from "bun:test"
 import { action, story, surface, view, type Call, type Update } from "../../framework/core/index.ts"
-import { BOUND, HIDDEN, KEPT, PAGE, didLine, entryOf, inputsOf, lookAt, record, refusalOf, restored, seenFrom, seeUpto, unseenIn, unseenOf, type Entry, type Line } from "../../framework/shell/src/activity.ts"
+import { BOUND, HIDDEN, KEPT, PAGE, didLine, entryOf, inputsOf, openedFrom, openUpto, record, refusalOf, restored, unopenedIn, type Entry, type Line } from "../../framework/shell/src/activity.ts"
 import { shell, type ShellCommand, type ShellModel } from "../../framework/shell/src/surface.ts"
 import type { Row } from "../../framework/shell/ui/thread.ts"
 
@@ -28,6 +28,13 @@ const approve = action({
   inputs: {},
   update: (m: Model, { n }): Update<Model, Command> => (n === 13 ? { refused: "13 is not approved" } : { model: m, notices: [{ text: `Approved #${n}`, at: `/things/${n}` }] }),
 })
+const flag = action({
+  name: "flag",
+  description: "flag one for the person",
+  subject: {},
+  inputs: { n: "number" },
+  update: (m: Model, { n }): Update<Model, Command> => ({ model: m, notices: [{ text: `#${n} needs a look`, at: `/things/${n}`, highlight: true }] }),
+})
 const ring = action({
   name: "ring",
   description: "ring later",
@@ -35,8 +42,8 @@ const ring = action({
   inputs: {},
   update: (m: Model): Update<Model, Command> => ({ model: m, commands: [{ kind: "ring" }] }),
 })
-const pages = view([bump, approve, ring], {
-  "/": (m) => ({ n: m.n, bump: bump.bind({}), approve: approve.bind({ n: 12 }), ring: ring.bind({}) }),
+const pages = view([bump, approve, flag, ring], {
+  "/": (m) => ({ n: m.n, bump: bump.bind({}), approve: approve.bind({ n: 12 }), flag: flag.bind({}), ring: ring.bind({}) }),
   "/things/:n": (_m, { n }) => ({ n: Number(n), approve: approve.bind({ n: Number(n) }) }),
 })
 const things = surface<Model, Event, Command>({
@@ -88,7 +95,7 @@ describe("an entry", () => {
     })
     expect(refusalOf(held, call("/", "open", { surface: "nope" }), T, "no surface nope")).toMatchObject({ surface: "baba", at: "/", refused: "no surface nope" })
     expect(refusalOf(held, call("/tabs/9", "bump", {}), T, "nothing at /tabs/9")).toMatchObject({ surface: "baba", at: "/tabs/9", own: true })
-    expect(refusalOf(held, call("/activity/notices", "seen", { n: 1 }), T, "an ask")).toBeUndefined()
+    expect(refusalOf(held, call("/activity/highlights", "opened", { n: 1 }), T, "an ask")).toBeUndefined()
   })
 
   it("is an event of the world, named by what heard it, silent or with the surface's lines", () => {
@@ -136,14 +143,17 @@ describe("an entry", () => {
     expect(entryOf(held, call("/tabs/2", "approve", { n: 12 }, "person"), T)).not.toHaveProperty("id")
   })
 
-  it("is the shell's own open, close and show, its call kept", () => {
+  it("is the shell's own open and close, its call kept; the agent's highlight is in the tab it marks", () => {
     expect(entryOf(held, call("/", "open", { surface: "lab" }, "person"), T)).toEqual({ when: T, who: "person", surface: "lab", at: "/tabs/3", did: "open", args: { surface: "lab" }, own: true })
     expect(entryOf(held, call("/", "close", { n: 2 }), T)).toMatchObject({ surface: "queue", at: "/tabs/2", did: "close", own: true })
-    expect(entryOf(held, call("/", "show", { at: "/tabs/2/issues/4" }), T)).toMatchObject({ surface: "queue", at: "/tabs/2/issues/4", did: "show", own: true })
+    const marked = entryOf(held, call("/", "highlight", { at: "/tabs/2/issues/4", why: "look", front: false }), T, [{ text: "look", at: "/tabs/2/issues/4", highlight: true }])
+
+    expect(marked).toMatchObject({ surface: "queue", at: "/tabs/2/issues/4", did: "highlight", said: [{ text: "look", highlight: true }] })
+    expect(marked).not.toHaveProperty("own")
   })
 
-  it("is none for the person marking what they have seen", () => {
-    expect(entryOf(held, call("/activity/notices", "seen", { n: 4 }, "person"), T)).toBeUndefined()
+  it("is none for the person opening a drawer", () => {
+    expect(entryOf(held, call("/activity/highlights", "opened", { n: 4 }, "person"), T)).toBeUndefined()
   })
 })
 
@@ -223,7 +233,7 @@ describe("the shell's activity", () => {
 
     for (const row of page.entries as Row[]) expect(Date.parse(row.when)).toBeGreaterThanOrEqual(before - 1000)
     expect(rows(page)).toEqual([
-      { n: 5, who: "agent", at: "/things", did: "nope", refused: "nope {} is not offered at /tabs/1; offered: bump, approve {\"n\":12}, ring" },
+      { n: 5, who: "agent", at: "/things", did: "nope", refused: "nope {} is not offered at /tabs/1; offered: bump, approve {\"n\":12}, flag, ring" },
       { n: 4, who: "agent", at: "/things/things/13", did: "approve n=13", refused: "13 is not approved" },
       { n: 3, who: "person", at: "/things", did: "approve n=12", said: ["Approved #12"], saidAt: "/things/things/12" },
       { n: 2, who: "agent", at: "/things", did: 'bump by=2 why="two more"' },
@@ -352,24 +362,25 @@ describe("the shell's activity", () => {
     expect(agent.noticed()).toEqual(["Approved #12"])
   })
 
-  it("gives the entries with a surface's lines alone at /activity/notices, newest first, with their pages", async () => {
+  it("gives the entries with a highlight alone at /activity/highlights, newest first, with their pages", async () => {
     const { agent, person } = story(shell({ things }))
 
     await agent.call("/", "open", { surface: "things" })
-    await person.call("/tabs/1", "approve", { n: 12 })
-    await agent.call("/tabs/1", "bump", { by: 1, why: "x" })
+    await person.call("/tabs/1", "flag", { n: 3 })
     await agent.call("/tabs/1", "approve", { n: 12 })
+    await agent.call("/tabs/1", "flag", { n: 4 })
 
-    expect(agent.sees("/activity")!.notices).toEqual({ at: "/activity/notices" })
+    expect(agent.sees("/activity")!.highlights).toEqual({ at: "/activity/highlights" })
 
-    const notices = agent.sees("/activity/notices")!
+    const highlights = agent.sees("/activity/highlights")!
 
-    expect(notices).toMatchObject({ at: "/activity/notices", kept: 2 })
-    expect(rows(notices).map((r) => [r.n, r.who, r.said, r.did])).toEqual([
-      [4, "agent", ["Approved #12"], "approve n=12"],
-      [2, "person", ["Approved #12"], "approve n=12"],
+    expect(highlights).toMatchObject({ at: "/activity/highlights", kept: 2 })
+    expect(rows(highlights).map((r) => [r.n, r.who, r.said, r.highlight, r.saidAt])).toEqual([
+      [4, "agent", ["#4 needs a look"], true, "/things/things/4"],
+      [2, "person", ["#3 needs a look"], true, "/things/things/3"],
     ])
-    expect((agent.sees("/activity/notices/3")!.entries as Row[]).map((r) => r.n)).toEqual([2])
+    expect(rows(agent.sees("/activity")).find((r) => r.n === 3)).not.toHaveProperty("highlight")
+    expect((agent.sees("/activity/highlights/3")!.entries as Row[]).map((r) => r.n)).toEqual([2])
   })
 
   it("keeps its entries across a restart", async () => {
@@ -391,107 +402,69 @@ describe("the shell's activity", () => {
   })
 })
 
-describe("what the person has seen", () => {
-  const entry = (n: number, who: Entry["who"], said = true): Entry => ({ n, when: T, who, surface: "queue", at: "/tabs/1", did: "x", ...(said && { said: [{ text: "x" }] }) })
-  const entries = [entry(1, "agent"), entry(2, "agent", false), entry(3, "person"), entry(4, "world"), entry(5, "agent")]
+describe("which highlights the person opened", () => {
+  const entry = (n: number, who: Entry["who"], at = "/tabs/1", highlight = true): Entry => ({ n, when: T, who, surface: "queue", at, did: "x", said: [{ text: "x", ...(highlight && { highlight: true as const }) }] })
+  const entries = [entry(1, "agent"), entry(2, "agent", "/tabs/1", false), entry(3, "person"), entry(4, "world", "/tabs/2"), entry(5, "agent"), entry(6, "world", "/")]
 
-  it("counts the notices others caused, newer than the mark and not looked at one by one, and names them", () => {
-    expect(unseenIn(entries, { upto: 0, looked: [] })).toEqual([1, 4, 5])
-    expect(unseenIn(entries, { upto: 1, looked: [5] })).toEqual([4])
-    expect(unseenOf(entries, { upto: 0, looked: [] })).toBe(3)
-    expect(unseenOf(entries, { upto: 1, looked: [] })).toBe(2)
-    expect(unseenOf(entries, { upto: 1, looked: [5] })).toBe(1)
-    expect(unseenOf(entries, { upto: 0, looked: [] }, "agent")).toBe(2)
+  it("are those others raised, newer than the mark of the drawer they are in, a tab's or home's", () => {
+    expect(unopenedIn(entries, {})).toEqual([1, 4, 5, 6])
+    expect(unopenedIn(entries, { "1": 1 })).toEqual([4, 5, 6])
+    expect(unopenedIn(entries, { "1": 5, "2": 4, home: 6 })).toEqual([])
   })
 
-  it("moves the mark forward only, and drops what it passes from what was looked at", () => {
-    expect(seeUpto({ upto: 3, looked: [5, 7] }, 5)).toEqual({ upto: 5, looked: [7] })
-    expect(seeUpto({ upto: 6, looked: [] }, 2)).toEqual({ upto: 6, looked: [] })
-    expect(lookAt({ upto: 3, looked: [] }, 5)).toEqual({ upto: 3, looked: [5] })
-    expect(lookAt({ upto: 3, looked: [5] }, 5)).toEqual({ upto: 3, looked: [5] })
-    expect(lookAt({ upto: 3, looked: [] }, 2)).toEqual({ upto: 3, looked: [] })
+  it("move a drawer's mark forward only, to the entry it was opened after, and touch no other drawer's", () => {
+    expect(openUpto({}, entries, 5)).toEqual({ "1": 5 })
+    expect(openUpto({ "1": 5 }, entries, 1)).toEqual({ "1": 5 })
+    expect(openUpto({ "1": 5 }, entries, 4)).toEqual({ "1": 5, "2": 4 })
+    expect(openUpto({}, entries, 6)).toEqual({ home: 6 })
+    expect(openUpto({}, entries, 99)).toEqual({})
   })
 
-  it("restores the mark, and where state kept before it has none, counts everything kept so far as seen", () => {
-    expect(seenFrom(undefined, entries)).toEqual({ upto: 5, looked: [] })
-    expect(seenFrom(undefined, [])).toEqual({ upto: 0, looked: [] })
-    expect(seenFrom({ upto: 2, looked: [1, 4, "x"] }, entries)).toEqual({ upto: 2, looked: [4] })
+  it("are restored as kept, and none where state kept before has no marks", () => {
+    expect(openedFrom(undefined)).toEqual({})
+    expect(openedFrom({ "1": 3, "2": "x" })).toEqual({ "1": 3 })
 
     const program = shell({ things })
 
-    expect(program.restore!({ tabs: [], next: 2, activity: entries }).seen).toEqual({ upto: 5, looked: [] })
+    expect(program.restore!({ tabs: [], next: 2, activity: entries, opened: { "1": 2 } }).opened).toEqual({ "1": 2 })
   })
 })
 
-describe("the person's notifications", () => {
-  it("are counted of the person, the same for every reader, and marked seen by the page's quiet actions, which tell the agent nothing", async () => {
+describe("the person's highlights", () => {
+  it("are the same for every reader, and opened by the page's quiet mark of a drawer, which tells the agent nothing", async () => {
     const { agent, person } = story(shell({ things }))
 
     await person.call("/", "open", { surface: "things" })
+    await agent.call("/tabs/1", "flag", { n: 1 })
     await agent.call("/tabs/1", "approve", { n: 12 })
-    await agent.call("/tabs/1", "approve", { n: 12 })
-    await person.call("/tabs/1", "approve", { n: 12 })
+    await agent.call("/tabs/1", "flag", { n: 2 })
+    await person.call("/tabs/1", "flag", { n: 3 })
 
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 3] })
-    expect(person.offered("/activity/notices")).toEqual(["seen", "looked"])
-    expect(agent.sees("/activity/notices")).toEqual(person.sees("/activity/notices"))
-    agent.told()
-    agent.noticed()
-
-    await person.call("/activity/notices", "looked", { n: 3 })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 1, fresh: [2] })
-    await person.call("/activity/notices", "seen", { n: 4 })
-    expect(person.sees("/activity/notices")!.unseen).toBe(0)
-    expect(agent.told()).toEqual([])
-    expect(agent.noticed()).toEqual([])
-  })
-
-  it("see exactly the one looked at alone, by opening its tab's drawer, once however often, and the rest stay unseen until a mark passes them", async () => {
-    const { agent, person } = story(shell({ things }))
-
-    await person.call("/", "open", { surface: "things" })
-    await agent.call("/tabs/1", "approve", { n: 12 })
-    await agent.call("/tabs/1", "approve", { n: 12 })
-    await agent.call("/tabs/1", "approve", { n: 12 })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 3, fresh: [2, 3, 4] })
-
-    await person.call("/activity/notices", "looked", { n: 3 })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 4] })
-    await person.call("/activity/notices", "looked", { n: 3 })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 2, fresh: [2, 4] })
-    // The newest looked at alone leaves the older unseen: no mark moves past it.
-    await person.call("/activity/notices", "looked", { n: 4 })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 1, fresh: [2] })
-    await person.call("/activity/notices", "seen", { n: 2 })
-    expect(person.sees("/activity/notices")).toMatchObject({ unseen: 0, fresh: [] })
-  })
-
-  it("are marked seen without an entry, and nothing of it is told to the agent", async () => {
-    const { agent, person } = story(shell({ things }))
-
-    await person.call("/", "open", { surface: "things" })
-    await agent.call("/tabs/1", "approve", { n: 12 })
+    expect(person.sees("/activity/highlights")).toMatchObject({ unopened: [2, 4] })
+    expect(person.offered("/activity/highlights")).toEqual(["opened"])
+    expect(agent.sees("/activity/highlights")).toEqual(person.sees("/activity/highlights"))
     agent.told()
     agent.noticed()
 
     const kept = agent.sees("/activity")!.kept
 
-    await person.call("/activity/notices", "seen", { n: 2 })
-    await person.call("/activity/notices", "looked", { n: 2 })
-
+    await person.call("/activity/highlights", "opened", { n: 4 })
+    expect(person.sees("/activity/highlights")).toMatchObject({ unopened: [] })
     expect(agent.sees("/activity")!.kept).toBe(kept)
     expect(agent.told()).toEqual([])
     expect(agent.noticed()).toEqual([])
-    expect(agent.sees("/")).not.toHaveProperty("seen")
+    expect(agent.sees("/")).not.toHaveProperty("opened")
   })
 
   it("count from the log after a restart, as for a page opened later", async () => {
     const s = story(shell({ things }))
 
     await s.person.call("/", "open", { surface: "things" })
-    await s.agent.call("/tabs/1", "approve", { n: 12 })
+    await s.agent.call("/tabs/1", "flag", { n: 1 })
+    await s.person.call("/activity/highlights", "opened", { n: 2 })
+    await s.agent.call("/tabs/1", "flag", { n: 2 })
     await s.restart()
 
-    expect(s.person.sees("/activity/notices")!.unseen).toBe(1)
+    expect(s.person.sees("/activity/highlights")!.unopened).toEqual([3])
   })
 })

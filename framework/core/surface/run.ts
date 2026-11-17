@@ -12,8 +12,8 @@ export type Saved = { model: unknown }
  * it. A commit and the notices it gave share one cause. `quiet` where the update said the commit is bookkeeping.
  */
 export type Cause = { actor: string; call: boolean; path?: string; quiet?: true }
-/** A notice as heard: its text, the path it is about and who says it where given, and the cause of the commit that gave it. */
-export type Noticed = { text: string; at?: string; from?: string; cause: Cause }
+/** A notice as heard: its text, the path it is about and who says it where given, whether it is a highlight, and the cause of the commit that gave it. */
+export type Noticed = { text: string; at?: string; from?: string; highlight?: true; cause: Cause }
 export type Ports<M> = {
   /** What was kept, or undefined the first time. */
   load(): Saved | undefined
@@ -145,6 +145,7 @@ export function run<M, E extends { kind: string }, C>(surface: Surface<M, E, C>,
         text: said.text.trim(),
         ...(typeof said.at === "string" && { at: said.at }),
         ...(typeof said.from === "string" && { from: said.from }),
+        ...(said.highlight === true && { highlight: true as const }),
         cause: by,
       }
 
