@@ -7,8 +7,22 @@
 // is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
 // left behind by a lab that is gone is cleared when the lab starts, its record saying so.
 import { randomBytes, randomUUID } from "node:crypto"
-import { action, detail, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
-import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
+import {
+  action,
+  claudeCode,
+  detail,
+  isPerson,
+  surface,
+  view,
+  type Call,
+  type Harness,
+  type HarnessEvent,
+  type HarnessSession,
+  type Json,
+  type Notice,
+  type Surface,
+  type Update,
+} from "babavoss/core/index.ts"
 import { LEFT_OUT, linkOf, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
 import { append, empty, line, NO_HOOK, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
 
@@ -475,7 +489,7 @@ type Follower = { after: number; turn: Promise<unknown>; stop: AbortController }
 /** The lab, with its outside given: a harness, where runs live, and how often a run's activity is read; fakes in its specs. */
 export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): Surface<Model, Event, Command> {
   /** The sessions under test of this process, by id; a process does not outlive the runtime that started it. */
-  const sessions = new Map<string, Session>()
+  const sessions = new Map<string, HarnessSession>()
   /** Who follows each session under test's activity: a read of it and an act as the person never interleave. */
   const followers = new Map<string, Follower>()
   const serially = <T>(f: Follower, fn: () => Promise<T>): Promise<T> => {

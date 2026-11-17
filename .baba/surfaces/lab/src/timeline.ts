@@ -1,7 +1,7 @@
 // A run's timeline: every chunk that entered the agent under test's context, in order, from the harness's normalised
 // events, what the developing agent did on the page under test, as the person, and what the person did there. Pure: `stream` takes the timeline and
 // one event and answers with the next, so the surface's update stays the one writer.
-import { NONE, type HarnessEvent, type Tokens } from "babavoss/core/harness/index.ts"
+import { NONE, type HarnessEvent, type Tokens } from "babavoss/core/index.ts"
 
 export type { Tokens }
 export type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "person" | "note"

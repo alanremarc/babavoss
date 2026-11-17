@@ -1,7 +1,7 @@
 // The guide's own frame around what it shows: a specimen, its name and files over its states; a state, the thing itself
 // with a word under it; and a row of states. It draws nothing of the framework's: what stands inside is the real thing.
 import type { ReactNode } from "react"
-import { cn } from "babavoss/kit/cn.ts"
+import { cn } from "babavoss/kit/index.ts"
 
 /** A specimen: its name, the framework's files it shows, quietly, and its states. */
 export function Specimen({ id, title, files, children }: { id: string; title: string; files: readonly string[]; children: ReactNode }) {

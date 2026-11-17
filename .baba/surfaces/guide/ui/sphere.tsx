@@ -2,10 +2,10 @@
 // as the shell draws it. Still, enlarged with the sphere's outline shown, at the strip's size, through each move, and
 // following the pointer, so any pose can be held and looked at.
 import { useEffect, useRef, useState, type ComponentType } from "react"
-import { Logo } from "babavoss/shell/ui/mark.tsx"
+import { Logo } from "../../../../framework/shell/ui/mark.tsx"
 import { useConventions } from "babavoss/shell/ui/index.tsx"
-import { between, eased, MOVES, next, outline, REST, settled, SIDES, SPHERE, within, type Gaze, type Sphere } from "babavoss/shell/ui/gaze.ts"
-import { standingOf } from "babavoss/shell/ui/turn.ts"
+import { between, eased, MOVES, next, outline, REST, settled, SIDES, SPHERE, within, type Gaze, type Sphere } from "../../../../framework/shell/ui/gaze.ts"
+import { standingOf } from "../../../../framework/shell/ui/turn.ts"
 import { WorkbenchSegments } from "babavoss/kit/index.ts"
 import { State, States } from "./frame.tsx"
 

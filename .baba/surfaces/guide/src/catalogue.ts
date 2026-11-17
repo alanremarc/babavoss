@@ -1,8 +1,8 @@
 // The guide's catalogue: every specimen, once, in the group and section it belongs to, with the framework's files it shows
 // and the states it is shown in. Pure data, which the surface lists and the page draws; a specimen's path is
 // /GROUP/ENTRY. A file of the kit's components or layouts that no entry names fails the guide's spec.
-import { PRESETS } from "babavoss/kit/theme.ts"
-import { MOVES } from "babavoss/shell/ui/gaze.ts"
+import { PRESETS } from "babavoss/kit/index.ts"
+import { MOVES } from "../../../../framework/shell/ui/gaze.ts"
 
 export type Entry = { readonly id: string; readonly title: string; readonly files: readonly string[]; readonly states: readonly string[] }
 export type Section = { readonly title: string; readonly entries: readonly Entry[] }

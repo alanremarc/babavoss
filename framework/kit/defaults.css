@@ -37,7 +37,8 @@
               border, input, ring          lines, field outlines, the focus ring
               sidebar                      the shell's chrome: the tab strip, side panels
               chart-1 … chart-5            series in a chart, in order: a ramp of the accent, light to dark
-   type       badge 9px, meta 11px, body 12px (the frame's default), large 13px; Tailwind's sm and up for headings
+   type       badge 9px, meta 11px, body 12px (the frame's default), large 13px: the kit and the shell use these four alone;
+              a surface may take Tailwind's sm and up for its headings
    font       sans (Inter), heading, mono
    radius     sm, md, lg (= --radius), xl, 2xl, 3xl, 4xl
    frame      menubar, bar, row: heights of a compact header, a bar, a row or an icon button;

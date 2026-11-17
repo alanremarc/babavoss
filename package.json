@@ -17,9 +17,11 @@
     "babavoss": "./bin/baba.ts"
   },
   "exports": {
-    "./core/*": "./framework/core/*",
-    "./shell/*": "./framework/shell/*",
-    "./kit/*": "./framework/kit/*",
+    "./core/index.ts": "./framework/core/index.ts",
+    "./core/config.ts": "./framework/core/config.ts",
+    "./kit/index.ts": "./framework/kit/index.ts",
+    "./shell/ui/index.tsx": "./framework/shell/ui/index.tsx",
+    "./shell/ui/styles.css": "./framework/shell/ui/styles.css",
     "./package.json": "./package.json"
   },
   "dependencies": {

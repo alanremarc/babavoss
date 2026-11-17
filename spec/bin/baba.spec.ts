@@ -87,6 +87,30 @@ test("new makes a surface from the template, with a passing spec, and the root i
   expect(spec.stderr).toContain("3 pass")
 })
 
+test("a project imports the framework by its entries alone: a new surface's types check, the root's page builds with its styles, and a path not exported does not resolve", () => {
+  const out = mkdtempSync(join(tmpdir(), "baba-page-"))
+  const page = join(baba, "surfaces/entries/ui/index.tsx")
+  const check = () => spawnSync(process.execPath, ["check"], { cwd: baba, encoding: "utf8" })
+  const build = () => spawnSync(process.execPath, ["node_modules/babavoss/framework/shell/scripts/build.ts", ".root", out], { cwd: baba, encoding: "utf8" })
+
+  try {
+    expect(run(["new", "entries"]).status).toBe(0)
+    expect(check().status, check().stdout).toBe(0)
+
+    const built = build()
+
+    expect(built.status, built.stderr).toBe(0)
+    expect(readdirSync(out).some((name) => name.endsWith(".css"))).toBe(true)
+    writeFileSync(page, `${readFileSync(page, "utf8")}\nimport { cn } from "babavoss/kit/cn.ts"\nexport const merged = cn("a")\n`)
+    expect(check().status).not.toBe(0)
+    expect(build().stderr).toContain('Could not resolve: "babavoss/kit/cn.ts"')
+  } finally {
+    rmSync(join(baba, "surfaces/entries"), { recursive: true, force: true })
+    rmSync(out, { recursive: true, force: true })
+    run(["provision"])
+  }
+}, 60_000)
+
 test("provision generates the root from the surfaces that are there, from anywhere in the project", () => {
   expect(run(["new", "reel-maker"]).status).toBe(0)
   expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('"reel-maker": () => import(')

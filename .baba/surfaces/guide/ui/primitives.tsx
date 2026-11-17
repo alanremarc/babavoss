@@ -60,8 +60,8 @@ import {
   useNarrow,
   varsOf,
   type Theme,
+  Toggle,
 } from "babavoss/kit/index.ts"
-import { Toggle } from "babavoss/kit/components/toggle.tsx"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 

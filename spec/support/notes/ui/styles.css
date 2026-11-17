@@ -1,4 +1,4 @@
 /* The notes fixture uses the kit's design language. */
-@import "babavoss/kit/styles.css";
+@import "../../../../framework/kit/styles.css";
 
 @source ".";

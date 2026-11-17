@@ -1,7 +1,7 @@
 // A trace, shadcn's: one line of what an agent did, which opens onto its detail.
 import * as React from "react"
 import { ChevronRightIcon } from "lucide-react"
-import { cn } from "babavoss/kit/cn.ts"
+import { cn } from "babavoss/kit/index.ts"
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible.tsx"
 

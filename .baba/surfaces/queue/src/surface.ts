@@ -6,8 +6,7 @@
 // writes through to it, so a second tab shows the same work and a closed one loses nothing. A tab keeps a copy of the work
 // as it last heard it, so it shows at once, and a new one says it is reading until it first hears it; a tab kept from
 // before brings its issues into the record once (migrate.ts).
-import { action, admit, detail, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
-import { sessionDir } from "babavoss/core/state/session-dir.ts"
+import { action, admit, detail, sessionDir, surface, view, type Call, type Surface, type Update } from "babavoss/core/index.ts"
 import { adopt, isLegacy } from "./migrate.ts"
 import { openOnly, outline, type Elsewhere, type Place } from "./outline.ts"
 import { fileIn, store as kept, type Store } from "./store.ts"

@@ -1,6 +1,6 @@
 // A message, shadcn's: one voice of a conversation, its header, content and footer.
 import * as React from "react"
-import { cn } from "babavoss/kit/cn.ts"
+import { cn } from "babavoss/kit/index.ts"
 
 function MessageGroup({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="message-group" className={cn("flex min-w-0 flex-col gap-1.5", className)} {...props} />

@@ -6,8 +6,7 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { findService, pageLink, SERVICE_HEADER, serviceClient, type Json } from "babavoss/core/index.ts"
-import { sessionEnv } from "babavoss/core/harness/index.ts"
+import { findService, pageLink, SERVICE_HEADER, serviceClient, sessionEnv, type Json } from "babavoss/core/index.ts"
 
 /** The checkout a run is a copy of: where, at which commit, and the paths that differed from it, changed or added. */
 export type Checkout = { from: string; commit: string; dirty: string[] }

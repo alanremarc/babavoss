@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "bun:test"
 import { BUILT, shellUi, buildUi, migrated, withSettings } from "../../framework/shell/src/hosting.ts"
 import { readSettings, writeSettings } from "../../framework/shell/settings/src/store.ts"
 import { DEFAULTS } from "../../framework/shell/settings/src/settings.ts"
+import { copyNotes } from "../support/notes.ts"
 
 const dirs: string[] = []
 
@@ -55,7 +56,7 @@ for (const root of ["spec/support/notes"]) {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-root-")))
 
     dirs.push(dir)
-    for (const name of ["ui", "src"]) cpSync(resolve(root, name), join(dir, name), { recursive: true })
+    copyNotes(dir, ["ui", "src"])
     symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
     const serve = async () => {
@@ -146,7 +147,7 @@ it("builds a page with one React, the framework's, where the page's own packages
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-react-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  copyNotes(dir, ["ui", "src"])
   // As a library installed beside the surfaces may leave it: a copy of React of their own, and the framework's own.
   mkdirSync(join(dir, "node_modules"))
   for (const name of readdirSync("node_modules"))
@@ -168,7 +169,7 @@ it("refuses to build a shell page that imports no stylesheet, and says what to i
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  copyNotes(dir, ["ui", "src"])
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
   writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
 
@@ -179,7 +180,7 @@ it("serves the last page that built while the page does not build, through a rel
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-broken-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  copyNotes(dir, ["ui", "src"])
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
   const main = join(dir, "ui/main.tsx")
