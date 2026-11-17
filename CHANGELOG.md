@@ -2,6 +2,19 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.70.0
+
+A runtime stays up for what woke it, in place of 30 minutes after any request.
+
+- A session's start, resume or compaction keeps it 5 minutes. The person's message, the agent's commands, a hook after a tool call and the person's actions on the page keep it 30 minutes. A page that only watches no longer keeps it up. The session's end leaves 1 minute.
+- It sleeps, its state kept, once that time is spent and nothing runs; any command wakes it. A restart keeps the time that was left.
+- `<word> sleep` puts the root to sleep when the agent's work with the surfaces is over; baba's words say so. `close` still works and means the same.
+- The page says when the runtime is asleep: "Asleep; it wakes when the agent next works with it". It finds the runtime again once it is back, and never wakes it.
+- Breaking, for code that starts a runtime itself: the `idleMs` option is gone, use `strengths: { weak, strong, end }` in milliseconds or `BABAVOSS_WAKE_MS=weak=…,strong=…,end=…`; `IDLE_MS` is no longer exported; the door's option `touched` is `woken(signal)`.
+- The client's `VERSION` is 17 and replaces itself.
+
+No surface code needs to change.
+
 ## 0.69.0
 
 Breaking: the package exports only its entries. A surface's source and specs import `babavoss/core/index.ts`; a page `babavoss/kit/index.ts` and `babavoss/shell/ui/index.tsx`; `.baba/baba.config.ts` imports `babavoss/core/config.ts`; the generated root's stylesheet `babavoss/shell/ui/styles.css`. Any other path into the package no longer resolves. Search the surfaces for `babavoss/` and change each import:

@@ -128,6 +128,10 @@ hook       Where the harness lets context in: at a session's start, with each me
 skill      The same words where a harness has no hooks, and the way back in.
 adapter    The one place that knows a harness: how to set it up, start a session in it, and read its stream. A hook
            names its adapter, so a runtime knows which harness its agent runs in.
+wake       Every request wakes the runtime with a strength: a session's start weakly, a few minutes; the person's message,
+           the agent's command and the person's action strongly, half an hour; a page that only watches, not at all. It
+           sleeps, its state kept, once the furthest is spent and nothing runs, or at once when the agent says `sleep`
+           at the end of its work; the session's end leaves a minute. Any command wakes it; the page never does.
 ```
 
 ### A project
