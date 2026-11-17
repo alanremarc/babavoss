@@ -81,7 +81,7 @@ const addFrom = action({
 })
 const draft = action({
   name: "draft",
-  description: "Suggest an issue the person has not asked for, as a draft: title and about as for add; it waits for their approval on the page",
+  description: "Suggest an issue the person has not asked for, as a draft: title and about as for add; it is theirs to look at, on the page or with you",
   subject: {},
   inputs: { title: "string", about: "string" },
   update: (w: Work, args): Result => made(w, args, "draft"),
@@ -108,10 +108,9 @@ const narrate = action({
 })
 const approve = action({
   name: "approve",
-  description: ({ n }) => `Approve draft ${n}: it joins the backlog`,
+  description: ({ n }) => `Approve draft ${n} into the backlog: the person does on the page, and you do once they tell you to go ahead with it`,
   subject: { n: "number" },
   inputs: {},
-  ask: true,
   update: (w: Work, { n }): Result => ({ model: moved(w, n, (issue) => ({ ...issue, status: "backlog" })), notices: [said(w, n, "approved: it joins the backlog")] }),
 })
 const describe = action({
@@ -140,7 +139,7 @@ const post = action({
 })
 const start = action({
   name: "start",
-  description: ({ n }) => `Give issue ${n} to a lane, 1 to ${LANES}, when a subagent begins on it`,
+  description: ({ n }) => `Give issue ${n} to a lane, 1 to ${LANES}, when a subagent begins on it; a draft the person said to build starts the same way`,
   subject: { n: "number" },
   inputs: { lane: "number" },
   update(w: Work, { n, lane }): Result {
@@ -155,7 +154,7 @@ const start = action({
 })
 const done = action({
   name: "done",
-  description: ({ n }) => `Mark issue ${n} done, once it is merged into main and the person can see it`,
+  description: ({ n }) => `Mark issue ${n} done: its work is merged into main, where the person can see it`,
   subject: { n: "number" },
   inputs: {},
   update: (w: Work, { n }): Result => ({ model: moved(w, n, ({ lane: _lane, ...issue }) => ({ ...issue, status: "done" })), notices: [said(w, n, "is done")] }),
@@ -316,11 +315,12 @@ function whole(w: Work, issue: Issue) {
     iterations: issue.iterations.map((x, i) => ({ n: i + 1, ...x })),
     ...(issue.updates?.length && { updates: issue.updates }),
     menu,
-    ...(issue.status === "draft" && { attention: { who: "person", why: "to approve or drop this draft" }, approve: approve.bind(subject) }),
+    ...(issue.status === "draft" && { attention: { who: "person", why: "to look at this draft" }, approve: approve.bind(subject) }),
     describe: describe.bind(subject),
     note_: note.bind(subject),
-    ...(issue.status === "backlog" && { start: start.bind(subject) }),
-    ...(issue.status === "lane" && { post: post.bind(subject), done: done.bind(subject) }),
+    ...((issue.status === "backlog" || issue.status === "draft") && { start: start.bind(subject) }),
+    ...(issue.status === "lane" && { post: post.bind(subject) }),
+    ...(issue.status !== "done" && { done: done.bind(subject) }),
     ...((issue.status === "lane" || issue.status === "done") && { back: back.bind(subject) }),
     move: move.bind(subject),
     link: link.bind(subject),
@@ -341,11 +341,12 @@ const pages = view(actions, {
     return {
       title: "Queue",
       how:
-        "Keep this true as the work moves, each in one move: add an issue the person asks for, or draft one you would suggest and leave it " +
-        "until they approve it on the page; add_from and draft_from also name what it came out of and its narrative, an effort going its " +
-        "own way. Start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into " +
-        "main; tell a lane's worker to post to its issue as it goes. When an issue needs another pass, iterate it with why, then decide " +
-        `and conclude it. An issue's path has the rest and what can be done with it. One issue per lane, ${LANES} lanes; the backlog's top is next.`,
+        "The session's work as the person follows it, so it is worth keeping true as the work moves. What the person asks for is added " +
+        "as an issue; what you would suggest is a draft, theirs to look at. Once they say to go ahead with a draft, on the page or in " +
+        "the conversation, it is as good as approved: start it like any issue. A lane is a subagent delivering one issue; a note says " +
+        "where an issue stands, and its worker can post to it as it goes. Done means merged into main. add_from and draft_from also name " +
+        "what an issue came out of and its narrative, an effort going its own way; another pass at an issue is an iteration, with why, " +
+        `what was decided and how it ended. An issue's path has the rest. There are ${LANES} lanes; the backlog's top is next.`,
       lanes: LANES,
       free: Array.from({ length: LANES }, (_, i) => i + 1).filter((lane) => !lanes.some((issue) => issue.lane === lane)),
       narratives: w.narratives.map((x) => {
@@ -355,7 +356,7 @@ const pages = view(actions, {
       }),
       // What is done is detail: read at the tab's path, and only counted in the shell's present.
       issues: [...[...lanes, ...backlog, ...drafts].map(row), ...finished.map((issue) => detail(row(issue)))],
-      ...(drafts.length && { attention: { who: "person", why: `to approve or drop ${drafts.length} draft${drafts.length > 1 ? "s" : ""}` } }),
+      ...(drafts.length && { attention: { who: "person", why: `to look at ${drafts.length} draft${drafts.length > 1 ? "s" : ""}` } }),
       add: add.bind({}),
       add_from: addFrom.bind({}),
       draft: draft.bind({}),

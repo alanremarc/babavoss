@@ -3,7 +3,7 @@
 // the archive is the same over the issues that are done, grouped by narrative; the narratives are a list, and a page for
 // each with its issues as an outline (narratives.tsx), from which an issue opens in the list. Which view and what is
 // selected is the tab's route, the same as the views' paths, so a refresh and the agent's pointing land on it: /issues/N
-// in the list, below /archive in the archive, /narratives, /narratives/ID and /narratives/ID/open. The person approves or drops a draft here;
+// in the list, below /archive in the archive, /narratives, /narratives/ID and /narratives/ID/open. The person approves or drops a draft here, or tells the agent to;
 // anything else, they tell the agent. `drawers` ask for an issue to add or draft: a title, about as markdown, and where
 // there is room for them, what it came out of and its narrative.
 import { useEffect, useState } from "react"
@@ -45,7 +45,7 @@ function IssueDrawer({ handle, view, submit, close }: DrawerProps) {
         void send()
       }}
     >
-      <p className="text-muted-foreground">{drafting ? "A draft waits for your approval before it joins the backlog." : "It joins the bottom of the backlog."}</p>
+      <p className="text-muted-foreground">{drafting ? "A draft is a suggestion: approve it here, or tell the agent to go ahead with it." : "It joins the bottom of the backlog."}</p>
       <label className="flex flex-col gap-1">
         <span className="text-meta text-muted-foreground">Title</span>
         <Input autoFocus placeholder="A short imperative title" value={title} onChange={(e) => setTitle(e.target.value)} />
