@@ -10,6 +10,13 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 - Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, kit, bin, skill. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
 - Every file and concept earns its keep.
 
+## The queue
+
+How this project's agent keeps its queue, `.baba/surfaces/queue`. The surface says only how it works; this is what to do with it.
+
+- Keep the queue true as the work moves: add an issue for what the person asks for; what you would suggest is a draft, theirs to approve; once they say go ahead with a draft, start it.
+- Start an issue in a free lane when a subagent takes it, note where it stands, and mark it done only once its work is merged into main. The backlog's top is next.
+
 ## Layout
 
 ```text
