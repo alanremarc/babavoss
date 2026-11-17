@@ -62,7 +62,10 @@ function init(args: string[]) {
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })
 
   if (install.exitCode !== 0) throw new Refusal(`cannot install the framework; allow bun to reach github.com and the package registry, then run: cd '${baba}' && bun install`)
-  console.log(`${baba} is made. A new session of the harness begins with it: ask there for a surface, or with /baba`)
+  console.log(
+    `${baba} is made, with no surfaces yet. A new session of the harness starts its shell; outside one, \`bun run baba start\` there does. ` +
+      "How a surface is made: node_modules/babavoss/skill/making-surfaces.md, there.",
+  )
 }
 
 async function create(args: string[]) {
