@@ -65,15 +65,13 @@ test("a note says where an issue stands, an issue can go back, and a dropped one
   expect(await agent.call("/", "add", { title: " ", about: "Why" })).toEqual({ outcome: "refused", reason: "An issue needs a title and a line about it" })
 })
 
-test("what the agent suggests is a draft, which only the person approves into the backlog", async () => {
+test("what the agent suggests is a draft, the person's to look at: they approve it on the page, or the agent does once told to go ahead", async () => {
   const { agent, person } = await tab()
 
   await agent.call("/", "draft", { title: "Rename the picker", about: "It reads as a list" })
   expect(rows(agent.sees())).toEqual([[1, "draft", undefined]])
-  expect(agent.sees()).toMatchObject({ attention: { who: "person", why: "to approve or drop 1 draft" } })
+  expect(agent.sees()).toMatchObject({ attention: { who: "person", why: "to look at 1 draft" } })
   expect(agent.sees("/issues/1")).toMatchObject({ attention: { who: "person" } })
-  expect(await agent.call("/issues/1", "approve", { n: 1 })).toMatchObject({ outcome: "refused" })
-  expect(await agent.call("/issues/1", "start", { n: 1, lane: 1 })).toMatchObject({ outcome: "refused" })
 
   agent.told()
   await person.call("/issues/1", "approve", { n: 1 })
@@ -81,6 +79,22 @@ test("what the agent suggests is a draft, which only the person approves into th
   expect(agent.told()).toContain('/issues/1: status "draft" → "backlog"')
   expect(agent.sees()).not.toHaveProperty("attention")
   expect(agent.noticed()).toEqual(["Draft 1, Rename the picker, approved: it joins the backlog"])
+
+  await agent.call("/", "draft", { title: "A dock", about: "Why" })
+  await agent.call("/issues/2", "approve", { n: 2 })
+  expect(rows(agent.sees())).toEqual([[1, "backlog", undefined], [2, "backlog", undefined]])
+})
+
+test("a draft the person said to build is started as it is, and an issue is marked done from wherever it stands", async () => {
+  const { agent } = await tab()
+
+  await agent.call("/", "draft", { title: "One", about: "Why" })
+  await agent.call("/", "draft", { title: "Two", about: "Why" })
+  await agent.call("/issues/1", "start", { n: 1, lane: 1 })
+  expect(rows(agent.sees())).toEqual([[1, "lane", 1], [2, "draft", undefined]])
+  await agent.call("/issues/2", "done", { n: 2 })
+  expect(agent.sees("/issues/2")).toMatchObject({ status: "done" })
+  expect(agent.sees()).not.toHaveProperty("attention")
 })
 
 test("what happens to an issue is noticed: started, done, dropped; the agent is not told back what its own calls did", async () => {
@@ -334,8 +348,9 @@ test("removing the session's file begins its work again, in every tab that is op
   try {
     await first.agent.call("/", "add", { title: "One", about: "Why" })
     rmSync(file)
-    // The file's watcher hears it removed when the system tells it, which is no set time.
-    for (let waited = 0; rows(second.person.sees()).length && waited < 3000; waited += 20) await new Promise((done) => setTimeout(done, 20))
+    // Each tab's watcher hears it removed when the system tells it, which is no set time, and later under load.
+    for (let waited = 0; (rows(first.person.sees()).length || rows(second.person.sees()).length) && waited < 10_000; waited += 20)
+      await new Promise((done) => setTimeout(done, 20))
     await first.world.idle()
     expect(rows(first.person.sees())).toEqual([])
     expect(rows(second.person.sees())).toEqual([])
@@ -344,4 +359,4 @@ test("removing the session's file begins its work again, in every tab that is op
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
-})
+}, 15_000)

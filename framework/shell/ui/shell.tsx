@@ -13,7 +13,8 @@
 // name, else /tabs/N, and /tabs/N of a tab at /NAME stands for it. When the
 // agent points to a place, the page goes there, or offers it while the person is busy (pointing.ts). The person's settings,
 // their own surface's that comes with the shell, are applied here: the appearance and where the rail stands, the shortcuts
-// (shortcuts.ts) and the mark's animation (appearance.ts). It loads no stylesheet: the root's page does, one, which
+// (shortcuts.ts) and the mark's animation (appearance.ts); and with the machine they make the conventions, handed to every
+// page, home's too (src/conventions.ts). It loads no stylesheet: the root's page does, one, which
 // imports the shell's styles.css, so the shell's styles are compiled once.
 import { Activity, Component, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ComponentType, type ReactNode } from "react"
 import type { Args, Handle, View } from "../../core/index.ts"
@@ -32,7 +33,7 @@ import { useSettings } from "./appearance.ts"
 import { choiceIn, nameOf, numbersOf, type Rail as Placed } from "../settings/src/settings.ts"
 import { Logo } from "./mark.tsx"
 import { useShortcuts } from "./shortcuts.ts"
-import { ChangesContext, Ready, ServicesContext, TabProvider, tabCache, type ShellServices } from "./tab.tsx"
+import { ChangesContext, ConventionsContext, Ready, ServicesContext, TabProvider, tabCache, type ShellServices } from "./tab.tsx"
 import { boot, booted, servedAs } from "./boot.ts"
 import { Overlay, PointedAlert, RefusedAlert, useSaid, type Connected } from "./connection.tsx"
 import { cachesBy } from "./live.ts"
@@ -78,7 +79,7 @@ class Failing extends Component<{ children: ReactNode }, { error?: string }> {
 
 export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry; home?: ComponentType<HomeProps> }) {
   const surfaces = useMemo(() => ({ ...project, ...OWN }), [project])
-  const { settings, mode, again: settingsAgain } = useSettings()
+  const { settings, mode, conventions, again: settingsAgain } = useSettings()
   const placed = settings.appearance.rail
   // What the page was served with is its first frame: the shell at /, the turn, the notices, and the shown tab's views.
   const [root, setRoot] = useState<RootView | undefined>(() => booted<RootView>("/"))
@@ -530,140 +531,142 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   return (
     <ChangesContext.Provider value={stream}>
       <ServicesContext.Provider value={services}>
-        <div className={cn("flex h-dvh min-h-64 overflow-hidden text-xs", SIDES[placed.side])}>
-          <Rail placed={placed} mark={rail.mark} tabs={rail.tabs} active={active} {...(drawer !== undefined && { drawer })} select={(key) => go(key)} toggle={toggle} />
-          <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            {/* Over the content, never above it: nothing that comes or goes here moves the page. */}
-            <Overlay>
-              {error && <RefusedAlert reason={error} dismiss={() => setError("")} />}
-              {offer && offered && (
-                <PointedAlert
-                  label={tabs.find((t) => t.row.at === offered.key)?.label ?? offered.key}
-                  route={offered.route}
-                  go={() => go(offered.key, offered.route)}
-                  dismiss={() => setOffer(undefined)}
+        <ConventionsContext.Provider value={conventions}>
+          <div className={cn("flex h-dvh min-h-64 overflow-hidden text-xs", SIDES[placed.side])}>
+            <Rail placed={placed} mark={rail.mark} tabs={rail.tabs} active={active} {...(drawer !== undefined && { drawer })} select={(key) => go(key)} toggle={toggle} />
+            <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              {/* Over the content, never above it: nothing that comes or goes here moves the page. */}
+              <Overlay>
+                {error && <RefusedAlert reason={error} dismiss={() => setError("")} />}
+                {offer && offered && (
+                  <PointedAlert
+                    label={tabs.find((t) => t.row.at === offered.key)?.label ?? offered.key}
+                    route={offered.route}
+                    go={() => go(offered.key, offered.route)}
+                    dismiss={() => setOffer(undefined)}
+                  />
+                )}
+              </Overlay>
+              {active === HOME && (
+                <TabContent address={HOME} hidden={false}>
+                  <Failing>
+                    <HomePage
+                      title={title}
+                      {...((root?.missing ?? root?.empty) && { notice: root?.missing ?? root?.empty })}
+                      surfaces={(root?.surfaces ?? []).map((s) => ({
+                        name: s.name,
+                        label: named(s.name),
+                        description: s.description ?? "",
+                        icon: icons[s.name],
+                        ...(s.broken !== undefined && { broken: s.broken }),
+                        ...(s.open && s.broken === undefined && { open: () => void open(s.open!) }),
+                      }))}
+                      tabs={homeTabs}
+                      foot={<Foot {...(turn?.harness && { harness: turn.harness })} />}
+                    />
+                  </Failing>
+                </TabContent>
+              )}
+              {rows.map((row) => {
+                const Page = surfaces[row.surface]?.default
+                const visible = active === row.at
+
+                return (
+                  // By number too: a tab opened again at its surface's name is another, drawn anew.
+                  <TabContent key={`${row.at} ${row.n}`} address={row.at} hidden={!visible}>
+                    <Activity mode={visible ? "visible" : "hidden"}>
+                      {!visible && !drawn.has(row.at) ? null : row.broken !== undefined ? (
+                        <TabBroken why={row.broken} />
+                      ) : Page ? (
+                        <Failing>
+                          <TabProvider
+                            address={row.at}
+                            surface={row.surface}
+                            route={routes[row.at] ?? "/"}
+                            active={visible}
+                            navigate={(route) => go(row.at, route)}
+                            reload={reloads[row.at] ?? 0}
+                          >
+                            <Actions
+                              asks={asks}
+                              title={row.title}
+                              name={row.surface}
+                              drawers={surfaces[row.surface]?.drawers}
+                              start={(action) => start(row, action)}
+                              {...(asking?.at === row.at && { asking: asking.action })}
+                              answered={() => setAsking(undefined)}
+                              {...(refused?.at === row.at && { refused: refused.reason })}
+                              dismiss={() => setRefused(undefined)}
+                            >
+                              <Ready>
+                                <Page />
+                              </Ready>
+                            </Actions>
+                          </TabProvider>
+                        </Failing>
+                      ) : (
+                        <TabNoPage surface={row.surface} />
+                      )}
+                    </Activity>
+                  </TabContent>
+                )
+              })}
+              {drawer === HOME && active === HOME && (
+                <Drawer
+                  label={title}
+                  side={drawerSide(placed)}
+                  home
+                  menu={{
+                    items: homeMenu({ view: root as View | undefined, title, tabs: homeTabs, start: startHome, navigate: (at) => go(placeOf(at).key, placeOf(at).route) }),
+                    empty: "Nothing to do here yet",
+                  }}
+                  rows={withUnheard(shellEntries(all.rows), known)}
+                  loaded={all.loaded}
+                  {...(all.earlier && { more: all.more })}
+                  stay={stay}
+                  {...(homePinned && { pinned: homePinned })}
+                  waiting={waitingRows(all.rows, standingNow.waiting)}
+                  go={(entry) => {
+                    closeDrawer()
+                    if (entry.at && entry.at !== "/") go(placeOf(entry.at).key, placeOf(entry.at).route)
+                  }}
+                  goThere={(at) => go(placeOf(at).key, placeOf(at).route)}
+                  reload={() => {}}
+                  close={closeDrawer}
                 />
               )}
-            </Overlay>
-            {active === HOME && (
-              <TabContent address={HOME} hidden={false}>
-                <Failing>
-                  <HomePage
-                    title={title}
-                    {...((root?.missing ?? root?.empty) && { notice: root?.missing ?? root?.empty })}
-                    surfaces={(root?.surfaces ?? []).map((s) => ({
-                      name: s.name,
-                      label: named(s.name),
-                      description: s.description ?? "",
-                      icon: icons[s.name],
-                      ...(s.broken !== undefined && { broken: s.broken }),
-                      ...(s.open && s.broken === undefined && { open: () => void open(s.open!) }),
-                    }))}
-                    tabs={homeTabs}
-                    foot={<Foot {...(turn?.harness && { harness: turn.harness })} />}
-                  />
-                </Failing>
-              </TabContent>
+              {shownTab && shownTab.row.at === active && (
+                <TabDrawer
+                  key={shownTab.row.at}
+                  tab={shownTab}
+                  side={drawerSide(placed)}
+                  paged={!!surfaces[shownTab.row.surface]?.default}
+                  route={routes[shownTab.row.at] ?? "/"}
+                  feed={all}
+                  stay={stay}
+                  notices={noticesIn(shownTab.row.at, unseen)}
+                  controls={controls(shownTab.row)}
+                  start={(action) => start(shownTab.row, action)}
+                  navigate={(route) => go(shownTab.row.at, route)}
+                  reload={() => setReloads((r) => ({ ...r, [shownTab.row.at]: (r[shownTab.row.at] ?? 0) + 1 }))}
+                  close={closeDrawer}
+                />
+              )}
+            </main>
+            <Bubbles
+              bubbles={bubbles}
+              away={awayOf(placed)}
+              open={openDrawer}
+              go={(at) => go(placeOf(at).key, placeOf(at).route)}
+              dismiss={(key, id) => setBubbles((was) => gone(was, key, id))}
+            />
+            {asking?.at === HOME && (
+              <Suspense fallback={null}>
+                <Inputs action={asking.action} {...(root && { view: root as View })} call={answerHome} close={() => setAsking(undefined)} />
+              </Suspense>
             )}
-            {rows.map((row) => {
-              const Page = surfaces[row.surface]?.default
-              const visible = active === row.at
-
-              return (
-                // By number too: a tab opened again at its surface's name is another, drawn anew.
-                <TabContent key={`${row.at} ${row.n}`} address={row.at} hidden={!visible}>
-                  <Activity mode={visible ? "visible" : "hidden"}>
-                    {!visible && !drawn.has(row.at) ? null : row.broken !== undefined ? (
-                      <TabBroken why={row.broken} />
-                    ) : Page ? (
-                      <Failing>
-                        <TabProvider
-                          address={row.at}
-                          surface={row.surface}
-                          route={routes[row.at] ?? "/"}
-                          active={visible}
-                          navigate={(route) => go(row.at, route)}
-                          reload={reloads[row.at] ?? 0}
-                        >
-                          <Actions
-                            asks={asks}
-                            title={row.title}
-                            name={row.surface}
-                            drawers={surfaces[row.surface]?.drawers}
-                            start={(action) => start(row, action)}
-                            {...(asking?.at === row.at && { asking: asking.action })}
-                            answered={() => setAsking(undefined)}
-                            {...(refused?.at === row.at && { refused: refused.reason })}
-                            dismiss={() => setRefused(undefined)}
-                          >
-                            <Ready>
-                              <Page />
-                            </Ready>
-                          </Actions>
-                        </TabProvider>
-                      </Failing>
-                    ) : (
-                      <TabNoPage surface={row.surface} />
-                    )}
-                  </Activity>
-                </TabContent>
-              )
-            })}
-            {drawer === HOME && active === HOME && (
-              <Drawer
-                label={title}
-                side={drawerSide(placed)}
-                home
-                menu={{
-                  items: homeMenu({ view: root as View | undefined, title, tabs: homeTabs, start: startHome, navigate: (at) => go(placeOf(at).key, placeOf(at).route) }),
-                  empty: "Nothing to do here yet",
-                }}
-                rows={withUnheard(shellEntries(all.rows), known)}
-                loaded={all.loaded}
-                {...(all.earlier && { more: all.more })}
-                stay={stay}
-                {...(homePinned && { pinned: homePinned })}
-                waiting={waitingRows(all.rows, standingNow.waiting)}
-                go={(entry) => {
-                  closeDrawer()
-                  if (entry.at && entry.at !== "/") go(placeOf(entry.at).key, placeOf(entry.at).route)
-                }}
-                goThere={(at) => go(placeOf(at).key, placeOf(at).route)}
-                reload={() => {}}
-                close={closeDrawer}
-              />
-            )}
-            {shownTab && shownTab.row.at === active && (
-              <TabDrawer
-                key={shownTab.row.at}
-                tab={shownTab}
-                side={drawerSide(placed)}
-                paged={!!surfaces[shownTab.row.surface]?.default}
-                route={routes[shownTab.row.at] ?? "/"}
-                feed={all}
-                stay={stay}
-                notices={noticesIn(shownTab.row.at, unseen)}
-                controls={controls(shownTab.row)}
-                start={(action) => start(shownTab.row, action)}
-                navigate={(route) => go(shownTab.row.at, route)}
-                reload={() => setReloads((r) => ({ ...r, [shownTab.row.at]: (r[shownTab.row.at] ?? 0) + 1 }))}
-                close={closeDrawer}
-              />
-            )}
-          </main>
-          <Bubbles
-            bubbles={bubbles}
-            away={awayOf(placed)}
-            open={openDrawer}
-            go={(at) => go(placeOf(at).key, placeOf(at).route)}
-            dismiss={(key, id) => setBubbles((was) => gone(was, key, id))}
-          />
-          {asking?.at === HOME && (
-            <Suspense fallback={null}>
-              <Inputs action={asking.action} {...(root && { view: root as View })} call={answerHome} close={() => setAsking(undefined)} />
-            </Suspense>
-          )}
-        </div>
+          </div>
+        </ConventionsContext.Provider>
       </ServicesContext.Provider>
     </ChangesContext.Provider>
   )

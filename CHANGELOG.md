@@ -2,6 +2,60 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.67.0
+
+Breaking: the shell no longer reloads its code under running work. There are two modes, each simple.
+
+- **Normal mode, the default.** A runtime runs the code it started with; it no longer runs under `bun --hot`. After changing `.baba/` or taking a release, run `<word> restart`. Until then `/` and the hooks say `code: changed on disk since instance … started; it runs once restarted`.
+- **Restart with work under way drains.** The runtime takes no new calls, restarts once the work has ended, and the command exits at once, naming the instance. `<word> follow ID [SECONDS]` returns when the next instance answers, or at once where that instance is already gone. `<word> close` cuts the work instead.
+- **Dev mode.** `dev: true` in `.baba/baba.config.ts`, or `BABAVOSS_DEV=1` (`0` turns it off). Any change to the code the runtime loaded restarts it at once and cuts running commands; the next answer says what was cut. Use it while surfaces are being built.
+- A restart, in either mode, is a fresh process at the same address with the state as saved; an open page reloads itself.
+- The version told is the one running. The client's `VERSION` is 15 and replaces itself.
+- A runtime ends within a moment of its state directory being removed, so none is left behind by a deleted project.
+
+To adapt a project's surfaces:
+
+- A cut command sends no event: make long work resumable from the model, and do not count running jobs in the model.
+- Nothing on `globalThis` survives a reload any more.
+- A spec that starts a real runtime and expects an edit to be live sets `BABAVOSS_DEV=1`.
+- Decide the project's mode: set `dev: true` while its surfaces are being made, and leave it out otherwise.
+
+## 0.66.0
+
+Conventions: the shell hands every page, home included, how the person wants pages to be.
+
+- `motion`: `full` or `reduced`. `scale`: the text size, 1 by default. `side`: `left` or `right`, where a page's own sidebar stands. `rail`: where the shell's tabs stand. `mode`: `light` or `dark`, as shown.
+- Read them with `useConventions()` from `babavoss/shell/ui/index.tsx`, or in CSS: each stands on the page's root as `data-NAME`, a number also as `--NAME`, with the variants `motion-safe:`, `motion-reduce:`, `side-left:`, `side-right:`, `rail-left:`, `rail-right:`, `rail-top:` and `rail-bottom:`.
+- The kit follows them unasked: nothing animates where motion is reduced, and everything sized in rem follows the scale. `motion-safe:` and `motion-reduce:` now follow the person's setting, and the browser's preference only where there is none.
+- The settings gain `preferences`: `motion` (system, full, reduced), `scale` (0.9, 1, 1.1, 1.25, 1.5) and `side`, each with an action of its name at `/settings`, and a row under Appearance.
+- A page follows them by its own code. It is expected and never enforced: a page that follows none works as before.
+
+To adapt a project's surfaces: stand a page's sidebar at `side`, for example `side-left:flex-row-reverse` on its row with the border swapped; check `motion` before animating or scrolling smoothly in script; size text in rem, never px.
+
+## 0.65.0
+
+Breaking: the kit is shadcn's primitives with one layer of opinions, and nothing else. What it no longer holds, and what to use instead:
+
+- `Workbench`, `Plain`, `Welcome` and their types: draw the page in the surface's own `ui/`, with the kit's `WorkbenchToolbar`, `WorkbenchSpacer`, `WorkbenchSegments`, `WorkbenchPage` and `WorkbenchEmpty` where they fit; `useNarrow` stays too.
+- `WorkbenchButton`, `WorkbenchProperties`, `WorkbenchCode`, `WorkbenchInfo`, `WorkbenchPicker`, `WorkbenchMark`, `WorkbenchMeter`, `WorkbenchNotice`, `WorkbenchSection`, `WorkbenchFold`, `WorkbenchSetting`, `WorkbenchList`, `WorkbenchTree`, `WorkbenchSplitter`, `Dismiss`, and the types `WorkbenchAction`, `WorkbenchChoice`, `WorkbenchIcon`, `WorkbenchFacts`, `WorkbenchOption`, `WorkbenchRow`, `WorkbenchGroup`, `WorkbenchNode`: write what you use in the surface's own folder. For a fold, `bunx shadcn@latest add collapsible` in `.baba/`; for a splitter, the kit's `ResizableHandle`; for a picker, the kit's `DropdownMenu`.
+- From `babavoss/kit/layouts/menu.tsx`: `MenuItems`, `SearchMenu`, `MenuDropdown`, `MenuTriggers`, `ContextKit`, `DropdownKit`, `menuContent`, `menuRow`, the `Menu` type and `muted`. A menu of actions in a page is the kit's `DropdownMenu`. `MenuItem`, `filtered`, `matches` and `quietScroll` stay.
+- From `babavoss/kit/layouts/parts.tsx`: `SearchField` and the class constants `muted`, `ring`, `iconButton` and `bar`.
+- `Command…`: `bunx shadcn@latest add command` in `.baba/`. `Sheet`, `SheetContent`, `SheetTitle`: `bunx shadcn@latest add sheet`.
+- `Toasts`, `TOAST_MS`, `ToastItem`: `useShell().toast(text, at?)`, a bubble beside the tab.
+- The conversation set, `Thread…`, `useThreadDetail`, `Composer`, `ComposerCompletion`, `Message…`, `Bubble…`, `MessageScroller…`, `useMessageScroller`, `Trace…`, `Marker…`, `CodeBlock…`, `InputGroup…`, `Collapsible…`: it is the lab's own now. Copy what you use from this repository's `.baba/surfaces/lab/ui/components/` into the surface's own `ui/`, or add shadcn's own with its CLI. A copied message scroller needs `bun add @shadcn/react` in `.baba/`.
+- The files `babavoss/kit/components/{command,sheet,toast,thread,composer,bubble,message,message-scroller,trace,marker,code-block,collapsible,input-group}.tsx`, `babavoss/kit/layouts/{workbench,plain,welcome}.tsx` and `babavoss/kit/layouts/arrange.ts` are gone.
+- `cmdk` and `@shadcn/react` are no longer the package's dependencies: a project that imports either adds it to `.baba/`.
+- The `.markdown-body` styles are gone from the kit's CSS: a page that renders markdown with that class styles it itself.
+
+To adapt: run `bun check` in `.baba/`; each import it cannot find is in the list above.
+
+## 0.64.1
+
+- A tab's close, offered at `/`, names what runs in the tab beside its number: "close tab 3, Queue; its state is dropped". Home's menu, drawn from it, tells several tabs apart. The command is unchanged: `close n=3`.
+- docs/DESIGN.md says the rail and a tab's drawer, as built in 0.61.0.
+
+Nothing to adapt in a project's surfaces.
+
 ## 0.64.0
 
 - Home tells the person when the session's hooks are not heard, never heard or heard and gone quiet: a bubble beside the mark, kept in home's thread, a dot on the mark, and a line pinned in home's drawer that says what to do. The dot and the line clear when a hook is heard again. It begins when the runtime tells the agent its one line of the silence, never from a timer of the page's.

@@ -38,7 +38,7 @@ const pages = view<Model, never>([], {
 })
 
 export default surface<Model, never, never>({
-  description: "See the UI babavoss is built with, live: the mark, the design tokens, the kit's primitives and layouts and the shell's elements, each in its states. Use when the person wants to look at or iterate on how a piece of it looks.",
+  description: "See the UI babavoss is built with, live: the mark, the design tokens, the kit's primitives and the shell's elements, each in its states. Use when the person wants to look at or iterate on how a piece of it looks.",
   init: () => ({}),
   update: (m) => ({ model: m }),
   view: pages.view,

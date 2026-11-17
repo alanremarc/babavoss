@@ -65,7 +65,7 @@ ui         A surface's part of the page: its views, shown to the person.
    │  home · attention · notifications · turn · addresses│
    │  activity · frame · theme · settings · health       │
    └───────▲──────────┬──────────────────────┬───────────┘
-           │          │ present,             │ strip and frame,
+           │          │ present,             │ rail and drawers,
    a surface speaks   │ for the agent        │ for the person
    to the shell:
      facts at /   title, attention, broken
@@ -75,22 +75,27 @@ ui         A surface's part of the page: its views, shown to the person.
 ```text
 shell      The root surface, from the framework: the desktop. It holds every other surface as a tab.
 tab        An open surface; the same surface may be open in several.
-kit        What pages are built with: components, layouts, theming tokens.
+rail       The tabs, at a side of the page the person chooses; home's mark first, the newest beside it.
+drawer     A tab's panel, home's too: its menu drawn from its views, over its activity as a thread.
+kit        What pages are built with: primitives and theming tokens; it follows the conventions unasked.
+conventions  How the person wants pages to be, from their settings and the machine: motion, text scale, a sidebar's side,
+           where the rail stands, the mode. Handed to every page, which follows them by its own code; expected, never enforced.
 present    The shell at /: every open tab's facts.
 ```
 
 What the shell offers, it offers twice: on the page for the person, in the present for the agent.
 
 ```text
-home            the strip's first tab, under the mark: open a surface, switch to a tab
-attention       a surface says who it needs, and why: a dot on its tab; first in the present
-notifications   every notice: a toast that rests in the strip's activity; one line for the agent
+home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's own
+attention       a surface says who it needs, and why: a dot on its tab, the why pinned in its drawer; first in the present
+notifications   every notice: a bubble beside its tab for a moment, kept in the tab's thread; one line for the agent
 turn            whose move it is, said by the mark: its eyes look about while the agent works
 addresses       every place has a link, a tab by its surface's name, and the agent can point the person to it
-activity        who did what, across surfaces, a channel per tab: in the strip; read on demand by the agent
-frame           title, menus and a surface's actions, in the same place for every surface
+activity        who did what, kept with each tab and going with it: in its drawer; read on demand by the agent
+frame           title, menus and a surface's actions, in the same place for every surface: a tab's drawer
 theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
-settings        the person's own, the same in every session and project: appearance, shortcuts, the mark's motion
+settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
+                follow by convention, shortcuts, the mark's motion
 health          what is broken, and why; a page that lost its runtime says so and finds it again
 ```
 
@@ -146,7 +151,8 @@ framework  One version, named in .baba/. The agent is told of a later one, takes
 ```text
 shared    both act on the surface, at any time. A change by the person is a move to take up, never to undo
 learned   a surface is all an agent learns of it: its description to choose it, its views to work it
-dynamic   a surface made, changed or removed is in the running shell at once
+dynamic   a surface made, changed or removed runs once the shell restarts: at once in dev mode, else when the agent
+          restarts it, the present saying the code changed until then
 soft      hooks add context and never block; hard limits stay the person's, in the harness
 ```
 

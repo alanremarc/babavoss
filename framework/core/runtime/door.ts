@@ -11,6 +11,7 @@
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
 //   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it
+//   POST /_/restart text/plain      the runtime restarts, at once or once its work ended (runtime.ts): 200 at once, 202 draining
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view. And with what it shows first, so its first frame is whole: an island of JSON, the root's state as the
@@ -21,8 +22,8 @@
 // the session's page key: once in the link its agent gives, `?key=`, answered with the key as a cookie named after the port
 // and a page that loads its address without it, so the key leaves the address bar and the history; then by that cookie.
 // A browser with neither is given a plain page that says how the page is opened, and nothing of the session. A runtime
-// that gives way answers 503 with STALE_HEADER, having done nothing, and ends: its clients ask again, of the one in its
-// place. A client's probe for whether it is up never waits.
+// that restarts for changed code answers 503 with STALE_HEADER, having done nothing, and ends: its clients ask again, of
+// the one in its place. A runtime draining to restart refuses calls, saying so. A client's probe for whether it is up never waits.
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { timingSafeEqual } from "node:crypto"
@@ -57,6 +58,12 @@ export type DoorOptions = {
   end?: () => void
   /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
   current?: () => Promise<string | undefined>
+  /** The lines that open the agent's read of / when it opens the root: its name and version, and what stands of its code. */
+  opened?: () => string[]
+  /** The agent asks the runtime to restart: what to answer, and what to do once answered. */
+  restart?: () => { status: number; text: string; after?: () => void }
+  /** Why calls are refused now, as while the runtime drains to restart; undefined while they are taken. */
+  refusing?: () => string | undefined
   /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. A key read as undefined is left out. */
   about?: Record<string, string | undefined>
   /** The paths whose views the page at a path needs first, given with its html in the boot island. */
@@ -141,8 +148,6 @@ const opening = (to: string) =>
 export type Door = {
   server: Server
   close(): Promise<void>
-  /** The root's code was loaded again: its ui, as it is defined now, takes the place of the one served. */
-  replace(ui: Ui): Promise<void>
   /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
   refresh(file: string): Promise<void>
   /**
@@ -153,7 +158,7 @@ export type Door = {
 }
 
 export function door<M>(running: Running<M>, options: DoorOptions): Door {
-  let ui = options.ui
+  const ui = options.ui
   const uiDir = () => (typeof ui === "function" ? undefined : typeof ui === "string" ? ui : fileURLToPath(ui))
   const hosting = () => (typeof ui === "function" ? ui : undefined)
   let hosted: ReturnType<UiHosting> | undefined
@@ -179,7 +184,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     }
   }
   const escaped = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-  // Read at each page: the version is the code's, and the code may have been loaded again.
+  // Read at each page: a key may change while the runtime runs, as a later release does.
   const about = () =>
     Object.entries(options.about ?? {})
       .flatMap(([key, value]) => (value === undefined ? [] : [[key, value] as const]))
@@ -219,7 +224,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
     said = undefined
 
-    return line === undefined ? answer : `${line}\n${answer}`
+    return line === undefined ? answer : answer ? `${line}\n${answer}` : line
   }
   const change = () => `event: change\ndata: ${JSON.stringify({ version: running.version(), jobs: running.jobs() })}\n\n`
   const notice = (value: { text: string; at?: string; from?: string; by?: string }) => `event: notice\ndata: ${JSON.stringify(value)}\n\n`
@@ -363,6 +368,14 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
           return reply(200, `${options.about?.root} closed; any call wakes it`)
         }
+        if (req.method === "POST" && path === "/_/restart") {
+          const asked = options.restart?.()
+
+          if (!asked) return reply(405, `${options.about?.root} does not restart`)
+          if (asked.after) res.once("finish", asked.after)
+
+          return reply(asked.status, asked.text)
+        }
         if (req.method === "GET" && path === "/_/wait") {
           const seconds = Number(url.searchParams.get("seconds") ?? 600)
 
@@ -393,7 +406,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (res.destroyed) return
 
           // Answered even when nothing is told: what only the agent's own calls changed is passed over, not kept for later.
-          return reply(200, told((heard ? text.heard() : text.tell()) || "nothing changed"))
+          return reply(200, told((heard ? text.heard() : text.tell()) || (said === undefined ? "nothing changed" : "")))
         }
         if (req.method === "GET") {
           const view = running.read(path, actorText) ?? factAt(path)
@@ -401,7 +414,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const lines = view === undefined ? [running.absent(path)] : textView(view, path, options.command ?? "bv root")
 
           if (path !== "/") text.touch(path)
-          const use = open ? [`${options.about?.root} ${options.about?.version}`] : []
+          const use = path !== "/" ? [] : open ? (options.opened?.() ?? [`${options.about?.root} ${options.about?.version}`]) : (options.opened?.().slice(1) ?? [])
 
           // A read of / is the present whole, and what changes is counted from it; any other read is its own, and what was heard.
           return reply(view === undefined ? 404 : 200, told(path === "/" && view !== undefined ? text.tell([...use, ...lines], true) : text.answer(lines)))
@@ -410,6 +423,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const call = JSON.parse(await body(req))
 
           if (!call || typeof call.handle !== "string") return reply(400, "a call names a handle")
+
+          const refusing = options.refusing?.()
+
+          if (refusing) return reply(409, told(text.answer([`refused: ${refusing}`])))
 
           const before = running.read(path, actorText)
           const args = textArgs(before, call.handle, call.args ?? {})
@@ -537,6 +554,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       }
       if (typeof call.handle !== "string") return json(res, 400, { error: "a call names a handle" })
 
+      const refusing = options.refusing?.()
+
+      if (refusing) return json(res, 409, { outcome: "refused", reason: refusing })
+
       if (actor === actorText) text.touch(path)
 
       const id = req.headers[CALL_ID_HEADER]
@@ -557,13 +578,6 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
   return {
     server,
-    async replace(next) {
-      const held = hosted
-
-      hosted = undefined
-      ui = next
-      await ended(held)
-    },
     async refresh(file) {
       if (!streams.size || served === undefined) return
 

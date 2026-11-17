@@ -1,5 +1,5 @@
 // A dropdown menu, shadcn's (radix-mira), in the kit's type scale: a button's menu of actions, checks and choices, such as
-// the model a composer sends with. The kit's menus as data, `MenuDropdown` and `MenuItems`, are for menus made of views.
+// the model a composer sends with. A menu made of views is the shell's, from the kit's menus as data, `MenuItem`.
 import * as React from "react"
 import { cn } from "../cn.ts"
 import { CheckIcon, ChevronRightIcon } from "lucide-react"

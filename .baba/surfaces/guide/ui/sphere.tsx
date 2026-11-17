@@ -3,6 +3,7 @@
 // following the pointer, so any pose can be held and looked at.
 import { useEffect, useRef, useState, type ComponentType } from "react"
 import { Logo } from "babavoss/shell/ui/mark.tsx"
+import { useConventions } from "babavoss/shell/ui/index.tsx"
 import { between, eased, MOVES, next, outline, REST, settled, SIDES, SPHERE, within, type Gaze, type Sphere } from "babavoss/shell/ui/gaze.ts"
 import { standingOf } from "babavoss/shell/ui/turn.ts"
 import { WorkbenchSegments } from "babavoss/kit/index.ts"
@@ -73,6 +74,7 @@ function Follow({ sphere }: { sphere: Tuned }) {
 function Eyes({ sphere, move, gaze, shown, className }: { sphere: Tuned; move: string; gaze?: Gaze; shown?: boolean; className?: string }) {
   const paths = useRef<(SVGPathElement | null)[]>([])
   const now = useRef(sphere)
+  const still = useConventions().motion === "reduced"
 
   now.current = sphere
 
@@ -86,7 +88,7 @@ function Eyes({ sphere, move, gaze, shown, className }: { sphere: Tuned; move: s
     let at: Gaze = REST
 
     place(REST)
-    if (move === "still" || matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    if (move === "still" || still) return
 
     const turn = (to: Gaze, ms: number, then: () => void) => {
       const from = at
@@ -124,7 +126,7 @@ function Eyes({ sphere, move, gaze, shown, className }: { sphere: Tuned; move: s
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [move])
+  }, [move, still])
   // A slider moved while the eyes rest is seen at once, and so is a pose given.
   useEffect(() => {
     if (move === "still") place(gaze ?? REST)

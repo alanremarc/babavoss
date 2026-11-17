@@ -10,11 +10,11 @@ import { afterEach, expect, it } from "bun:test"
 import { endpointFile, readJsonFile, type Endpoint } from "babavoss/core/index.ts"
 
 const dirs: string[] = []
-const run = (file: string, args: string[], input: string, state: string) => {
+const run = (file: string, args: string[], input: string, state: string, dev = false) => {
   const result = spawnSync(process.execPath, [file, ...args], {
     input,
     encoding: "utf8",
-    env: { ...process.env, BABAVOSS_HOME: state, BABAVOSS_BIN: state },
+    env: { ...process.env, BABAVOSS_HOME: state, BABAVOSS_BIN: state, BABAVOSS_DEV: dev ? "1" : "0" },
   })
 
   return { out: result.stdout, err: result.stderr, status: result.status }
@@ -71,7 +71,7 @@ it("opens notes, carries changes after calls, and reports a person's change in t
   expect(cli("wait", "1").out).toContain("due: 0 → 1")
 })
 
-it("answers with the code on disk after it is replaced, deleted and made again, or broken and then mended", async () => {
+it("in dev mode, answers with the code on disk after it is replaced, deleted and made again, or broken and then mended", async () => {
   const state = mkdtempSync(join(tmpdir(), "demo-"))
 
   dirs.push(state)
@@ -82,10 +82,10 @@ it("answers with the code on disk after it is replaced, deleted and made again, 
   const original = readFileSync(source, "utf8")
   const opener = readFileSync(entry, "utf8")
   // The agent calls through the standalone client, which loads none of the root's code: only the runtime does.
-  const bv = (...args: string[]) => run(join(process.cwd(), "framework/core/bv/bv.ts"), ["--session", "S", "demo", ...args], "", state)
+  const bv = (...args: string[]) => run(join(process.cwd(), "framework/core/bv/bv.ts"), ["--session", "S", "demo", ...args], "", state, true)
   const edition = (name: string) => original.replace("due: m.items.filter", `edition: "${name}",\n    due: m.items.filter`)
 
-  expect(run(entry, ["--session", "S"], "", state).status).toBe(0)
+  expect(run(entry, ["--session", "S"], "", state, true).status).toBe(0)
   expect(bv("/", "add", "text=kept").status).toBe(0)
 
   // Written to a temporary file and renamed over the source, as editors and agents' tools write.
@@ -93,7 +93,7 @@ it("answers with the code on disk after it is replaced, deleted and made again, 
   renameSync(`${source}.tmp`, source)
   expect(bv("/").out).toContain('edition: "renamed"')
 
-  // Gone for a moment, the entry with it, as a checkout leaves them: the hot reload in between fails on the missing files.
+  // Gone for a moment, the entry with it, as a checkout leaves them: the runtime waits for its entry to restart.
   rmSync(source)
   rmSync(entry)
   await sleep(400)
@@ -103,7 +103,7 @@ it("answers with the code on disk after it is replaced, deleted and made again, 
   const after = bv("/")
 
   // Started again, having cut nothing: the agent is answered by the code as it is, and told nothing of how.
-  expect(after.out).not.toContain("its runtime started again")
+  expect(after.out).not.toContain("restarted")
   expect(after.out).toContain('edition: "checked out"')
   expect(after.out).toContain('latest: "kept"')
 

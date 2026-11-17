@@ -1,6 +1,7 @@
 // The shell page: bundle source on demand; built releases serve files directly. What the page is built from is installed
-// by the root's door before it opens. A page that does not build leaves the last one that did: it is served until a change
-// builds, through a reload of the root's code too, so a surface's broken page never takes the root's page down. Every
+// by the root's door before it opens. Following the source, as in dev mode, it is built again after an edit; else it is
+// built once, the page of the code the runtime runs, until it restarts. A page that does not build leaves the last one that
+// did: it is served until a change builds, so a surface's broken page never takes the root's page down. Every
 // page is served with the person's settings in it, so it paints in their appearance at once, and /_/settings.json gives
 // them again, read from their file each time (settings/src/store.ts).
 import { existsSync, readFileSync, mkdtempSync, readdirSync, statSync, rmSync } from "node:fs"
@@ -10,6 +11,7 @@ import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { UiHosting } from "../../core/index.ts"
 import { appearanceOf, choiceIn, nameOf, numbersOf, type Appearance, type Mode } from "../settings/src/settings.ts"
+import { conventionsOf } from "./conventions.ts"
 import { machineMode } from "../settings/src/system/index.ts"
 import { kept, readSettings, settingsFile, writeSettings } from "../settings/src/store.ts"
 
@@ -53,8 +55,8 @@ type Build = { dir: string; stamp: string }
 
 const PAGES = Symbol.for("babavoss.pages")
 /**
- * The last page that built, by the root's ui directory. Kept on globalThis, which a hot reload leaves as it is, so the
- * hosting a reload makes serves it while the page does not build; removed when a later one builds, and as the process ends.
+ * The last page that built, by the root's ui directory, for the process: served while a later one does not build; removed
+ * when a later one builds, and as the process ends.
  */
 const lastBuilt = (): Map<string, Build> => {
   const held = globalThis as { [PAGES]?: Map<string, Build> }
@@ -78,13 +80,17 @@ export const SETTINGS_ID = "babavoss-settings"
  * The page with the person's settings in its head, as JSON no markup in it can close, with `paint`, what each mode is
  * painted in, its theme's name and numbers, so the page paints it before its first frame. Where the file has no appearance
  * yet, none is given, and the page paints by the cookie an older page kept until it is taken in. `machine` tells the
- * machine's mode, where it is known: what "system" means to the page, over what its browser says.
+ * machine's mode, where it is known: what "system" means to the page, over what its browser says. With them come the
+ * conventions as the runtime can tell them, which the page sets before its first frame, the mode and a motion that follows
+ * the machine told again by its browser.
  */
 export function withSettings(html: string, file = settingsFile(), machine: () => Mode | undefined = machineMode): string {
-  const { appearance, ...rest } = readSettings(file)
+  const settings = readSettings(file)
+  const { appearance, ...rest } = settings
   const system = machine()
   const paint = Object.fromEntries((["light", "dark"] as const).map((mode) => [mode, painted(appearance, mode)]))
-  const given = { ...(kept(file)?.appearance === undefined ? rest : { appearance, paint, ...rest }), ...(system && { system }) }
+  const conventions = conventionsOf(settings, { dark: system === "dark", reduced: false })
+  const given = { ...(kept(file)?.appearance === undefined ? rest : { appearance, paint, ...rest }), conventions, ...(system && { system }) }
 
   return html.replace(/<head>/i, `<head><script type="application/json" id="${SETTINGS_ID}">${JSON.stringify(given).replaceAll("<", "\\u003c")}</script>`)
 }
@@ -127,9 +133,12 @@ const settingsAsset = (req: IncomingMessage, res: ServerResponse): boolean => {
   return true
 }
 
-/** Serve a built release, or rebuild source on the next request after an edit; each page with the person's settings. */
-export function shellUi(dir: string | URL): UiHosting {
-  const hosting = pageUi(dir)
+/**
+ * Serve a built release, or build source: again on the next request after an edit where it `follow`s the source, else once;
+ * each page with the person's settings.
+ */
+export function shellUi(dir: string | URL, { follow = true }: { follow?: boolean } = {}): UiHosting {
+  const hosting = pageUi(dir, follow)
 
   return async (server) => {
     const hosted = await hosting(server)
@@ -146,7 +155,7 @@ export function shellUi(dir: string | URL): UiHosting {
   }
 }
 
-function pageUi(dir: string | URL): UiHosting {
+function pageUi(dir: string | URL, follow: boolean): UiHosting {
   const root = typeof dir === "string" ? resolve(dir) : fileURLToPath(dir)
 
   return async () => {
@@ -167,6 +176,7 @@ function pageUi(dir: string | URL): UiHosting {
         .join(";")
     const ready = async () => {
       if (pending) return pending
+      if (!follow && pages.has(root)) return
 
       const next = changed(dirname(root)) + changed(frameworkRoot)
 
@@ -218,7 +228,6 @@ function pageUi(dir: string | URL): UiHosting {
             res.end(String(error))
           })
       },
-      // The page built stays for the hosting that takes this one's place, as a reload of the root's code makes.
       close: async () => {
         await pending
       },

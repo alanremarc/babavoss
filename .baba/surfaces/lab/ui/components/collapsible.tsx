@@ -1,3 +1,4 @@
+// A collapsible, shadcn's: what a trace's line opens onto.
 "use client"
 
 import { Collapsible as CollapsiblePrimitive } from "radix-ui"

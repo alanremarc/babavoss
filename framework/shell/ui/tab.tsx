@@ -4,6 +4,8 @@
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { Args, View } from "../../core/index.ts"
 import type { Theme } from "../../kit/theme.ts"
+import { DEFAULTS } from "../settings/src/settings.ts"
+import { conventionsOf, type Conventions } from "../src/conventions.ts"
 import { call as callDoor, read as readDoor, type Answer } from "./client.ts"
 import { cachesBy, liveCache, shownOf, type Entry, type LiveCache } from "./live.ts"
 
@@ -36,6 +38,15 @@ export type ShellServices = {
 
 /** The shell's services as the shell gives them; a page drawn without the shell has them do nothing. */
 export const ServicesContext = createContext<ShellServices>({ open: async () => {}, go: () => {}, toast: () => {}, appearance: { mode: "light", theme: "neutral", numbers: { hue: 0, tint: 0, vivid: 0 } } })
+
+/** The conventions as the shell hands them to every page; a page drawn without the shell has the defaults, in light. */
+export const ConventionsContext = createContext<Conventions>(conventionsOf(DEFAULTS, { dark: false, reduced: false }))
+
+/**
+ * The conventions, kept current: how the person wants pages to be, which a page interprets by its own code. Following them
+ * is expected and never checked; the same stand on the page's root as data-NAME and --NAME, for CSS and the kit.
+ */
+export const useConventions = (): Conventions => useContext(ConventionsContext)
 
 /** The tab's context as the shell holds it: with its cache, which useLive reads. */
 const Context = createContext<(TabContext & { cache: LiveCache }) | null>(null)

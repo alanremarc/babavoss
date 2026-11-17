@@ -1,14 +1,32 @@
 // The settings: a surface that comes with the shell, beside the project's, which holds the person's settings of the
-// shell's page, the appearance with where the rail of tabs stands, the shortcuts and the mark, each a fact with the action that changes it. They are the
+// shell's page, the appearance with where the rail of tabs stands, the preferences a page follows, the shortcuts and the mark, each a fact
+// with the action that changes it. They are the
 // person's, not a tab's nor a session's: its state is their file (store.ts), which every settings tab, in any session,
 // watches and follows; the model is what the file said last, with what this tab changed and is writing. A change is
 // written by a command, and a read while one is being written waits for it, so the tab never shows an older value back.
 // The shell's page applies what they say. Nothing is noticed but a write that failed, and every change is quiet: the page's
 // own, of no event in the agent's work, so it is told to the agent in no way; the agent reads the tab when asked to change one.
-import { action, surface, view, type Update } from "../../../core/index.ts"
+import { action, surface, view, type Schema, type Update } from "../../../core/index.ts"
 import { clashing, COMMANDS, isCommand, parse, type CommandId } from "./keys.ts"
 import { bounded, isPreset } from "../../../kit/theme.ts"
-import { DRAWERS, ENDS, isMode, MODES, numbersOf, settingsOf, SIDES, THEMES, viewOf, type Choice, type Mode, type Rail, type Settings } from "./settings.ts"
+import {
+  DRAWERS,
+  ENDS,
+  isChoice,
+  isMode,
+  MODES,
+  numbersOf,
+  PREFERENCE_NAMES,
+  PREFERENCES,
+  settingsOf,
+  SIDES,
+  THEMES,
+  viewOf,
+  type Choice,
+  type Mode,
+  type Rail,
+  type Settings,
+} from "./settings.ts"
 import { readSettings, settingsFile, watchSettings, writeSettings } from "./store.ts"
 
 /** `writing`: this tab's writes not yet done; `unsaved`: why the last one failed. */
@@ -121,6 +139,25 @@ const rail = action({
     return changed(m, { ...m.settings, appearance: { ...m.settings.appearance, rail: placed } })
   },
 })
+/** An action for each preference, named after it, with one input of its name: what it is set to. */
+const preferred = PREFERENCE_NAMES.map((name) => {
+  const { does, choices, default: usual } = PREFERENCES[name]
+
+  return action({
+    name,
+    quiet: true,
+    description: `${does}: ${choices.join(", ")}`,
+    subject: {},
+    inputs: { [name]: typeof usual === "number" ? "number" : "string" } as Schema,
+    update(m: Model, args): Update<Model, Command> {
+      const value = args[name]
+
+      if (!isChoice(name, value)) return { refused: `${name} is ${choices.join(", ")}, not ${value}` }
+
+      return changed(m, { ...m.settings, preferences: { ...m.settings.preferences, [name]: value } })
+    },
+  })
+})
 const bind = action({
   name: "bind",
   quiet: true,
@@ -162,7 +199,7 @@ const reset = action({
   },
 })
 
-const pages = view([mode, theme, dynamic, same, rail, animate, bind, reset], {
+const pages = view([mode, theme, dynamic, same, rail, ...preferred, animate, bind, reset], {
   "/": (m) => {
     const told = viewOf(m.settings)
 
@@ -170,6 +207,7 @@ const pages = view([mode, theme, dynamic, same, rail, animate, bind, reset], {
       title: "Settings",
       how: "The person's own settings of the shell's page, the same in every session and project. Change one when they ask.",
       appearance: told.appearance,
+      preferences: told.preferences,
       shortcuts: { at: "/shortcuts", ...told.shortcuts },
       logo: told.logo,
       ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
@@ -178,6 +216,7 @@ const pages = view([mode, theme, dynamic, same, rail, animate, bind, reset], {
       dynamic: dynamic.bind({}),
       same: same.bind({}),
       rail: rail.bind({}),
+      ...Object.fromEntries(preferred.map((a) => [a.name, a.bind({})])),
       animate: animate.bind({}),
     }
   },
@@ -197,7 +236,7 @@ const pages = view([mode, theme, dynamic, same, rail, animate, bind, reset], {
 /** The settings surface over the person's file, which `file` names when it runs: theirs by default. */
 export function settings(file: () => string = () => settingsFile()) {
   return surface<Model, Event, Command>({
-    description: "The person's settings of the shell's page: appearance, where the tabs stand, shortcuts, and whether the mark moves while the agent works. Use when the person asks to change one.",
+    description: "The person's settings of the shell's page: appearance, where the tabs stand, motion, text size, the side of a page's sidebar, shortcuts, and whether the mark moves while the agent works. Use when the person asks to change one.",
     init: () => ({ settings: settingsOf(undefined), writing: 0 }),
     // What a tab kept is only a first look: the file is read again as it starts.
     restore: (saved) => ({ settings: settingsOf((saved as { settings?: unknown } | undefined)?.settings), writing: 0 }),

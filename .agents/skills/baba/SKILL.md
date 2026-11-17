@@ -10,7 +10,7 @@ This project has surfaces. A surface is a tool you work with for the person: wha
 
 `.baba/` has a shell, its root surface: one runtime for this session, with one page, the desktop that lists the surfaces and holds each one opened as a tab. Where this session began with these words, the shell is started and its answer follows them. Otherwise start it from `.baba/` with `bun run baba start`.
 
-Its answer names the page's address, the command to use, the surfaces and the open tabs. Open the page in the harness's browser if it has one, and otherwise give its address to the person; do so again whenever an answer names a new address. The shell sleeps when nothing has called it for a while, and any command wakes it where it was, its tabs and their state kept. There is nothing to keep running.
+Its answer names the page's address, the command to use, the surfaces and the open tabs. Open the page in the harness's browser if it has one, and otherwise give its address to the person; do so again whenever an answer names a new address. The shell sleeps when nothing has called it for a while, and any command wakes it where it was, its tabs and their state kept. There is nothing to keep running. It runs the code it started with: when that changes, `/` says so with the command that restarts it, unless `.baba/baba.config.ts` sets `dev: true`, and then it restarts at once by itself.
 
 ## Working with it
 

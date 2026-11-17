@@ -1,6 +1,6 @@
 {
   "name": "baba",
-  "version": "0.64.0",
+  "version": "0.67.0",
   "description": "Makes each session aware of this project's surfaces: the skill baba, and the framework's hook, which starts the shell and tells what changed.",
   "homepage": "https://babavoss.org",
   "license": "Apache-2.0",

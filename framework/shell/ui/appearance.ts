@@ -2,9 +2,11 @@
 // when the page is looked at again or when the shell asks, and told at once by a settings tab on this page as they change
 // there. The settings are their file's (settings/src/store.ts); the appearance is applied before the first paint by
 // index.html, by the same rules as here. With the settings comes the machine's mode, where the runtime could tell it:
-// that is what "system" follows, a browser's own answer only where there is none.
-import { useEffect, useState, useSyncExternalStore } from "react"
+// that is what "system" follows, a browser's own answer only where there is none. From the settings and the machine come
+// the conventions every page is handed (src/conventions.ts), set on the page's root as they change.
+import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { varsOf, type Theme } from "../../kit/theme.ts"
+import { attributesOf, conventionsOf, type Conventions } from "../src/conventions.ts"
 import { choiceIn, nameOf, numbersOf, resolveMode, settingsOf, type Appearance, type Mode, type Settings } from "../settings/src/settings.ts"
 
 const SETTINGS_ID = "babavoss-settings"
@@ -37,6 +39,31 @@ export function applyAppearance(appearance: Appearance, mode: Mode): void {
   root.dataset.theme = nameOf(choice)
   root.style.colorScheme = mode
   paintTheme(numbersOf(choice), root)
+}
+
+/** Sets the conventions on the page's root, where CSS and the kit read them: as index.html does before the first paint. */
+export function applyConventions(conventions: Conventions, root: HTMLElement = document.documentElement): void {
+  const { data, vars } = attributesOf(conventions)
+
+  for (const [name, value] of Object.entries(data)) root.dataset[name] = value
+  for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value)
+}
+
+/** Whether a media query of the browser matches, kept current. */
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => matchMedia(query).matches)
+
+  useEffect(() => {
+    const media = matchMedia(query)
+    const change = () => setMatches(media.matches)
+
+    change()
+    media.addEventListener("change", change)
+
+    return () => media.removeEventListener("change", change)
+  }, [query])
+
+  return matches
 }
 
 const modeOf = (value: unknown): Mode | undefined => {
@@ -72,25 +99,21 @@ const MACHINE_MS = 5000
 /** Whether the system asks for dark, kept current: the machine's mode where the runtime tells it, the browser's otherwise. */
 export function useSystemDark(): boolean {
   const told = useSyncExternalStore(listen, machineNow, () => undefined)
-  const [dark, setDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches)
-
-  useEffect(() => {
-    const system = matchMedia("(prefers-color-scheme: dark)")
-    const change = () => setDark(system.matches)
-
-    system.addEventListener("change", change)
-
-    return () => system.removeEventListener("change", change)
-  }, [])
+  const dark = useMedia("(prefers-color-scheme: dark)")
 
   return told ? told === "dark" : dark
 }
 
-/** The person's settings, kept current, with the appearance applied to the page; the mode it resolves to; and how to read them again. */
-export function useSettings(): { settings: Settings; mode: Mode; again: () => void } {
+/**
+ * The person's settings, kept current, with the appearance and the conventions applied to the page; the mode it resolves
+ * to; the conventions; and how to read them again.
+ */
+export function useSettings(): { settings: Settings; mode: Mode; conventions: Conventions; again: () => void } {
   const [settings, setSettings] = useState(given)
   const systemDark = useSystemDark()
+  const reduced = useMedia("(prefers-reduced-motion: reduce)")
   const mode = resolveMode(settings.appearance, systemDark)
+  const conventions = useMemo(() => conventionsOf(settings, { dark: systemDark, reduced }), [settings, systemDark, reduced])
   const [again] = useState(() => () => {
     if (document.hidden) return
     void fetch("/_/settings.json", { headers: { accept: "application/json" } })
@@ -124,8 +147,10 @@ export function useSettings(): { settings: Settings; mode: Mode; again: () => vo
     return () => window.clearInterval(timer)
   }, [follows, again])
   useEffect(() => applyAppearance(settings.appearance, mode), [settings.appearance, mode])
+  // Before the page is painted, so a page drawn by them never shows a frame by the conventions before.
+  useLayoutEffect(() => applyConventions(conventions), [conventions])
 
-  return { settings, mode, again }
+  return { settings, mode, conventions, again }
 }
 
-export type { Appearance, Mode, Settings }
+export type { Appearance, Conventions, Mode, Settings }

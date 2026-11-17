@@ -1,8 +1,8 @@
 // The person's settings of the shell, as values: what they are, their defaults, and how a kept value is read, tolerant
 // of what it does not know. Pure, for the surface that changes them and for the page that applies them alike: the
 // appearance, a mode and a theme for both modes or for each, a preset or the person's own numbers (the kit's theme.ts), and
-// where the rail of tabs stands; the shortcuts, the person's bindings over the shell's commands (keys.ts); and whether the
-// mark moves while the agent works.
+// where the rail of tabs stands; the preferences a page follows by convention (the shell's conventions); the shortcuts, the
+// person's bindings over the shell's commands (keys.ts); and whether the mark moves while the agent works.
 import { bounded, isPreset, presetOf, PRESETS, type Mode, type PresetId, type Theme } from "../../../kit/theme.ts"
 import { COMMANDS, isCommand, normal, RENAMED, same, type CommandId } from "./keys.ts"
 
@@ -16,8 +16,24 @@ export type Choice = PresetId | Theme
 export type Rail = { side: "left" | "right" | "top" | "bottom"; from: "top" | "bottom"; drawer: "left" | "right" }
 /** `same`: one theme for both modes, `themes.light`; otherwise each mode has its own. */
 export type Appearance = { mode: Mode | "system"; same: boolean; themes: Record<Mode, Choice>; rail: Rail }
+
+/**
+ * The person's preferences, which the shell hands every page as its conventions (src/conventions.ts) and a page follows by
+ * its own code: each its choices, its default and what it is. One entry is the whole of a preference: it is kept and read
+ * here, told by the settings' view, set by an action of its name and chosen on the settings' page, as are the others.
+ */
+export const PREFERENCES = {
+  motion: { label: "Motion", does: "whether pages move; system follows the machine's preference", choices: ["system", "full", "reduced"], default: "system" },
+  scale: { label: "Text size", does: "the size of text on every page, as a share of the usual", choices: [0.9, 1, 1.1, 1.25, 1.5], default: 1 },
+  side: { label: "Sidebar", does: "the side a page's own sidebar stands at", choices: ["left", "right"], default: "right" },
+} as const satisfies Record<string, { label: string; does: string; choices: readonly (string | number)[]; default: string | number }>
+export type Preference = keyof typeof PREFERENCES
+export type Preferences = { -readonly [K in Preference]: (typeof PREFERENCES)[K]["choices"][number] }
+/** Each preference's name, in the order the settings' page shows them. */
+export const PREFERENCE_NAMES = Object.keys(PREFERENCES) as Preference[]
+
 /** `keys`: the person's bindings, where they differ from a command's default. */
-export type Settings = { appearance: Appearance; keys: Partial<Record<CommandId, string>>; logo: { animate: boolean } }
+export type Settings = { appearance: Appearance; preferences: Preferences; keys: Partial<Record<CommandId, string>>; logo: { animate: boolean } }
 
 export const MODES = ["light", "dark", "system"] as const
 export const SIDES = ["left", "right", "top", "bottom"] as const
@@ -28,6 +44,7 @@ export const THEMES = [...PRESETS.map((p) => p.id), "dynamic"] as const
 
 export const DEFAULTS: Settings = {
   appearance: { mode: "system", same: true, themes: { light: "neutral", dark: "neutral" }, rail: { side: "left", from: "bottom", drawer: "left" } },
+  preferences: Object.fromEntries(PREFERENCE_NAMES.map((name) => [name, PREFERENCES[name].default])) as Preferences,
   keys: {},
   logo: { animate: true },
 }
@@ -37,6 +54,17 @@ export const isMode = (value: unknown): value is Appearance["mode"] => value ===
 const oneOf = <T extends string>(options: readonly T[], value: unknown, otherwise: T): T => (options.includes(value as T) ? (value as T) : otherwise)
 const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
+
+/** Whether a value is one of a preference's choices. */
+export const isChoice = <K extends Preference>(name: K, value: unknown): value is Preferences[K] =>
+  (PREFERENCES[name].choices as readonly unknown[]).includes(value)
+
+/** The preferences a kept value says, each it does not say, or says wrongly, the default. */
+export function preferencesOf(value: unknown): Preferences {
+  const kept = record(value)
+
+  return Object.fromEntries(PREFERENCE_NAMES.map((name) => [name, isChoice(name, kept[name]) ? kept[name] : DEFAULTS.preferences[name]])) as Preferences
+}
 
 /** The choice a kept value says: a preset's id, or three numbers, bounded; anything else, none. Clay was once named claude. */
 export function choiceOf(value: unknown): Choice | undefined {
@@ -108,7 +136,7 @@ export function settingsOf(value: unknown): Settings {
 
   const logo = record(kept.logo)
 
-  return { appearance: appearanceOf(kept.appearance), keys, logo: { animate: logo.animate !== false } }
+  return { appearance: appearanceOf(kept.appearance), preferences: preferencesOf(kept.preferences), keys, logo: { animate: logo.animate !== false } }
 }
 
 /** A command whose own binding is the same as an earlier command's, the later of them that has one of its own; none where all differ. */
@@ -133,7 +161,7 @@ export type Told = string | ({ theme: "dynamic" } & Theme)
 /** The appearance as the view tells it: the mode, one theme for both or one each, and the rail. */
 export type ToldAppearance = ({ same: true; theme: Told } | { same: false; light: Told; dark: Told }) & { mode: Appearance["mode"]; rail: Rail }
 /** The settings as their view at / tells them, beside its actions: what the page takes the whole settings from. */
-export type SettingsView = { appearance: ToldAppearance; shortcuts: Record<CommandId, string>; logo: Settings["logo"] }
+export type SettingsView = { appearance: ToldAppearance; preferences: Preferences; shortcuts: Record<CommandId, string>; logo: Settings["logo"] }
 
 const told = (choice: Choice): Told => (typeof choice === "string" ? choice : { theme: "dynamic", ...choice })
 
@@ -144,6 +172,7 @@ export function viewOf(settings: Settings): SettingsView {
 
   return {
     appearance: same ? { mode, same: true, theme: told(themes.light), rail } : { mode, same: false, light: told(themes.light), dark: told(themes.dark), rail },
+    preferences: { ...settings.preferences },
     shortcuts: keys,
     logo: { animate: settings.logo.animate },
   }
@@ -160,6 +189,7 @@ export function settingsFromView(view: SettingsView): Settings {
 
   return {
     appearance: appearanceOf({ mode: a.mode, same: a.same, themes, rail: a.rail }),
+    preferences: preferencesOf(view.preferences),
     keys: settingsOf({ keys: Object.fromEntries(bound) }).keys,
     logo: { animate: view.logo.animate !== false },
   }
