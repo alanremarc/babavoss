@@ -1,8 +1,9 @@
+// A trace, shadcn's: one line of what an agent did, which opens onto its detail.
 import * as React from "react"
 import { ChevronRightIcon } from "lucide-react"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible.tsx"
 
 function Trace({ className, ...props }: React.ComponentProps<"div">) {
   return (

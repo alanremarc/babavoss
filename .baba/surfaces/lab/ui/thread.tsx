@@ -17,26 +17,11 @@ import {
   WrenchIcon,
   ZapIcon,
 } from "lucide-react"
-import {
-  Bubble,
-  BubbleContent,
-  CodeBlock,
-  CodeBlockActions,
-  CodeBlockContent,
-  CodeBlockCopyButton,
-  CodeBlockHeader,
-  CodeBlockTitle,
-  Marker,
-  MarkerContent,
-  Message,
-  MessageContent,
-  MessageHeader,
-  Thread,
-  ThreadEvent,
-  ThreadItem,
-  ThreadStep,
-  ThreadSteps,
-} from "babavoss/kit/index.ts"
+import { Bubble, BubbleContent } from "./components/bubble.tsx"
+import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockCopyButton, CodeBlockHeader, CodeBlockTitle } from "./components/code-block.tsx"
+import { Marker, MarkerContent } from "./components/marker.tsx"
+import { Message, MessageContent, MessageHeader } from "./components/message.tsx"
+import { Thread, ThreadEvent, ThreadItem, ThreadStep, ThreadSteps } from "./components/thread.tsx"
 import { approx, breakdown, END_MOVE, money, PROSE, seconds, Told, useEntry, type Kind, type Row } from "./parts.tsx"
 
 type Item =

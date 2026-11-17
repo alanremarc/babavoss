@@ -121,31 +121,6 @@
   }
 }
 
-/* Canonical rendered markdown: GitHub's markdown-body layout, coloured by the theme's tokens.
-   Unlayered like github-markdown-css, and after it, so these mappings win in every theme and mode. */
-.markdown-body {
-  --fgColor-default: var(--foreground);
-  --fgColor-muted: var(--muted-foreground);
-  --fgColor-accent: var(--foreground);
-  --fgColor-danger: var(--destructive);
-  --bgColor-default: transparent;
-  --bgColor-muted: var(--muted);
-  --bgColor-neutral-muted: color-mix(in oklab, var(--muted-foreground) 16%, transparent);
-  --bgColor-attention-muted: color-mix(in oklab, var(--primary) 18%, transparent);
-  --borderColor-default: var(--border);
-  --borderColor-muted: var(--border);
-  --borderColor-neutral-muted: var(--border);
-  --borderColor-accent-emphasis: var(--ring);
-  --focus-outlineColor: var(--ring);
-  color-scheme: inherit;
-  font-family: inherit;
-  font-size: inherit;
-  & a {
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

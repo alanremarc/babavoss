@@ -1,6 +1,7 @@
+// A bubble, shadcn's: a message's body in a conversation, the lab's for what was said to the agent under test.
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 import { Slot } from "radix-ui"
 
 function BubbleGroup({ className, ...props }: React.ComponentProps<"div">) {

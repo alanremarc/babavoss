@@ -1,12 +1,13 @@
+// An input group, shadcn's: a field with addons and buttons beside it, which the composer is built on.
 "use client"
 
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 
-import { Button } from "./button"
-import { Input } from "./input"
-import { Textarea } from "./textarea"
+import { Button } from "babavoss/kit/components/button.tsx"
+import { Input } from "babavoss/kit/components/input.tsx"
+import { Textarea } from "babavoss/kit/components/textarea.tsx"
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (

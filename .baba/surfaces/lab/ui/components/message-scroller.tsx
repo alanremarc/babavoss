@@ -1,3 +1,4 @@
+// A message scroller, shadcn's: a thread that follows its end as it grows, and a button back to it.
 "use client"
 
 import * as React from "react"
@@ -8,9 +9,9 @@ import {
   useMessageScrollerVisibility,
 } from "@shadcn/react/message-scroller"
 import { ArrowDownIcon } from "lucide-react"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 
-import { Button } from "./button"
+import { Button } from "babavoss/kit/components/button.tsx"
 
 function MessageScrollerProvider(props: React.ComponentProps<typeof MessageScrollerPrimitive.Provider>) {
   return <MessageScrollerPrimitive.Provider {...props} />

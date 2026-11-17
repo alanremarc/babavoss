@@ -2,7 +2,7 @@
 // where a turn ended.
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 import { Slot } from "radix-ui"
 
 const markerVariants = cva(

@@ -2,9 +2,9 @@
 // it is typed, from the first character; what the session runs under sits in the footer, quiet.
 import * as React from "react"
 import { SendHorizontalIcon, SquareIcon } from "lucide-react"
-import { cn } from "../cn.ts"
+import { cn } from "babavoss/kit/cn.ts"
 
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./input-group"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./input-group.tsx"
 
 /** Something to call by name: `insert` is the text it becomes, its first character what starts the completion. */
 export type ComposerCompletion = { id: string; label: string; description?: string; insert: string }
