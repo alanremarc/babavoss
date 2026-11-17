@@ -304,9 +304,9 @@ export function Fold({ rows, open, flip, glance, label, home, go }: { rows: Row[
     <div className="flex flex-col gap-2" data-fold={open ? "open" : "folded"}>
       <button type="button" aria-expanded={open} className="group flex w-full cursor-pointer items-center gap-2 outline-none" onClick={() => flip(!open)}>
         <span aria-hidden className="h-px min-w-3 flex-1 bg-border/70" />
-        <span className="flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 text-meta text-muted-foreground group-hover:bg-foreground/6 group-hover:text-foreground group-focus-visible:bg-foreground/8 group-focus-visible:text-foreground">
+        <span className="flex min-w-0 items-center gap-1 rounded-2xl px-2 py-0.5 text-meta text-muted-foreground group-hover:bg-foreground/6 group-hover:text-foreground group-focus-visible:bg-foreground/8 group-focus-visible:text-foreground">
           <ChevronRightIcon aria-hidden className={cn("size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none", open && "rotate-90")} />
-          <span className="truncate">{foldLine(rows)}</span>
+          <span className="text-balance">{foldLine(rows)}</span>
         </span>
         <span aria-hidden className="h-px min-w-3 flex-1 bg-border/70" />
       </button>
@@ -321,7 +321,13 @@ export function Fold({ rows, open, flip, glance, label, home, go }: { rows: Row[
           {glanceOf(newest, home)} · <Ago when={newest.when} />
         </button>
       )}
-      {open && [...items].reverse().map((item) => <Line key={keyOf(item)} item={item} label={label} home={home} {...(go && { go })} />)}
+      {open && (
+        <div className="ml-1 flex flex-col gap-2 border-l border-border/70 pl-2.5">
+          {[...items].reverse().map((item) => (
+            <Line key={keyOf(item)} item={item} label={label} home={home} {...(go && { go })} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

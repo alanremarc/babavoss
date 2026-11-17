@@ -69,7 +69,7 @@ export function ClosedLine({ kept, open }: { kept: number; open: () => void }) {
 /** The head of a view of the archive, under the island: the way back, what it is, and a line under it. */
 export function ArchiveHead({ back, label, title, icon, line }: { back: () => void; label: string; title: string; icon?: ReactNode; line: string }) {
   return (
-    <div className="mt-[52px] flex shrink-0 flex-col gap-1.5 border-b border-border/60 px-3 pb-2.5">
+    <div className="mt-[3.75rem] flex shrink-0 flex-col gap-1.5 border-b border-border/60 px-3 pb-2.5">
       <button
         type="button"
         className="-ml-1.5 flex h-6 w-fit cursor-pointer items-center gap-0.5 rounded-full pr-2 pl-1 text-meta text-muted-foreground outline-none hover:bg-foreground/6 hover:text-foreground focus-visible:bg-foreground/8"
