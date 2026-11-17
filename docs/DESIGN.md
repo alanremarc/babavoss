@@ -127,7 +127,8 @@ notices      none yet        yes         yes                    yes
 ```
 
 ```text
-baba       The command the agent reads and acts with; and the words that teach it to.
+baba       The command the agent reads and acts with, one call at a time or as one program of many, answered by one
+           summary; and the words that teach it to.
 hook       Where the harness lets context in: at a session's start, with each message, after each tool call. It adds, and never blocks.
 skill      The same words where a harness has no hooks, and the way back in.
 adapter    The one place that knows a harness: how to set it up, start a session in it, and read its stream. A hook
