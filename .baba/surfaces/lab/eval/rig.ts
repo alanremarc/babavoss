@@ -262,7 +262,8 @@ export function programs(calls: { tool: string; input: string }[]): string[] {
     if (word.programs) kinds.add("-e")
     if (uses && /\b(for|while|until)\b[\s\S]*?\bdo\b/.test(input)) kinds.add("shell loop")
     if (uses && /\|\s*(xargs|while|parallel)\b/.test(input)) kinds.add("pipeline")
-    if (uses && /\b(bun|node|python3?|deno)\s+(-e|--eval|-c)\b|<<\s*['"]?\w+/.test(input)) kinds.add("inline script")
+    // A heredoc that is the command's own program, `-e - <<'EOF'`, is that program, not a script of the shell's.
+    if (uses && (/\b(bun|node|python3?|deno)\s+(-e|--eval|-c)\b/.test(input) || (!word.programs && /<<\s*['"]?\w+/.test(input)))) kinds.add("inline script")
     if (written.some((file) => input.includes(file))) kinds.add("script file")
   }
 
