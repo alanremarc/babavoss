@@ -6,23 +6,32 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { findService, SERVICE_HEADER, serviceClient, type Json } from "babavoss/core/index.ts"
-import { sessionEnv } from "babavoss/core/harness/index.ts"
+import { findService, SERVICE_HEADER, serviceClient, sessionEnv, type Json } from "babavoss/core/index.ts"
 
 /** The checkout a run is a copy of: where, at which commit, and the paths that differed from it, changed or added. */
 export type Checkout = { from: string; commit: string; dirty: string[] }
 export type Made = { dir: string; project: string; home: string; checkout: Checkout; ms: number; page?: string }
 /** An answer of the root under test: what it said, and whether it did what was asked. */
 export type Said = { ok: boolean; text: string }
-/** One line of the root under test's activity, as its /activity gives it: `when` in ms since the epoch, to the second. */
-export type Heard = { n: number; when: number; who: string; surface: string; at: string; what: string }
+/**
+ * One line of the root under test's activity, as its /activity gives it: `when` in ms since the epoch, to the second; `id`
+ * the name its call was given, where the lab gave it one.
+ */
+export type Heard = { n: number; when: number; who: string; surface: string; at: string; what: string; id?: string }
+
+/** An entry as /activity gives it: its surface absent where its place names it; what was done, its lines, or why it was refused. */
+type Row = { n: number; when: string; who: string; surface?: string; at: string | null; did?: string; said?: string[]; refused?: string; id?: string }
+
+/** What an entry says was done, in one line: the surface's lines about it where it gave any, else the call; and why it was refused. */
+const whatOf = (row: Pick<Row, "did" | "said" | "refused">): string =>
+  [row.said?.join(" ") || row.did || "", row.refused === undefined ? "" : `refused: ${row.refused}`].filter(Boolean).join(", ")
 
 export interface Runs {
   /** Makes run `id`'s directory: the project, a copy of the checkout at `from` (this repository where empty), its root started for `session`. */
   make(id: string, from: string, session: string): Promise<Made>
-  /** Calls a handle in the root under test, as the person. */
-  act(project: string, home: string, session: string, at: string, handle: string, args: Json): Promise<Said>
-  /** What the person sees at a path of the root under test, with the handles offered to them. */
+  /** Calls a handle in the root under test, as the person, the call named `id`, as its activity will say it. */
+  act(project: string, home: string, session: string, id: string, at: string, handle: string, args: Json): Promise<Said>
+  /** What the person's page reads at a path of the root under test. */
   look(project: string, home: string, session: string, at: string): Promise<Said>
   /** The root under test's activity after entry `after`, oldest first; none where its runtime is not up, which is never woken for it. */
   activity(project: string, session: string, after: number): Promise<Heard[]>
@@ -201,8 +210,8 @@ export function runsAt(root: string = RUNS): Runs {
         throw error
       }
     },
-    async act(project, home, session, at, handle, args) {
-      const answer = await client(project, home, session).request(at, { method: "POST", body: JSON.stringify({ handle, args }) })
+    async act(project, home, session, id, at, handle, args) {
+      const answer = await client(project, home, session).request(at, { method: "POST", id, body: JSON.stringify({ handle, args }) })
       const body = (await answer.json()) as { outcome?: string; reason?: string; error?: string }
 
       return body.outcome === "written"
@@ -227,10 +236,11 @@ export function runsAt(root: string = RUNS): Runs {
           signal: AbortSignal.timeout(5000),
         })
         const page = (await answer.json()) as { entries?: unknown; earlier?: { at?: string } }
-        const entries = Array.isArray(page.entries) ? (page.entries as (Omit<Heard, "when"> & { when: string })[]) : []
+        const entries = Array.isArray(page.entries) ? (page.entries as Row[]) : []
 
-        for (const { n, when, who, surface, at: where, what } of entries)
-          if (n > after) heard.push({ n, when: Date.parse(when), who, surface, at: where ?? "", what })
+        for (const { n, when, who, surface, at: where, id, ...row } of entries)
+          if (n > after)
+            heard.push({ n, when: Date.parse(when), who, surface: surface ?? /^\/([a-z][a-z0-9-]*)/.exec(where ?? "")?.[1] ?? "", at: where ?? "", what: whatOf(row), ...(typeof id === "string" && { id }) })
         at = entries.length && entries.at(-1)!.n > after + 1 ? page.earlier?.at : undefined
       }
 

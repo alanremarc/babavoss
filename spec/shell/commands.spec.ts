@@ -1,9 +1,10 @@
-// What a tab offers: which of a view's handles the person is offered as actions, which are asks, how they are named and
+// What a tab offers: which of a view's handles the person is offered as actions, how they are named and
 // grouped by a view's menu fact; the places a view names and the tree the search reads; the tab's menu and the dots on
 // the way to what waits on the person; what a form's fields make of their inputs, and every menu entry as a command.
 import { describe, expect, it } from "bun:test"
-import { handle, type View } from "../../framework/core/surface/view.ts"
+import { handle, type Schema, type View } from "../../framework/core/surface/view.ts"
 import {
+  aboveOf,
   actionItems,
   argsOf,
   dotted,
@@ -13,7 +14,7 @@ import {
   labelOf,
   MANY,
   named,
-  noticesIn,
+  highlightsIn,
   offered,
   parentOf,
   placesOf,
@@ -22,46 +23,46 @@ import {
 } from "../../framework/shell/ui/commands.ts"
 import type { MenuItem } from "../../framework/kit/layouts/menu.tsx"
 
-const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 }, {}, true)
+const approve = handle("approve", "Approve draft 3: it joins the backlog", { n: 3 })
 const note = handle("note", "Say where issue 3 stands", { n: 3 }, { text: "string" })
 const person: View = { n: 3, title: "Draft", approve, note_: note, more: [{ note }] }
 
 describe("a tab's actions", () => {
-  it("offers every handle of the view once, in the view's order, and knows an ask by its mark", () => {
+  it("offers every handle of the view once, in the view's order, and nothing where there is no view", () => {
     const actions = offered("/issues/3", person)
 
-    expect(actions.map((a) => [a.handle.name, a.ask])).toEqual([
-      ["approve", true],
-      ["note", false],
-    ])
+    expect(actions.map((a) => a.handle.name)).toEqual(["approve", "note"])
     expect(actions.every((a) => a.path === "/issues/3")).toBe(true)
-  })
-
-  it("calls nothing an ask that is not marked one, and offers nothing where there is no view", () => {
-    expect(offered("/", { note_: note }).some((a) => a.ask)).toBe(false)
     expect(offered("/", undefined)).toEqual([])
   })
 
-  it("names an action by its name, asks first, with … where it asks for input; by its description where names repeat", () => {
+  it("names an action by its name, in the view's order, with … where it asks for input; by its row's title or its subject where names repeat", () => {
     const ran: string[] = []
     const items = actionItems(offered("/issues/3", { note_: note, approve }), (a) => ran.push(a.handle.name))
 
-    expect(items.map((i) => [i.label, i.ask])).toEqual([
-      ["Approve", true],
-      ["Note…", false],
-    ])
-    expect(items[0]!.hint).toBe(approve.description)
-    items[1]!.run()
+    expect(items.map((i) => i.label)).toEqual(["Note…", "Approve"])
+    expect(items[1]!.hint).toBe(approve.description)
+    items[0]!.run()
     expect(ran).toEqual(["note"])
 
-    const open = (n: number) => handle("open", `Open issue ${n}`, { n })
+    const open = (n: number) => handle("open", "in a new tab", { n })
+    const labels = (view: View) => actionItems(offered("/", view), () => {}).map((i) => [i.label, i.hint])
 
-    expect(actionItems(offered("/", { a: open(1), b: open(2) }), () => {}).map((i) => i.label)).toEqual(["Open issue 1", "Open issue 2"])
+    expect(labels({ a: open(1), b: open(2) })).toEqual([
+      ["Open 1", "in a new tab"],
+      ["Open 2", "in a new tab"],
+    ])
+    expect(labels({ tabs: [1, 2, 3].map((n) => ({ n, title: n === 3 ? "Notes" : "Queue", open: open(n) })) }).map(([label]) => label)).toEqual([
+      "Open Queue (1)",
+      "Open Queue (2)",
+      "Open Notes",
+    ])
+    expect(labels({ surfaces: [{ name: "queue", open: open(1) }, { name: "lab", open: open(2) }], title: "Desk" }).map(([label]) => label)).toEqual(["Open queue", "Open lab"])
     expect(named("end_move")).toBe("End move")
   })
 
-  it("makes a prompt's fields the action's arguments, of their types, and none while a number is not one", () => {
-    const open = { title: "string", lane: "number", urgent: "boolean" } as const
+  it("makes a prompt's fields the action's arguments, of their base types, and none while a number is not one", () => {
+    const open: Schema = { title: { type: "string", kind: "line" }, lane: { type: "number", range: [1, 5] }, urgent: "boolean" }
 
     expect(argsOf(open, { title: "Fix", lane: "2" })).toEqual({ title: "Fix", lane: 2, urgent: false })
     expect(argsOf(open, { title: "Fix", lane: "two" })).toBeUndefined()
@@ -77,16 +78,15 @@ describe("a tab's menus from the surface", () => {
   const drop = handle("drop", "Remove issue 3", { n: 3 })
   const issue: View = { at: "/issues/3", title: "Fix it", approve, start, done, describe: describe_, drop }
 
-  it("lists the asks first and marked, then the groups the menu fact names under their labels, then the rest", () => {
+  it("lists the groups the menu fact names under their labels, then the rest, none marked", () => {
     const items = grouped(offered("/issues/3", { ...issue, menu: [{ label: "Work", actions: ["done", "start"] }] }), [{ label: "Work", actions: ["done", "start"] }], () => {})
 
     expect(items.map((i) => [i.kind, "label" in i ? i.label : "", i.kind === "action" && i.mark === true])).toEqual([
-      ["action", "Approve", true],
-      ["separator", "", false],
       ["label", "Work", false],
       ["action", "Done", false],
       ["action", "Start…", false],
       ["separator", "", false],
+      ["action", "Approve", false],
       ["action", "Describe…", false],
       ["action", "Drop", false],
     ])
@@ -109,6 +109,15 @@ describe("a tab's menus from the surface", () => {
     expect([parentOf("/issues/3"), parentOf("/issues"), parentOf("/")]).toEqual(["/issues", "/", undefined])
   })
 
+  it("reads the place above only where a view known names it, so a parent with no view is never asked for", () => {
+    const root: View = { narratives: [{ at: "/narratives/work" }], issues: [{ at: "/issues/1" }] }
+
+    expect(aboveOf("/narratives/work/runs", [root, undefined])).toBe("/narratives/work")
+    expect(aboveOf("/issues/1", [root, { at: "/issues/1" }])).toBeUndefined()
+    expect(aboveOf("/issues/1", [root, { back: { at: "/issues" } }])).toBe("/issues")
+    expect([aboveOf("/issues", [root]), aboveOf("/", [root])]).toEqual([undefined, undefined])
+  })
+
   it("reads the tree breadth-first within its caps, and finds places and actions by every word", async () => {
     const tree: Record<string, View> = {
       "/": { title: "Queue", add: handle("add", "Add an issue", {}, { title: "string" }), rows: [1, 2, 3].map((n) => ({ at: `/issues/${n}`, title: `Issue ${n}` })) },
@@ -122,7 +131,7 @@ describe("a tab's menus from the surface", () => {
 
     expect(reads).toEqual(["/", "/issues/1", "/issues/2"])
     expect(search(found, "issue 3")[0]).toEqual({ kind: "place", at: "/issues/3", label: "Issue 3" })
-    expect(search(found, "approve").map((f) => (f.kind === "action" ? [f.label, f.where, f.action.ask] : []))).toEqual([["Approve", "Issue 1", true]])
+    expect(search(found, "approve").map((f) => (f.kind === "action" ? [f.label, f.where] : []))).toEqual([["Approve", "Issue 1"]])
     expect(search(found, "deep").map((f) => (f.kind === "place" ? f.at : ""))).toEqual(["/issues/1/deep"])
     expect(search(found, "drop")).toEqual([])
     expect(search(found, "  ")).toEqual([])
@@ -153,7 +162,7 @@ describe("the tab's menu", () => {
   const controls: MenuItem[] = [{ kind: "action", id: "close", label: "Close tab", run: () => {} }]
   const parts = { start: () => {}, navigate: () => {}, controls }
 
-  it("holds the surface's actions with no title, the tab having it, the place's under its name, its asks first and dotted, Go, then the shell's", () => {
+  it("holds the surface's actions with no title, the tab having it, the place's under its name, Go, then the shell's", () => {
     const items = tabMenu({
       ...parts,
       surface: { label: "Queue", actions: at("/", { add }) },
@@ -166,7 +175,7 @@ describe("the tab's menu", () => {
       dots: new Set(["/issues/3/runs"]),
     })
 
-    expect(shape(items)).toEqual(["Add…", "---", "# Draft •", "Approve •", "---", "Done", "---", "> Go • [issues, Queue, ---, Runs •]", "---", "Close tab"])
+    expect(shape(items)).toEqual(["Add…", "---", "# Draft", "Done", "Approve", "---", "> Go • [issues, Queue, ---, Runs •]", "---", "Close tab"])
   })
 
   it("leaves out what is empty, and gives Go a field to filter where it lists more than a few places", () => {
@@ -186,13 +195,13 @@ describe("the tab's menu", () => {
     expect([...dotted(["/issues/4"], "/", [{ at: "/issues/4" }, { at: "/issues/5" }])]).toEqual(["/issues/4"])
   })
 
-  it("knows which unseen notices are about a tab, as paths within it, one about no place as its root", () => {
-    const notices = [{ at: "/tabs/2/issues/4" }, { at: "/tabs/2" }, { at: "/tabs/21/issues/1" }, { at: null }, { at: "/tabs/3" }]
+  it("knows which highlights are about a tab, as paths within it, one about no place as its root", () => {
+    const highlights = [{ at: "/tabs/2/issues/4" }, { at: "/tabs/2" }, { at: "/tabs/21/issues/1" }, { at: null }, { at: "/tabs/3" }]
 
-    expect(noticesIn("/tabs/2", notices)).toEqual(["/issues/4", "/"])
+    expect(highlightsIn("/tabs/2", highlights)).toEqual(["/issues/4", "/"])
   })
 
-  it("makes what the search finds entries that go to a place or start an action, an ask dotted, each naming where it is", () => {
+  it("makes what the search finds entries that go to a place or start an action, each naming where it is", () => {
     const went: string[] = []
     const items = foundItems(
       [
@@ -205,7 +214,7 @@ describe("the tab's menu", () => {
 
     expect(items.map((i) => (i.kind === "action" ? [i.label, i.note, i.mark === true] : []))).toEqual([
       ["Draft", "Go", false],
-      ["Approve", "Draft", true],
+      ["Approve", "Draft", false],
     ])
     for (const i of items) if (i.kind === "action") i.run()
     expect(went).toEqual(["/issues/3", "approve"])

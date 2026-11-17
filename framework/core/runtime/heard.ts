@@ -1,17 +1,18 @@
 // What was heard and not yet told to the agent: the notices others gave, the places the person acted in, and the tabs
 // they opened or closed. It is kept on disk beside the present as told, so a runtime that starts again, after it slept or
-// gave way to changed code, still tells each line once. Only the newest FOLD notices are kept as lines: an older one is
-// counted, and the count is told as one line that says where the notices are read whole.
+// gave way to changed code, still tells each line once. A highlight, a notice a surface marked important, is told before the
+// rest. Only the newest FOLD notices are kept as lines: an older one is counted, and the count is told as one line that says
+// where the notices are read whole.
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "../state/json-file.ts"
 
 /** How many notices are told as lines at once; older ones are told as a count. */
 export const FOLD = 20
-/** Where the notices are read whole: the shell's log of them. */
-export const NOTICES_AT = "/activity/notices"
+/** Where the notices are read whole: the shell's log, where they stand with what was done. */
+export const NOTICES_AT = "/activity"
 
-/** A line heard, in the order heard; `notice` where a surface said it, absent where it says where the person acted. */
-type Line = { line: string; notice?: true }
+/** A line heard, in the order heard; `notice` where a surface said it, absent where it says where the person acted; `highlight` where the surface marked it. */
+type Line = { line: string; notice?: true; highlight?: true }
 /** `folded`: the notices older than the lines, counted; `acted`: the places the person acted in, each heard once. */
 type Kept = { lines: Line[]; folded: number; acted: string[] }
 
@@ -25,7 +26,9 @@ const restored = (file: string): Kept => {
 
     if (!kept || !Array.isArray(kept.lines)) return empty()
 
-    const lines = kept.lines.filter((l): l is Line => !!l && typeof l.line === "string").map((l) => (l.notice ? { line: l.line, notice: true as const } : { line: l.line }))
+    const lines = kept.lines
+      .filter((l): l is Line => !!l && typeof l.line === "string")
+      .map((l) => ({ line: l.line, ...(l.notice && { notice: true as const }), ...(l.highlight && { highlight: true as const }) }))
 
     return { lines, folded: typeof kept.folded === "number" && kept.folded > 0 ? kept.folded : 0, acted: strings(kept.acted) }
   } catch {
@@ -37,12 +40,12 @@ const restored = (file: string): Kept => {
 export function heardRecord(dir: string) {
   const file = join(dir, "presented", "heard.json")
   let kept = restored(file)
-  const save = () => writeJsonFile(file, kept)
+  const save = () => writeJsonFile(file, kept, { own: true })
 
   return {
-    /** A notice heard: kept as a line, and the oldest counted once more than FOLD wait. */
-    notice(line: string) {
-      kept.lines.push({ line, notice: true })
+    /** A notice heard, a highlight where marked: kept as a line, and the oldest counted once more than FOLD wait. */
+    notice(line: string, highlight = false) {
+      kept.lines.push({ line, notice: true, ...(highlight && { highlight: true as const }) })
 
       const notices = kept.lines.filter((l) => l.notice).length
 
@@ -67,10 +70,14 @@ export function heardRecord(dir: string) {
     },
     /** How many lines wait to be told. */
     size: () => kept.lines.length + (kept.folded ? 1 : 0),
-    /** What waits, in the order heard, the count of older notices first; and then it is told, and forgotten. */
+    /** What waits, the highlights first, then the count of older notices, then the rest in the order heard; and then it is told, and forgotten. */
     take(): string[] {
       const { lines, folded } = kept
-      const out = [...(folded ? [`${folded} earlier notice${folded === 1 ? "" : "s"}; read ${NOTICES_AT}`] : []), ...lines.map((l) => l.line)]
+      const out = [
+        ...lines.filter((l) => l.highlight).map((l) => l.line),
+        ...(folded ? [`${folded} earlier notice${folded === 1 ? "" : "s"}; read ${NOTICES_AT}`] : []),
+        ...lines.filter((l) => !l.highlight).map((l) => l.line),
+      ]
 
       if (out.length || kept.acted.length) {
         kept = empty()

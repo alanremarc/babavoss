@@ -1,7 +1,8 @@
-// The demo project's tasks, for the design document's scenarios: rows by identity, actions for both sides, an ask that is
-// the person's alone, attention while they are waited for, a notice when a task moves, and a path per task. A task in
-// review carries its asks in the list too, so the person decides from the list; the agent is never offered them. The
-// list is ordered by what is to be done: in review first, then to do, then done, so an approval moves a row.
+// The demo project's tasks, for the design document's scenarios: rows by identity, the same actions for both sides, a
+// decision that is the person's, raised by the agent in the conversation and taken by either side, a notice when a task
+// moves, a highlight where it waits for the person's word, and a path per task. A task in review carries its approve and reopen in
+// the list too, so it is decided from the list. The list is ordered by what is to be done: in review first, then to do,
+// then done, so an approval moves a row.
 import { action, detail, surface, view, type Update } from "babavoss/core/index.ts"
 
 export type Task = { n: number; title: string; status: "todo" | "review" | "done"; note?: string }
@@ -10,8 +11,9 @@ type Result = Update<Model, never>
 
 const moved = (m: Model, n: number, status: Task["status"], what: string): Result => {
   const task = m.tasks.find((t) => t.n === n)!
+  const notice = { text: `Task ${n}, ${task.title}, ${what}`, at: `/tasks/${n}`, ...(status === "review" && { highlight: true as const }) }
 
-  return { model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, status } : t)) }, notices: [{ text: `Task ${n}, ${task.title}, ${what}`, at: `/tasks/${n}` }] }
+  return { model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, status } : t)) }, notices: [notice] }
 }
 
 const ORDER: Record<Task["status"], number> = { review: 0, todo: 1, done: 2 }
@@ -27,54 +29,47 @@ const row = (t: Task) => ({
 
 const add = action({
   name: "add",
-  description: "Add a task: a short title",
+  description: "",
   subject: {},
-  inputs: { title: "string" },
+  inputs: { title: { type: "string", kind: "line" } },
   update: (m: Model, { title }): Result =>
     title.trim() ? { model: { tasks: [...m.tasks, { n: m.next, title: title.trim(), status: "todo" }], next: m.next + 1 } } : { refused: "A task needs a title" },
 })
 const done = action({
   name: "done",
-  description: ({ n }) => `Mark task ${n} done; the person reviews it`,
+  description: "it goes to review",
   subject: { n: "number" },
   inputs: {},
   update: (m: Model, { n }): Result => moved(m, n, "review", "waits for review"),
 })
 const approve = action({
   name: "approve",
-  description: ({ n }) => `Approve task ${n}`,
+  description: "",
   subject: { n: "number" },
   inputs: {},
-  ask: true,
   update: (m: Model, { n }): Result => moved(m, n, "done", "is approved"),
 })
 const reopen = action({
   name: "reopen",
-  description: ({ n }) => `Reopen task ${n}: it is not done`,
+  description: "it is not done",
   subject: { n: "number" },
   inputs: {},
-  ask: true,
   update: (m: Model, { n }): Result => moved(m, n, "todo", "is reopened"),
 })
 const annotate = action({
   name: "annotate",
-  description: ({ n }) => `Note on task ${n} what was done or found: a line`,
+  description: "what was done or found",
   subject: { n: "number" },
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (m: Model, { n, text }): Result => ({ model: { ...m, tasks: m.tasks.map((t) => (t.n === n ? { ...t, note: text.trim() } : t)) } }),
 })
 const pages = view([add, done, approve, reopen, annotate], {
-  "/": (m) => {
-    const review = m.tasks.filter((t) => t.status === "review")
-
-    return {
-      title: "Tasks",
-      how: "Add what the person asks for and mark a task done when it is; they approve it on the page.",
-      tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
-      ...(review.length && { attention: { who: "person", why: `to review ${review.length === 1 ? `task ${review[0]!.n}` : `${review.length} tasks`}` } }),
-      add: add.bind({}),
-    }
-  },
+  "/": (m) => ({
+    title: "Tasks",
+    how: "A task is to do, in review once marked done, then done once approved; reopening sends it back to do.",
+    tasks: m.tasks.toSorted((a, b) => ORDER[a.status] - ORDER[b.status]).map((t) => (t.status === "done" ? detail(row(t)) : row(t))),
+    add: add.bind({}),
+  }),
   "/tasks/:n": (m, { n }) => {
     const t = m.tasks.find((t) => t.n === Number(n))
 

@@ -1,6 +1,6 @@
 // The scenarios, one table: each a script of steps played on the demo project, in order. A step is one move by one party:
 // the harness starting or stopping the session, or no longer running its hooks; the person speaking, acting on the page or
-// looking at their notifications; the agent reading, calling, waiting, running a program or using another tool through its
+// opening a tab's drawer; the agent reading, calling, waiting, running a program or using another tool through its
 // harness; the build moving by itself; the demo's code changing under the root; the root going to sleep. The canonical
 // scenarios are the ordinary moments of a session; the noise scenarios each show one kind of telling the agent does not
 // need, measured on today's code, so a change to what is told shows there. Nothing told is written here.
@@ -27,11 +27,11 @@ export type Step =
   | { kind: "build"; line: string }
   /** The agent's turn ends: the Stop hook. */
   | { kind: "stop" }
-  /** The root goes to sleep, as when nothing called it for a while; the next command wakes it. */
+  /** The root goes to sleep, as the agent's `sleep` puts it, or nothing used it for a while; the next command wakes it. */
   | { kind: "sleep" }
-  /** The person opens their notifications, which marks every notice seen, or clicks the newest notice's toast: the page's `seen` or `looked`. */
-  | { kind: "look"; mark: "seen" | "looked" }
-  /** The person's page goes where the agent last pointed it, as when the person follows the offer. */
+  /** The person opens the drawer of the newest highlight's tab, which opens its highlights: the page's `opened`. */
+  | { kind: "look" }
+  /** The person's page goes where the agent last brought it, as when the person follows the offer. */
   | { kind: "go" }
   /** The person makes several calls on the page in a row, as by clicking down a list. */
   | { kind: "acts"; what: string; calls: { path: string; handle: string; args?: Record<string, string | number> }[] }
@@ -43,7 +43,7 @@ export type Step =
   | { kind: "reloaded" }
   /** The harness stops running the framework's hooks, or runs them again. */
   | { kind: "hooks"; on: boolean }
-  /** Time passes with no call, as while the agent thinks: real seconds, so a scenario with one is played after the rest. */
+  /** Time passes with no call, as while the agent thinks: seconds on the demo's clock, which pass at once. */
   | { kind: "pause"; seconds: number }
 
 /** A step as a script has it: `timing` says why what it was told may vary with timing, and so is recorded, not settled. */
@@ -51,8 +51,6 @@ export type Scripted = Step & { timing?: string }
 /** `group`: the canonical moments, or a kind of noise. */
 export type Scenario = { name: string; group: "canonical" | "noise"; title: string; about: string; steps: Scripted[] }
 export const GROUPS: Record<Scenario["group"], string> = { canonical: "Canonical", noise: "Noise" }
-/** Whether a scenario takes real time, and so is played after the rest. */
-export const slow = (s: Scenario) => s.steps.some((step) => step.kind === "pause")
 
 const opened = (...surfaces: string[]): Scripted[] => surfaces.map((surface) => ({ kind: "call", path: "/", handle: "open", args: { surface } }))
 
@@ -125,21 +123,27 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
-    name: "ask",
+    name: "decision",
     group: "canonical",
-    title: "An ask",
-    about: "The agent marks a task done and waits; the person approves it on the page, which only they may; the wait ends with what they did.",
+    title: "The person's decision",
+    about:
+      "The person asked to check each task: the agent marks one done, which the surface highlights for the person, and asks them in the conversation, then approves it on their word; the next, the person approves on the page, and the agent is told what they did.",
     steps: [
       { kind: "start", source: "startup" },
-      { kind: "say", text: "Write the notes and have me check them." },
+      { kind: "say", text: "Write the notes and the changelog, and have me check each." },
       ...opened("tasks"),
       { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Write the notes" } },
+      { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Write the changelog" } },
       { kind: "tool", what: "write NOTES.md" },
       { kind: "call", path: "/tabs/1/tasks/1", handle: "done" },
-      { kind: "wait", seconds: 30 },
-      { kind: "act", path: "/tabs/1/tasks/1", handle: "approve", args: { n: 1 } },
-      { kind: "waited" },
       { kind: "stop" },
+      { kind: "say", text: "The notes are good: approve them." },
+      { kind: "call", path: "/tabs/1/tasks/1", handle: "approve" },
+      { kind: "tool", what: "write CHANGELOG.md" },
+      { kind: "call", path: "/tabs/1/tasks/2", handle: "done" },
+      { kind: "stop" },
+      { kind: "act", path: "/tabs/1/tasks/2", handle: "approve", args: { n: 2 } },
+      { kind: "say", text: "Anything left?" },
     ],
   },
   {
@@ -179,7 +183,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "The person looks at the activity",
       about:
-        "While the agent works, the person opens their notifications and clicks a toast, follows where the agent pointed them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
+        "While the agent works, the person opens the drawer of a tab the build's failure highlighted, follows where the agent brought them, and changes a setting: the page's own housekeeping, none of it the agent's business. Is any of it told?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Add the release tasks and watch the build." },
@@ -187,10 +191,9 @@ function NOISE(): Scenario[] {
         { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Write the notes" } },
         { kind: "build", line: "running" },
         { kind: "build", line: "failed: 1 spec fails" },
-        { kind: "look", mark: "looked" },
+        { kind: "look" },
         { kind: "tool", what: "edit spec/notes.spec.ts" },
-        { kind: "look", mark: "seen" },
-        { kind: "call", path: "/", handle: "show", args: { at: "/tabs/1/tasks/1" } },
+        { kind: "call", path: "/", handle: "highlight", args: { at: "/tabs/1/tasks/1", why: "the notes are next", front: "true" } },
         { kind: "go" },
         { kind: "act", path: "/", handle: "open", args: { surface: "settings" } },
         { kind: "act", path: "/tabs/3", handle: "theme", args: { mode: "dark", theme: "claude" } },
@@ -211,7 +214,7 @@ function NOISE(): Scenario[] {
       group: "noise",
       title: "One event, one line",
       about:
-        "Twelve tasks; the person approves one on the page. It is one event: is it told as one line, or as the notice, the row's status, the need gone and the whole new order of the list?",
+        "Twelve tasks; the person approves one on the page. It is one event: is it told as one line, or as the notice, the row's status and the whole new order of the list?",
       steps: [
         { kind: "start", source: "startup" },
         { kind: "say", text: "Plan the release as tasks; I'll approve them as they are done." },
@@ -321,7 +324,7 @@ function NOISE(): Scenario[] {
           edits: [
             ['description: "Track the project\'s tasks. Use when work is asked for."', 'description: "Track the project\'s tasks and when they are due. Use when work is asked for."'],
             ['title: "Tasks",', 'title: "Tasks",\n      due: "Friday",'],
-            ['they approve it on the page."', 'they approve it on the page; say when one is due."'],
+            ['reopening sends it back to do."', 'reopening sends it back to do. due is when the work is due."'],
           ],
         },
         { kind: "call", path: "/tabs/1", handle: "add", args: { title: "Tag the release" }, timing: "called while the root loads the changed code: what it is told depends on how far the reload is" },

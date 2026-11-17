@@ -13,13 +13,13 @@ const list = surface<Model, Event, Command>({
   description: "A list",
   init: () => ({ items: [] }),
   restore: (saved) => saved as Model,
-  view: (m, path, actor) =>
+  view: (m, path) =>
     path === "/"
       ? {
           items: m.items,
           error: m.error,
           add: handle("add", "Add an item", {}, { text: "string" }),
-          ...(actor === "person" && { clear: handle("clear", "Clear the list") }),
+          clear: handle("clear", "Clear the list"),
           fetch: handle("fetch", "Fetch an item", {}, { text: "string" }),
         }
       : undefined,
@@ -44,18 +44,18 @@ test("an actor sees a view and its offered handles", () => {
   const { agent, person } = story(list)
 
   expect(agent.sees()).toMatchObject({ items: [] })
-  expect(agent.offered()).toEqual(["add", "fetch"])
+  expect(agent.offered()).toEqual(["add", "clear", "fetch"])
   expect(person.offered()).toEqual(["add", "clear", "fetch"])
   expect(agent.sees("/missing")).toBeUndefined()
   expect(agent.offered("/missing")).toEqual([])
 })
 
-test("a person-only handle is hidden from and refused to the agent", async () => {
+test("what the person may call, the agent may call too", async () => {
   const { agent, person } = story(list)
 
-  expect(agent.offered()).not.toContain("clear")
-  expect(await agent.call("/", "clear")).toMatchObject({ outcome: "refused", reason: expect.stringContaining("not offered") })
-  expect(await person.call("/", "clear")).toMatchObject({ outcome: "written" })
+  await person.call("/", "add", { text: "One" })
+  expect(await agent.call("/", "clear")).toMatchObject({ outcome: "written" })
+  expect(person.sees()).toMatchObject({ items: [] })
 })
 
 test("a refused call carries its reason", async () => {
@@ -68,7 +68,7 @@ test("a refused call carries its reason", async () => {
 test("told gives the whole view, then only changes, then nothing", async () => {
   const { agent } = story(list)
 
-  expect(agent.told()).toEqual(["items: []", "add: add + text:string", "fetch: fetch + text:string"])
+  expect(agent.told()).toEqual(["items: []", "add: add + text:string", "clear: clear", "fetch: fetch + text:string"])
   await agent.call("/", "add", { text: "One" })
   expect(agent.told()).toEqual(['items: [] → ["One"]'])
   expect(agent.told()).toEqual([])
@@ -149,6 +149,25 @@ test("real effects can be awaited with idle", async () => {
   expect(agent.sees()).toMatchObject({ items: ["One"] })
 })
 
+test("idle waits for finite work alone, not for a session command that runs on, as one following a store", async () => {
+  const following = surface<Model, Event, Command | { follow: true }>({
+    ...list,
+    start: () => [{ follow: true }],
+    session: (c) => "follow" in c,
+    run: async (command, send, signal) => {
+      if ("follow" in command) return new Promise<void>((done) => signal.addEventListener("abort", () => done(), { once: true }))
+      await Bun.sleep(5)
+      send({ kind: "added", text: command.text })
+    },
+    failed: (_, error) => ({ kind: "failed", error }),
+  })
+  const { agent, world } = story(following, { effects: "real" })
+
+  await agent.call("/", "fetch", { text: "One" })
+  await world.idle()
+  expect(agent.sees()).toMatchObject({ items: ["One"] })
+})
+
 test("restart keeps saved state and each actor's told record", async () => {
   const { agent, person, world, restart } = story(list)
 
@@ -172,31 +191,27 @@ test("a story can start from a saved model through restore", () => {
   expect(agent.sees()).toMatchObject({ items: ["ONE"] })
 })
 
-test("an action declared an ask is offered to the person only, wherever it is bound, and the facts are the same for both", async () => {
-  type Draft = { text: string; approved: boolean }
+test("an action is offered to the agent and the person alike, wherever it is bound, at any depth, and either may take it", async () => {
+  type Rows = { approved: string[] }
 
-  const write = action({
-    name: "write",
-    description: "Write the text",
-    subject: {},
-    inputs: { text: "string" },
-    update: (m: Draft, { text }) => ({ model: { ...m, text } }),
-  })
   const approve = action({
     name: "approve",
-    description: "Approve the text",
-    subject: {},
+    description: "Approve a row",
+    subject: { id: "string" },
     inputs: {},
-    ask: true,
-    update: (m: Draft) => ({ model: { ...m, approved: true } }),
+    update: (m: Rows, { id }) => ({ model: { approved: [...m.approved, id] } }),
   })
-  const pages = view([write, approve], {
-    "/": (m) => ({ text: m.text, approved: m.approved, write: write.bind({}), review: { waiting: !m.approved, approve: approve.bind({}) } }),
+  const pages = view([approve], {
+    "/": (m) => ({
+      approved: m.approved,
+      rows: ["a", "b"].map((id) => ({ id, actions: [approve.bind({ id })] })),
+      pending: [approve.bind({ id: "a" }), [approve.bind({ id: "b" })]],
+    }),
   })
   const { agent, person } = story(
-    surface<Draft, { kind: "none" }, never>({
-      description: "A draft",
-      init: () => ({ text: "", approved: false }),
+    surface<Rows, { kind: "none" }, never>({
+      description: "Rows to approve",
+      init: () => ({ approved: [] }),
       view: pages.view,
       update: (m, msg) => (msg.kind === "call" ? pages.update(m, msg) : { model: m }),
       run: async () => {},
@@ -204,18 +219,11 @@ test("an action declared an ask is offered to the person only, wherever it is bo
     })
   )
 
-  expect(agent.offered()).toEqual(["write"])
-  expect(person.offered()).toEqual(["write", "approve"])
-  // The person's view marks the ask as one, so a page knows it from that view alone; nothing the agent reads carries the mark.
-  expect(person.sees()).toMatchObject({ write: { name: "write" }, review: { approve: { name: "approve", ask: true } } })
-  expect(person.sees()!.write).not.toHaveProperty("ask")
-  expect(JSON.stringify(agent.sees())).not.toContain('"ask"')
-  expect(JSON.stringify(pages.view({ text: "", approved: false }, "/", "agent"))).not.toContain('"ask"')
-  expect(agent.sees()).toMatchObject({ review: { waiting: true } })
-  expect(await agent.call("/", "approve", {})).toMatchObject({ outcome: "refused" })
-  agent.told()
-  expect(await person.call("/", "approve", {})).toMatchObject({ outcome: "written" })
-  expect(agent.told()).toEqual(["approved: false → true", "review.waiting: true → false"])
+  expect(agent.sees()).toEqual(person.sees())
+  expect(agent.offered()).toEqual(["approve", "approve", "approve", "approve"])
+  expect(await agent.call("/", "approve", { id: "a" })).toMatchObject({ outcome: "written" })
+  expect(await person.call("/", "approve", { id: "b" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees()).toMatchObject({ approved: ["a", "b"] })
 })
 
 test("an update gives notices beside its model: each side notices them once, the agent not what its own call gave, and no view holds them", async () => {

@@ -1,6 +1,6 @@
 // The demo project's build, for the design document's scenarios: a surface that changes by itself. Its one command watches
 // build.txt in the project, which the scenario writes, a status a line: `running`, `passed`, `passed: N specs`, or
-// `failed: why`. A run started is a fact alone; a failure is a notice too, and the agent's attention until a run passes.
+// `failed: why`. A run started is a fact alone; a failure is a notice too, a highlight.
 // The person may ask for another run, which is queued until the next one starts.
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -18,7 +18,7 @@ export const BUILD_FILE = "build.txt"
 
 const rerun = action({
   name: "rerun",
-  description: "Run the build again",
+  description: "runs the build again",
   subject: {},
   inputs: {},
   update: (m: Model): Update<Model, Command> => ({ model: { ...m, asked: (m.asked ?? 0) + 1, queued: true } }),
@@ -32,7 +32,6 @@ const pages = view<Model, Command>([rerun], {
     ...(m.specs !== undefined && { specs: m.specs }),
     ...(m.asked && { asked: m.asked }),
     ...(m.queued && { queued: true }),
-    ...(m.status === "failed" && { attention: { who: "agent", why: "to fix the failing build" } }),
     ...(!m.queued && m.status !== "running" && { rerun: rerun.bind({}) }),
   }),
 })
@@ -48,7 +47,7 @@ function update(m: Model, event: Event): Update<Model, Command> {
 
   if (status === "running") return { model: { ...kept, status: "running", runs: m.runs + 1, read } }
   if (status === "passed") return { model: { ...kept, ...(m.queued && { queued: true }), status: "passed", read, ...(Number.isFinite(specs) && { specs }) } }
-  if (status === "failed") return { model: { ...kept, ...(m.queued && { queued: true }), status: "failed", why, read }, notices: [`The build failed: ${why}`] }
+  if (status === "failed") return { model: { ...kept, ...(m.queued && { queued: true }), status: "failed", why, read }, notices: [{ text: `The build failed: ${why}`, highlight: true }] }
 
   return { model: { ...m, read } }
 }

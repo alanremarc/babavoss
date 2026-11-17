@@ -1,5 +1,5 @@
 // The browser side of the door: the surface's paths are the URLs, GET reads, POST calls, the event stream tells of change.
-// The page's cookie carries the service token, so nothing here does.
+// The page proves nothing: the runtime admits a browser on this machine at its own address, so nothing here carries a secret.
 import type { Args, View } from "../../core/index.ts"
 
 export type Answer<V = View> = { outcome: "written"; view: V } | { outcome: "refused"; reason: string }
@@ -30,30 +30,49 @@ export async function call<V = View>(path: string, handle: string, args: Args): 
 
 export type Change = { version: number; jobs: string[] }
 /** What just happened, told once as it is heard: `at` the path it is about, `from` who says it, `by` who caused it where not the person. */
-export type Notice = { text: string; at?: string; from?: string; by?: string }
+export type Notice = { text: string; at?: string; from?: string; highlight?: true; by?: string }
 
-/** Whose move it is in the session, and how many of the person's calls wait for the agent's next answer; `drivable` where the page can start a turn; `harness` the session's harness, by its adapter's name, once a hook of it was heard. */
-export type Turn = { agent: "working" | "idle" | "unknown"; since: number; waiting: number; drivable: boolean; harness?: string }
+/**
+ * The hooks' silence the agent was told of, while it lasts: `since` when the runtime found it, `ever` where a hook was heard
+ * before, so they went quiet rather than were never heard.
+ */
+export type Unheard = { ever: boolean; since: number }
+/**
+ * Whose move it is in the session, and how many of the person's calls wait for the agent's next answer; `drivable` where
+ * the page can start a turn; `harness` the session's harness, by its adapter's name, once a hook of it was heard; `unheard`
+ * while its hooks are not heard.
+ */
+export type Turn = { agent: "working" | "idle" | "unknown"; since: number; waiting: number; drivable: boolean; harness?: string; unheard?: Unheard }
 
-/** Told on every change of the surface, of each notice, of the turn, and whether the stream is up; the browser reconnects by itself. Returns stop. */
+/**
+ * Told on every change of the surface, of each notice, of the turn, and whether the stream is up, and if not, whether the
+ * runtime went to sleep, which the page never wakes; the browser reconnects by itself. Returns stop.
+ */
 export function changes(
   onChange: (change: Change) => void,
-  onConnected?: (up: boolean) => void,
+  onConnected?: (up: boolean, asleep?: boolean) => void,
   onNotice?: (notice: Notice) => void,
   onTurn?: (turn: Turn) => void
 ): () => void {
   const source = new EventSource("/")
 
+  let asleep = false
+
   source.addEventListener("change", (event) => {
+    asleep = false
     onChange(JSON.parse((event as MessageEvent<string>).data) as Change)
     onConnected?.(true)
+  })
+  source.addEventListener("asleep", () => {
+    asleep = true
+    onConnected?.(false, true)
   })
   source.addEventListener("notice", (event) => onNotice?.(JSON.parse((event as MessageEvent<string>).data) as Notice))
   source.addEventListener("turn", (event) => onTurn?.(JSON.parse((event as MessageEvent<string>).data) as Turn))
   // The page's own code changed: only a fresh page has it.
   source.addEventListener("page", () => location.reload())
   source.onerror = () => {
-    onConnected?.(false)
+    onConnected?.(false, asleep)
     // The browser retries a stream that dropped, and gives up on one that is refused: the runtime at this address is a new
     // instance, with a token this page does not hold. A fresh page is given it.
     if (source.readyState === EventSource.CLOSED) renew()

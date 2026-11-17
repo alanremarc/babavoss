@@ -2,7 +2,7 @@
 // baba, the package's command: makes a project's .baba/ directory, makes a surface in it from the template, and provisions:
 // each harness made aware by its adapter, and the root. It works on the .baba/ it is run in, or the nearest one above.
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, basename } from "node:path"
 import { fileURLToPath } from "node:url"
 import { loadConfig, sectionOf } from "../framework/core/config.ts"
 import { ADAPTERS } from "../framework/core/harness/index.ts"
@@ -62,7 +62,10 @@ function init(args: string[]) {
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })
 
   if (install.exitCode !== 0) throw new Refusal(`cannot install the framework; allow bun to reach github.com and the package registry, then run: cd '${baba}' && bun install`)
-  console.log(`${baba} is made. A new session of the harness begins with it: ask there for a surface, or with /baba`)
+  console.log(
+    `${baba} is made, with no surfaces yet. A new session of the harness starts its shell; outside one, \`bun run baba start\` there does. ` +
+      "How a surface is made: node_modules/babavoss/skill/making-surfaces.md, there.",
+  )
 }
 
 async function create(args: string[]) {
@@ -74,7 +77,8 @@ async function create(args: string[]) {
   const dir = join(baba, SURFACES_DIR, name)
 
   if (existsSync(dir)) throw new Refusal(`${dir} is there already: name the surface otherwise`)
-  cpSync(TEMPLATE, dir, { recursive: true })
+  // Only the template's own files: what a file manager leaves beside them, as .DS_Store, is no part of a surface.
+  cpSync(TEMPLATE, dir, { recursive: true, filter: (from) => !basename(from).startsWith(".") })
   console.log(`made ${dir}`)
   report(await provision(baba))
 }
@@ -102,6 +106,18 @@ async function hook(args: string[]) {
   } catch {}
 }
 
+/** What keeps each harness the configuration enables from running baba's hook here, a line each; nothing where that cannot be read. */
+async function blockedLines(): Promise<string[]> {
+  try {
+    const baba = findBaba(process.cwd())
+    const config = baba ? await loadConfig(baba) : {}
+
+    return ADAPTERS.flatMap((adapter) => (sectionOf(config, adapter).enable ? (adapter.blocked?.() ?? []) : []))
+  } catch {
+    return []
+  }
+}
+
 /** The session a root's door is to work in: the harness's where there is one, else the one started by hand. */
 const session = () => (process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID ? [] : ["--session", BY_HAND])
 
@@ -110,8 +126,10 @@ try {
 
   if (command === "init") init(args)
   else if (command === "new") await create(args)
-  else if (command === "start")
+  else if (command === "start") {
+    for (const line of await blockedLines()) console.error(line)
     process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...(args.includes("--session") ? [] : session()), ...args], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
+  }
   else if (command === "provision" && !args.length) report(await provision(found()))
   else if (command === "hook" && args.length <= 1) await hook(args)
   else throw new Refusal(USAGE)

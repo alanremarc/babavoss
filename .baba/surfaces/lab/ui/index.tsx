@@ -1,5 +1,5 @@
 // The lab's page: a header with the run's identity and its lifecycle, the run as a conversation with a composer at its
-// foot, and the page under test beside it, live, where the person acts as the person. The model the next run takes, the
+// foot, and the page under test beside it, at the side the person prefers for a sidebar, live, where the person acts as the person. The model the next run takes, the
 // split and which side is shown are the page's own; the entry in the tab's route, /entries/N, is open and scrolled to,
 // and /runs opens the runs kept.
 import { useEffect, useRef, useState, type ReactNode } from "react"
@@ -23,7 +23,6 @@ import type { Handle } from "babavoss/core/index.ts"
 import {
   Badge,
   Button,
-  Composer,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -47,7 +46,8 @@ import {
   ResizablePanelGroup,
   useNarrow,
 } from "babavoss/kit/index.ts"
-import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+import { useConventions, useLive, useTab } from "babavoss/shell/ui/index.tsx"
+import { Composer } from "./components/composer.tsx"
 import { breakdown, k, MODELS, money, total, type Past, type Root, type Row, type Status } from "./parts.tsx"
 import { RunThread } from "./thread.tsx"
 
@@ -152,7 +152,13 @@ export default function Lab() {
   const empty = root.run === undefined && !pending
   // With no run there is no page under test: the welcome takes the whole width.
   const shown: Side = empty || (narrow && side === "split") ? "thread" : side
-  const hasPage = !!root.page && status !== "closed"
+  const gone =
+    status === "closed"
+      ? "The run is closed, and its page with it."
+      : status === "cleared"
+        ? "The run was cleared when the lab started, and its page with it."
+        : undefined
+  const hasPage = !!root.page && !gone
   const conversation =
     route === "/runs" ? (
       <RunsPanel runs={kept?.runs ?? []} act={act} back={() => navigate("/")} />
@@ -190,9 +196,9 @@ export default function Lab() {
       {shown === "thread" ? (
         conversation
       ) : shown === "page" ? (
-        <UnderTest page={hasPage ? root.page : undefined} closed={status === "closed"} side={shown} show={show} narrow={narrow} />
+        <UnderTest page={hasPage ? root.page : undefined} gone={gone} side={shown} show={show} narrow={narrow} />
       ) : (
-        <Split thread={conversation} page={<UnderTest page={hasPage ? root.page : undefined} closed={status === "closed"} side={shown} show={show} narrow={narrow} />} />
+        <Split thread={conversation} page={<UnderTest page={hasPage ? root.page : undefined} gone={gone} side={shown} show={show} narrow={narrow} />} />
       )}
     </div>
   )
@@ -200,16 +206,23 @@ export default function Lab() {
 
 function Split({ thread, page }: { thread: ReactNode; page: ReactNode }) {
   const layout = useDefaultLayout({ id: "babavoss.lab.split", panelIds: ["thread", "page"], storage, onlySaveAfterUserInteractions: true })
+  // The page under test is the split's sidebar: it stands at the side the person prefers for one.
+  const { side } = useConventions()
+  const pagePanel = (
+    <ResizablePanel id="page" defaultSize="44" minSize={320} className="flex min-w-0 flex-col">
+      {page}
+    </ResizablePanel>
+  )
 
   return (
     <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
+      {side === "left" && pagePanel}
+      {side === "left" && <ResizableHandle />}
       <ResizablePanel id="thread" defaultSize="56" minSize={360} className="flex min-w-0 flex-col">
         {thread}
       </ResizablePanel>
-      <ResizableHandle />
-      <ResizablePanel id="page" defaultSize="44" minSize={320} className="flex min-w-0 flex-col">
-        {page}
-      </ResizablePanel>
+      {side === "right" && <ResizableHandle />}
+      {side === "right" && pagePanel}
     </ResizablePanelGroup>
   )
 }
@@ -313,6 +326,7 @@ const TONE: Record<Status, "default" | "secondary" | "destructive" | "outline"> 
   ended: "destructive",
   closing: "secondary",
   closed: "outline",
+  cleared: "outline",
 }
 
 /** The run's identity and state in one line, and at the right what can be done to it now. */
@@ -344,6 +358,12 @@ function Header({
       <Badge variant={TONE[s]} className={s === "working" || s === "starting" ? "animate-pulse" : undefined}>
         {s}
       </Badge>
+      {/* A run whose agent was told nothing by a hook says so beside its status, wherever the page is read. */}
+      {typeof root.hooks === "string" && root.turns ? (
+        <Badge variant="destructive" title={`${root.hooks}: it did what it did without the surfaces' words and present`}>
+          no hook heard
+        </Badge>
+      ) : null}
       {root.run !== undefined && (
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground tabular-nums">
           <span className="shrink-0 font-medium text-foreground">{root.model}</span>
@@ -423,7 +443,7 @@ function Header({
             title={side === "thread" ? "Show the page under test" : narrow ? "Show the thread" : "Hide the page under test"}
             onClick={() => show(side === "thread" ? (narrow ? "page" : "split") : "thread")}
           >
-            {side === "thread" ? <PanelRightOpenIcon /> : <PanelRightCloseIcon />}
+            {side === "thread" ? <PanelRightOpenIcon className="side-left:-scale-x-100" /> : <PanelRightCloseIcon className="side-left:-scale-x-100" />}
           </Button>
         </>
       )}
@@ -596,7 +616,7 @@ function StartFrom({ open, setOpen, model, start }: { open: boolean; setOpen: (o
 }
 
 /** The page under test, live, under a slim bar of its own: its address, reload, open in a tab, and which side is shown. */
-function UnderTest({ page, closed, side, show, narrow }: { page?: string; closed: boolean; side: Side; show: (side: Side) => void; narrow: boolean }) {
+function UnderTest({ page, gone, side, show, narrow }: { page?: string; gone?: string; side: Side; show: (side: Side) => void; narrow: boolean }) {
   const [loads, setLoads] = useState(0)
 
   return (
@@ -631,11 +651,12 @@ function UnderTest({ page, closed, side, show, narrow }: { page?: string; closed
         )}
       </div>
       {page ? (
-        <iframe key={`${page}-${loads}`} src={page} title="The page under test" className="min-h-0 flex-1 border-0 bg-background" />
+        // On this page's own host name: a frame from another host is another site's, and the runtime refuses it.
+        <iframe key={`${page}-${loads}`} src={page.replace("//127.0.0.1:", `//${location.hostname}:`)} title="The page under test" className="min-h-0 flex-1 border-0 bg-background" />
       ) : (
         <div className="grid flex-1 place-items-center p-6 text-center text-muted-foreground">
           <p className="max-w-64">
-            {closed ? "The run is closed, and its page with it." : "The root under test starts with the run; its page shows here, for you to act on as the person."}
+            {gone ?? "The root under test starts with the run; its page shows here, for you to act on as the person."}
           </p>
         </div>
       )}

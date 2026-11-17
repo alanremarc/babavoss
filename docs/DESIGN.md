@@ -1,126 +1,193 @@
-# BabaVoss
+# Baba Voss
 
-Canonical design, cut down to what holds while the product is reshaped: the vocabulary, the architecture, how agent, surface and person meet, and how a project's surfaces are kept, made known and updated. Details and limits belong in code and specs.
-
-A TypeScript framework for surfaces an agent works on. The person talks to the agent; the agent is the interface, and a surface is a tool it works with for them: what is true now and what can be done now, read and acted on by the agent through a command. The person has a page over the same surface, where they watch and decide. The agent makes a surface before a task that deserves one, or when asked, and keeps it for later. A project's surfaces are code in its .baba/ directory. .baba/ has a root, which is itself a surface: the picker of surfaces, with each open surface beside it as a tab. An agent learns of surfaces, and of each one, from the surface alone. The framework is primitives; the shell is a preset over them; baba is what makes an agent aware.
-
-## Vocabulary
-
-```text
-Parties
-  person       Asks, decides, supplies what the agent cannot.
-  agent        Computes the next step from context: input, instructions, current state.
-  harness      Hosts the agent: Claude Code, Codex. Owns sessions, skills, hooks and the agent's shell.
-
-Surface
-  surface      A tool an agent works with for a person, as a program: init, restore, update, view, run, failed. What it is for
-               is its description; how it is worked is what its views say. Code in .baba/, a tab of the root once opened.
-  model        Private domain state.
-  view         Public facts and handles at a path.
-  handle       Offered action with fixed and typed open arguments.
-  call         Request by an actor to invoke a handle.
-  message      Input to update: admitted call or command event.
-  command      Effect run outside update; reports events back.
-  actor        Identity responsible for a call: the agent or the person.
-  ask          Handle offered to the person only; the agent places it and waits on it.
-  ui           A surface's part of the page, for the person: renders views and calls handles; presentation, navigation and
-               private drafts are its own.
-
-Root
-  .baba/       The surfaces' package, in a project or in the person's home: it names the framework, and holds one directory per surface.
-  root         What .baba/ is to a session: one runtime and one page. Its surface is the picker and the open tabs.
-  picker       The root's first tab: the surfaces, each with what it is for.
-  tab          A surface opened in the root, by the agent or by the person; the same surface may be open in several.
-  word         The root's command, its own name, baba. How the agent reads views, calls handles, waits and closes it.
-  bv           The one program behind the word: finds what the session has open, wakes the runtime and passes one request to it.
-  state        What the open tabs hold, kept across the turns of a session.
-  baba         The words that make an agent aware of the root and how it is worked; also the package's command: init, new, start, provision.
-  provision    Writes what makes an agent aware beside .baba/: the framework's hook, and the skill baba.
-
-Turns
-  session      Harness conversation; the unit of state, runtime, page and directory. A subagent works within it, in its name.
-  turn         One computation of the agent.
-  present      The root at /, whole or as what changed since the session was last answered: every open tab's facts.
-
-Shell
-  util         A surface of its own in the shell, with its own component, opened as a tab. The root's utils are the picker and the surfaces.
-  layout       The frame a util's page is built in: the workbench, the plain layout, the welcome page.
-  document     What a workbench util works on, one at a time, in the strip of open ones; tools find, the document shows.
-  scope        What a util with several opens first, a project or a repository; the welcome page lists them.
-```
+A framework for surfaces. A surface is a tool an agent works with for a person: the agent reads and acts on it through a command, the person watches and acts on it on a page. Both see the same thing, and both change it. A project's surfaces are code in `.baba/`. The shell is the desktop they run on.
 
 ## Architecture
 
+### The whole
+
 ```text
-person ↔ agent ↔ harness ──hooks; the word──↔ root's runtime ─┬─ root surface: picker, tabs ─ surface: model, views, commands
-   └─────────────── browser ↔ page ─────────────────────┘      └─ state
+                          person
+             talks │                  │ watches, acts
+    ┌─ harness ────┴──────┐   ┌─ page ┴─────────────────┐
+    │        agent        │   │ shell ui                │
+    │                     │   │  ├─ surface ui          │
+    └──┬───────────▲──────┘   │  └─ surface ui          │
+       │ command   │ hooks    └──┬───────────▲──────────┘
+       │ actions   │ present     │ actions   │ views
+    ┌──▼───────────┴─────────────▼───────────┴──────────┐
+    │ runtime, one per session                          │
+    │   shell ─┬─ surface                               │
+    │          └─ surface                               │
+    └───────────────────────────────────────────────────┘
 ```
 
 ```text
-Start
-  session starts → hook → the root starts → baba's words and the whole present reach the agent: the page's address, the
-                   word, the surfaces and the open tabs; then, when a later release is out, how to take it
-  without hooks  → the skill baba says the same words, and to start the root
+person     Asks and decides.
+agent      Does the work.
+harness    Hosts the agent: Claude Code, Codex.
+session    One conversation of the harness.
+runtime    Holds the surfaces of a session: one state, changed by either side.
+page       Shows the same surfaces to the person, at one address per session, opened as it is by a browser of this
+           machine; what another site starts there is refused, but a link to the page.
+```
 
-Turn
-  call → update → model → views → page; the answer carries the result and what else changed since the session was last answered
-  hook → with the person's message, and after a tool call: what changed in the present since the session was last answered
-  page → the agent opens the page in the harness's browser where it has one, else hands the person its address
-  ask  → the agent places it and waits → the page offers it → the person answers → the wait returns with the answer
+### A surface
+
+```text
+              ┌─ surface ───────────────────────┐
+              │  view at /         view at /a/1 │
+   agent ─────┤    facts             facts      ├───── ui ───── person
+   reads,     │    actions           actions    │      shows,
+   calls      │                                 │      acts
+   world ─────┤  event: what it heard outside   │
+              │                                 │
+              │  update ──► notice ─────────────┼──► the log; the agent, once
+              │              highlight ─────────┼──► the person: a bubble, a dot
+              └─────────────────────────────────┘
+```
+
+```text
+surface    What is true now and what can be done now, as a program. Shared and live.
+view       What a surface says at a path: facts, and the actions offered there.
+action     Something that can be done now, offered alike to the agent and the person: a name, a clause on what the name
+           does not say, and inputs that each say what they mean.
+fact       What stands: true until the surface says otherwise.
+world      What changes outside a surface: a file, a process, a service. A surface hears it by a command that lives with
+           the session, and the log names it as the one who acted.
+notice     What happened: one line an update gives, kept in its entry of the log and told once to the agent; in no view.
+highlight  A notice marked important to the person, by its surface or by the agent: a bubble, and a dot on its tab
+           until they open its drawer.
+ui         A surface's part of the page: its views, shown to the person.
+```
+
+### The shell
+
+```text
+   ┌─ shell ─────────────────────────────────────────────┐
+   │  tab ── surface        ┐                            │
+   │  tab ── surface        ├─ each with its ui,         │
+   │  tab ── surface        ┘  built with the kit        │
+   │                                                     │
+   │  home · highlights · turn · addresses · activity    │
+   │  frame · theme · settings · health                  │
+   └───────▲──────────┬──────────────────────┬───────────┘
+           │          │ present,             │ rail and drawers,
+   a surface speaks   │ for the agent        │ for the person
+   to the shell:
+     facts at /   title, broken
+     notices      what happened; a highlight what the person should see
+```
+
+```text
+shell      The root surface, from the framework: the desktop. It holds every other surface as a tab.
+tab        An open surface; the same surface may be open in several.
+rail       The tabs, at a side of the page the person chooses; home's mark first, the newest beside it.
+drawer     A tab's panel, home's too: its menu drawn from its views, over its activity as a thread: its highlights,
+           everything else folded between them; home's also opens the closed tabs, read only.
+kit        What pages are built with: primitives and theming tokens; it follows the conventions unasked.
+conventions  How the person wants pages to be, from their settings and the machine: motion, text scale, a sidebar's side,
+           where the rail stands, the mode. Handed to every page, which follows them by its own code; expected, never enforced.
+border     What a project may import: the framework's entries, core/index.ts for a surface, kit/index.ts and
+           shell/ui/index.tsx for a page; nothing else resolves.
+present    The shell at /: every open tab's facts and actions, each with its command, a list's rows' as one pattern.
+```
+
+What the shell offers, it offers twice: on the page for the person, in the present for the agent.
+
+```text
+home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's
+                own, with the closed tabs under its thread
+highlights      what the person should see, raised by a surface or by the agent: a bubble beside the tab for a moment, a
+                dot on it until its drawer is opened, standing out in its thread
+turn            whose move it is, said by the mark: its eyes look about while the agent works
+addresses       every place has a link, a tab by its surface's name, and the agent can highlight it and bring it to the front
+activity        a log of actions, for auditing and not replay: who, the person, the agent or the world; what was called,
+                with its inputs; done, or refused and why; the surface's lines about it. Kept with each tab in its own
+                log: in its drawer; read on demand by the agent; a closed tab's, read only, at /activity/closed
+frame           title, menus and a surface's actions, in the same place for every surface: a tab's drawer
+theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
+settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
+                follow by convention, shortcuts, the mark's motion, how long closed tabs are kept; and clearing them
+health          what is broken, and why; a page whose runtime sleeps or is lost says so and finds it again
+```
+
+### A turn
+
+```text
+   session starts ── hook ──► baba's words + the whole present ──────────► agent
+   resumed, compacted ── hook ──► the same words + the whole present ─────► agent
+
+   agent ── baba ──► action ──► surface changes ──► page follows ────────► person
+
+   person ── page ──► action ──► surface changes ─┬─ notice ── hook, after a tool call ──► agent, at once
+                                                  └─ what changed, and by whom ── hook, with their message ──► agent
+```
+
+State at boundaries, events in the flow.
+
+```text
+             a start, a compaction   on demand   the agent's own call   the person's message   during work
+present      whole                   whole       what it changed        what changed           nothing
+notices      none yet                yes         yes                    yes                    yes
+```
+
+```text
+baba       The command the agent reads and acts with, one call at a time or as one program of many, answered by one
+           summary; and the words that teach it to.
+hook       Where the harness lets context in: at a session's start, with each message, after each tool call. It adds, and never blocks.
+skill      The same words where a harness has no hooks, and the way back in.
+adapter    The one place that knows a harness: how to set it up, start a session in it, and read its stream. A hook
+           names its adapter, so a runtime knows which harness its agent runs in.
+wake       Every request wakes the runtime with a strength: a session's start weakly, a few minutes; the person's message,
+           the agent's command and the person's action strongly, half an hour; a page that only watches, not at all. It
+           sleeps, its state kept, once the furthest is spent and nothing runs, or at once when the agent says `sleep`
+           at the end of its work; the session's end leaves a minute. Any command wakes it; the page never does.
+```
+
+### A project
+
+```text
+   project/
+   ├─ .baba/                      the surfaces' package: it names the framework
+   │   ├─ surfaces/NAME/
+   │   │   ├─ src/surface.ts      the surface
+   │   │   ├─ ui/index.tsx        its ui
+   │   │   └─ spec/               its rules
+   │   └─ baba.config.ts          optional: the project's title, and how each harness is set up
+   ├─ .claude/ · .codex/ …        the harnesses, set up from .baba/: the hooks, baba's words
+   └─ .babavoss/                  what sessions keep: each tab's state and log, closed tabs read only, cleared by a rolling window
+```
+
+```text
+.baba/     A project's surfaces. One command makes it; the shell is not in it.
+framework  One version, named in .baba/. The agent is told of a later one, takes it, and adapts the surfaces.
 ```
 
 ## Agent, surface, person
 
 ```text
-agent → surface   the word: read a view, call a handle the view offers, wait
-surface → agent   the answer to a command; and unasked, through hooks, what changed since the session was last answered
-person → surface  the page: the same handles, called as the person; an ask answered; a surface opened from the picker
-surface → person  the page: the views, live
-agent ↔ person    the conversation, which the surface is no part of
-learned           a surface has no skill and no instructions beside it. An agent chooses it by its description, in the
-                  picker, and works it by what its views say, read once it is open. So a surface the person opens is the
-                  agent's to take up as soon as the present tells of it
-not woken         what the person does on the page while no turn runs reaches the agent with their next message; nothing
-                  starts a turn
-not a canvas      the page shows the surfaces' own views; the agent changes what the person sees only by calling handles
+shared    both act on the surface, at any time. A change by the person is a move to take up, never to undo
+held      the agent holds the state: it is given whole once, and every change after as a change. It reads again only
+          what it was never shown, so an action is one call
+learned   a surface is all an agent learns of how it works: its description to choose it, its views to work it; never
+          what to do, which the person and their instructions say
+dynamic   a surface made, changed or removed runs once the shell restarts: at once in dev mode, else when the agent
+          restarts it, the present saying the code changed until then
+soft      hooks add context and never block; a surface offers both sides the same and locks nothing: what is the
+          person's, the agent asks for in the conversation; hard limits stay the person's, in the harness
 ```
 
-The agent is a surface's first user and it is built for it: a reader that reads everything each time and remembers nothing. The page is the same surface for the person. Neither is drawn by the other.
+## Lab
 
-## .baba/
+A surface of this repository. An agent that built something drives an agent that uses it, on a copy of the project as it is now, and reads everything that entered its context. The person watches both.
+
+Beside it, the rig: the same tasks given to a real agent on two checkouts, several times each, scored on whether the surface ended as asked, on what the agent was told and on what it did. A change to how a surface is shown is decided by it.
+
+## Later
 
 ```text
-.baba/:     a Bun package beside the harnesses' configuration, in a project or in the person's home; package.json names the
-            framework, a release of this repository, and nothing else does; surfaces/NAME/ is a surface: src/surface.ts,
-            the surface; ui/index.tsx, its component; spec/, its rules
-root:       one runtime and one page per session, which the framework provides and generates from the surfaces. It runs
-            with none at all. Its first tab is the picker; a surface is a util of it, opened as a tab as often as
-            wanted. At / the agent is told what changes in any open tab
-dynamic:    the root follows .baba/ by itself: a surface made or removed, and a change to one's code, are loaded into the
-            running root, and the page follows. Nothing is provisioned for a surface
-start:      by `baba start`, by hand or by the agent, and by the hook when a session starts; either way the answer is the
-            framework's version, the page's address with the word to open it in the harness's browser where it has one,
-            the surfaces and the open tabs. It sleeps when idle and any command wakes it where it was
-aware:      one piece of content makes an agent aware: baba's words, how the root is worked, and after them the present.
-            Hooks deliver it: whole at a session's start, with the root started, and as what changed with each message
-            of the person and after each tool call. The skill baba is the same words for a harness without hooks, and
-            the way back in
-bootstrap:  one command, the package's init: makes .baba/, installs the framework and provisions
-loop:       change a surface in .baba/ → test it → work it in the root
-provision:  writes the framework's hook into the harness's settings beside .baba/, and the skill baba, which the package
-            carries, into .claude/skills and .agents/skills; installing in .baba/ provisions
-harness:    the harness's configuration beside .baba/ is compiled from .baba/: baba's is primary, the harness's follows.
-            What is compiled is hooks where a harness has them, Claude Code's, into its settings, among the person's own,
-            which are left as they are; and the one skill
-hooks:      soft control only: a hook adds context, the words and the present, and never blocks or decides; what may not
-            happen stays the person's to set in the harness. The person's own layer outranks a project's
-versions:   none to match: the command, baba's words and the root all come from the framework .baba/ names, so they are
-            always of one version
-update:     the root's door says when a later release is out, asked of the repository at most once a day; the agent takes
-            it in .baba/, reads the changelog from the version the surfaces ran on up, and adapts them
-release:    a tag vX.Y.Z of this repository; every version on main is one, with its section in CHANGELOG.md, written for
-            the agent that adapts a project to it
-keeps:      what the root's sessions write is beside .baba/: ~/.babavoss/ for the person's home, the project's .babavoss/ otherwise
-later:      a way for the page to start a turn, such as ending the person's move; tests that run a surface under a
-            harness; hooks for harnesses besides Claude Code
+wrapper    a harness the page can start a turn in, through the adapter
+codex      its adapter is written from Codex's documents; run it against the real one
+systems    the mode of the machine is read on macOS only; an adapter each for the others
 ```

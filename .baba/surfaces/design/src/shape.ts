@@ -2,13 +2,13 @@
 // boundary as a story runs it, and explored as the person would. From its first state every handle offered is called once
 // per place, an input filled with a sample, and each state reached is looked at along the paths its views name under `at`.
 // What is kept is each place by its pattern, /tasks/:n, with the names of the facts it gives and the actions offered there:
-// their inputs, whether one is an ask, the person's alone, and whether a call gives a notice. What a surface's own
+// their inputs, and whether a call gives a notice. What a surface's own
 // commands change is read from what it starts.
 import { readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { story, type Args, type Handle, type Json, type Schema, type Surface, type View } from "babavoss/core/index.ts"
+import { story, typeOf, type Args, type Handle, type Input, type Json, type Surface, type Type, type View } from "babavoss/core/index.ts"
 
-export type Action = { name: string; description: string; inputs: string[]; ask?: true; notice?: true }
+export type Action = { name: string; description: string; inputs: string[]; notice?: true }
 export type Place = { path: string; facts: string[]; actions: Action[] }
 /** A surface as the demo has it: what it says of itself, its places, and the commands it starts, which change it by itself. */
 export type Shape = { name: string; description: string; views: Place[]; itself?: string[] }
@@ -20,7 +20,9 @@ const STATES = 40
 
 type Call = { path: string; handle: string; args: Args }
 
-const SAMPLE: Record<Schema[string], Json> = { string: "Example", number: 1, boolean: true }
+const SAMPLE: Record<Type, Json> = { string: "Example", number: 1, boolean: true }
+/** A value an input takes: its first choice, the start of its range, else a sample of its base type. */
+const sample = (input: Input): Json => (typeof input === "string" ? SAMPLE[input] : (input.choices?.[0] ?? input.range?.[0] ?? SAMPLE[typeOf(input)]))
 const isHandle = (v: Json | undefined): v is Handle => !!v && typeof v === "object" && !Array.isArray(v) && v.kind === "handle"
 const isRow = (v: Json | undefined): v is { [key: string]: Json | undefined } => !!v && typeof v === "object" && !Array.isArray(v) && !isHandle(v)
 
@@ -45,6 +47,17 @@ export function factsOf(view: View | Json | undefined, facts: Facts = new Map())
 export const said = (facts: Facts) => [...facts].map(([k, fields]) => (fields.length ? `${k}: ${fields.join(" ")}` : k))
 /** Facts as listed, taken back. */
 export const listed = (lines: string[]): Facts => new Map(lines.map((line) => [line.split(": ")[0]!, line.split(": ")[1]?.split(" ") ?? []]))
+
+/**
+ * A handle's description said of any subject rather than the one it was offered for: each fixed argument's value written
+ * as its name in capitals, as the framework writes what is to be filled in, "Approve task N" for "Approve task 1".
+ */
+export const described = (h: Handle) =>
+  Object.entries(h.args ?? {}).reduce((text, [k, v]) => {
+    const value = String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+    return typeof v === "number" || typeof v === "string" ? text.replace(new RegExp(`(?<![\\w-])${value}(?![\\w-])`, "g"), k.toUpperCase()) : text
+  }, h.description)
 
 /** Every path a view names under `at`, with the row it names it in. */
 function places(value: Json | undefined, out: { at: string; row: { [key: string]: Json | undefined } }[] = []) {
@@ -117,7 +130,7 @@ export async function explore<M, E extends { kind: string }, C>(name: string, su
         if (tried.has(key)) continue
         tried.add(key)
 
-        const args: Args = { ...h.args, ...Object.fromEntries(Object.entries(h.open).map(([k, t]) => [k, SAMPLE[t]])) }
+        const args: Args = { ...h.args, ...Object.fromEntries(Object.entries(h.open).map(([k, t]) => [k, sample(t)])) }
         const probe = story(surface)
 
         for (const c of calls) await probe.person.call(c.path, c.handle, c.args)
@@ -128,9 +141,8 @@ export async function explore<M, E extends { kind: string }, C>(name: string, su
         if (answer.outcome === "refused") continue
         placeOf(seen.get(path)!).actions.set(h.name, {
           name: h.name,
-          description: h.description,
+          description: described(h),
           inputs: Object.keys(h.open),
-          ...(h.ask && { ask: true as const }),
           ...(probe.agent.noticed().length > 0 && { notice: true as const }),
         })
         queue.push([...calls, { path, handle: h.name, args }])

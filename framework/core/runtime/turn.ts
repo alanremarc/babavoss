@@ -42,10 +42,11 @@ export function reading(turn: Turn, now: number, busy = false): Turn {
  * The hooks' silence, as the agent's word finds it. Each run of the word is one tool call of the agent's, and a harness's
  * hooks speak after each tool call; so a run that begins more than HUSH_MS after another run's last answer, with no hook
  * heard since, finds them quiet. One tool call that runs long, a wait or a program of many calls, is one run, and never
- * finds them so. `ever`: a hook was heard in this session; `told`: the agent was told of this stretch of silence, which the
- * next hook heard ends; `last`: the run answered last since a hook was heard, and when.
+ * finds them so. Only the session's own agent's runs carry a call: one in its name from elsewhere, another session's agent
+ * by --session or a script, carries none and counts for nothing (bv.ts). `ever`: a hook was heard in this session; `told`: the agent was told of this stretch of silence, which the
+ * next hook heard ends, and `since` when it was; `last`: the run answered last since a hook was heard, and when.
  */
-export type Hooks = { ever: boolean; told: boolean; last?: { call: string; at: number }; harness?: string }
+export type Hooks = { ever: boolean; told: boolean; since?: number; last?: { call: string; at: number }; harness?: string }
 export const HUSH_MS = 10_000
 export const QUIET_LINE = "baba: this session's hooks are not being heard; what changes is told only when you read it. Start a new session to get them back."
 export const NO_HOOKS_LINE = "baba: no hook of this session's harness is heard; what changes is told only when you read it."
@@ -66,8 +67,17 @@ export function hushed(hooks: Hooks, call: string, now: number): { hooks: Hooks;
 
   if (hooks.told || !quiet) return { hooks }
 
-  return { hooks: { ...hooks, told: true }, line: hooks.ever ? QUIET_LINE : NO_HOOKS_LINE }
+  return { hooks: { ...hooks, told: true, since: now }, line: hooks.ever ? QUIET_LINE : NO_HOOKS_LINE }
 }
+
+/**
+ * The hooks' silence as the person is shown it, by the runtime's own finding and never a timer of the page's: from the
+ * run that found them quiet, `since`, to the next hook heard; `ever` where one was heard before, so they went quiet rather
+ * than never spoke. Nothing while they are heard or no silence was found, as before a session's first run of the word.
+ */
+export type Unheard = { ever: boolean; since: number }
+
+export const unheardOf = (hooks: Hooks): Unheard | undefined => (hooks.told ? { ever: hooks.ever, since: hooks.since ?? 0 } : undefined)
 
 /** What a harness that can be driven from code does: starts a turn of the session's agent with a message. */
 export type Driver = { startTurn(message: string): Promise<{ started: true } | { cannot: string }> }

@@ -4,7 +4,7 @@ import { expect, test } from "bun:test"
 import { story } from "babavoss/core/index.ts"
 import greeting from "../src/surface.ts"
 
-test("the agent proposes a greeting, and only the person is offered the decision", async () => {
+test("the agent proposes a greeting, both are offered the decision, and the agent takes it on the person's word", async () => {
   const { agent, person } = story(greeting)
 
   // Given what both are shown at the start
@@ -14,29 +14,33 @@ test("the agent proposes a greeting, and only the person is offered the decision
   // When the agent proposes
   expect(await agent.call("/", "propose", { text: "good morning" })).toMatchObject({ outcome: "written" })
 
-  // Then both see the proposal and that the person is needed, and the person alone may decide
-  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning", attention: { who: "person" } })
-  expect(agent.offered()).toEqual(["propose"])
+  // Then both see the proposal, the person is shown it as a highlight, and both are offered the decision
+  expect(agent.sees()).toMatchObject({ greeting: "hello", proposed: "good morning" })
+  expect(person.noticed()).toEqual(['highlight: "good morning" is proposed, to accept or decline'])
+  expect(agent.offered()).toEqual(["accept", "decline", "propose"])
   expect(person.offered()).toEqual(["accept", "decline", "propose"])
-  expect(await agent.call("/", "accept", {})).toMatchObject({ outcome: "refused" })
+
+  // And when the person says yes in the conversation, the agent accepts
+  expect(await agent.call("/", "accept", {})).toMatchObject({ outcome: "written" })
+  expect(person.sees()).toMatchObject({ greeting: "good morning" })
 })
 
-test("the agent is told what the person decided, and both notice it", async () => {
+test("the agent is told what the person decided on the page, and both notice it", async () => {
   const { agent, person } = story(greeting)
 
   await agent.call("/", "propose", { text: "good morning" })
   agent.told()
   expect(agent.noticed()).toEqual([])
   await person.call("/", "accept", {})
-  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- attention"])
+  expect(agent.told()).toEqual(['greeting: "hello" → "good morning"', "- proposed", "- action accept", "- action decline"])
   expect(agent.noticed()).toEqual(['The greeting is now "good morning"'])
-  expect(person.noticed()).toEqual(['The greeting is now "good morning"'])
+  expect(person.noticed()).toEqual(['highlight: "good morning" is proposed, to accept or decline', 'The greeting is now "good morning"'])
 
   await agent.call("/", "propose", { text: "hi" })
   agent.told()
   await person.call("/", "decline", {})
   expect(agent.sees()).toMatchObject({ greeting: "good morning" })
-  expect(agent.told()).toEqual(["- proposed", "- attention"])
+  expect(agent.told()).toEqual(["- proposed", "- action accept", "- action decline"])
   expect(agent.noticed()).toEqual(['"hi" was declined'])
 })
 

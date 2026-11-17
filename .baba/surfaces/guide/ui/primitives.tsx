@@ -1,30 +1,15 @@
-// The primitives' specimens: every component of the kit, in its variants and states, live, with sample content. What
-// opens over the page, a dialog, a sheet, a menu, opens from a button here, as it would in a page.
+// The primitives' specimens: every component of the kit, in its variants and states, live, with sample content, and the
+// parts of a content the kit has an opinion on. What opens over the page, a dialog, a menu, opens from a button here, as
+// it would in a page.
 import { useState, type ComponentType, type CSSProperties, type ReactNode } from "react"
-import { BellIcon, BoldIcon, BotIcon, CircleAlertIcon, CopyIcon, FileTextIcon, InboxIcon, ItalicIcon, PlusIcon, RotateCcwIcon, SearchIcon, TerminalIcon, UnderlineIcon, WrenchIcon } from "lucide-react"
+import { BellIcon, BoldIcon, CircleAlertIcon, CopyIcon, InboxIcon, ItalicIcon, PlusIcon, RotateCcwIcon, UnderlineIcon } from "lucide-react"
 import {
   Alert,
   AlertAction,
   AlertDescription,
   AlertTitle,
   Badge,
-  Bubble,
-  BubbleContent,
-  BubbleGroup,
   Button,
-  CodeBlock,
-  CodeBlockActions,
-  CodeBlockContent,
-  CodeBlockCopyButton,
-  CodeBlockHeader,
-  CodeBlockTitle,
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  Composer,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -52,54 +37,31 @@ import {
   EmptyMedia,
   EmptyTitle,
   Input,
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-  InputGroupText,
-  InputGroupTextarea,
-  Marker,
-  MarkerContent,
-  MarkerIcon,
-  Message,
-  MessageContent,
-  MessageFooter,
-  MessageGroup,
-  MessageHeader,
   Popover,
   PopoverContent,
   PopoverTrigger,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
-  Sheet,
-  SheetContent,
-  SheetTitle,
   Textarea,
-  Thread,
-  ThreadEnd,
-  ThreadEvent,
-  ThreadItem,
-  ThreadStep,
-  ThreadSteps,
-  Toasts,
+  ThemePicker,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  ThemePicker,
+  WorkbenchEmpty,
+  WorkbenchPage,
+  WorkbenchSegments,
+  WorkbenchSpacer,
+  WorkbenchToolbar,
   presetOf,
+  useNarrow,
   varsOf,
   type Theme,
-  type ToastItem,
+  Toggle,
 } from "babavoss/kit/index.ts"
-import { Toggle } from "babavoss/kit/components/toggle.tsx"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "babavoss/kit/components/collapsible.tsx"
-import { CodeBlockFooter, CodeBlockLine } from "babavoss/kit/components/code-block.tsx"
-import { CommandSeparator, CommandShortcut } from "babavoss/kit/components/command.tsx"
-import { MessageAvatar } from "babavoss/kit/components/message.tsx"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 
@@ -222,92 +184,6 @@ function Inputs() {
   )
 }
 
-function InputGroups() {
-  return (
-    <States min={240}>
-      <State label="addon start">
-        <InputGroup>
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput placeholder="Search issues" />
-        </InputGroup>
-      </State>
-      <State label="addon end, text">
-        <InputGroup>
-          <InputGroupInput defaultValue="0.5" />
-          <InputGroupAddon align="inline-end">
-            <InputGroupText>USD</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>
-      </State>
-      <State label="button">
-        <InputGroup>
-          <InputGroupInput defaultValue="bun run baba start" className="font-mono" />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton size="icon-xs" aria-label="Copy">
-              <CopyIcon />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-      </State>
-      <State label="textarea, block addon">
-        <InputGroup>
-          <InputGroupTextarea rows={2} placeholder="Write to the agent" />
-          <InputGroupAddon align="block-end">
-            <InputGroupText>⌘↵ to send</InputGroupText>
-            <InputGroupButton variant="default" className="ml-auto">
-              Send
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-      </State>
-    </States>
-  )
-}
-
-function Commands() {
-  return (
-    <States min={300}>
-      <State label="search, groups, shortcut, disabled" className="p-0">
-        <Command className="w-full">
-          <CommandInput placeholder="Run, open or switch to…" />
-          <CommandList>
-            <CommandEmpty>Nothing found.</CommandEmpty>
-            <CommandGroup heading="Tabs">
-              <CommandItem>
-                <InboxIcon /> Queue
-                <CommandShortcut>⌘1</CommandShortcut>
-              </CommandItem>
-              <CommandItem>
-                <TerminalIcon /> Lab
-              </CommandItem>
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Surfaces">
-              <CommandItem>
-                <FileTextIcon /> Design
-              </CommandItem>
-              <CommandItem disabled>
-                <CircleAlertIcon /> Broken surface
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </State>
-      <State label="empty" className="p-0">
-        <Command className="w-full">
-          <CommandInput placeholder="Run, open or switch to…" value="zzz" />
-          <CommandList>
-            <CommandEmpty>Nothing found.</CommandEmpty>
-            <CommandItem>Queue</CommandItem>
-          </CommandList>
-        </Command>
-      </State>
-    </States>
-  )
-}
-
 function Badges() {
   return (
     <States min={110}>
@@ -319,38 +195,6 @@ function Badges() {
           </Badge>
         </State>
       ))}
-    </States>
-  )
-}
-
-function Markers() {
-  return (
-    <States min={220}>
-      <State label="default">
-        <Marker>
-          <MarkerContent>Resumed at 14:02</MarkerContent>
-        </Marker>
-      </State>
-      <State label="icon, link">
-        <Marker>
-          <MarkerIcon>
-            <WrenchIcon />
-          </MarkerIcon>
-          <MarkerContent>
-            Ran 3 tools · <a href="#marker">open the log</a>
-          </MarkerContent>
-        </Marker>
-      </State>
-      <State label="separator">
-        <Marker variant="separator">
-          <MarkerContent>Today</MarkerContent>
-        </Marker>
-      </State>
-      <State label="border">
-        <Marker variant="border">
-          <MarkerContent>2 turns · 41s · $0.08</MarkerContent>
-        </Marker>
-      </State>
     </States>
   )
 }
@@ -420,13 +264,7 @@ function Empties() {
   )
 }
 
-const TOASTS: ToastItem[] = [
-  { id: 1, text: "Issue 4, Show the present, is done", title: "Queue", mark: <BotIcon /> },
-  { id: 2, text: "Draft 7 waits for your approval", title: "Queue", meta: "now", mark: <BotIcon />, onSelect: () => {} },
-  { id: 3, text: "The run ended", title: "Lab", mark: <TerminalIcon /> },
-]
-
-/** What passes on its own, held here: each toast goes after a while, or when dismissed, and comes back with Again. */
+/** What passes on its own, held here: each goes when dismissed, and comes back with Again; the shell's bubbles are. */
 export function useHeld<T extends { id: number }>(all: T[]) {
   const [shown, setShown] = useState(all)
 
@@ -439,21 +277,6 @@ export const Again = ({ onClick, children = "Again" }: { onClick: () => void; ch
     <RotateCcwIcon data-icon="inline-start" /> {children}
   </Button>
 )
-
-function ToastSpecimen() {
-  const { shown, dismiss, again } = useHeld(TOASTS)
-
-  return (
-    <States min={320}>
-      <State label="line · from · meta · action; hover holds, × dismisses" wide className="flex-col items-stretch">
-        <Toasts toasts={shown} dismiss={dismiss} className="static w-full max-w-md" from="top" />
-        <div>
-          <Again onClick={again} />
-        </div>
-      </State>
-    </States>
-  )
-}
 
 function Tooltips() {
   return (
@@ -571,47 +394,6 @@ function Dialogs() {
   )
 }
 
-function Sheets() {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <States min={160}>
-      <State label="open on click, under the strip">
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-          Open sheet
-        </Button>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent top="top-11" aria-label="Sheet">
-            <div className="flex h-9 shrink-0 items-center px-3">
-              <SheetTitle className="text-body font-medium">Sheet</SheetTitle>
-            </div>
-            <p className="px-3 text-muted-foreground">A panel from the right edge over the page, which stays live around it. Escape or a press outside closes it.</p>
-          </SheetContent>
-        </Sheet>
-      </State>
-    </States>
-  )
-}
-
-function Collapsibles() {
-  return (
-    <States min={220}>
-      {[false, true].map((open) => (
-        <State key={String(open)} label={open ? "open" : "closed"} className="block">
-          <Collapsible defaultOpen={open}>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                Iteration 2 · Rewrite the strip
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="px-2 pt-1 text-muted-foreground">Why: the dots stood apart from the icon.</CollapsibleContent>
-          </Collapsible>
-        </State>
-      ))}
-    </States>
-  )
-}
-
 function Resizables() {
   return (
     <States min={300}>
@@ -636,189 +418,6 @@ function Resizables() {
             <div className="p-3 text-muted-foreground">Output</div>
           </ResizablePanel>
         </ResizablePanelGroup>
-      </State>
-    </States>
-  )
-}
-
-const SOURCE = `import { surface } from "babavoss/core/index.ts"
-
-export default surface({
-  description: "Keep a greeting. Use when it is to change.",
-  init: () => ({ greeting: "hello" }),
-})
-`
-
-function CodeBlocks() {
-  return (
-    <States min={320}>
-      <State label="header, copy" className="block">
-        <CodeBlock>
-          <CodeBlockHeader>
-            <CodeBlockTitle>src/surface.ts</CodeBlockTitle>
-            <CodeBlockActions>
-              <CodeBlockCopyButton value={SOURCE} />
-            </CodeBlockActions>
-          </CodeBlockHeader>
-          <CodeBlockContent>{SOURCE}</CodeBlockContent>
-        </CodeBlock>
-      </State>
-      <State label="numbered" className="block">
-        <CodeBlock>
-          <CodeBlockContent lineNumbers startLine={12}>
-            {SOURCE}
-          </CodeBlockContent>
-        </CodeBlock>
-      </State>
-      <State label="diff: added, removed, highlighted" className="block">
-        <CodeBlock>
-          <CodeBlockContent lineNumbers>
-            <CodeBlockLine>{"export default surface({"}</CodeBlockLine>
-            <CodeBlockLine variant="removed">{'  description: "Keep a greeting.",'}</CodeBlockLine>
-            <CodeBlockLine variant="added">{'  description: "Keep a greeting. Use when it is to change.",'}</CodeBlockLine>
-            <CodeBlockLine variant="highlighted">{'  init: () => ({ greeting: "hello" }),'}</CodeBlockLine>
-            <CodeBlockLine>{"})"}</CodeBlockLine>
-          </CodeBlockContent>
-        </CodeBlock>
-      </State>
-      <State label="wrap, sm, footer" className="block">
-        <CodeBlock size="sm">
-          <CodeBlockContent wrap>
-            {"$ bun ../bin/baba.ts start — the page is at http://localhost:3000, open it in the harness's browser where it has one"}
-          </CodeBlockContent>
-          <CodeBlockFooter className="text-meta">exit 0 · 120ms</CodeBlockFooter>
-        </CodeBlock>
-      </State>
-      <State label="destructive" className="block">
-        <CodeBlock size="sm" variant="destructive">
-          <CodeBlockContent>{"error: Unexpected end of file\n    at ui/main.tsx:189:24"}</CodeBlockContent>
-        </CodeBlock>
-      </State>
-    </States>
-  )
-}
-
-function Messages() {
-  return (
-    <States min={300}>
-      <State label="the agent, header, footer" className="block">
-        <Message>
-          <MessageAvatar>
-            <BotIcon />
-          </MessageAvatar>
-          <MessageContent>
-            <MessageHeader>Agent</MessageHeader>
-            <p>I started issue 4 in lane 2. Its specs pass; I am merging it.</p>
-            <MessageFooter>14:02</MessageFooter>
-          </MessageContent>
-        </Message>
-      </State>
-      <State label="the person, tinted bubble, end" className="block">
-        <Message align="end">
-          <MessageContent>
-            <MessageHeader className="justify-end px-0">You</MessageHeader>
-            <Bubble variant="tinted" align="end">
-              <BubbleContent>Show me the strip with a broken tab.</BubbleContent>
-            </Bubble>
-          </MessageContent>
-        </Message>
-      </State>
-      <State label="bubbles: default, secondary, muted, tinted, outline, ghost, destructive" wide className="block">
-        <BubbleGroup>
-          {(["default", "secondary", "muted", "tinted", "outline", "ghost", "destructive"] as const).map((v) => (
-            <Bubble key={v} variant={v}>
-              <BubbleContent>{v}</BubbleContent>
-            </Bubble>
-          ))}
-        </BubbleGroup>
-      </State>
-      <State label="group" wide className="block">
-        <MessageGroup>
-          <Message>
-            <MessageContent>
-              <Bubble variant="muted">
-                <BubbleContent>Which lane is free?</BubbleContent>
-              </Bubble>
-            </MessageContent>
-          </Message>
-          <Message>
-            <MessageContent>
-              <Bubble variant="muted">
-                <BubbleContent>Lanes 3, 4 and 5.</BubbleContent>
-              </Bubble>
-            </MessageContent>
-          </Message>
-        </MessageGroup>
-      </State>
-    </States>
-  )
-}
-
-function Threads() {
-  return (
-    <States min={320}>
-      <State label="message, step, steps running, error, end, event" wide className="flex h-96 flex-col items-stretch p-0">
-        <Thread>
-          <ThreadItem id="a" end>
-            <Message align="end">
-              <MessageContent>
-                <Bubble variant="tinted" align="end">
-                  <BubbleContent>Add a design guide.</BubbleContent>
-                </Bubble>
-              </MessageContent>
-            </Message>
-          </ThreadItem>
-          <ThreadItem id="b">
-            <ThreadStep icon={<FileTextIcon />} title="Read" description="docs/DESIGN.md" aside="126 lines">
-              <p>The canonical design, cut down to what holds.</p>
-            </ThreadStep>
-          </ThreadItem>
-          <ThreadItem id="c">
-            <ThreadSteps icon={<WrenchIcon />} summary="Ran 3 tools" description="bun check, bun test" aside="12s" initial>
-              <ThreadStep icon={<TerminalIcon />} title="bun check" aside="1s" />
-              <ThreadStep icon={<TerminalIcon />} title="bun test" status="error" description="1 fail" aside="9s" />
-              <ThreadStep icon={<TerminalIcon />} title="bun test" status="running" description="again" />
-            </ThreadSteps>
-          </ThreadItem>
-          <ThreadItem id="d">
-            <Message>
-              <MessageContent>
-                <p>The guide is up, with every primitive in it.</p>
-              </MessageContent>
-            </Message>
-            <ThreadEnd title="2 turns, 41 seconds, 8 cents">41s · $0.08</ThreadEnd>
-          </ThreadItem>
-          <ThreadItem id="e">
-            <ThreadEvent icon={<RotateCcwIcon />}>Resumed with another model</ThreadEvent>
-          </ThreadItem>
-        </Thread>
-      </State>
-    </States>
-  )
-}
-
-const COMPLETIONS = [
-  { id: "a", label: "queue", description: "The session's work as issues", insert: "/queue" },
-  { id: "b", label: "guide", description: "The design guide", insert: "/guide" },
-  { id: "c", label: "lab", description: "An agent that uses what was built", insert: "/lab" },
-]
-
-function Composers() {
-  const send = async (text: string) => (text.startsWith("!") ? "A message may not start with !" : undefined)
-
-  return (
-    <States min={320}>
-      <State label="empty, sends on Enter; ! is refused" className="block">
-        <Composer placeholder="Write to the agent" send={send} footer="sonnet · high" />
-      </State>
-      <State label="completions: type /" className="block">
-        <Composer placeholder="Type / to call a surface" send={send} completions={COMPLETIONS} stop={() => {}} />
-      </State>
-      <State label="closed" className="block">
-        <Composer closed="The run has ended" footer="sonnet" />
-      </State>
-      <State label="reopen" className="block">
-        <Composer closed="The session stopped" reopen={{ label: "Resume", run: () => {} }} />
       </State>
     </States>
   )
@@ -854,27 +453,70 @@ function ThemePickers() {
   )
 }
 
+/** A content's toolbar as the queue's narratives draw it: a title, a spacer, segments at the far end. */
+function Toolbars() {
+  const [lens, setLens] = useState<"story" | "issues">("story")
+
+  return (
+    <States min={300}>
+      <State label="toolbar · spacer · segments" wide bare className="rounded-lg border">
+        <WorkbenchToolbar label="Narrative">
+          <span className="px-1 font-medium">Show the present</span>
+          <WorkbenchSpacer />
+          <div className="w-40">
+            <WorkbenchSegments
+              label="Lens"
+              options={[
+                { id: "story", label: "Story" },
+                { id: "issues", label: "Issues" },
+              ]}
+              value={lens}
+              set={setLens}
+            />
+          </div>
+        </WorkbenchToolbar>
+      </State>
+    </States>
+  )
+}
+
+/** A document's page, its title, aside and meta over its blocks; the empty line where there is nothing; and narrowness, measured. */
+function Pages() {
+  const [measure, narrow] = useNarrow(420)
+
+  return (
+    <States min={300}>
+      <State label="page: title, aside, meta" bare className="flex h-48 flex-col rounded-lg border">
+        <WorkbenchPage title="Narratives" aside={3} meta="12 issues, 4 open">
+          <p className="text-muted-foreground">The blocks of the page, in one measured column.</p>
+        </WorkbenchPage>
+      </State>
+      <State label="empty" bare className="flex h-48 flex-col rounded-lg border">
+        <WorkbenchEmpty>No narratives yet. The agent starts one when work goes its own way.</WorkbenchEmpty>
+      </State>
+      <State label={`useNarrow(420): ${narrow ? "narrow" : "wide"}; resize the window`} wide>
+        <div ref={measure} className="flex w-full gap-2" style={{ flexDirection: narrow ? "column" : "row" }}>
+          <div className="flex-1 rounded-md bg-muted p-2">Thread</div>
+          <div className="flex-1 rounded-md bg-muted p-2">Page under test</div>
+        </div>
+      </State>
+    </States>
+  )
+}
+
 export const primitives: Record<EntryOf<"primitives">, ComponentType> = {
   button: Buttons,
   toggle: Toggles,
   input: Inputs,
-  "input-group": InputGroups,
-  command: Commands,
   "theme-picker": ThemePickers,
   badge: Badges,
-  marker: Markers,
   alert: Alerts,
   empty: Empties,
-  toast: ToastSpecimen,
   tooltip: Tooltips,
   popover: Popovers,
   "dropdown-menu": Dropdowns,
   dialog: Dialogs,
-  sheet: Sheets,
-  collapsible: Collapsibles,
   resizable: Resizables,
-  "code-block": CodeBlocks,
-  message: Messages,
-  thread: Threads,
-  composer: Composers,
+  toolbar: Toolbars,
+  page: Pages,
 }

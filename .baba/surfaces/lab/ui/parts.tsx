@@ -10,7 +10,7 @@ export type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" |
 export type Tokens = { input: number; cache_write: number; cache_read: number; output: number }
 export type Row = { at: string; i: number; kind: Kind; title: string; size: number; line: string; context?: number | null; growth?: number | null }
 export type Whole = Row & { t: number; text: string; call?: string; error?: boolean; pending?: boolean; tokens?: Tokens; cost?: number; ms?: number; calls?: number }
-export type Status = "no run" | "starting" | "idle" | "working" | "ended" | "closing" | "closed"
+export type Status = "no run" | "starting" | "idle" | "working" | "ended" | "closing" | "closed" | "cleared"
 export type Root = {
   status: Status
   run?: string | null
@@ -21,6 +21,8 @@ export type Root = {
   page?: string
   ended?: string
   turns?: number
+  /** The hooks heard by their event; a line where none was, which says so once a turn has ended. */
+  hooks?: string[] | string
   tokens?: Tokens
   cost?: number
   runs?: { count: number }

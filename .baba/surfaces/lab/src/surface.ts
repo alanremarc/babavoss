@@ -5,12 +5,26 @@
 // and what was done on its page as the person, by the developing agent or by the person's own clicks, which the lab
 // follows in the root under test's activity. A turn that ends, and a run that cannot go on, are noticed. A run's record
 // is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
-// left behind by a lab that is gone is cleared when the lab starts.
+// left behind by a lab that is gone is cleared when the lab starts, its record saying so.
 import { randomBytes, randomUUID } from "node:crypto"
-import { action, detail, isPerson, surface, view, type Call, type Json, type Notice, type Surface, type Update } from "babavoss/core/index.ts"
-import { claudeCode, type Harness, type HarnessEvent, type Session } from "babavoss/core/harness/index.ts"
+import {
+  action,
+  claudeCode,
+  detail,
+  isPerson,
+  surface,
+  view,
+  type Call,
+  type Harness,
+  type HarnessEvent,
+  type HarnessSession,
+  type Json,
+  type Notice,
+  type Surface,
+  type Update,
+} from "babavoss/core/index.ts"
 import { LEFT_OUT, runs as onDisk, type Checkout, type Heard, type Made, type Runs, type Said } from "./runs.ts"
-import { append, empty, line, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
+import { append, empty, line, NO_HOOK, resolve, stream, type Entry, type Timeline } from "./timeline.ts"
 
 export const MODELS = ["haiku", "sonnet", "opus"]
 export const END_MOVE = "[The person ended their move on the page.]"
@@ -21,8 +35,12 @@ const FOLLOW_MS = 1000
 /** How many runs' records are kept: past it, the oldest is forgotten. */
 export const KEEP = 20
 
-/** starting: the project is being made; idle: the agent waits for a message; working: a turn runs; ended: its process is gone. */
-export type Status = "starting" | "idle" | "working" | "ended" | "closing" | "closed"
+/**
+ * starting: the project is being made; idle: the agent waits for a message; working: a turn runs; ended: its process is
+ * gone, its project still to close; closed: closed here; cleared: its project and home deleted when a lab started, as a
+ * lab that is gone left them, never closed.
+ */
+export type Status = "starting" | "idle" | "working" | "ended" | "closing" | "closed" | "cleared"
 export type Run = Timeline & {
   /** This tab's number for the run, which its events carry; `id` is its directory's name, once made. */
   n: number
@@ -57,18 +75,19 @@ export type Event =
   | { kind: "acted"; n: number; t: number; id: string; said: Said; own?: number[] }
   | { kind: "heard"; n: number; entries: Heard[] }
   | { kind: "closed"; n: number; t: number; changed: string }
-  | { kind: "listed"; runs: Json[] }
+  /** The records of every run, `cleared` those a lab's start cleared just now. */
+  | { kind: "listed"; runs: Json[]; cleared: string[] }
   | { kind: "read"; run: Json }
   | { kind: "failed"; n: number; t: number; command: string; error: string; id?: string }
 export type Command =
   | { kind: "harness"; n: number; model: string; from: string }
   | { kind: "say"; n: number; session: string; text: string }
   | { kind: "interrupt"; n: number; session: string }
+  /** `id`: the act's entry, which names its call in the root under test's activity, so what came of it is told from the person's. */
   | { kind: "act"; n: number; id: string; project: string; home: string; session: string; at: string; handle?: string; args?: Json }
   | { kind: "follow"; n: number; project: string; session: string }
   | { kind: "close"; n: number; session?: string; dir?: string; project?: string; home?: string }
   | { kind: "record"; dir: string; run: Run }
-  | { kind: "list" }
   | { kind: "read"; id: string }
   | { kind: "forget"; ids: string[] }
   | { kind: "sweep"; keep?: string }
@@ -77,6 +96,8 @@ type Result = Update<Model, Command>
 const up = (run: Run | undefined): boolean => !!run && (run.status === "idle" || run.status === "working")
 /** A run with a process, or one being closed: nothing new starts until it is done. */
 const live = (run: Run | undefined) => !!run && ["starting", "idle", "working", "closing"].includes(run.status)
+/** A run whose project and home are gone: closed here, or cleared when a lab started. */
+const gone = (run: Run | undefined) => !!run && (run.status === "closed" || run.status === "cleared")
 /** The run with a note of the lab's own, `t` in ms since the epoch. */
 const note = (run: Run, t: number, title: string, text = "", error = false): Run => ({
   ...run,
@@ -113,7 +134,6 @@ const summary = (run: Run): Summary | undefined =>
       }
     : undefined
 const starting = (m: Model, model: string, from: string): Result => {
-  if (!MODELS.includes(model)) return { refused: `model is one of ${MODELS.join(", ")}` }
   if (live(m.run)) return { refused: `the run ${m.run!.id ?? ""} is up or closing: close it first` }
 
   const run: Run = { ...empty(), n: m.next, model, status: "starting", began: 0, from, since: 0 }
@@ -124,23 +144,23 @@ const starting = (m: Model, model: string, from: string): Result => {
 
 const start = action({
   name: "start",
-  description: `Start a run on this repository as it is now, uncommitted changes included; model is ${MODELS.join(", ")}, haiku the cheapest`,
+  description: "a run on this repository as it is now, uncommitted changes included; haiku the cheapest",
   subject: {},
-  inputs: { model: "string" },
+  inputs: { model: { type: "string", choices: MODELS } },
   update: (m: Model, { model }): Result => starting(m, model, ""),
 })
 const startFrom = action({
   name: "start_from",
-  description: "Start a run on another checkout as it is now, such as the worktree you built in: from is the path of its top, which has a .baba/",
+  description: "as start, on another checkout as it is now, such as the worktree you built in: from, its top, with a .baba/",
   subject: {},
-  inputs: { model: "string", from: "string" },
+  inputs: { model: { type: "string", choices: MODELS }, from: { type: "string", kind: "directory" } },
   update: (m: Model, { model, from }): Result => (from.trim() ? starting(m, model, from.trim()) : { refused: "from is a checkout's path" }),
 })
 const say = action({
   name: "say",
-  description: "Send the agent under test a message, as the person would; a turn starts, or the message waits for the one running",
+  description: "to the agent under test, as the person would; a turn starts, or it waits for the one running",
   subject: {},
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "markdown" } },
   update(m: Model, { text }, call): Result {
     if (!text.trim()) return { refused: "a message needs text" }
 
@@ -149,14 +169,14 @@ const say = action({
 })
 const endMove = action({
   name: "end_move",
-  description: "End the person's move on the page under test: a message starts the agent's turn, and its hook tells it what changed",
+  description: "of the person, on the page under test: a message starts the agent's turn, and its hook tells it what changed",
   subject: {},
   inputs: {},
   update: (m: Model, _args, call): Result => (m.run ? said(m, m.run, END_MOVE, call) : { refused: "no run is up: start one" }),
 })
 const stop = action({
   name: "stop",
-  description: "Interrupt the agent under test's turn",
+  description: "interrupts the agent under test's turn",
   subject: {},
   inputs: {},
   update: (m: Model): Result =>
@@ -179,11 +199,9 @@ const acting = (m: Model, call: Call, title: string, what: string, command: Pick
 }
 const act = action({
   name: "act",
-  description:
-    "Call a handle in the root under test as the person, as their click on its page would: " +
-    'at is its path, such as /tabs/1; args is a JSON object, such as {"n":1}',
+  description: 'calls a handle in the root under test as the person, as a click on its page would; args as {"n":1}',
   subject: {},
-  inputs: { at: "string", handle: "string", args: "string" },
+  inputs: { at: { type: "string", kind: "path" }, handle: { type: "string", kind: "name" }, args: { type: "string", kind: "json" } },
   update(m: Model, { at, handle, args }, call): Result {
     let parsed: Json
 
@@ -200,15 +218,15 @@ const act = action({
 })
 const look = action({
   name: "look",
-  description: "Read a path of the root under test as the person sees it, with the handles offered to them alone; its answer joins the timeline",
+  description: "reads it in the root under test as the person's page does; its answer joins the timeline",
   subject: {},
-  inputs: { at: "string" },
+  inputs: { at: { type: "string", kind: "path" } },
   update: (m: Model, { at }, call): Result =>
     at.startsWith("/") ? acting(m, call, `look at ${at}`, `look at ${at}`, { at }) : { refused: "at is a path, such as /tabs/1" },
 })
 const close = action({
   name: "close",
-  description: "Close the run: its agent's process is killed, its root closed, its project and home deleted; its timeline and record stay",
+  description: "the run: its agent killed, its root closed, its project and home deleted; its timeline and record stay",
   subject: {},
   inputs: {},
   update(m: Model): Result {
@@ -222,12 +240,12 @@ const close = action({
 })
 const forget = action({
   name: "forget",
-  description: ({ id }) => `Delete run ${id}'s record whole`,
+  description: "deletes its record whole",
   subject: { id: "string" },
   inputs: {},
   update(m: Model, { id }): Result {
     if (!m.runs.some((r) => r.id === id)) return { refused: `no run ${id}` }
-    if (m.run?.id === id && m.run.status !== "closed") return { refused: "the run is shown here and not closed: close it first" }
+    if (m.run?.id === id && !gone(m.run)) return { refused: "the run is shown here and not closed: close it first" }
 
     const { run, ...rest } = m
 
@@ -246,7 +264,7 @@ const kept = (result: { model: Model; commands?: Command[]; notices?: Notice[] }
 }
 const open = action({
   name: "open",
-  description: ({ id }) => `Show run ${id} here, its timeline as it was recorded`,
+  description: "here, its timeline as it was recorded",
   subject: { id: "string" },
   inputs: {},
   update(m: Model, { id }): Result {
@@ -261,18 +279,23 @@ const open = action({
 const row = (entry: Entry) => ({ at: `/entries/${entry.i}`, i: entry.i, kind: entry.kind, title: entry.title, size: entry.text.length, line: line(entry) })
 /** An entry whole: what entered the context, its size, and what it cost where it is a turn. */
 const whole = (entry: Entry) => ({ at: `/entries/${entry.i}`, ...entry, size: entry.text.length })
-const rows = (m: Model, from = 0) =>
-  m.run && {
-    run: m.run.id ?? null,
-    entries: m.run.entries.slice(from).map((entry) => ({ ...row(entry), context: entry.context ?? null, growth: entry.growth ?? null })),
-  }
-const injected = (m: Model, from = 0) =>
-  m.run && { run: m.run.id ?? null, injected: m.run.entries.slice(from).filter((entry) => entry.kind === "hook").map(whole) }
+// With no run, the timeline is there and empty: the page asks for it before a run starts.
+const rows = (m: Model, from = 0) => ({
+  run: m.run?.id ?? null,
+  entries: (m.run?.entries ?? []).slice(from).map((entry) => ({ ...row(entry), context: entry.context ?? null, growth: entry.growth ?? null })),
+})
+const injected = (m: Model, from = 0) => ({
+  run: m.run?.id ?? null,
+  injected: (m.run?.entries ?? []).slice(from).filter((entry) => entry.kind === "hook").map(whole),
+})
+/** Which hooks were heard in the run: a run whose turn ended with none heard says so, as its timeline does. */
+const hooksOf = (run: Run): string[] | string => (run.hooks.length ? run.hooks : run.turns ? `${NO_HOOK}: the agent under test was told nothing by baba's hooks` : "none heard yet")
 const checkout = (c: Checkout | undefined) => c && { checkout: c.from, commit: c.commit.slice(0, 10), uncommitted: c.dirty.length }
 const HOW =
-  "Start a run, say a message, then wait: the wait ends when the turn does, status idle. Read what the agent under test was told: " +
-  "/entries a line each, /entries/since/N the entries after N, /entries/N one whole, /injected what hooks injected. Act on its page as " +
-  "the person with look and act, then end_move. All of it is on the timeline the person watches. Close the run when done: its record stays, in /runs."
+  "A run is an agent under test in a copy of a checkout. A message starts its turn; a wait ends when the turn does, status idle. What " +
+  "the agent under test was told: /entries a line each, /entries/since/N the entries after N, /entries/N one whole, /injected what " +
+  "hooks injected. look and act work its page as the person, and end_move ends their move. All of it is on the timeline the person " +
+  "watches. Closing a run ends its agent and deletes its project; its record stays, in /runs."
 
 const pages = view([start, startFrom, say, endMove, stop, act, look, close, open, forget], {
   "/": (m) => {
@@ -290,8 +313,8 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             status: run.status,
             model: run.model,
             ...(checkout(run.checkout) ?? (run.from && { checkout: run.from })),
-            ...(run.project && run.status !== "closed" && { project: run.project }),
-            ...(run.page && run.status !== "closed" && { page: run.page }),
+            ...(run.project && !gone(run) && { project: run.project }),
+            ...(run.page && !gone(run) && { page: run.page }),
             ...(run.ended && { ended: run.ended }),
             turns: run.turns,
             // The run's counters are detail: read at the tab's path, and only counted in the shell's present.
@@ -299,6 +322,7 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
             cost: detail(Math.round(run.cost * 10_000) / 10_000),
             ...(working && { turn: { since: run.since, at: `/entries/since/${run.since}` } }),
             ...(!still && {
+              hooks: hooksOf(run),
               entries: detail(run.entries.length),
               ...(run.turns > 0 && { last_turn: { at: `/entries/since/${run.since}` } }),
               timeline: { at: "/entries" },
@@ -337,7 +361,7 @@ const pages = view([start, startFrom, say, endMove, stop, act, look, close, open
         cost: Math.round(r.cost * 10_000) / 10_000,
         entries: r.entries,
         ...(r.id === m.run?.id ? { shown: true } : !live(m.run) && { open: open.bind({ id: r.id }) }),
-        ...((r.id !== m.run?.id || m.run.status === "closed") && { forget: forget.bind({ id: r.id }) }),
+        ...((r.id !== m.run?.id || gone(m.run)) && { forget: forget.bind({ id: r.id }) }),
       })),
   }),
 })
@@ -409,15 +433,17 @@ function heardOf(run: Run, entries: Heard[]): Run {
   return next
 }
 
-/** What an event of the run's own command is worth noticing: a turn that ended, a run that could not go on. */
+/** What an event of the run's own command is worth noticing: a turn that ended, a highlight where it failed; a run that could not go on, a highlight. */
 function noticed(before: Run, after: Run): Notice[] {
   if (before.status === "working" && after.status === "idle") {
     const turn = after.entries.findLast((entry) => entry.kind === "turn")
 
-    return [{ text: `turn ${after.turns} ended${turn?.error ? `: ${turn.text}` : ""}`, ...(turn && { at: `/entries/${turn.i}` }) }]
+    const text = `turn ${after.turns} ended${turn?.error ? `: ${turn.text}` : ""}`
+
+    return [{ text, ...(turn && { at: `/entries/${turn.i}` }), ...(turn?.error && { highlight: true as const }) }]
   }
 
-  return after.status === "ended" && before.status !== "ended" && after.ended ? [after.ended] : []
+  return after.status === "ended" && before.status !== "ended" && after.ended ? [{ text: after.ended, highlight: true }] : []
 }
 
 /** A run from its record, as the lab shows one it did not start: if it was left live, its process is gone. */
@@ -427,7 +453,7 @@ const recorded = (saved: Json | undefined, n: number, ended: string): Run | unde
   if (!run || typeof run !== "object" || !Array.isArray(run.entries)) return undefined
 
   // A record from before a run had these is shown without them.
-  const kept: Run = { ...run, from: run.from ?? "", since: run.since ?? 0, n }
+  const kept: Run = { ...run, from: run.from ?? "", since: run.since ?? 0, hooks: run.hooks ?? [], n }
 
   return live(kept) ? note({ ...kept, status: "ended", ended }, at(kept), "process gone", ended, true) : kept
 }
@@ -446,12 +472,15 @@ const ranElsewhere = (record: Json | undefined): boolean => {
     return false
   }
 }
-const summaries = (records: Json[]): Summary[] =>
+const CLEARED = "its project and home were deleted when a lab started, as the lab that ran it left them; this record stays"
+/** The records as runs, those a lab's start cleared just now marked so. */
+const restoredAll = (records: Json[], cleared: string[]): Run[] =>
   records.flatMap((r) => {
     const run = recorded(r, 0, ORPHANED)
-    const s = run && summary(run)
 
-    return s ? [s] : []
+    if (!run) return []
+
+    return [run.id && cleared.includes(run.id) && !gone(run) ? note({ ...run, status: "cleared" }, at(run), "cleared", CLEARED) : run]
   })
 
 /** Who follows a run's activity: what was heard up to, the turn its reads and acts take one at a time, and its end. */
@@ -460,7 +489,7 @@ type Follower = { after: number; turn: Promise<unknown>; stop: AbortController }
 /** The lab, with its outside given: a harness, where runs live, and how often a run's activity is read; fakes in its specs. */
 export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): Surface<Model, Event, Command> {
   /** The sessions under test of this process, by id; a process does not outlive the runtime that started it. */
-  const sessions = new Map<string, Session>()
+  const sessions = new Map<string, HarnessSession>()
   /** Who follows each session under test's activity: a read of it and an act as the person never interleave. */
   const followers = new Map<string, Follower>()
   const serially = <T>(f: Follower, fn: () => Promise<T>): Promise<T> => {
@@ -483,7 +512,7 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
     description:
       "Have an agent under test use a checkout as it is now, uncommitted work included, through its real surfaces and hooks: what entered " +
       "its context chunk by chunk, with tokens and cost, its page beside, acted on as the person. " +
-      "Use when checking how a surface you built appears to the agent that uses it.",
+      "Use when how a surface appears to the agent that uses it is checked.",
     init: () => ({ next: 1, runs: [] }),
     // A run whose process this runtime did not start is gone: it is shown ended, its timeline kept, its project still to close.
     restore(saved) {
@@ -496,12 +525,17 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
       return { next: kept.next, runs: Array.isArray(kept.runs) ? kept.runs : [], ...(run && { run }) }
     },
     // What a lab that is gone left of its runs is cleared: every run but the one shown here and those of a lab still running.
-    start: (m) => [{ kind: "sweep", ...(m.run?.id && m.run.status !== "closed" && { keep: m.run.id }) }, { kind: "list" }],
+    start: (m) => [{ kind: "sweep", ...(m.run?.id && !gone(m.run) && { keep: m.run.id }) }],
     working: (m) => live(m.run),
     session: (c) => c.kind === "harness" || c.kind === "follow",
     update(m, message) {
       if (message.kind === "call") return pages.update(m, message)
-      if (message.kind === "listed") return kept({ model: { ...m, runs: summaries(message.runs) } })
+      if (message.kind === "listed") {
+        const all = restoredAll(message.runs, message.cleared)
+        const records = all.flatMap((run): Command[] => (run.dir && run.id && message.cleared.includes(run.id) ? [{ kind: "record", dir: run.dir, run }] : []))
+
+        return kept({ model: { ...m, runs: all.flatMap((run) => summary(run) ?? []) }, commands: records })
+      }
       if (message.kind === "read") {
         const run = recorded(message.run, m.next, ORPHANED)
 
@@ -523,12 +557,13 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
     view: pages.view,
     async run(c, send, signal) {
       if (c.kind === "record") return place.record(c.dir, c.run)
-      if (c.kind === "list") return send({ kind: "listed", runs: place.list() })
       if (c.kind === "forget") return c.ids.forEach((id) => place.forget(id))
       if (c.kind === "sweep") {
         const spared = (id: string, record: Json | undefined) => id === c.keep || ranElsewhere(record)
 
-        return void (await place.sweep(spared, (home) => harness.release(home)))
+        const cleared = await place.sweep(spared, (home) => harness.release(home))
+
+        return send({ kind: "listed", runs: place.list(), cleared })
       }
       if (c.kind === "read") {
         const found = place.list().find((r) => (r as { id?: unknown } | null)?.id === c.id)
@@ -614,16 +649,16 @@ export function lab(harness: Harness, place: Runs, every: number = FOLLOW_MS): S
         if (!handle) return send({ kind: "acted", n: c.n, t: Date.now(), id: c.id, said: await place.look(project, home, session, at) })
 
         const f = followers.get(session)
+        const named = `lab:${c.id}`
         const acting = async () => {
-          // What the person did before is heard first; what came of the act is its own, not the person's on the page.
+          // What the person did before is heard first; what came of the act, by the name its call carried, is its own, not the person's.
           const before = f ? await hear(f, project, session) : []
 
           if (before.length) send({ kind: "heard", n: c.n, entries: before })
 
-          const said = await place.act(project, home, session, at, handle, c.args ?? {})
+          const said = await place.act(project, home, session, named, at, handle, c.args ?? {})
           const after = f ? await hear(f, project, session) : []
-          const tab = /^\/tabs\/\d+/.exec(at)?.[0]
-          const mine = (e: Heard) => said.ok && e.who === "person" && (!tab || e.at === tab || e.at.startsWith(`${tab}/`))
+          const mine = (e: Heard) => e.id === named
           const others = after.filter((e) => !mine(e))
 
           if (others.length) send({ kind: "heard", n: c.n, entries: others })

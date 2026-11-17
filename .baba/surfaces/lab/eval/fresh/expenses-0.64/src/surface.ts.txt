@@ -1,0 +1,110 @@
+// Expenses: what the team spent this month, each expense logged by the agent from a receipt, submitted, and approved or
+// rejected by the person on the page. The month has a budget; the total of what is not rejected is measured against it.
+import { action, surface, view, type Update } from "babavoss/core/index.ts"
+
+const CATEGORIES = ["travel", "meals", "office", "software"]
+
+type State = "logged" | "submitted" | "approved" | "rejected"
+type Expense = { id: number; what: string; amount: number; category: string; state: State; note?: string }
+export type Model = { expenses: Expense[]; budget: number; next: number }
+type Event = { kind: "none" }
+
+const total = (m: Model) => m.expenses.filter((e) => e.state !== "rejected").reduce((n, e) => n + e.amount, 0)
+const set = (m: Model, id: number, change: Partial<Expense>): Model => ({ ...m, expenses: m.expenses.map((e) => (e.id === id ? { ...e, ...change } : e)) })
+const row = (e: Expense) => ({ at: `/expenses/${e.id}`, id: e.id, what: e.what, amount: e.amount, category: e.category, state: e.state })
+
+const log = action({
+  name: "log",
+  description: "Log an expense from a receipt the person gives you; it starts as logged",
+  subject: {},
+  inputs: { what: "string", amount: "number", category: "string" },
+  update: (m: Model, { what, amount, category }): Update<Model, never> => {
+    if (!what.trim()) return { refused: "An expense needs a description" }
+    if (!(amount > 0)) return { refused: "The amount must be more than 0" }
+    if (!CATEGORIES.includes(category)) return { refused: `The category is one of ${CATEGORIES.join(", ")}` }
+
+    return { model: { ...m, expenses: [...m.expenses, { id: m.next, what: what.trim(), amount, category, state: "logged" }], next: m.next + 1 } }
+  },
+})
+const submit = action({
+  name: "submit",
+  description: ({ id }) => `Submit expense ${id} for approval once its receipt is attached; the person then approves or rejects it`,
+  subject: { id: "number" },
+  inputs: {},
+  update: (m: Model, { id }): Update<Model, never> => ({ model: set(m, id, { state: "submitted" }), notices: [`Expense ${id} submitted for approval`] }),
+})
+const approve = action({
+  name: "approve",
+  description: ({ id }) => `Approve expense ${id}`,
+  subject: { id: "number" },
+  inputs: {},
+  ask: true,
+  update: (m: Model, { id }): Update<Model, never> => ({ model: set(m, id, { state: "approved" }), notices: [`Expense ${id} approved`] }),
+})
+const reject = action({
+  name: "reject",
+  description: ({ id }) => `Reject expense ${id}, saying why`,
+  subject: { id: "number" },
+  inputs: { why: "string" },
+  ask: true,
+  update: (m: Model, { id, why }): Update<Model, never> =>
+    why.trim() ? { model: set(m, id, { state: "rejected", note: why.trim() }), notices: [`Expense ${id} rejected: ${why.trim()}`] } : { refused: "Say why it is rejected" },
+})
+const note = action({
+  name: "note",
+  description: ({ id }) => `Note on expense ${id}; use it to record where the receipt is`,
+  subject: { id: "number" },
+  inputs: { text: "string" },
+  update: (m: Model, { id, text }): Update<Model, never> => ({ model: set(m, id, { note: text.trim() || undefined }) }),
+})
+const budget = action({
+  name: "budget",
+  description: "Set the month's budget when the person names one",
+  subject: {},
+  inputs: { amount: "number" },
+  ask: true,
+  update: (m: Model, { amount }): Update<Model, never> => (amount > 0 ? { model: { ...m, budget: amount } } : { refused: "The budget must be more than 0" }),
+})
+
+const pages = view([log, submit, approve, reject, note, budget], {
+  "/": (m) => {
+    const waiting = m.expenses.filter((e) => e.state === "submitted")
+    const spent = total(m)
+
+    return {
+      title: "Expenses",
+      how:
+        "Log every receipt the person mentions, then submit it once its receipt is noted. Approving and rejecting are the person's: never do either yourself, " +
+        "wait for them on the page, and show them the expense with `show at=/expenses/N` when it is submitted. Always tell the person when the month goes over budget.",
+      budget: m.budget,
+      spent,
+      ...(spent > m.budget && { over: spent - m.budget }),
+      expenses: m.expenses.map(row),
+      ...(waiting.length > 0 && { attention: { who: "person", why: `${waiting.length} expense(s) to approve or reject` } }),
+      log: log.bind({}),
+      set_budget: budget.bind({}),
+    }
+  },
+  "/expenses/:id": (m, { id }) => {
+    const e = m.expenses.find((x) => x.id === Number(id))
+
+    return (
+      e && {
+        ...row(e),
+        ...(e.note && { note: e.note }),
+        write_note: note.bind({ id: e.id }),
+        ...(e.state === "logged" && { submit: submit.bind({ id: e.id }) }),
+        ...(e.state === "submitted" && { approve: approve.bind({ id: e.id }), reject: reject.bind({ id: e.id }) }),
+      }
+    )
+  },
+})
+
+export default surface<Model, Event, never>({
+  description: "Expenses: log expenses, submit them and have them approved. Use when the person mentions an expense or a receipt.",
+  init: () => ({ expenses: [], budget: 2000, next: 1 }),
+  update: (m, message) => (message.kind === "call" ? pages.update(m, message) : { model: m }),
+  view: pages.view,
+  run: async () => {},
+  failed: () => ({ kind: "none" }),
+})

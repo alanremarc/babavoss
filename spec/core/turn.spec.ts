@@ -1,8 +1,12 @@
 // Whose move it is, from what the hooks tell: a message starts the agent's turn, tool calls are work, a stop ends it, the
 // session's end leaves it unknown, and a working turn unheard for long reads as unknown rather than stuck; whether the hooks
-// have gone quiet between the agent's calls; and which of baba's words a session's start is given.
+// have gone quiet between the agent's calls; and which of baba's words a session's start is given, once a boundary.
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { expect, test } from "bun:test"
-import { wordsFor } from "../../framework/core/hook.ts"
+import { hookContext, returning } from "../../framework/core/hook.ts"
+import type { HookEvent } from "../../framework/core/harness/harness.ts"
 import {
   answered,
   hooksHeard,
@@ -15,6 +19,7 @@ import {
   startTurn,
   turned,
   unheardHooks,
+  unheardOf,
   unknownTurn,
   type Hooks,
   type Turn,
@@ -61,15 +66,64 @@ test("no harness can be driven yet, so starting a turn says why it cannot", asyn
   expect(await startTurn("S", "take them up")).toEqual({ cannot: expect.stringContaining("send the agent a message") })
 })
 
-test("the words a start is given: whole where the agent has not had them, their reminder where it has", () => {
-  expect(wordsFor("startup")).toBe("whole")
-  expect(wordsFor("clear")).toBe("whole")
-  // Codex and Claude Code say the source; where a harness does not, the whole words.
-  expect(wordsFor(undefined)).toBe("whole")
-  expect(wordsFor("compact")).toBe("reminder")
-  expect(wordsFor("resume")).toBe("reminder")
-  expect(wordsFor("fork")).toBe("reminder")
+test("a start returns to a session that had the words where it was compacted, resumed or forked; a new or cleared one does not", () => {
+  expect(returning("startup")).toBe(false)
+  expect(returning("clear")).toBe(false)
+  // Codex and Claude Code say the source; where a harness does not, a start like any.
+  expect(returning(undefined)).toBe(false)
+  expect(returning("compact")).toBe(true)
+  expect(returning("resume")).toBe(true)
+  expect(returning("fork")).toBe(true)
 })
+
+test("a boundary is told once: a start that follows another with nothing heard between is given nothing again, as a compaction at once after a resume", async () => {
+  const home = mkdtempSync(join(tmpdir(), "boundary-"))
+  const was = { home: process.env.BABAVOSS_HOME, cwd: process.cwd() }
+  const at = (moment: HookEvent["moment"], source?: HookEvent["source"]): HookEvent => ({ session: "B", event: moment, moment, ...(source && { source }) })
+  const whole = readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
+  // The words a start is given, before the shell's answer; or nothing.
+  const told = async (event: HookEvent) => {
+    const context = await hookContext(event, join(home, ".baba"))
+
+    return context && [whole].find((words) => context.startsWith(words))
+  }
+
+  process.env.BABAVOSS_HOME = home
+  process.chdir(home)
+  try {
+    // A resume, then a compaction at once and another, as Claude Code plays them: the words again, once.
+    expect(await told(at("SessionStart", "resume"))).toBe(whole)
+    expect(await told(at("SessionStart", "compact"))).toBeUndefined()
+    expect(await told(at("SessionStart", "compact"))).toBeUndefined()
+    // The session's end opens nothing: a resume after it is the same boundary still.
+    // It is left in the session's folder, for the archive's sweep, until anything else is heard.
+    await told(at("SessionEnd"))
+    expect(existsSync(join(home, "sessions/B/ended"))).toBe(true)
+    expect(await told(at("SessionStart", "resume"))).toBeUndefined()
+    expect(existsSync(join(home, "sessions/B/ended"))).toBe(false)
+    // A message is heard: the next compaction is a boundary of its own; so after a tool call, or a stop.
+    await told(at("UserPromptSubmit"))
+    expect(await told(at("SessionStart", "compact"))).toBe(whole)
+    for (const moment of ["PostToolUse", "Stop"] as const) {
+      await told(at(moment))
+      expect(await told(at("SessionStart", "compact"))).toBe(whole)
+    }
+    // A cleared context has nothing of them: it is given the words whole, whatever came before.
+    expect(await told(at("SessionStart", "clear"))).toBe(whole)
+    expect(await told(at("SessionStart", "compact"))).toBeUndefined()
+  } finally {
+    process.chdir(was.cwd)
+    if (was.home === undefined) delete process.env.BABAVOSS_HOME
+    else process.env.BABAVOSS_HOME = was.home
+    // Each start started the shell for the session: its runtime is stopped.
+    for (const root of readdirSync(join(home, "sessions/B"), { withFileTypes: true }).filter((e) => e.isDirectory()))
+      try {
+        process.kill((JSON.parse(readFileSync(join(home, "sessions/B", root.name, "service.json"), "utf8")) as { pid: number }).pid)
+      } catch {}
+    await Bun.sleep(100)
+    rmSync(home, { recursive: true, force: true })
+  }
+}, 60_000)
 
 test("the hooks are quiet where a run of the word begins over HUSH_MS after another's last answer with no hook heard since: told once a stretch", () => {
   const ask = (hooks: Hooks, call: string, at: number) => hushed(hooks, call, at)
@@ -100,4 +154,25 @@ test("the hooks are quiet where a run of the word begins over HUSH_MS after anot
 
   expect(none.line).toBe(NO_HOOKS_LINE)
   expect(ask(answered(none.hooks, "b", HUSH_MS + 2), "c", 10 * HUSH_MS).line).toBeUndefined()
+})
+
+test("the person is shown the silence the agent was told of, never heard or gone quiet, from the run that found it to the next hook", () => {
+  const ask = (hooks: Hooks, call: string, at: number) => hushed(hooks, call, at).hooks
+
+  // Before the first run, and between turns, nothing is found: the agent's silence alone is no sign.
+  expect(unheardOf(unheardHooks())).toBeUndefined()
+  expect(unheardOf(answered(unheardHooks(), "a", 0))).toBeUndefined()
+  expect(unheardOf(ask(answered(hooksHeard(), "a", 0), "a", 10 * HUSH_MS))).toBeUndefined()
+
+  // Never heard: a harness with no hooks for the session.
+  const never = ask(answered(unheardHooks(), "a", 0), "b", HUSH_MS + 1)
+
+  expect(unheardOf(never)).toEqual({ ever: false, since: HUSH_MS + 1 })
+  // Heard, then gone quiet; and it lasts while the agent runs on, dated from when it was found.
+  const quiet = ask(answered(hooksHeard("claude"), "a", 0), "b", HUSH_MS + 5)
+
+  expect(unheardOf(quiet)).toEqual({ ever: true, since: HUSH_MS + 5 })
+  expect(unheardOf(ask(answered(quiet, "b", HUSH_MS + 6), "c", 100 * HUSH_MS))).toEqual({ ever: true, since: HUSH_MS + 5 })
+  // A hook heard ends either.
+  expect(unheardOf(hooksHeard("claude"))).toBeUndefined()
 })

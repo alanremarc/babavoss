@@ -7,19 +7,31 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
 import type { Subprocess } from "bun"
-import { ACTOR_HEADER, CALL_HEADER, DEAF_MS, ENDPOINT_FILE, SERVICE_HEADER, VERSION } from "../../framework/core/bv/bv.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, DEAF_MS, ENDPOINT_FILE, ownRun, SERVICE_HEADER, shaped, summed, under, VERSION } from "../../framework/core/bv/bv.ts"
 import {
   ACTOR_HEADER as actorHeader,
   CALL_HEADER as callHeader,
+  CALL_ID_HEADER as callIdHeader,
   DEAF_MS as deafMs,
   SERVICE_HEADER as serviceHeader,
   endpointFile,
 } from "../../framework/core/runtime/service.ts"
+import { HUSH_MS, QUIET_LINE } from "../../framework/core/runtime/turn.ts"
 
 const client = resolve("framework/core/bv/bv.ts")
+
+/** A handle's command as an answer prints it: its block's head, with its name for ACTION and its line's arguments for the rest. */
+function printed(answer: string, name: string): string {
+  const lines = answer.split("\n")
+  const at = lines.findIndex((line) => line === `  ${name}` || line.startsWith(`  ${name} `))
+  const head = lines.slice(0, at).findLast((line) => line.startsWith("actions: "))!
+  const own = lines[at]!.trim().split("   ")[0]!.split(" ")
+
+  return head.slice("actions: ".length).replace(" name=value…", "").replace("ACTION", own.join(" "))
+}
 const roots: string[] = []
 
-function setup() {
+function setup(dev = false) {
   const root = mkdtempSync(join(tmpdir(), "bv-spec-"))
 
   roots.push(root)
@@ -37,6 +49,7 @@ function setup() {
     CODEX_THREAD_ID: "",
     BABAVOSS_HOME: root,
     BABAVOSS_BIN: bin,
+    BABAVOSS_DEV: dev ? "1" : "0",
   }
   const run = (args: string[] = [], file = client, input = "") => {
     const result = spawnSync(process.execPath, [file, ...args], { env, input, encoding: "utf8", timeout: 15000 })
@@ -45,7 +58,7 @@ function setup() {
   }
   const open = () => run([], entry)
   const endpoint = () =>
-    JSON.parse(readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/service.json"), "utf8")) as { pid: number; port: number; token: string }
+    JSON.parse(readFileSync(join(env.BABAVOSS_HOME, "sessions/S/demo/service.json"), "utf8")) as { pid: number; port: number; token: string; instance: string }
 
   return { entry, root, bin, env, run, open, endpoint }
 }
@@ -135,6 +148,24 @@ it("reads stdin containing an apostrophe", () => {
   expect(s.run(["/", "add", "text=@-"], client, "person's note").status).toBe(0)
   expect(s.run(["/notes"]).out).toContain("person's note")
 })
+it("reads a value @PATH from its file, refuses one with no file, and keeps other text that begins with @", () => {
+  const s = setup()
+  const note = join(s.root, "note.md")
+
+  writeFileSync(note, "# From a file\n")
+  s.open()
+  expect(s.run(["/", "add", `text=@${note}`]).status).toBe(0)
+  expect(s.run(["/notes"]).out).toContain("From a file")
+
+  const missing = s.run(["/", "add", `text=@${join(s.root, "none.md")}`])
+
+  expect(missing.status).toBe(2)
+  expect(missing.err).toContain(`no file at ${join(s.root, "none.md")}`)
+  expect(s.run(["/", "add", "text=@alice says hi"]).status).toBe(0)
+  expect(s.run(["/", "add", "text=@-"], client, "@/not/a/file").status).toBe(0)
+  expect(s.run(["/notes"]).out).toContain("@alice says hi")
+  expect(s.run(["/notes"]).out).toContain("@/not/a/file")
+})
 it("returns exit 1 for refusal", () => {
   const s = setup()
 
@@ -169,14 +200,41 @@ it("wait is released by a person's call", async () => {
   expect(await new Response(waiting.stdout).text()).toContain("person")
   expect(await waiting.exited).toBe(0)
 })
-it("close then call, at once, wakes the runtime at the address the session had, so nothing is announced", async () => {
+it("finds the hooks quiet only where the session's own agent went unheard: a run by --session from another session, or none, is not its", async () => {
+  const s = setup()
+
+  s.open()
+
+  const e = s.endpoint()
+  const hook = () => fetch(`http://127.0.0.1:${e.port}/_/turn`, { method: "POST", headers: { accept: "text/plain", [SERVICE_HEADER]: e.token }, body: "working" })
+  const by = (session: string) => spawnSync(process.execPath, [client, "--session", "S", "/notes"], { env: { ...s.env, CLAUDE_CODE_SESSION_ID: session }, encoding: "utf8" }).stdout
+
+  // A run is the agent's own where its harness's session is the one it runs in, as the environment says.
+  expect(ownRun("S", { CLAUDE_CODE_SESSION_ID: "S" })).toBe(true)
+  expect(ownRun("S", { CODEX_THREAD_ID: "S" })).toBe(true)
+  expect(ownRun("S", { CLAUDE_CODE_SESSION_ID: "another" })).toBe(false)
+  expect(ownRun("S", {})).toBe(false)
+  // The agent's run, its hook heard after it; then a lane's worker posts in the session's name from its own session, and a
+  // script from none; the agent's next run, long after, follows only its own hook.
+  expect(s.run(["/notes"]).out).not.toContain(QUIET_LINE)
+  await hook()
+  expect(by("another")).not.toContain(QUIET_LINE)
+  expect(by("")).not.toContain(QUIET_LINE)
+  await Bun.sleep(HUSH_MS + 500)
+  expect(s.run(["/notes"]).out).not.toContain(QUIET_LINE)
+}, 30_000)
+it("sleep then call, at once, wakes the runtime at the address the session had, so nothing is announced; close is sleep's old name", async () => {
   const s = setup()
 
   s.open()
 
   const port = s.endpoint().port
+  const slept = s.run(["sleep"])
 
-  expect(s.run(["close"]).out).not.toContain("page:")
+  expect(slept.out).toContain("asleep; any call wakes it")
+  expect(slept.out).not.toContain("page:")
+  expect(s.run(["/"]).status).toBe(0)
+  expect(s.run(["close"]).out).toContain("asleep; any call wakes it")
   // No pause: the runtime before it may still be letting go of the session, and the call waits that out.
   expect(s.run(["/"])).toMatchObject({ status: 0, out: expect.not.stringContaining("page:") })
   expect(s.endpoint().port).toBe(port)
@@ -193,20 +251,81 @@ it("keeps its address after an unannounced runtime death", async () => {
   expect(s.run(["/"]).out).not.toContain("a new address")
   expect(s.endpoint().port).toBe(port)
 })
-it("loads an edit of the root's code into the running runtime: the same process and address, the notes kept, the new code answering", async () => {
-  const s = setup()
+describe("changed code", () => {
+  const edit = (s: ReturnType<typeof setup>) => {
+    const source = join(s.root, "root/src/root.ts")
 
-  s.open()
-  s.run(["/", "add", "text=Pharmacy"])
+    writeFileSync(source, readFileSync(source, "utf8").replace('name: "add",\n  description: ""', 'name: "add",\n  description: "as edited"'))
+  }
 
-  const before = s.endpoint()
-  const source = join(s.root, "root/src/root.ts")
+  it("in dev mode restarts the runtime at once: the same address, the notes kept, the new code answering, a reminder under way cut and said", async () => {
+    const s = setup(true)
 
-  writeFileSync(source, readFileSync(source, "utf8").replace('description: "Keep a note"', 'description: "Keep a note, as edited"'))
-  await poll(() => s.run(["/"]).out, { timeout: 10_000 }).toContain("Keep a note, as edited")
-  expect(s.endpoint()).toEqual(before)
-  expect(s.run(["/"]).out).toContain("Pharmacy")
-  expect(s.run(["/"]).out).not.toContain("page:")
+    s.open()
+    s.run(["/", "add", "text=Pharmacy"])
+    s.run(["/notes/1", "remind", "seconds=60"])
+
+    const before = s.endpoint()
+
+    const answers: string[] = []
+
+    edit(s)
+    await poll(() => answers[answers.push(s.run(["/"]).out) - 1], { timeout: 10_000 }).toContain("add text=line   as edited")
+    // The first answer from the code as edited says what the restart cut, as the agent may have to do it again.
+    expect(answers.at(-1)).toMatch(/^demo: its code changed \(.*root\.ts\) and it restarted; the restart cut remind by agent:S\n/)
+
+    const after = s.endpoint()
+
+    expect([after.port, after.instance === before.instance, after.pid === before.pid]).toEqual([before.port, false, false])
+    expect(s.run(["/"]).out).toContain("Pharmacy")
+    expect(s.run(["/"]).out).not.toContain("page:")
+  })
+
+  it("in normal mode runs the code it started with, says it changed, and runs it once restarted, which answers at once with nothing under way", async () => {
+    const s = setup()
+
+    s.open()
+
+    const before = s.endpoint()
+
+    edit(s)
+    await poll(() => s.run(["/"]).out, { timeout: 10_000 }).toContain(`code: changed on disk since instance ${before.instance} started; it runs once restarted: demo restart`)
+    expect(s.run(["/"]).out).not.toContain("as edited")
+
+    const restarted = s.run(["restart"])
+
+    expect(restarted.out).toBe(`demo: instance ${before.instance} restarts\ndemo: instance ${s.endpoint().instance} answers\n`)
+    expect(s.endpoint().port).toBe(before.port)
+    expect(s.run(["/"]).out).toContain("add text=line   as edited")
+    expect(s.run(["/"]).out).not.toContain("code: changed")
+  })
+
+  it("in normal mode drains a restart while work runs: the command exits at once naming the instance, and follow returns once its successor answers", async () => {
+    const s = setup()
+
+    s.open()
+    s.run(["/", "add", "text=Pharmacy"])
+    s.run(["/notes/1", "remind", "seconds=2"])
+
+    const { instance } = s.endpoint()
+    const asked = Date.now()
+    const draining = s.run(["restart"])
+
+    expect(Date.now() - asked).toBeLessThan(1500)
+    expect(draining.out).toBe(
+      `demo: instance ${instance} is draining to restart: it takes no new calls and restarts once remind by agent:S ended. Wait for it: demo follow ${instance}\n`,
+    )
+    expect(s.run(["/", "add", "text=Later"])).toMatchObject({ status: 1, out: expect.stringContaining("refused: demo: instance") })
+
+    const followed = s.run(["follow", instance])
+
+    expect(followed.status).toBe(0)
+    expect(followed.out).toMatch(new RegExp(`^demo: instance ${instance} restarted; instance (?!${instance})[0-9a-f]+ answers\n$`))
+    expect(Date.now() - asked).toBeGreaterThan(1500)
+    expect(s.run(["/"]).out).toContain("due: 1")
+    // Gone already: follow says so at once.
+    expect(s.run(["follow", instance]).out).toMatch(new RegExp(`^demo: instance ${instance} is gone; instance [0-9a-f]+ answers\n$`))
+  }, 20_000)
 })
 it("an open names the page each time, and calls it new only once", () => {
   const s = setup()
@@ -260,7 +379,97 @@ it("reads program code from stdin", () => {
   s.open()
   expect(s.run(["-e", "-"], client, 'console.log(await root.read("/"))').out).toContain("count: 0")
 })
-it("prints the full help", () => expect(setup().run(["help"]).out).toContain("Stop at the first refusal"))
+it("prints the full help", () => expect(setup().run(["help"]).out).toContain("A refusal ends the program unless it catches it"))
+describe("the program door", () => {
+  it("names the call's header as the runtime does", () => expect(CALL_ID_HEADER).toBe(callIdHeader))
+  it("sums calls up: the same change once, its places together, past ten elided; each refusal with its inputs; what was heard once", () => {
+    const calls = Array.from({ length: 12 }, (_, i) => ({ path: `/queue/issues/${i + 3}`, handle: "note", args: { text: "x" }, changed: '+ note: "x"\nnotices:\nheard once' }))
+
+    expect(summed([...calls, { path: "/queue/issues/20", handle: "note", args: { text: "a long note, said in more words than forty" }, refused: "refused: issue 20 is done" }], true)).toBe(
+      [
+        "12 calls done, 1 refused",
+        '/queue/issues/{3,4,5,6,7,8,9,10,…} note ×12: + note: "x"',
+        'refused: /queue/issues/20 note text="a long note, said in more words than fo…": issue 20 is done',
+        "the refusal ended the program: no call after it was made",
+        "notices:",
+        "heard once",
+      ].join("\n"),
+    )
+    expect(summed([{ path: "/a", handle: "go", args: {}, changed: "" }, { path: "/b/c", handle: "go", args: {}, changed: "" }])).toBe("2 calls done\n/a /b/c go ×2: nothing changed")
+  })
+  it("reads a view as data: each action as its handle, its fixed args and its inputs, each input an object that can say more later", () => {
+    expect(shaped({ n: 1, rows: [{ done: { kind: "handle", name: "done", args: { n: 1 }, open: { why: "string" }, description: "Mark it done" } }] })).toEqual({
+      n: 1,
+      rows: [{ done: { handle: "done", args: { n: 1 }, inputs: { why: { type: "string" } } } }],
+    })
+  })
+  it("takes a relative path under the path given before -e", () => {
+    expect([under("/queue", "issues/3"), under("/queue", "/notes"), under("/queue/issues", "../lanes"), under("/queue"), under("/", "./a/")]).toEqual([
+      "/queue/issues/3",
+      "/notes",
+      "/queue/lanes",
+      "/queue",
+      "/a",
+    ])
+  })
+  it("runs a program on standard input, under the path before -e, and answers what it printed, then one summary of its calls", () => {
+    const s = setup()
+
+    s.open()
+
+    const program = `
+      for (const text of ["a", "b", "c"]) await call("/", "add", { text })
+      const view: { notes: { at: string; remind: { handle: string; args: object; inputs: object } }[] } = await read("notes")
+      print(view.notes.length, view.notes[0].remind)
+      for (const note of view.notes) await call(note.at, note.remind.handle, { seconds: 60 })
+      // One fact of a view by its path, as the command's own read gives it: its value alone.
+      const fact = (await read("/notes/notes")) as unknown[]
+      print("fact", fact.length)
+    `
+    const answer = s.run(["/", "-e", "-"], client, program)
+
+    expect(answer.status, answer.err).toBe(0)
+    expect(answer.out).toContain('3 {"handle":"remind","args":{"n":1},"inputs":{"seconds":{"type":"number"}}}\nfact 3\n6 calls done\n')
+    expect(answer.out).toMatch(/\n\/notes\/\{1,2,3\} remind ×3: .*due/)
+    expect(answer.out).not.toContain("refused")
+  })
+  it("ends the program at a refusal: the calls before it stay done, and the summary says what was not", () => {
+    const s = setup()
+
+    s.open()
+
+    const answer = s.run(["-e", "-"], client, 'await call("/", "add", { text: "a" })\nawait call("/", "add", { text: "" })\nawait call("/", "add", { text: "b" })')
+
+    expect(answer.status).toBe(1)
+    expect(answer.out).toContain('1 call done, 1 refused\n')
+    expect(answer.out).toContain('refused: / add text="": A note needs text\nthe refusal ended the program: no call after it was made')
+    expect(s.run(["/"]).out).toContain("notes.count: 1")
+  })
+  it("goes on past a refusal the program catches", () => {
+    const s = setup()
+
+    s.open()
+
+    const answer = s.run(["-e", "-"], client, 'for (const text of ["a", "", "b"]) await call("/", "add", { text }).catch((e) => print(e.message))')
+
+    expect(answer.status).toBe(0)
+    expect(answer.out).toStartWith("refused: / add: A note needs text\n2 calls done, 1 refused\n")
+    expect(answer.out).not.toContain("ended the program")
+  })
+  it("refuses a program that came as more than one word, saying why, and runs one that came as one", () => {
+    const s = setup()
+
+    s.open()
+
+    const split = s.run(["-e", 'await call("/", "add", { text: "it', 's" })'])
+
+    expect(split.status).toBe(2)
+    expect(split.err).toContain("the program came as 2 words, not one: a quote inside it ended the shell's. Give it on standard input: demo -e - <<'EOF'")
+    expect(s.run(["-e", 'await call("/", "add", { text: "one" })']).out).toBe("1 call done\n/ add: notes.count: 0 → 1; latest: null → \"one\"; + action clear\n")
+    expect(s.run(["/", "add", "-e", "-"]).err).toContain("-e follows a path alone: demo / -e - <<'EOF' with the program")
+    expect(s.run(["-e", `await call("/", "add", { text: "its })`]).err).toContain("a quote inside it may have ended the shell's")
+  })
+})
 it("opens with the page and the command, and of the command's words only what the skill does not say; no pointer to a fuller guide", () => {
   const out = setup().open().out
 
@@ -473,7 +682,7 @@ it("makes a root's word and uses it", () => {
   const answer = spawnSync(join(s.bin, "demo"), ["/"], { env: s.env, encoding: "utf8" })
 
   expect(answer.status, answer.stderr).toBe(0)
-  expect(answer.stdout).toContain("add: demo / add")
+  expect(answer.stdout).toContain("actions: demo / ACTION")
 })
 it("keeps another command's word and uses bv NAME", () => {
   const s = setup()
@@ -483,7 +692,7 @@ it("keeps another command's word and uses bv NAME", () => {
   s.env.PATH = `${s.bin}:${process.env.PATH}`
   expect(s.open().out).toContain("command: bv demo;")
   expect(readFileSync(occupied, "utf8")).toContain("exit 0")
-  expect(s.run(["demo", "/"]).out).toContain("add: bv demo / add")
+  expect(s.run(["demo", "/"]).out).toContain("actions: bv demo / ACTION")
 })
 
 
@@ -502,8 +711,7 @@ it("two roots answer under their words and printed handles run as printed", () =
   try {
     for (const name of ["demo", "other"]) {
       const answer = spawnSync(join(s.bin, name), ["/"], { env: s.env, encoding: "utf8" })
-      const line = answer.stdout.split("\n").find((line) => line.startsWith("add: "))!
-      const command = line.slice("add: ".length).split("   ")[0]!.replace("text=string", `text=${name}`).split(" ")
+      const command = printed(answer.stdout, "add").replace("text=line", `text=${name}`).split(" ")
       const called = spawnSync(join(s.bin, command[0]!), command.slice(1), { env: s.env, encoding: "utf8" })
 
       expect(called.status, called.stderr).toBe(0)
@@ -652,8 +860,7 @@ it("a project handle runs exactly as printed from the project root", () => {
     expect(answer.status).toBe(0)
     expect(answer.stdout).toContain("command: .babavoss/bin/demo, from the project's directory;")
 
-    const line = answer.stdout.split("\n").find((line) => line.startsWith("add: "))!
-    const command = line.slice(5).split("   ")[0]!.replace("text=string", "text=Printed").split(" ")
+    const command = printed(answer.stdout, "add").replace("text=line", "text=Printed").split(" ")
     const called = s.run(command[0]!, command.slice(1))
 
     expect(called.status, called.stderr).toBe(0)

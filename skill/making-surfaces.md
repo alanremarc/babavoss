@@ -1,138 +1,222 @@
 # Making surfaces
 
-Read this before making or changing a surface. Run the commands from the `.baba/` directory.
+How a surface is made and changed. Read it whole before the first. Run `bun` commands from `.baba/`, and the shell's command, `.babavoss/bin/baba`, from the project's directory.
 
 ## The loop
 
-1. Make or change a surface. `bun run baba new NAME` makes `surfaces/NAME/` from the template, a surface that runs as it is. Agree with the person first what it is for: its job, your part, what they see in its tab and what they decide there.
-2. Test it. `bun test surfaces/NAME` runs its specs: one story per rule. `bun check` checks its types. In a story the test is the world: `world.settle(command, event)` ends a command the surface started; one that keeps running is held open, given one event at a time by `world.send(command, event)`, the actors looking between, and ended by `world.end(command)`.
-3. Open it from the shell, give the person the page, and build it one step at a time, each ending in something they can see in its tab.
-
-The running shell takes a surface that was made or removed, and a change to a surface's code, by itself, and the page follows. `bun run baba provision` is for the harnesses: it writes again what makes each aware of the surfaces beside `.baba/`, as installing does.
-
-## A surface
+1. `bun run baba new NAME` makes `surfaces/NAME/` from the template: a small surface that runs as it is, its page and its spec. NAME is lowercase kebab-case. Agree with the person what it is for and what they see in its tab; what they want of the agent that works it is theirs to say, never the surface's.
+2. Change it into the surface wanted. `bun test surfaces/NAME` runs its specs; `bun check` checks its types.
+3. Make the shell run it. The shell runs the code it started with; `/` says `code: changed on disk…` until it restarts. `.babavoss/bin/baba restart` restarts it, at the same address with every tab's state kept; with work under way it drains, then answers with an instance that `follow ID` waits for. Or set `dev: true` in `.baba/baba.config.ts` (below) while surfaces are being made: then any change restarts it at once, cutting what runs.
+4. Open it, `.babavoss/bin/baba / open surface=NAME`, and give the person the page's address if they do not have it. Build it a step at a time, each ending in something they can see in its tab.
 
 ```text
 surfaces/NAME/
-  src/surface.ts   the surface, the default export: what is true and what can be done, made for the agent first
-  ui/index.tsx     its page, the default export: a component shown in its tab, over the same surface; `icon`, where exported, is the
-                   tab's, and `drawers` ask an action's inputs
+  src/surface.ts   the surface, its default export
+  ui/index.tsx     its page, the default export a component shown in its tab; `icon` and `drawers` may be exported too
   spec/            its rules, as stories
 ```
 
-Everything an agent learns of a surface, it learns from the surface. There is no file of instructions beside it.
+## A surface
 
-- `description` is how the shell lists it, and so how an agent chooses it: what it does and when to use it, a phrase and a "use when".
-- How it is to be worked is said by its views, as facts: the order of the work, who decides what, when not to act. The template's `how` at `/` is the place for what always holds. Say what depends on the state where the state is: what comes next; who is waited for is `attention`, below. Keep it short, since it is read each time.
-- What is mechanical needs no words: what an input may be is in the handle's description, and an action that may not be taken now is not offered.
-
-Every place in a surface has an address, so a refresh, a copied link and the agent's pointing all land on it. Give each thing its own path, `/issues/:n`, and name it under `at` in the rows that list it: the agent reads it and points the person there with the shell's `show`. On the page, keep what is selected in the tab's route, never in component state: `useTab().route` is the path within the tab and `navigate(route)` moves it, as the queue does with `/issues/N`. A route the surface does not know, such as a dropped issue's, falls back to something sensible, the first issue, never an error.
-
-The agent does the work through handles. What only the person may decide is an ask, offered to them alone on the page. The page shows what the surface says and offers the person their decisions; anything else they want changed, they tell the agent.
-
-## Speaking to the shell
-
-A surface tells the shell two kinds of thing, and the shell tells both sides: the agent in its present, the person on the page.
-
-| Kind | What | Written as |
-|---|---|---|
-| a fact at `/` | what stands, until the surface stops saying it | `title`; `attention`, someone is needed; `broken` |
-| a notice from `update` | what just happened, told once and kept nowhere | `notices`, beside `model` and `commands` |
-
-`attention` says who is needed now, `"person"` or `"agent"`, and why, in a few words. The shell gathers it first at `/`, as `needs`, marks the tab in the strip and shows the why; a list says it of both. Where an ask is offered, say it: the ask is how the person decides, `attention` is that they are waited for.
+A surface is a model, an update that changes it, and views that say what is true and what can be done. `update` is pure and synchronous; anything outside, a file, a process, the network, is a command, run outside the loop, which reports back by events.
 
 ```ts
-...(m.proposed !== undefined && { attention: { who: "person", why: "to accept or decline the proposed greeting" }, accept: accept.bind({}) }),
+export default surface<Model, Event, Command>({
+  description: "The books the person reads, by status. Use when a book is added, its status set or the list read.",
+  init: () => ({ books: [], next: 1 }),       // the first model; the model is JSON, kept per tab
+  restore: (saved) => saved as Model,         // optional: the kept model, validated or migrated as the shape changes
+  update: (m, message) => (message.kind === "call" ? pages.update(m, message) : heard(m, message)),
+  view: pages.view,
+  start: () => [{ kind: "watch-books-file" }], // optional: commands started with the surface
+  session: (c) => c.kind === "watch-books-file", // optional: which commands run for the surface's life
+  run: async (command, send, signal) => {},    // runs a command; it sends events and never writes the model
+  failed: (command, error) => ({ kind: "none" }), // the event for a command that threw
+})
 ```
 
-A notice is one short line on what just happened, in answer to a call or to a command's event: a draft approved, a run ended. The page shows it as a toast that goes to the tab, and keeps it in the person's notifications; the agent is told it once, but not what its own call alone gave. `at` is a path within the surface it is about. What still holds afterwards belongs in a fact, not a notice.
+`description` is how the shell lists the surface, and so how an agent chooses it: a phrase of what it does and a "Use when …".
+
+## Mechanics only
+
+A surface's words are all an agent learns of how it works, and nothing else is written beside it. Its `how`, its descriptions and its facts say what a thing is, what an action does and what must hold for it: "each book has one status", "a book added is to-read", "puts it in the lane, which must be free". They never say when the agent ought to act, how it should run its work, or who should decide: not "add a book when the person mentions one", not "ask the person first". An agent obeys such words where nobody asked.
+
+What the person wants as a standing behaviour is theirs to write in the project's own instructions to its agent, such as `CLAUDE.md` or `AGENTS.md`; babavoss writes nothing there. For example:
+
+```text
+When I finish a book in conversation, mark it read in the books surface.
+```
+
+## Views and places
+
+`view(actions, routes)` composes the views, one function a route, each the same for every reader. `/` is the surface's whole; give `title`, and `how`: what always holds, short, since it is read each time. Say what depends on the state where the state is, as a fact.
 
 ```ts
-update: (m: Model): Update<Model, never> => ({ model: { greeting: m.proposed! }, notices: [`The greeting is now "${m.proposed}"`] }),
+const pages = view([add, mark], {
+  "/": (m) => ({ title: "Books", how: "Each book has one status. A book added is to-read.", reading: m.books.filter(…).map(row), add: add.bind({}) }),
+  "/books/:id": (m, { id }) => { const b = find(m, Number(id)); return b && { ...row(b), mark: mark.bind({ id: b.id }) } },
+})
+const row = (b: Book) => ({ at: `/books/${b.id}`, id: b.id, title: b.title, status: b.status })
 ```
 
-A surface's activity comes by itself: the shell keeps every call into a tab, at `/activity` and on the page under all activity, as its handle and arguments. A notice is how a surface puts a meaningful line there instead, for a call or for a command's event, and the only way it reaches the person's notifications.
+- A route's `:name` captures one segment, given as text: `{ id }` is a `string | undefined` to the type check, so read it as `Number(id)` or with a default.
+- Every thing has its own path, and the rows that list it name it under `at`. A refresh, a copied link and the agent's `highlight` all land on it. A route with nothing there answers `undefined`.
+- An action not offered now is left out of the view: offering is the rule, and a call of anything else is refused.
+- What is there to be looked up rather than followed, finished rows or counters, wrap in `detail(value)`: the page and a read see it as usual; the present at `/` leaves it out and counts it in one line.
+- A view may order its actions in the tab's menu with a `menu` fact, `[{ label: "Move", actions: ["start", "done"] }]`, the rest after; give it below `/`, where it stays out of the present.
 
-The agent hears notices as it works, after every tool call; facts reach it with the person's next message, or when it reads `/`. A change the agent should react to before then, mid-turn, deserves a notice; one it can take up later is a fact alone. Where the person acts and the surface says nothing, the agent hears only that they acted there. A notice stands for what its update changed: those changes are not told to the agent again, so let the notice say what moved; a need of the agent's is told all the same.
-
-What is there to be looked up rather than followed, rows that are finished or counters, wrap in `detail(value)` from `babavoss/core/index.ts`, a fact or a row of a list. The page and a read of the tab see it as an ordinary value; the shell's present at `/` leaves it out and counts it in one line, `+19 more in issues; read /tabs/3`, and a change to it there is one line too.
+## Actions
 
 ```ts
-issues: [...open.map(row), ...done.map((issue) => detail(row(issue)))],
+const mark = action({
+  name: "mark",
+  description: "",
+  subject: { id: "number" },
+  inputs: { status: { type: "string", choices: ["to-read", "reading", "read"] } },
+  update: (m: Model, { id, status }): Update<Model, never> => ({ model: { ...m, books: m.books.map((b) => (b.id === id ? { ...b, status } : b)) } }),
+})
 ```
 
-An action that is the page's own bookkeeping, of no event in the work, such as what the person has seen, takes `quiet: true`: what it changes is told to the agent in no way. An update may return `quiet: true` for an event of the same kind.
+- `name` says what it does. `description` is one clause that adds what the name does not say: its effect, or what must hold for it. It never repeats the name, its subject or the command, and never says when to call it; lower case, no full stop; empty where the name says it all. `done`: "its work is merged into main"; `start`: "puts it in the lane, which must be free"; `remove`: "".
+- `subject` is fixed where the action is bound, `mark.bind({ id: b.id })`; `inputs` are given by the caller.
+- An input declares its base type, `"string"`, `"number"` or `"boolean"`, and what it means where the type alone does not say: `kind`, a word, `line`, `markdown` and `path` being text the page's form knows, any other the surface's own, printed with its type as `id(string)`; `choices`, the values it may take; `range`, whole numbers, `[1, 5]`. Admission refuses a value outside them and says what is allowed, so the update need not check. Every input is required.
+- `update` returns `{ model, notices?, commands? }`, or `{ refused: "why" }`, which changes nothing and tells the caller why.
+- An action that is only the page's bookkeeping, as a fold the person opened, takes `quiet: true`: it is in no log and told to the agent in no way.
 
-A story asserts them as the actors do: `agent.noticed()` and `person.noticed()` give what each was told since it last asked.
+**Rows and the pattern.** The present at `/` prints the actions offered at each row's own path once for the whole list, as `/books/books/ID mark id=ID status=…`, so the agent acts on any row without reading it. An action is in the pattern where the list has two rows or more, each row's `at` holds one of its columns' values, the action's subject is that value, and its inputs and description are the same for every row. Anything else is left to the row's own read.
 
-The framework is the package `babavoss`, in `node_modules/babavoss`: import it as `babavoss/core/…`; a page takes its components and layouts from the kit, `babavoss/kit/index.ts`, and reaches its tab through the shell's hooks, `useTab` and `useLive` from `babavoss/shell/ui/index.tsx`, with `DrawerProps` beside them; read its code in `framework/` there rather than guessing its interfaces.
+## The person's decisions
 
-A page reads its views with `useLive(path)` and is shown once its first reads have answered, those that depend on others too, as the queue's selected issue does on its list; until then its tab is its quiet ground. So a page draws no loading state of its own, and an empty state it draws is true. When a path it reads moves, as with the route, it keeps the view it had until the new one lands; a change by anyone replaces the view in place. `error` says why a read failed, beside the view it had. A refresh is served with the shell and the shown tab's views at `/` and at its route, so it is drawn whole at once.
+The agent and the person are offered the same actions, and nothing is locked. Which decisions are the person's, they and the project's instructions say: the agent raises such a decision in the conversation and acts on their word, or the person takes the same action on the page. A surface may state as a fact what only the person can know, "the person has read the draft". When something waits on the person, mark the notice that says so as a highlight (below). The template shows the shape: the agent proposes, both are offered accept and decline.
 
-## The tab and its menu
+## What happened: notices, highlights and the log
 
-A tab is the home of one instance of a surface, with its own state. The page's strip holds home, the babavoss mark, which also shows whether the agent is working, then the tabs, then the notifications. Each tab carries its surface's menu, the same for every surface and made from its views alone: over the tab, or with it focused, its icon gives way to dots that open the menu, as a right click or Shift+F10 does. A page cannot add to it or replace it: `ui/index.tsx` returns its content, which fills the tab under the strip, and optionally `icon` and `drawers`.
+The shell keeps a log of every action in a tab, by itself: when, who (the person, the agent or the world), where, the action and its inputs, and what came of it, done or refused with why. It is in the tab's drawer and at `/activity`; each tab's log and state are kept on disk, and a closed tab's are archived read only at `/activity/closed`.
 
-- A search of the actions and places of the whole tree below the tab, read breadth-first from `/` along the `at`s.
-- The surface's actions at `/`, under its `title`.
-- Where the tab's route is below `/`, the actions offered there, under the place's view's `title` or `name`, or its row's.
-- Go: every `at` the view where the tab is names, by its row's `title` or `name`, and the way back up; choosing one moves the tab's route, so a page that keeps its place in the route follows. Go of more than 8 places opens on a field that filters it.
-- The shell's own: close the tab, close the others, copy its link, reload its views.
-- What waits on the person carries one dot, on the tab and on every step of the way to it in the menu: an ask stands first in its group, dotted; an ask at another place, or a notice they have not seen about one, dots Go and that place. Home, the strip's first tab, is the shell's own page, never a surface's: the surfaces to open, the settings among them, the tabs to switch to, and the shell's commands; a surface's actions and places are in its tab's menu alone. ⌘P or Ctrl+P goes home from any tab, and back; ⌘J and ⌘K go to the next and previous tab. The person can rebind them in the settings, a surface that comes with the shell, so a page does not take them for its own.
-
-So the person can do from the menu what the agent can do from the command: name and describe handles for both, and name each place by a `title` or `name` in its row. A view may order its actions in the menu with a `menu` fact, groups each with a label and the names of its actions, the rest after them; it is an ordinary fact the agent reads too, so give it below `/`, as the queue does at `/issues/:n`, where it stays out of the present.
+A notice is a surface's own line about an action or event, one short sentence on what just happened. It is kept in the action's entry and told to the agent once, after its next tool call; the caller is not told back what its own call gave. What still holds afterwards is a fact, not a notice.
 
 ```ts
-menu: [{ label: "Move", actions: ["start", "done", "back"] }, { label: "Edit", actions: ["describe", "note"] }],
+notices: [`"${title}" added`]
+notices: [{ text: `"${text}" is proposed, to accept or decline`, highlight: true, at: "/proposal" }]
 ```
 
-An action with inputs opens a modal. The shell makes a form of its inputs, one field each, under its description. Where the page module exports a drawer for the action by its name, the modal shows that instead: `export const drawers = { add: AddIssue }`, each a component given `{ handle, path, view, submit, close }`. `submit(args)` makes the call with the inputs and resolves with the reason where it is refused; the modal then shows the reason and stays open, and closes once the call is admitted. `close` gives up. A drawer is drawn outside the tab, so the surface's `ui/styles.css` does not reach it.
+A notice marked `highlight: true` is a highlight: what the person should see, as a decision waiting on them or a run that failed. Their page shows a bubble beside the tab and a dot on it until they open its drawer, where highlights are what stands out and everything else is folded between them; the agent hears it first. The agent raises one of its own with the shell's `highlight`. Mark only what deserves it.
 
-What is only the page's, presentation such as a lens, a fold or a pane, and a choice a page makes before it calls, is a control in the page's own content, never in the menu: the lab folds its injections and picks the next run's model in its timeline's toolbar. A kit layout inside the content is for a page that needs one, the workbench's toolbars or a welcome page over scopes.
+## Hearing the world
 
-Whose move it is is the shell's too: the mark at the strip's start moves while the agent works and counts the person's changes that wait for its next turn. A surface makes no busy indicator and no end-of-move button of its own.
+What changes outside the surface, a file the person edits or a process that ends, is heard by a session command: started by `start`, kept running by `session`, run by `run`, sending an event on each change. Name its `kind` for what it hears, `watch-books-file`: an event of a session command is the world's in the log, named by that kind, and silent ones in a row fold into one entry. One that changes nothing and says nothing leaves no entry. A command started by a call is the caller's work instead, logged only where the surface gives a notice.
 
-## A page's own
+```ts
+import { watch } from "node:fs"
+const FILE = new URL("../../../../books.json", import.meta.url) // .baba/surfaces/NAME/src/ → the project's directory
 
-A page is a React component the shell wraps in its tab. Inside the tab everything is the surface's: any library installed in `.baba/`, any pattern, its own CSS. The kit is where to start, and the project's own shadcn components stand beside it. The strip, a tab's menu, the activity, a drawer's frame and the theme's tokens are the shell's.
+run: async (command, send, signal) => {
+  const read = () => send({ kind: "file-read", books: JSON.parse(readFileSync(FILE, "utf8")) })
+  const watcher = watch(FILE, read)
+  read()
+  await new Promise((done) => signal.addEventListener("abort", done, { once: true }))
+  watcher.close()
+},
+```
 
-- A library: `bun add NAME` in `.baba/`, then import it. The page has one React, the framework's, whatever a library brings. A library's own stylesheet is imported from the page, `import "NAME/dist/style.css"`; it is not scoped, so restyle it to the tokens in `ui/styles.css`.
-- A shadcn component: `bunx shadcn@latest add NAME` in `.baba/` writes it to `components/ui/`, shared by every surface, imported as `@/components/ui/NAME`. It reads the tokens the shell's theme defines, so it follows the palette and the mode. The css file `components.json` names is not part of the page: what the CLI writes there changes nothing.
-- Tailwind sees every file in `.baba/` but `node_modules`. A package whose own classes must be generated is named by a `@source` line in `ui/styles.css`, its path from there: `@source "../../../node_modules/NAME";`.
-- The shell's services, by convention, from `useShell()`: `toast(text, at?)`, a toast from the tab that clicking returns to, kept nowhere and not told to the agent, where what both sides should know is a notice from `update`; `open(surface)`, its tab, the open one or a new one; `go(at)`, a place by its whole path, `/queue/issues/3`; `appearance`, `{ mode, theme }`, for a library that must be told them, such as a chart's or an editor's. A page drawn by the tokens needs none of it.
+The update takes the event like a call and returns the next model. A surface that writes the file too should compare before it writes, so its own write heard back changes nothing. A command is cut when the shell restarts or sleeps and sends nothing more: keep long work resumable from the model.
 
-## Looks
+## Specs are stories
 
-A page follows the person's palette, light or dark mode, by the shell's theming tokens, so it never needs to know which is chosen.
+A spec tells the surface's rules as a story: actors see, call and are told; the test is the world; the model is never read.
 
-- Use the kit's components and layouts first, then the project's shadcn components: they are already in the design language.
-- Then the tokens, through Tailwind classes; `framework/kit/defaults.css` defines them:
-  - colour: `background` and `foreground`, the page and its text; `muted` and `muted-foreground`, quiet fills and secondary text; `card`, `popover` and `secondary`, each with `-foreground`, raised, floating and quieter panels; `primary` and `primary-foreground`, the one action, the selected, what is live; `accent` and `accent-foreground`, a hovered or current row; `destructive`, `success`, `warning`, `info`, states; `border`, `input`, `ring`, lines, field outlines, focus; `sidebar`, the shell's chrome; `chart-1` to `chart-5`, a chart's series. As `bg-primary`, `text-muted-foreground`, `border-border`, `bg-success/10`.
-  - type: `text-badge` 9px, `text-meta` 11px, `text-body` 12px, the frame's default, `text-large` 13px; Tailwind's `text-sm` and up for headings.
-  - font: `font-sans`, `font-heading`, `font-mono`.
-  - radius: `rounded-sm` to `rounded-4xl`, from the palette's `--radius`.
-  - frame: `h-menubar`, `h-bar` and `h-row`, the heights of a compact header, a bar, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
-- Never hard-code a colour, a font or a size where a token fits.
+```ts
+import { story } from "babavoss/core/index.ts"
+import books from "../src/surface.ts"
 
-Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` and `@source` work in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
+test("a book added is to-read, and the person sets its status on the page", async () => {
+  const { agent, person, world } = story(books)
 
-## The harnesses
+  expect(await agent.call("/", "add", { title: "Dune" })).toMatchObject({ outcome: "written" })
+  expect(await person.call("/books/1", "mark", { id: 1, status: "reading" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees()).toMatchObject({ reading: [{ title: "Dune" }] })
+})
+```
 
-Each harness beside `.baba/` is made aware by its own adapter when `.baba/` is installed or provisioned. Claude Code gets `.claude/skills/baba`, a link to the package's plugin: the skill and the hook, loaded once the folder is trusted. Codex gets the skill in `.agents/skills/baba` and the hook in `.codex/hooks.json`, among the person's own hooks; Codex asks the person to review them once, with `/hooks`. With no configuration every harness is set up so. Where the person wants otherwise, `.baba/baba.config.ts` says it:
+- `sees(path?)`, `offered(path?)`, `call(path, handle, args)`; `told()`, what changed since it last asked, as the agent is told; `noticed()`, the notices since it last asked, a highlight as `highlight: TEXT`.
+- The test holds every command the surface starts; none runs. `await world.settle(command, event)` ends one with its event; one that keeps running, as a session command, is given events one at a time by `await world.send(command, event)`, the actors looking between, and ended by `await world.end(command)`. Name the command by a test of it, `(c) => c.kind === "watch-books-file"`, or leave it out where one is running; `world.commands()` lists them. `story(surface, { model })` starts from a model.
+
+```ts
+const { agent, world } = story(books)
+const watching = (c: Command) => c.kind === "watch-books-file"
+
+await world.send(watching, { kind: "file-read", books: [{ title: "Dune", status: "reading" }] })
+expect(agent.sees()).toMatchObject({ reading: [{ title: "Dune" }] })
+```
+
+## The page
+
+`ui/index.tsx` is a React component the shell shows in the surface's tab. It reads the views live and calls the same actions:
+
+```tsx
+import { Button } from "babavoss/kit/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+
+export default function Books() {
+  const { view, error } = useLive<Root>("/")
+  const { call, route, navigate } = useTab()
+  …
+}
+```
+
+- A view changed by anyone replaces the one shown, in place. The tab is shown once its first reads answer, so a page draws no loading state of its own.
+- `call(path, handle, args)` answers `{ outcome: "written", view }` or `{ outcome: "refused", reason }`; show the reason.
+- Keep what is selected in the tab's route, never in component state: `route` is the path within the tab and `navigate(route)` moves it. A route the surface does not know falls back to something sensible, never an error.
+- The shell gives every tab a drawer with its menu: the surface's actions, its places, a search, and its activity. A page does not repeat it. An action with inputs opens a form made from the declared inputs; `export const drawers = { add: AddBook }` replaces it for that action, a component given `{ handle, path, view, submit, close }`. `export const icon = <BookIcon />` is the tab's icon.
+- Whose move it is is the shell's: a page draws no busy indicator or end-of-move button.
+
+**Looks.** Build with the kit, `babavoss/kit/index.ts`, shadcn's primitives with one layer of opinions, then the project's own shadcn components (`bunx shadcn@latest add NAME` in `.baba/`, imported as `@/components/ui/NAME`). Never hard-code a colour, a font or a size where a token fits: the tokens follow the person's theme and mode.
+
+- colour: `background`/`foreground`, `muted`/`muted-foreground`, `card`, `popover`, `secondary`, `primary` (the one action, the selected), `accent` (a hovered or current row), `destructive`, `success`, `warning`, `info`, `border`, `input`, `ring`, `chart-1`…`chart-5`; as `bg-primary`, `text-muted-foreground`, `bg-success/10`.
+- type: `text-badge`, `text-meta`, `text-body` (the default), `text-large`; Tailwind's `text-sm` and up for headings. Size text in rem, never px.
+- frame: `h-menubar`, `h-bar`, `h-row`; `size-icon`, `size-glyph`. Spacing is Tailwind's.
+
+**Conventions.** The shell hands every page how the person wants pages to be: `motion` (`full` or `reduced`), `scale`, `side` (where a page's own sidebar stands), `rail` (where the tabs stand), `mode`. Read them with `useConventions()`, or in CSS by the variants `motion-safe:`, `motion-reduce:`, `side-left:`, `side-right:`, `rail-left:`…`rail-bottom:` and `dark:`. The kit follows them unasked; a page that moves by script or has a sidebar follows them by its own code.
+
+```tsx
+<div className="flex side-left:flex-row-reverse">…</div>
+row.scrollIntoView({ behavior: useConventions().motion === "reduced" ? "auto" : "smooth" })
+```
+
+**More.** A library: `bun add NAME` in `.baba/`, then import it; its stylesheet is imported from the page and restyled to the tokens. `ui/styles.css` beside the component is the surface's own stylesheet, scoped to its tabs; `:scope { --name: … }` sets its own tokens; do not import it from the page. Tailwind sees every file in `.baba/` but `node_modules`; a package whose classes must be generated is named by `@source "../../../node_modules/NAME";` in it.
+
+## Home
+
+The mark on the rail shows home, by default a desktop of the surfaces. `.baba/home.tsx`, where it exists, takes its place: a component given `HomeProps` from `babavoss/shell/ui/index.tsx` (`title`, `notice`, `surfaces`, `tabs`, `foot`), drawn with the kit.
+
+## What may be imported
+
+The framework is the package `babavoss`, imported only by its entries; anything else does not resolve.
+
+- `babavoss/core/index.ts`, for a surface's source and specs: `surface`, `view`, `action`, `detail`, `story`, `Update` and the rest; a page takes its types, as `Handle`.
+- `babavoss/kit/index.ts`, for a page: the primitives and `cn`.
+- `babavoss/shell/ui/index.tsx`, for a page: `useLive`, `useTab`, `useShell`, `useConventions`, `DrawerProps`, `HomeProps`.
+- `babavoss/core/config.ts`, for `.baba/baba.config.ts` alone.
+
+What a surface needs beyond them it keeps in its own folder.
+
+## How the agent works it
+
+The agent reads views and calls actions one at a time, or many in one program: `.babavoss/bin/baba -e - <<'EOF'` with `await read(path)`, a view as data, each action in it as `{ handle, args, inputs }`; `await call(path, handle, { name: value })`, which throws on a refusal; and `print(…)`. So give rows the values a program filters by, as `status`, and their `at`, and a batch needs no reading of each row.
+
+## Configuration
 
 ```ts
 import { config } from "babavoss/core/config.ts"
 
 export default config({
-  harnesses: {
-    claude: { enable: true, events: ["SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "SessionEnd"] },
-    codex: { enable: false },
-  },
+  title: "Reading desk",
+  dev: true,
+  harnesses: { claude: { enable: true }, codex: { enable: false } },
 })
 ```
 
-A section per harness, each starting with `enable`; `enable: false` takes back what baba wrote for that harness at the next `bun run baba provision`. `events` lists the hook's events that tell anything, all by default; the hook reads it as it runs, so a change needs no provisioning. Codex's section takes `network: true` too, which opens the sandbox's network in `.codex/config.toml` where that file does not already say, so the shell's command reaches its runtime. A configuration that does not load stops provisioning with its error, and keeps the hooks silent until it is corrected; the shell's answer says so.
+`title` names the root on the page and at `/`; the project's directory by default. `dev: true` restarts the shell at once whenever its code changes; absent or false, it runs the code it started with until restarted; `BABAVOSS_DEV=1` or `0` overrides it. Each harness has a section: `enable: false` takes back what was written for it at the next `bun run baba provision`; `events` lists the hook's events that tell anything, all by default; Codex's `network: true` opens its sandbox's network so the command reaches the shell. Claude Code gets `.claude/skills/baba`, a link to the package's plugin, loaded once the folder is trusted; Codex gets `.agents/skills/baba` and its hook in `.codex/hooks.json`, which it asks the person to review once with `/hooks`. Installing provisions; `bun run baba provision` does it again.
 
 ## Updating
 
-When an answer says a later babavoss is out, take it with the command it gives, unless the person said not to. Then read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up, adapt the surfaces to what changed, and run their specs. Installing provisions again.
+When an answer says a later babavoss is out, it names the command that takes it; whether and when is the person's. Once taken, read `node_modules/babavoss/CHANGELOG.md` from the version the surfaces ran on up (the version before is in `.baba/package.json`'s history or `bun.lock`), adapt the surfaces to each change it names, run `bun check` and their specs, and restart the shell to run the version taken.

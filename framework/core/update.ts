@@ -1,11 +1,14 @@
 // Says when a later babavoss is released than the one these surfaces run on. The repository is asked at most once a day,
-// briefly, and a failure to reach it is silence. BABAVOSS_LATEST, when set, is the answer, and nothing is asked.
+// briefly, and a failure to reach it is silence. BABAVOSS_LATEST, when set, is the answer, and nothing is asked. What it is
+// compared with is the version running, read when it is compared: the package may be taken while a process runs.
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { readJsonFile, writeJsonFile } from "./state/json-file.ts"
 
-/** The framework's version: every version on the repository's main is a release, tagged vX.Y.Z. */
-export const VERSION = (JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }).version
+/** The framework's version as its package says now: every version on the repository's main is a release, tagged vX.Y.Z. */
+export const running = () => (JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }).version
+/** The framework's version as this process loaded it. */
+export const VERSION = running()
 export const REPOSITORY = "alanremarc/babavoss"
 const DAY = 24 * 60 * 60 * 1000
 
@@ -19,7 +22,7 @@ export const later = (a: string, b: string) => {
 }
 
 /** The latest release, as last heard in this home; asked again once that is a day old. */
-async function latest(home: string, now: number): Promise<string | undefined> {
+export async function latestRelease(home: string, now = Date.now()): Promise<string | undefined> {
   if (process.env.BABAVOSS_LATEST !== undefined) return process.env.BABAVOSS_LATEST || undefined
 
   const file = join(home, "latest.json")
@@ -41,19 +44,13 @@ async function latest(home: string, now: number): Promise<string | undefined> {
   return version
 }
 
-/** The latest release where it is later than the one these surfaces run on, else undefined. */
-export async function laterRelease(home: string, now = Date.now()): Promise<string | undefined> {
-  const version = await latest(home, now)
-
-  return version && later(version, VERSION) ? version : undefined
-}
-
-/** What to tell the agent when a later release is out: how to take it in `baba`, the surfaces' package, and what to do after. */
+/** What to tell the agent when a later release is out than the one running: how to take it in `baba`, the surfaces' package, and what to do after. */
 export async function updateNote(home: string, baba: string, now = Date.now()): Promise<string | undefined> {
-  const version = await laterRelease(home, now)
+  const version = await latestRelease(home, now)
+  const ran = running()
 
-  return version
-    ? `babavoss ${version} is out; these surfaces run on ${VERSION}. Update, unless the person said not to: run \`bun add babavoss@github:${REPOSITORY}#v${version}\` in ${baba}, ` +
-        `read node_modules/babavoss/CHANGELOG.md there from ${VERSION} up, adapt the surfaces to what changed, and run their specs`
+  return version && later(version, ran)
+    ? `babavoss ${version} is out; these surfaces run on ${ran}. Whether to take it is the person's; it is taken by \`bun add babavoss@github:${REPOSITORY}#v${version}\` ` +
+        `in ${baba}, then node_modules/babavoss/CHANGELOG.md there is read from ${ran} up, the surfaces adapted to what changed, and their specs run`
     : undefined
 }

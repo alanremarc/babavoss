@@ -1,0 +1,104 @@
+// Expenses: what the team spent this month, each expense logged by the agent from a receipt, submitted, and approved or
+// rejected by the person on the page. The month has a budget; the total of what is not rejected is measured against it.
+import { action, surface, view, type Update } from "babavoss/core/index.ts"
+
+const CATEGORIES = ["travel", "meals", "office", "software"]
+
+type State = "logged" | "submitted" | "approved" | "rejected"
+type Expense = { id: number; what: string; amount: number; category: string; state: State; note?: string }
+export type Model = { expenses: Expense[]; budget: number; next: number }
+type Event = { kind: "none" }
+
+const total = (m: Model) => m.expenses.filter((e) => e.state !== "rejected").reduce((n, e) => n + e.amount, 0)
+const set = (m: Model, id: number, change: Partial<Expense>): Model => ({ ...m, expenses: m.expenses.map((e) => (e.id === id ? { ...e, ...change } : e)) })
+const row = (e: Expense) => ({ at: `/expenses/${e.id}`, id: e.id, what: e.what, amount: e.amount, category: e.category, state: e.state })
+
+const log = action({
+  name: "log",
+  description: "an expense, which starts as logged",
+  subject: {},
+  inputs: { what: { type: "string", kind: "line" }, amount: "number", category: { type: "string", choices: CATEGORIES } },
+  update: (m: Model, { what, amount, category }): Update<Model, never> => {
+    if (!what.trim()) return { refused: "An expense needs a description" }
+    if (!(amount > 0)) return { refused: "The amount must be more than 0" }
+
+    return { model: { ...m, expenses: [...m.expenses, { id: m.next, what: what.trim(), amount, category, state: "logged" }], next: m.next + 1 } }
+  },
+})
+const submit = action({
+  name: "submit",
+  description: "for approval or rejection",
+  subject: { id: "number" },
+  inputs: {},
+  update: (m: Model, { id }): Update<Model, never> => ({ model: set(m, id, { state: "submitted" }), notices: [{ text: `Expense ${id} submitted for approval`, at: `/expenses/${id}`, highlight: true }] }),
+})
+const approve = action({
+  name: "approve",
+  description: "",
+  subject: { id: "number" },
+  inputs: {},
+  update: (m: Model, { id }): Update<Model, never> => ({ model: set(m, id, { state: "approved" }), notices: [`Expense ${id} approved`] }),
+})
+const reject = action({
+  name: "reject",
+  description: "with the reason, kept as its note; it no longer counts against the budget",
+  subject: { id: "number" },
+  inputs: { why: { type: "string", kind: "line" } },
+  update: (m: Model, { id, why }): Update<Model, never> =>
+    why.trim() ? { model: set(m, id, { state: "rejected", note: why.trim() }), notices: [`Expense ${id} rejected: ${why.trim()}`] } : { refused: "Say why it is rejected" },
+})
+const note = action({
+  name: "note",
+  description: "one line on the expense; empty clears it",
+  subject: { id: "number" },
+  inputs: { text: { type: "string", kind: "line" } },
+  update: (m: Model, { id, text }): Update<Model, never> => ({ model: set(m, id, { note: text.trim() || undefined }) }),
+})
+const budget = action({
+  name: "budget",
+  description: "of the month, which must be more than 0",
+  subject: {},
+  inputs: { amount: "number" },
+  update: (m: Model, { amount }): Update<Model, never> => (amount > 0 ? { model: { ...m, budget: amount } } : { refused: "The budget must be more than 0" }),
+})
+
+const pages = view([log, submit, approve, reject, note, budget], {
+  "/": (m) => {
+    const waiting = m.expenses.filter((e) => e.state === "submitted")
+    const spent = total(m)
+
+    return {
+      title: "Expenses",
+      how: "An expense is logged, then submitted, then approved or rejected. Spent is the total of every expense not rejected; over is by how much it passes the budget.",
+      budget: m.budget,
+      spent,
+      ...(spent > m.budget && { over: spent - m.budget }),
+      expenses: m.expenses.map(row),
+      waiting: waiting.length,
+      log: log.bind({}),
+      set_budget: budget.bind({}),
+    }
+  },
+  "/expenses/:id": (m, { id }) => {
+    const e = m.expenses.find((x) => x.id === Number(id))
+
+    return (
+      e && {
+        ...row(e),
+        ...(e.note && { note: e.note }),
+        write_note: note.bind({ id: e.id }),
+        ...(e.state === "logged" && { submit: submit.bind({ id: e.id }) }),
+        ...(e.state === "submitted" && { approve: approve.bind({ id: e.id }), reject: reject.bind({ id: e.id }) }),
+      }
+    )
+  },
+})
+
+export default surface<Model, Event, never>({
+  description: "The month's expenses against its budget, each logged, submitted and approved or rejected. Use when an expense is logged, decided or totalled.",
+  init: () => ({ expenses: [], budget: 2000, next: 1 }),
+  update: (m, message) => (message.kind === "call" ? pages.update(m, message) : { model: m }),
+  view: pages.view,
+  run: async () => {},
+  failed: () => ({ kind: "none" }),
+})

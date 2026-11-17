@@ -1,5 +1,5 @@
-// The tasks page as a function of its view at /: the tasks as rows, each by its status, the asks of one in review beside
-// it, and who is waited for above them. Its own page draws it with the live view; the design document draws it with a view
+// The tasks page as a function of its view at /: the tasks as rows, each by its status, approve and reopen of one in review beside
+// it. Its own page draws it with the live view; the design document draws it with a view
 // a play recorded, and gives no `call`, so nothing in it acts.
 import { CircleCheckIcon, CircleDotIcon, CircleIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
@@ -7,7 +7,7 @@ import { Button } from "babavoss/kit/index.ts"
 
 type Status = "todo" | "review" | "done"
 type Row = { at: string; n: number; title: string; status: Status; approve?: Handle; reopen?: Handle }
-export type TasksView = { title?: string; tasks?: Row[]; attention?: { who: string; why: string } }
+export type TasksView = { title?: string; tasks?: Row[] }
 export type Props = { view: TasksView; call?: (path: string, handle: Handle) => void }
 
 const NAMES: Record<Status, string> = { todo: "to do", review: "in review", done: "done" }
@@ -24,11 +24,6 @@ export default function TasksPage({ view, call }: Props) {
 
   return (
     <div className="flex flex-col gap-2 p-3 text-body">
-      {view.attention && (
-        <p data-fact="attention" className="bg-warning/10 text-warning rounded-md px-2 py-1 text-meta">
-          Waiting for the {view.attention.who}: {view.attention.why}
-        </p>
-      )}
       {tasks.length === 0 ? (
         <p className="text-muted-foreground py-4 text-center">No tasks yet.</p>
       ) : (

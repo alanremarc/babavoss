@@ -1,12 +1,15 @@
 // Claude Code's adapter. Set up: a project-level plugin, the package's plugin/claude/, which is the skill baba and the
 // framework's hook for each event; the project gets one link to it, .claude/skills/baba, which Claude Code loads in place
-// in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json. Hooks: Claude Code's input
+// in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json; an organisation's managed
+// settings that keep the plugin or its hook from running are read, where they can be, and said. Hooks: Claude Code's input
 // and output, whose names the framework's moments are. Run: one long-lived headless process per session, spoken to and
 // read as JSON lines, in a home of its own, so its transcripts, settings and caches land there and the person's own are
-// neither read nor written; the project is trusted in that home, so its plugin loads as in the person's own session. Its
-// login is the person's: on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a
-// token or key the environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on
-// nothing of the account's: no account, organisation or user id, and no address, whatever field or text carries one.
+// neither read nor written. A plugin in .claude/skills loads only in a folder trusted in that home, which `-p` does not
+// count; so the run loads the project's plugin by --plugin-dir, for that session only, whatever the trust says, and the
+// project is trusted in the home besides, so its own settings apply as in the person's session. Its login is the person's:
+// on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a token or key the
+// environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on nothing of the
+// account's: no account, organisation or user id, and no address, whatever field or text carries one.
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative } from "node:path"
@@ -90,7 +93,10 @@ export function claudeEvents(line: Json): HarnessEvent[] {
   if (type === "system" && subtype === "hook_response") {
     const text = injected(str(e.stdout))
 
-    return text ? [{ kind: "injected", event: str(e.hook_event) || str(e.hook_name), text, ...(num(e.exit_code) !== 0 && { error: true }) }] : []
+    const event = str(e.hook_event) || str(e.hook_name)
+
+    // A hook that ran and added nothing is heard all the same.
+    return [text ? { kind: "injected", event, text, ...(num(e.exit_code) !== 0 && { error: true }) } : { kind: "hook", event }]
   }
   if (type === "user" && e.parent_tool_use_id == null) {
     const message = obj(e.message)
@@ -224,8 +230,8 @@ async function* jsonLines(stream: ReadableStream<Uint8Array>): AsyncIterable<Jso
 }
 
 /**
- * Marks `project` trusted in the session's `home`, as the person's own session of it is, so the project's plugin loads.
- * Claude Code asks it of a git worktree's main checkout, so that is marked too.
+ * Marks `project` trusted in the session's `home`, as the person's own session of it is, so the project's own settings
+ * apply as there. Claude Code asks it of a git worktree's main checkout, so that is marked too.
  */
 export function trust(home: string, project: string) {
   const file = join(home, ".claude.json")
@@ -243,20 +249,27 @@ export function trust(home: string, project: string) {
   writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`)
 }
 
-function spawnClaude({ project, home, session, model, budget = 0.5 }: Start): Session {
+/**
+ * What a session is started with. Its hooks run however the project is trusted: the project's plugin, its link at
+ * .claude/skills/baba, is loaded for the session only with --plugin-dir, which goes before a plugin of the same name in
+ * .claude/skills; the stream carries each hook's run. The home is the session's own, and the person's user layer of
+ * settings and MCP servers is kept out even where it is not.
+ */
+export const claudeArgs = ({ project, session, model, budget = 0.5 }: Start): string[] => [
+  "claude",
+  "-p",
+  ...["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--replay-user-messages"],
+  ...["--session-id", session, "--model", model, "--permission-mode", "bypassPermissions", "--max-budget-usd", String(budget)],
+  ...["--plugin-dir", join(project, PLUGIN_LINK)],
+  ...["--setting-sources", "project,local", "--strict-mcp-config"],
+]
+
+function spawnClaude(options: Start): Session {
+  const { project, home, session } = options
+
   trust(home, project)
 
-  const child = Bun.spawn(
-    [
-      "claude",
-      "-p",
-      ...["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--replay-user-messages"],
-      ...["--session-id", session, "--model", model, "--permission-mode", "bypassPermissions", "--max-budget-usd", String(budget)],
-      // The home is the session's own; these keep the person's user layer out even where it is not.
-      ...["--setting-sources", "project,local", "--strict-mcp-config"],
-    ],
-    { cwd: project, env: sessionEnv(home), stdin: "pipe", stdout: "pipe", stderr: "pipe" }
-  )
+  const child = Bun.spawn(claudeArgs(options), { cwd: project, env: sessionEnv(home), stdin: "pipe", stdout: "pipe", stderr: "pipe" })
   const stderr = new Response(child.stderr).text()
   const write = (line: Json) => {
     child.stdin.write(`${JSON.stringify(line)}\n`)
@@ -287,6 +300,7 @@ export const PLUGIN = fileURLToPath(new URL("../../../plugin/claude", import.met
 export const PLUGIN_LINK = ".claude/skills/baba"
 /** Claude Code's settings beside .baba/: the person's, where older provisioning wrote the framework's hooks. */
 const SETTINGS = ".claude/settings.json"
+/** The plugin's files; reminder.md, which an earlier plugin carried, still marks a copied folder as baba's. */
 const PLUGIN_FILES = ["SKILL.md", "reminder.md", ".claude-plugin", "hooks"]
 
 /** Whether the skill folder at `link` is baba's: a link to a babavoss plugin, or a folder of baba's files alone whose skill is baba. */
@@ -301,6 +315,131 @@ function ours(link: string): boolean {
   } catch {
     return false
   }
+}
+
+/** The plugin's id in Claude Code: its manifest's name, loaded from a skills folder. */
+export const PLUGIN_ID = "baba@skills-dir"
+
+/**
+ * Where Claude Code reads an organisation's managed settings on this machine, as its documents say, highest first: the
+ * MDM profile, on macOS, then the system directory's managed-settings.json with managed-settings.d/*.json merged after it.
+ * BABAVOSS_MANAGED stands for the system directory, and leaves the profile out, so a spec reads its own and never the machine's.
+ */
+export function managedAt(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): { profiles: string[]; dir?: string } {
+  if (env.BABAVOSS_MANAGED !== undefined) return { profiles: [], dir: env.BABAVOSS_MANAGED || undefined }
+  if (platform === "darwin") {
+    const domain = "com.anthropic.claudecode.plist"
+    const user = env.USER ? [join("/Library/Managed Preferences", env.USER, domain)] : []
+
+    return { profiles: [join("/Library/Managed Preferences", domain), ...user], dir: "/Library/Application Support/ClaudeCode" }
+  }
+
+  return { profiles: [], dir: platform === "win32" ? "C:\\Program Files\\ClaudeCode" : platform === "linux" ? "/etc/claude-code" : undefined }
+}
+
+/** Two documents merged as Claude Code merges its drop-ins: lists joined, objects key by key, any other value the later's. */
+const merged = (a: O, b: O): O =>
+  Object.fromEntries(
+    [...new Set([...Object.keys(a), ...Object.keys(b)])].map((key) => {
+      const [x, y] = [a[key], b[key]]
+
+      if (y === undefined) return [key, x]
+      if (Array.isArray(x) && Array.isArray(y)) return [key, [...x, ...y]]
+      if (x && y && typeof x === "object" && typeof y === "object" && !Array.isArray(x) && !Array.isArray(y)) return [key, merged(x, y)]
+
+      return [key, y]
+    })
+  )
+const readObject = (text: string): O | undefined => {
+  try {
+    const value = JSON.parse(text) as Json
+
+    return value && typeof value === "object" && !Array.isArray(value) ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+/** The keys that say how managed sources combine, and set no policy themselves. */
+const CONTROL = ["managedSourcesBehavior", "parentSettingsBehavior"]
+const policyIn = (value: O | undefined): value is O => !!value && Object.keys(value).some((key) => !CONTROL.includes(key))
+
+/**
+ * The managed policy Claude Code applies on this machine, as far as it can be read without changing anything, and where
+ * it was read: the first source that sets a policy, or each, merged, where the first says "merge". The settings an
+ * organisation's console delivers are read by Claude Code from its servers, and the registry on Windows, are not read here.
+ */
+export function managedPolicy(at = managedAt()): { from: string; policy: O } | undefined {
+  const sources: { from: string; policy: O }[] = []
+
+  for (const profile of at.profiles) {
+    if (!existsSync(profile)) continue
+
+    const read = Bun.spawnSync(["plutil", "-convert", "json", "-o", "-", profile], { stdout: "pipe", stderr: "ignore" })
+    const policy = read.exitCode === 0 ? readObject(read.stdout.toString()) : undefined
+
+    if (policyIn(policy)) sources.push({ from: profile, policy })
+  }
+  if (at.dir) {
+    const drops = join(at.dir, "managed-settings.d")
+    const files = [
+      join(at.dir, "managed-settings.json"),
+      ...(existsSync(drops) ? readdirSync(drops).filter((name) => name.endsWith(".json") && !name.startsWith(".")) : []).sort().map((name) => join(drops, name)),
+    ]
+    const read = files.flatMap((file) => {
+      const policy = existsSync(file) ? readObject(readFileSync(file, "utf8")) : undefined
+
+      return policy ? [{ file, policy }] : []
+    })
+    const policy = read.reduce<O>((all, { policy }) => merged(all, policy), {})
+
+    if (policyIn(policy)) sources.push({ from: read.length === 1 ? read[0]!.file : at.dir, policy })
+  }
+
+  const [first] = sources
+
+  if (!first) return undefined
+
+  if (first.policy.managedSourcesBehavior !== "merge") return first
+
+  return { from: sources.map((s) => s.from).join(" and "), policy: sources.reduce<O>((all, s) => merged(all, s.policy), {}) }
+}
+
+const SURFACES = ["skills", "agents", "hooks", "mcp"]
+const skillsDir = (sources: Json | undefined) => list(sources).some((source) => obj(source).source === "skills-dir")
+
+/**
+ * Why a managed policy keeps the plugin's hook from running, as Claude Code's documents say, with what can be done; undefined
+ * where nothing in it does. A skills folder's plugin is skipped whole where customisation is locked to plugins, where the
+ * marketplaces allowed leave out skills folders or those blocked name them, or where the plugin is turned off; its hooks
+ * alone stop where only managed hooks run, unless the policy turns the plugin on, or where hooks are disabled.
+ */
+export function blockOf(policy: O): string | undefined {
+  const enabled = obj(policy.enabledPlugins)[PLUGIN_ID]
+  const locked = policy.strictPluginOnlyCustomization
+  const allowed = policy.strictKnownMarketplaces ?? policy.allowedMarketplaces
+  const skipped = (why: string) => `${why}, so Claude Code skips the plugin ${PLUGIN_LINK}, and its hook`
+  const offer = "ask whoever manages Claude Code here to allow it"
+  const flag = policy.disableSideloadFlags === true ? "" : `, or start claude with --plugin-dir ${PLUGIN_LINK}`
+
+  if (enabled === false) return `${skipped(`turn ${PLUGIN_ID} off`)}; ${offer}`
+  if (locked === true || (Array.isArray(locked) ? locked.some((s) => SURFACES.includes(str(s))) : locked !== undefined && locked !== false))
+    return `${skipped("lock customisation to plugins (strictPluginOnlyCustomization)")}; ${offer}${flag}`
+  if (allowed !== undefined && !skillsDir(allowed))
+    return `${skipped('allow no skills folder among the marketplaces (strictKnownMarketplaces)')}; ${offer}: { "source": "skills-dir" } among them${flag}`
+  if (skillsDir(policy.blockedMarketplaces)) return `${skipped("block skills folders (blockedMarketplaces)")}; ${offer}${flag}`
+  if (policy.disableAllHooks === true) return `disable every hook (disableAllHooks), baba's among them; ${offer}`
+  if (policy.allowManagedHooksOnly === true && enabled !== true)
+    return `run only the organisation's hooks (allowManagedHooksOnly), not baba's; ${offer}: "${PLUGIN_ID}": true in its enabledPlugins`
+
+  return undefined
+}
+
+/** What keeps Claude Code from running baba's hook on this machine, said in one line; undefined where nothing read does. */
+export function blocked(at = managedAt()): string | undefined {
+  const managed = managedPolicy(at)
+  const why = managed && blockOf(managed.policy)
+
+  return why && `baba: Claude Code's managed settings (${managed.from}) ${why}. Until then no session here is told of the surfaces.`
 }
 
 /** The settings' hooks without the framework's, which the plugin now carries: run from both, each would run twice. */
@@ -338,8 +477,11 @@ export const claude: Adapter<ClaudeOptions> = {
     }
     if (stripped(project)) paths.push(SETTINGS)
 
-    return { paths }
+    const said = blocked()
+
+    return { paths, ...(said && { said }) }
   },
+  blocked: () => blocked(),
   withdraw(project): SetUp {
     const link = join(project, PLUGIN_LINK)
     const paths: string[] = []

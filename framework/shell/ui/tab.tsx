@@ -4,6 +4,8 @@
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { Args, View } from "../../core/index.ts"
 import type { Theme } from "../../kit/theme.ts"
+import { DEFAULTS } from "../settings/src/settings.ts"
+import { conventionsOf, type Conventions } from "../src/conventions.ts"
 import { call as callDoor, read as readDoor, type Answer } from "./client.ts"
 import { cachesBy, liveCache, shownOf, type Entry, type LiveCache } from "./live.ts"
 
@@ -22,7 +24,7 @@ export type TabContext = {
 
 /**
  * What a page may ask of the shell beyond its tab, used by convention and never needed: `open` shows a tab of a surface,
- * the one open or else a new one; `go` goes to a place by its whole path, as `/queue/issues/3`; `toast` raises a toast from
+ * the one open or else a new one; `go` goes to a place by its whole path, as `/queue/issues/3`; `toast` raises a bubble beside
  * the tab, which clicking returns to, kept nowhere and not told to the agent, since what happened to both sides is a notice
  * of the surface's `update`; `appearance` is the person's mode and theme, for a library that must be told them: `theme`
  * the preset's id or dynamic, `numbers` the three it is derived from, which change as a dynamic theme is changed.
@@ -36,6 +38,15 @@ export type ShellServices = {
 
 /** The shell's services as the shell gives them; a page drawn without the shell has them do nothing. */
 export const ServicesContext = createContext<ShellServices>({ open: async () => {}, go: () => {}, toast: () => {}, appearance: { mode: "light", theme: "neutral", numbers: { hue: 0, tint: 0, vivid: 0 } } })
+
+/** The conventions as the shell hands them to every page; a page drawn without the shell has the defaults, in light. */
+export const ConventionsContext = createContext<Conventions>(conventionsOf(DEFAULTS, { dark: false, reduced: false }))
+
+/**
+ * The conventions, kept current: how the person wants pages to be, which a page interprets by its own code. Following them
+ * is expected and never checked; the same stand on the page's root as data-NAME and --NAME, for CSS and the kit.
+ */
+export const useConventions = (): Conventions => useContext(ConventionsContext)
 
 /** The tab's context as the shell holds it: with its cache, which useLive reads. */
 const Context = createContext<(TabContext & { cache: LiveCache }) | null>(null)
@@ -81,7 +92,7 @@ export const ChangesContext = createContext<Changes>({
   cacheOf: unshelled.of,
 })
 
-/** A tab's way to its views and actions, below its address: what its context gives, and what its menu in the strip reads by. */
+/** A tab's way to its views and actions, below its address: what its context gives, and what its menu in its drawer reads by. */
 export type Door = Pick<TabContext, "read" | "call" | "live"> & { cache: LiveCache }
 
 export function doorOf(address: string, { subscribe, connected, cacheOf }: Changes): Door {

@@ -1,6 +1,7 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
-// baba would, its text and the shell's answer, the shell started; where the session had the text before, as after a
-// compaction or a resume, the text's reminder in its place (wordsFor); after each tool call, what was heard in an open root since
+// baba would, its text and the shell's answer, the shell started, with the present whole; the same again where the session
+// had them before and lost them, after a compaction, a resume or a fork (returning), once a boundary: a start that follows
+// another with nothing heard between, as a compaction at once after a resume, is given nothing again; after each tool call, what was heard in an open root since
 // the agent was last told, one line each: notices, and where the person acted; with each message of the person, that and
 // then what changed at / since the agent was last told it, by who changed it: the person on its page, the surface by itself,
 // or the agent with them. What the agent's own calls alone changed or gave, their answers told it. It steers and informs,
@@ -9,13 +10,14 @@
 // a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
 // from stopping. Nothing here knows a harness: its adapter reads the hook's input as the framework's moment, and prints what
 // is told as the harness takes it (harness/).
-import { readFileSync, realpathSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
+import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, save, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
 import { HARNESS_HEADER, type TurnEvent } from "./runtime/turn.ts"
+import { ENDED } from "./state/session-dir.ts"
 
 type Endpoint = { port: number; token: string; dir: string }
 
@@ -27,13 +29,21 @@ export const turnOf = (event: HookEvent): TurnEvent | undefined =>
   TURNS[event.moment] ?? (event.moment === "SessionStart" && event.source !== "compact" ? "ended" : undefined)
 
 /**
- * Which of baba's words a session's start is given: the whole, where the agent has not had them, as in a new or cleared
- * session or where the harness does not say; their reminder, where it had them and they are in its context or its summary.
+ * Whether a session's start returns to a session that had baba's words and the present, and lost them to a compaction, a
+ * resume or a fork: it is given them again, the same as at a start, since every rule in them is one the agent acts on and
+ * the state it holds is gone; but once a boundary. A new or cleared session, or one whose harness does not say, is not.
  */
-export const wordsFor = (source: Source | undefined): "whole" | "reminder" => (source === "compact" || source === "resume" || source === "fork" ? "reminder" : "whole")
+export const returning = (source: Source | undefined): boolean => source === "compact" || source === "resume" || source === "fork"
+
+/**
+ * Where a session's start was told and nothing has been heard since: a boundary still open. A start that finds it is part of
+ * that boundary, as a compaction at once after a resume, and is given nothing again, where it is returning; any other moment
+ * but the session's end closes it. A start that is not returning, a new or cleared context, is always given them.
+ */
+const boundaryFile = (session: string) => join(dirname(registryFile(session)), "boundary.json")
 
 const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
-const WORDS = { whole: fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url)), reminder: fileURLToPath(new URL("../../skill/reminder.md", import.meta.url)) }
+const WORDS = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
 
 /** Where the roots of a .baba/ keep what their sessions write: beside it, or in the person's home's own place. */
 export const homeOf = (baba: string) => join(dirname(baba) === realpathSync(homedir()) ? homedir() : dirname(baba), ".babavoss")
@@ -92,22 +102,37 @@ export async function hookContext(input: HookEvent, baba: string, harness?: stri
   const roots = () => Object.entries(load<Record<string, OpenRoot>>(registryFile(session)) ?? {})
   const lines: string[] = []
   const turn = turnOf(input)
+  // The session's end is left in its directory, so the archive's sweep knows it is over; anything heard after takes it back.
+  const ended = join(dirname(registryFile(session)), ENDED)
+
+  if (turn !== "gone") rmSync(ended, { force: true })
+  else if (existsSync(dirname(ended))) writeFileSync(ended, "", { mode: 0o600 })
   // Whose move it is, told before what changed is read, so the page counts nothing as waiting once the turn has it.
   const tell = async () => {
     if (turn) await Promise.all(roots().map(([, root]) => tellTurn(root, session, turn, harness).catch(() => {})))
   }
 
   if (input.moment === "SessionStart") {
+    if (returning(input.source) && existsSync(boundaryFile(session))) {
+      await tell()
+
+      return undefined
+    }
+    save(boundaryFile(session), { source: input.source ?? null })
     // What invoking the skill baba gives, given unasked: its text, and the shell started, which the skill would have the
     // agent do. The shell's answer is its version, its page's address, the surfaces and the tabs open in this session.
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
-    lines.push(readFileSync(WORDS[wordsFor(input.source)], "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
+    lines.push(readFileSync(WORDS, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
     if (root.exitCode === 0 && answer) lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
     await tell()
-  } else if (turn === "ended" || turn === "gone") await tell()
-  else {
+  } else if (turn === "gone") await tell()
+  else if (turn === "ended") {
+    rmSync(boundaryFile(session), { force: true })
+    await tell()
+  } else {
+    rmSync(boundaryFile(session), { force: true })
     const tells = TELLS[input.moment] ?? TELLS.UserPromptSubmit!
 
     await tell()

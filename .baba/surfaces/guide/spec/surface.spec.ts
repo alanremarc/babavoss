@@ -29,9 +29,9 @@ test("every file a specimen names is the framework's", () => {
 test("the agent reads the groups at /, a group's specimens below it, and a specimen by its path", () => {
   const { agent } = story(guide)
 
-  expect((agent.sees() as { groups: { at: string }[] }).groups.map((g) => g.at)).toEqual(["/mark", "/foundations", "/primitives", "/layouts", "/shell"])
-  expect(agent.sees("/mark")).toMatchObject({ title: "Mark", sections: [{ specimens: [{ at: "/mark/states" }, { at: "/mark/moves" }] }] })
-  expect(agent.sees("/shell/activity")).toMatchObject({ title: "Activity", group: { at: "/shell" }, files: expect.arrayContaining(["framework/shell/ui/activity.tsx"]) })
+  expect((agent.sees() as { groups: { at: string }[] }).groups.map((g) => g.at)).toEqual(["/mark", "/foundations", "/primitives", "/shell"])
+  expect(agent.sees("/mark")).toMatchObject({ title: "Mark", sections: [{ specimens: [{ at: "/mark/states" }, { at: "/mark/moves" }, { at: "/mark/sphere" }] }] })
+  expect(agent.sees("/shell/drawer")).toMatchObject({ title: "Drawer", group: { at: "/shell" }, files: expect.arrayContaining(["framework/shell/ui/drawer.tsx"]) })
   expect(agent.sees("/primitives/nothing")).toBeUndefined()
   expect(agent.offered()).toEqual([])
 })

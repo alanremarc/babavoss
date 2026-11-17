@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "bun:test"
 import { BUILT, shellUi, buildUi, migrated, withSettings } from "../../framework/shell/src/hosting.ts"
 import { readSettings, writeSettings } from "../../framework/shell/settings/src/store.ts"
 import { DEFAULTS } from "../../framework/shell/settings/src/settings.ts"
+import { copyNotes } from "../support/notes.ts"
 
 const dirs: string[] = []
 
@@ -55,7 +56,7 @@ for (const root of ["spec/support/notes"]) {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-root-")))
 
     dirs.push(dir)
-    for (const name of ["ui", "src"]) cpSync(resolve(root, name), join(dir, name), { recursive: true })
+    copyNotes(dir, ["ui", "src"])
     symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
     const serve = async () => {
@@ -146,7 +147,7 @@ it("builds a page with one React, the framework's, where the page's own packages
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-react-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  copyNotes(dir, ["ui", "src"])
   // As a library installed beside the surfaces may leave it: a copy of React of their own, and the framework's own.
   mkdirSync(join(dir, "node_modules"))
   for (const name of readdirSync("node_modules"))
@@ -168,7 +169,7 @@ it("refuses to build a shell page that imports no stylesheet, and says what to i
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-bare-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  copyNotes(dir, ["ui", "src"])
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
   writeFileSync(join(dir, "ui/main.tsx"), readFileSync(join(dir, "ui/main.tsx"), "utf8").replace('import "./styles.css"\n', ""))
 
@@ -179,7 +180,7 @@ it("serves the last page that built while the page does not build, through a rel
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "hosting-broken-")))
 
   dirs.push(dir)
-  for (const name of ["ui", "src"]) cpSync(resolve("spec/support/notes", name), join(dir, name), { recursive: true })
+  copyNotes(dir, ["ui", "src"])
   symlinkSync(resolve("node_modules"), join(dir, "node_modules"))
 
   const main = join(dir, "ui/main.tsx")
@@ -211,7 +212,7 @@ describe("the person's settings in the page", () => {
   it("are given in its head as it is served, before what reads them, and no markup in them can close the script", () => {
     const file = scratch()
 
-    writeSettings(file, { ...DEFAULTS, appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: { hue: 200, tint: 40, vivid: 60 } } } })
+    writeSettings(file, { ...DEFAULTS, appearance: { ...DEFAULTS.appearance, mode: "dark", same: false, themes: { light: "neutral", dark: { hue: 200, tint: 40, vivid: 60 } } } })
 
     const html = withSettings("<html><head><script>paint()</script></head></html>", file)
 
@@ -230,14 +231,21 @@ describe("the person's settings in the page", () => {
     expect(given(withSettings("<head></head>", file, () => undefined))).not.toHaveProperty("system")
   })
 
+  it("come with the conventions as the runtime can tell them, which the page sets before its first frame", () => {
+    const file = scratch()
+
+    writeSettings(file, { ...DEFAULTS, preferences: { motion: "reduced", scale: 1.25, side: "left" } })
+    expect(given(withSettings("<head></head>", file, () => "dark")).conventions).toEqual({ motion: "reduced", scale: 1.25, side: "left", rail: "left", mode: "dark" })
+  })
+
   it("give no appearance while the file has none, so the page paints by an older page's cookie, which is taken into the file once", () => {
     const file = scratch()
     const cookie = `other=1; babavoss.appearance=${encodeURIComponent(JSON.stringify({ mode: "light", themes: { light: "clay", dark: "neutral" } }))}`
 
     expect(given(withSettings("<head></head>", file))).not.toHaveProperty("appearance")
     expect(migrated(cookie, file)).toBe(true)
-    expect(readSettings(file).appearance).toEqual({ mode: "light", same: false, themes: { light: "clay", dark: "neutral" } })
-    writeSettings(file, { ...readSettings(file), appearance: { mode: "dark", same: false, themes: { light: "clay", dark: "neutral" } } })
+    expect(readSettings(file).appearance).toEqual({ ...DEFAULTS.appearance, mode: "light", same: false, themes: { light: "clay", dark: "neutral" } })
+    writeSettings(file, { ...readSettings(file), appearance: { ...DEFAULTS.appearance, mode: "dark", same: false, themes: { light: "clay", dark: "neutral" } } })
     expect(migrated(cookie, file)).toBe(false)
     expect(readSettings(file).appearance.mode).toBe("dark")
   })

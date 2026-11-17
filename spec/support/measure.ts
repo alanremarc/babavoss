@@ -9,12 +9,18 @@
 // Before an action was told by its name, a reorder by what moved and a notice let stand for its commit's changes: the
 // steps' diffs summed 29 lines and 1011 characters; the turn's call answers 11 and 359, the person's next message 12 and 405.
 // After: 29 and 884; 11 and 328; 9 and 324.
+// Before highlight took the place of show and attention, the session start's present was 22 lines and 1184 characters,
+// and the call answers 11 and 328; after, 22 and 1177, and 11 and 338, a highlight told first and marked so.
+// Before a view's handles were one block, the command said once, and a description one clause: the whole present 26 lines
+// and 1823 characters, the session's start 22 and 1381. After: 28 and 1823; 25 and 1349.
+// Before each tab's actions were printed with their commands at /, its rows' as one pattern, they were named alone: the
+// whole present 28 lines and 1823 characters, the session's start 25 and 1349. After: 34 and 2128; 31 and 1523.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { action, defineRoot, surface, view as routes, type Update } from "../../framework/core/index.ts"
 import { handle, type Json } from "../../framework/core/surface/view.ts"
-import { diff, tell, whole } from "../../framework/core/present/present.ts"
+import { diff, offers, tell, whole } from "../../framework/core/present/present.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
 import { ACTOR_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
@@ -45,6 +51,9 @@ const TITLES = [
   "Draft: a changelog view",
 ]
 
+const ISSUE = { title: { type: "string", kind: "line" }, about: { type: "string", kind: "markdown" } } as const
+const LANE = { lane: { type: "number" as const, range: [1, 5] as [number, number] } }
+
 /** The queue's facts at /, as the shell lists them for tab 3: lanes first, then the backlog, the drafts and what is done. */
 function view(m: Model): Json {
   const of = (status: Issue["status"]) =>
@@ -66,12 +75,12 @@ function view(m: Model): Json {
       {
         name: "queue",
         description: "Track the work on babavoss as issues. Use when work is asked for, starts, moves or lands.",
-        open: handle("open", "open a queue tab", { surface: "queue" }),
+        open: handle("open", "in a new tab", { surface: "queue" }),
       },
       {
         name: "lab",
         description: "See how a surface appears to an agent. Use when a surface's words are tested.",
-        open: handle("open", "open a lab tab", { surface: "lab" }),
+        open: handle("open", "in a new tab", { surface: "lab" }),
       },
     ],
     tabs: [
@@ -79,9 +88,13 @@ function view(m: Model): Json {
         at: "/tabs/3",
         n: 3,
         surface: "queue",
-        close: handle("close", "close tab 3; its state is dropped", { n: 3 }),
+        close: handle("close", "its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 3 }),
         title: "Queue",
-        actions: ["add", "draft"],
+        // Its actions with what each takes: its own, and every issue's at its own path as one pattern.
+        actions: [
+          { at: "/tabs/3", offers: offers({ add: handle("add", "", {}, ISSUE), draft: handle("draft", "theirs to look at", {}, ISSUE) }) },
+          { at: "/tabs/3/issues/N", offers: offers({ start: handle("start", "puts it in the lane, which must be free", { n: "N" }, LANE), done: handle("done", "its work is merged into main", { n: "N" }), drop: handle("drop", "it will not be done", { n: "N" }) }).map((o) => ({ ...o, fixed: { n: "N" } })) },
+        ],
         facts: {
           how: m.how,
           lanes: 5,
@@ -103,9 +116,9 @@ function issue(m: Model, n: number): Json {
     title: i.title,
     status: i.status,
     ...(i.lane && { lane: i.lane }),
-    ...(i.status === "backlog" && { start: handle("start", `Give issue ${n} to a lane, 1 to 5`, { n }, { lane: "number" }) }),
-    ...(i.status === "lane" && { done: handle("done", `Mark issue ${n} done`, { n }) }),
-    drop: handle("drop", `Remove issue ${n}`, { n }),
+    ...(i.status === "backlog" && { start: handle("start", "when a subagent begins on it", { n }, { lane: { type: "number", range: [1, 5] } }) }),
+    ...(i.status === "lane" && { done: handle("done", "its work is merged into main", { n }) }),
+    drop: handle("drop", "it will not be done", { n }),
   }
 }
 
@@ -185,38 +198,37 @@ const gates: (() => void)[] = []
 const tasked = (m: Tasks, n: number, change: (t: Task) => Task): Tasks => ({ ...m, tasks: m.tasks.map((t) => (t.n === n ? change(t) : t)) })
 const add = action({
   name: "add",
-  description: "Add a task",
+  description: "",
   subject: {},
-  inputs: { title: "string" },
+  inputs: { title: { type: "string", kind: "line" } },
   update: (m: Tasks, { title }): Update<Tasks, never> => ({ model: { tasks: [...m.tasks, { n: m.next, title, status: "todo" }], next: m.next + 1 } }),
 })
 const begin = action({
   name: "begin",
-  description: "Begin a task",
+  description: "",
   subject: { n: "number" },
   inputs: {},
   update: (m: Tasks, { n }): Update<Tasks, { n: number }> => ({ model: tasked(m, n, (t) => ({ ...t, status: "doing" })), commands: [{ n }] }),
 })
 const finish = action({
   name: "finish",
-  description: "Finish a task",
+  description: "once its checks passed",
   subject: { n: "number" },
   inputs: {},
   update: (m: Tasks, { n }): Update<Tasks, never> => ({ model: tasked(m, n, (t) => ({ ...t, status: "done" })), notices: [{ text: `Task ${n} is done`, at: `/tasks/${n}` }] }),
 })
 const rename = action({
   name: "rename",
-  description: "Rename a task",
+  description: "",
   subject: { n: "number" },
-  inputs: { title: "string" },
+  inputs: { title: { type: "string", kind: "line" } },
   update: (m: Tasks, { n, title }): Update<Tasks, never> => ({ model: tasked(m, n, (t) => ({ ...t, title })) }),
 })
 const taskViews = routes<Tasks, { n: number }>([add, begin, finish, rename], {
   "/": (m) => ({
     title: "Tasks",
-    how: "Add what the person asks for, begin one at a time; checks run by themselves; finish a task only once its checks passed.",
+    how: "A task is todo, doing or done. Beginning one starts its checks, which run by themselves and report running, then passed.",
     tasks: m.tasks.map(({ n, title, status, checks }) => ({ at: `/tasks/${n}`, n, title, status, ...(checks && { checks }) })),
-    ...(m.tasks.some((t) => t.checks === "passed" && t.status === "doing") && { attention: { who: "agent", why: "to finish what passed its checks" } }),
     add: add.bind({}),
   }),
   "/tasks/:n": (m, { n }) => {
@@ -241,7 +253,7 @@ const tasks = surface<Tasks, Checked | { kind: "none" }, { n: number }>({
       : msg.kind === "checked"
         ? {
             model: tasked(m, msg.n, (t) => ({ ...t, checks: msg.result })),
-            ...(msg.result === "passed" && { notices: [{ text: `Task ${msg.n}'s checks passed`, at: `/tasks/${msg.n}` }] }),
+            ...(msg.result === "passed" && { notices: [{ text: `Task ${msg.n}'s checks passed`, at: `/tasks/${msg.n}`, highlight: true as const }] }),
           }
         : { model: m },
   view: taskViews.view,
@@ -259,16 +271,16 @@ type Notes = { notes: { n: number; text: string }[] }
 
 const write = action({
   name: "write",
-  description: "Write a note",
+  description: "",
   subject: {},
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (m: Notes, { text }): Update<Notes, never> => ({ model: { notes: [...m.notes, { n: m.notes.length + 1, text }] } }),
 })
 const pin = action({
   name: "pin",
-  description: "Pin a note for the agent",
+  description: "a note, for the agent",
   subject: {},
-  inputs: { text: "string" },
+  inputs: { text: { type: "string", kind: "line" } },
   update: (m: Notes, { text }): Update<Notes, never> => ({ model: { notes: [...m.notes, { n: m.notes.length + 1, text }] }, notices: [`Pinned: ${text}`] }),
 })
 const noteViews = routes<Notes, never>([write, pin], { "/": (m) => ({ title: "Notes", notes: m.notes, write: write.bind({}), pin: pin.bind({}) }) })
@@ -299,7 +311,7 @@ export async function midTurn(hooks: Hooks) {
   const runtime = await startRuntime(root, ["--session", "S"], {
     entry: join(dir, "scripts/open.ts"),
     env: { BABAVOSS_HOME: dir },
-    idleMs: 60_000,
+    strengths: { weak: 60_000 },
     watch: [],
     log: () => {},
     exit: () => {},

@@ -1,10 +1,10 @@
 // Present: a view as the agent reads it, whole or as what changed, as pure functions of views. Whole, a view is relative
-// facts, lists of objects as tables and each handle as the command that calls it; the root's tabs are each one heading
-// with its facts under it. A change is told as an event on a thing: a row of a list by its identity, not its index; a
-// tab once, as its heading; a need once, as who is needed, where and why; standing prose and long texts by where to read
+// facts, lists of objects as tables, and its handles in one block, the command said once and a line per handle; the root's
+// tabs are each one heading with its facts under it. A change is told as an event on a thing: a row of a list by its
+// identity, not its index; a tab once, as its heading; standing prose and long texts by where to read
 // them; a reorder by what moved; detail by how much of it there is, and where to read it. Who made a change is the
 // caller's to say.
-import { isDetail, revealed, type Handle, type Json } from "../surface/view.ts"
+import { isDetail, meant, revealed, type Handle, type Json } from "../surface/view.ts"
 
 /** The fields that name a row of a list, in order: the first every row has, unique in its list, is its identity; else its index. */
 export const IDENTITY = ["at", "n", "id", "name", "key"]
@@ -17,13 +17,16 @@ export const CAP = 40
 
 const CUT = 100
 
-/** How handles are said: as the command that calls them at `path`; without a command, as their name and arguments. */
-export type Say = { command?: string; path?: string }
 /**
- * One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; and its tab's
- * heading. `waits`: it is of what waits on the agent, which is told however else the change is explained.
+ * How handles are said: as the command that calls them at `path`; without a command, as their name and arguments. `opened`:
+ * a tab the change opens is told whole, as the answer to the agent's own call that opened it; otherwise in one line.
  */
-export type Change = { line: string; keys: string[]; where: string; tab?: string; waits?: true }
+export type Say = { command?: string; path?: string; opened?: "whole" }
+/**
+ * One change: its line or lines; the keys of `entries` it covers, for who made it; where it is read whole; its tab's
+ * heading; and `whole`, a tab told whole, never cut.
+ */
+export type Change = { line: string; keys: string[]; where: string; tab?: string; whole?: true }
 
 type Row = { [key: string]: Json | undefined }
 
@@ -36,18 +39,77 @@ const inner = (row: Row): Row => (isDetail(row as Json) ? ((isRow(row.value) ? r
 const same = (a: Json | undefined, b: Json | undefined) => JSON.stringify(a) === JSON.stringify(b)
 const join = (label: string, key: string) => (label ? `${label}.${key}` : key)
 
+/**
+ * A handle as the agent is offered it: its name, never the key a view holds it under; its fixed arguments as values; each
+ * input as what it means; and what it does beyond its name, which may be nothing.
+ */
+type Act = { name: string; fixed: [string, string][]; open: [string, string][]; description: string }
+
+const act = (h: Handle): Act => ({
+  name: h.name,
+  fixed: Object.entries(h.args).map(([k, v]) => [k, JSON.stringify(v)]),
+  open: Object.entries(h.open).map(([k, input]) => [k, meant(input)]),
+  description: h.description,
+})
+const pair = ([k, v]: [string, string]) => `${k}=${v}`
+
+/**
+ * A handle as plain data, as a block says it: its name; its fixed arguments, each as said after `name=`, a value as JSON or a
+ * column's name in capitals where a pattern stands for many; its inputs as what they mean; what it does.
+ */
+export type Offer = { name: string; fixed: Record<string, string>; open: Record<string, string>; description: string }
+/** The actions a tab offers at a path, as plain data the shell lists at /: `at` its whole path, a pattern where it names many. */
+export type Offered = { at: string; offers: Offer[] }
+
+const offer = (a: Act): Offer => ({ name: a.name, fixed: Object.fromEntries(a.fixed), open: Object.fromEntries(a.open), description: a.description })
+const fromOffer = (o: Offer): Act => ({ name: o.name, fixed: Object.entries(o.fixed), open: Object.entries(o.open), description: o.description })
+
+/** A view's handles as its block says them, as plain data: each offered once, a handle every row of a table has folded into one. */
+export function offers(value: Json | undefined): Offer[] {
+  const acts: Act[] = []
+
+  said(value, { command: "" }, "", [], acts)
+
+  return acts.map(offer)
+}
+/** Whether a value is the plain data of a tab's actions at its paths. */
+const isOffered = (v: Json | undefined): v is Offered[] =>
+  Array.isArray(v) && v.every((x) => isRow(x) && typeof x.at === "string" && Array.isArray(x.offers))
+const tail = (description: string) => (description ? `   ${description}` : "")
+
+/** What stands in a block's head for each handle's own arguments: the syntax of every one of them. */
+export const OWN = "name=value…"
+
 /** A handle as a line's value: the command that calls it and what it does, or its name and arguments. */
 function call(h: Handle, say: Say): string {
   if (say.command === undefined)
     return [
       h.name,
       Object.keys(h.args).length ? ` ${JSON.stringify(h.args)}` : "",
-      Object.keys(h.open).length ? ` + ${Object.entries(h.open).map(([k, t]) => `${k}:${t}`).join(", ")}` : "",
+      Object.keys(h.open).length ? ` + ${Object.entries(h.open).map(([k, input]) => `${k}:${meant(input)}`).join(", ")}` : "",
     ].join("")
 
-  const args = [...Object.entries(h.args).map(([k, v]) => `${k}=${JSON.stringify(v)}`), ...Object.entries(h.open).map(([k, t]) => `${k}=${t}`)]
+  const a = act(h)
 
-  return `${[say.command, say.path ?? "/", h.name, ...args].join(" ")}   ${h.description}`
+  return `${[say.command, say.path ?? "/", a.name, ...a.fixed.map(pair), ...a.open.map(pair)].join(" ")}${tail(a.description)}`
+}
+
+/**
+ * A view's handles as one block: a head, `actions:` and the command once, with ACTION for a handle's name, the fixed
+ * arguments every handle shares where there are several, and OWN where any has more; then a line per handle, its name, its own arguments and what
+ * it does. A handle folded from a table's rows keeps its column on its own line, as no row's value is shared.
+ */
+function block(acts: Act[], say: Say): string[] {
+  if (!acts.length) return []
+
+  const common = acts.length < 2 ? [] : acts[0]!.fixed.filter(([k, v]) => acts.every((a) => a.fixed.some(([j, w]) => j === k && w === v)))
+  const own = (a: Act) => [...a.fixed.filter(([k]) => !common.some(([j]) => j === k)), ...a.open]
+  const more = acts.some((a) => own(a).length) ? [OWN] : []
+
+  return [
+    `actions: ${[say.command, say.path ?? "/", "ACTION", ...common.map(pair), ...more].join(" ")}`,
+    ...acts.map((a) => `  ${[a.name, ...own(a).map(pair)].join(" ")}${tail(a.description)}`),
+  ]
 }
 
 /** A value in one cell or after a label: a scalar as JSON, a list of scalars as one list, anything else as compact JSON. */
@@ -73,9 +135,9 @@ function table(label: string, rows: Row[], say: Say): string | undefined {
 
 /**
  * One handle `k` that every row offers, with the same name and inputs, whose fixed arguments are each the row's value of a
- * column: as one command with the column, in capitals, for the value, and the first row's description, its value so named.
+ * column: as one handle with the column, in capitals, for the value, and the first row's description, its value so named.
  */
-function column(rows: Row[], k: string, say: Say): string | undefined {
+function column(rows: Row[], k: string, say: Say): Act | undefined {
   const hs = rows.map((row) => row[k])
 
   if (rows.length < 2 || !hs.every(isHandle) || say.command === undefined) return undefined
@@ -87,41 +149,56 @@ function column(rows: Row[], k: string, say: Say): string | undefined {
 
   if (!fixed.length || !alike || cols.some((c) => c === undefined)) return undefined
 
-  const value = (a: string, i: number) => `${a}=${cols[i]!.toUpperCase()}`
-  const args = [...fixed.map(value), ...Object.entries(first!.open).map(([a, t]) => `${a}=${t}`)]
   let description = first!.description
 
   for (const [i, a] of fixed.entries()) description = description.split(String(first!.args[a])).join(cols[i]!.toUpperCase())
 
-  return `${[say.command, say.path ?? "/", first!.name, ...args].join(" ")}   ${description}`
+  return { ...act(first!), fixed: fixed.map((a, i) => [a, cols[i]!.toUpperCase()]), description }
 }
 
-/** A view whole, relative to where it was read: one line per fact, a table per list of plain rows, a line per handle. */
+/**
+ * A view whole, relative to where it was read: one line per fact, a table per list of plain rows, then its handles in one
+ * block; without a command, a line per handle where it stands.
+ */
 export function lines(value: Json | undefined, say: Say = {}, label = "", out: string[] = []): string[] {
+  if (say.command === undefined) return said(value, say, label, out)
+
+  const acts: Act[] = []
+
+  said(value, say, label, out, acts)
+  out.push(...block(acts, say))
+
+  return out
+}
+
+/** The facts' lines, with the handles gathered into `acts` where it is given, else a line each where it stands. */
+function said(value: Json | undefined, say: Say, label: string, out: string[], acts?: Act[]): string[] {
   const rows = rowsOf(value)
 
-  if (isHandle(value)) out.push(`${label || value.name}: ${call(value, say)}`)
-  else if (rows?.length) {
+  if (isHandle(value)) {
+    if (acts) acts.push(act(value))
+    else out.push(`${label.replace(/[^ .]*$/, value.name)}: ${call(value, say)}`)
+  } else if (rows?.length) {
     const told = table(label, rows, say)
 
     if (told !== undefined) {
       out.push(told)
-      // A row's handles follow its table, each named as itself: the command's arguments say which row it is of; one handle
-      // every row has, which differs only by a column's value, once, with that column for its argument.
+      // A row's handles join the block, each named as itself: its arguments say which row it is of; one handle every row
+      // has, which differs only by a column's value, once, with that column for its argument.
       for (const k of [...new Set(rows.flatMap((row) => Object.keys(row).filter((k) => isHandle(row[k]))))]) {
-        const shared = column(rows, k, say)
+        const shared = acts && column(rows, k, say)
 
-        if (shared !== undefined) out.push(`${k}: ${shared}`)
-        else for (const row of rows) if (isHandle(row[k])) out.push(`${k}: ${call(row[k], say)}`)
+        if (shared) acts!.push(shared)
+        else for (const row of rows) if (isHandle(row[k])) said(row[k], say, k, out, acts)
       }
     } else {
       const id = identity([rows])
 
-      for (const [i, row] of rows.entries()) lines(row, say, `${label} ${id ? bare(row[id]) : `#${i}`}`.trim(), out)
+      for (const [i, row] of rows.entries()) said(row, say, `${label} ${id ? bare(row[id]) : `#${i}`}`.trim(), out, acts)
     }
-  } else if (Array.isArray(value) && value.length && !value.every(isScalar)) for (const [i, v] of value.entries()) lines(v, say, `${label}.${i}`, out)
+  } else if (Array.isArray(value) && value.length && !value.every(isScalar)) for (const [i, v] of value.entries()) said(v, say, `${label}.${i}`, out, acts)
   else if (isRow(value) && Object.values(value).some((v) => v !== undefined)) {
-    for (const [k, v] of Object.entries(value)) if (v !== undefined) lines(v, say, join(label, k), out)
+    for (const [k, v] of Object.entries(value)) if (v !== undefined) said(v, say, join(label, k), out, acts)
   } else out.push(`${label}: ${isRow(value) ? "{}" : cell(value ?? null, say)}`)
 
   return out
@@ -141,47 +218,11 @@ const own = (root: Row): Row => {
   return { ...rest, ...(isRow(pointed) && typeof pointed.at === "string" ? { pointed: pointed.at } : pointed !== undefined && { pointed }) }
 }
 
-/** Who is needed, gathered at / under this name: rows of a tab's path, its surface, who and why. */
-export const NEEDS = "needs"
-
-type Need = { at: string; surface?: string; who: string; why: string }
-
-const needsOf = (v: Json | undefined): Need[] | undefined => {
-  const rows = rowsOf(v)
-
-  return rows?.every((r) => typeof r.at === "string" && typeof r.who === "string" && typeof r.why === "string") ? (rows as Need[]) : undefined
-}
-/** A need's identity: its tab and who; a tab may need both. */
-const needKey = (n: Need) => keyOf(NEEDS, `${n.at} ${n.who}`)
-const needed = (n: Need) => `${n.who === "agent" ? "you" : `the ${n.who}`}, at ${[n.at, n.at !== `/${n.surface}` && n.surface].filter(Boolean).join(" ")}`
-
-/** Needs changed, each as an event on one need: added or gone, who, where and why; a why changed, the new one. */
-function needsChanged(a: Need[], b: Need[]): Change[] {
-  const before = new Map(a.map((n) => [needKey(n), n]))
-  const now = new Map(b.map((n) => [needKey(n), n]))
-  const out: Change[] = []
-
-  const waits = (n: Need) => (n.who === "agent" ? { waits: true as const } : {})
-
-  for (const [key, n] of before) if (!now.has(key)) out.push({ line: `- need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at, ...waits(n) })
-  for (const [key, n] of now) {
-    const old = before.get(key)
-
-    if (!old) out.push({ line: `+ need: ${needed(n)}, ${n.why}`, keys: [key], where: n.at, ...waits(n) })
-    else if (old.why !== n.why) out.push({ line: `need: ${needed(n)}, now ${n.why}`, keys: [key], where: n.at, ...waits(n) })
-  }
-
-  return out
-}
-
-/** A list's rows by what names them across versions: their identity, else, for needs, their tab and who; undefined where neither holds. */
+/** A list's rows by what names them across versions: their identity; undefined where it holds none. */
 function namer(lists: Row[][]): ((row: Row) => string) | undefined {
   const id = identity(lists.filter((rows) => rows.length))
 
-  if (id) return (row) => JSON.stringify(inner(row)[id])
-  if (lists.every((rows) => needsOf(rows))) return (row) => needKey(row as Need)
-
-  return undefined
+  return id ? (row) => JSON.stringify(inner(row)[id]) : undefined
 }
 
 /**
@@ -255,7 +296,6 @@ export const heading = (tab: Tab) =>
   ]
     .filter(Boolean)
     .join(" ")
-const names = (v: Json | undefined) => (Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ") : "")
 const SAID = new Set(["at", "n", "surface", "title", "actions", "facts"])
 
 /** What was left out as detail, by where: a list's label with how many of its rows, and each fact's label; and their keys. */
@@ -284,26 +324,40 @@ function hidden(value: Json | undefined, h: Hid, label = ""): Json | undefined {
 
   return out as Json
 }
-/** A view's lines whole, its detail left out and counted in one line that says where it is read. */
+/** A view's lines whole, its detail left out and counted in one line that says where it is read, then its handles' block. */
 function told(value: Json | undefined, say: Say, where: string, label = "", out: string[] = []): string[] {
   const h = hid()
+  const acts: Act[] = []
 
-  lines(hidden(value, h, label), say, label, out)
+  said(hidden(value, h, label), say, label, out, say.command === undefined ? undefined : acts)
   if (h.rows.size || h.facts.length) out.push(`+${counted(h)}; read ${where}`)
+  out.push(...block(acts, say))
 
   return out
 }
 
-/** A tab under its heading, as the whole present says it: its actions by name, the rest of its row, then its facts relative to it. */
+/**
+ * A tab under its heading, as the whole present says it: the rest of its row; its facts relative to it; its actions, a block
+ * for each path they are offered at, its own and a pattern for its rows', each with its command, so acting needs no read;
+ * then the root's handles its row offers, as the tab's close, in a block of their own.
+ */
 function tabLines(tab: Tab, say: Say): string[] {
   const out: string[] = []
+  const acts: Act[] = []
+  const gather = say.command === undefined ? undefined : acts
 
-  if (Array.isArray(tab.actions) && tab.actions.length) out.push(`actions: ${names(tab.actions)}   each one's command is at ${tab.at}`)
-  for (const [k, v] of Object.entries(tab)) if (!SAID.has(k) && v !== undefined) lines(revealed(v), say, k, out)
+  for (const [k, v] of Object.entries(tab)) if (!SAID.has(k) && v !== undefined) said(revealed(v), say, k, out, gather)
   if (tab.facts !== undefined) told(tab.facts, say, tab.at, "", out)
+  if (isOffered(tab.actions))
+    for (const at of tab.actions)
+      if (say.command === undefined) out.push(`actions at ${at.at}: ${at.offers.map((o) => o.name).join(", ")}`)
+      else out.push(...block(at.offers.map(fromOffer), { ...say, path: at.at }))
+  out.push(...block(acts, say))
 
   return out
 }
+/** The names of the actions a tab offers at its own path, for a line that tells it opened. */
+const ownNames = (tab: Tab) => (isOffered(tab.actions) ? (tab.actions.find((a) => a.at === tab.at)?.offers.map((o) => o.name) ?? []) : [])
 
 /**
  * The present whole: the root's own facts, then each open tab under its heading. A view not shaped as the shell's is told
@@ -340,10 +394,7 @@ export function entries(value: Json | undefined, key = "", out = new Map<string,
   const rows = rowsOf(value)
   const id = rows?.length ? identity([rows]) : undefined
 
-  const needs = key === NEEDS ? needsOf(value) : undefined
-
   if (isHandle(value)) out.set(key, call(value, {}))
-  else if (needs?.length) for (const n of needs) out.set(needKey(n), JSON.stringify(n))
   else if (rows?.length && id) {
     out.set(`${key}#order`, rows.map((r) => JSON.stringify(r[id])).join(","))
     for (const row of rows) entries(row, keyOf(key, row[id]), out)
@@ -387,13 +438,13 @@ function walk(a: Json | undefined, b: Json | undefined, at: At, out: Change[]): 
   }
   // An action offered or withdrawn is told by its name: its command is read where it is offered.
   if (a === undefined) {
-    if (isHandle(b)) push(`+ action ${at.label}`)
+    if (isHandle(b)) push(`+ action ${b.name}`)
     else for (const line of lines(b, at.say, at.label)) push(`+ ${long(b) ? `${at.label}: ${shown(b, at)}` : line}`)
 
     return out
   }
   if (b === undefined) {
-    push(isHandle(a) ? `- action ${at.label}` : `- ${at.label}`)
+    push(isHandle(a) ? `- action ${a.name}` : `- ${at.label}`)
 
     return out
   }
@@ -406,7 +457,7 @@ function walk(a: Json | undefined, b: Json | undefined, at: At, out: Change[]): 
 
     if (id) return rowsChanged(ra, rb, id, at, out)
   }
-  if (isHandle(b) || isHandle(a)) push(isHandle(a) && isHandle(b) ? `action ${at.label} changed; read ${at.where}` : `${at.label}: now ${isHandle(b) ? "an action" : cell(b, at.say)}`)
+  if (isHandle(b) || isHandle(a)) push(isHandle(a) && isHandle(b) ? `action ${b.name} changed; read ${at.where}` : `${at.label}: now ${isHandle(b) ? `action ${b.name}` : cell(b, at.say)}`)
   else if (isRow(a) && isRow(b)) {
     for (const k of [...Object.keys(b), ...Object.keys(a).filter((k) => !Object.hasOwn(b, k))])
       walk(a[k], b[k], { ...at, label: join(at.label, k), key: join(at.key, k) }, out)
@@ -436,7 +487,7 @@ function rowsChanged(a: Row[], b: Row[], id: string, at: At, out: Change[]): Cha
 
   if (several !== undefined) {
     push(several, added.map((r) => keyOf(at.key, r[id])))
-    for (const r of added) for (const [k, v] of Object.entries(r)) if (isHandle(v)) push(`+ ${k}: ${call(v, at.say)}`, [`${keyOf(at.key, r[id])}.${k}`])
+    for (const r of added) for (const [k, v] of Object.entries(r)) if (isHandle(v)) push(`+ action ${call(v, at.say)}`, [`${keyOf(at.key, r[id])}.${k}`])
   } else
     for (const r of added) {
       const key = keyOf(at.key, r[id])
@@ -576,7 +627,12 @@ function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
     const key = keyOf("tabs", t.at)
 
     if (!old) {
-      const actions = Array.isArray(t.actions) && t.actions.length ? `, actions: ${names(t.actions)}` : ""
+      if (say.opened === "whole") {
+        out.push({ line: [`+ ${heading(t)}`, ...tabLines(t, say)].join("\n"), keys: [key], where: t.at, whole: true })
+        continue
+      }
+
+      const actions = ownNames(t).length ? `, actions: ${ownNames(t).join(", ")}` : ""
 
       out.push({ line: `+ ${heading(t)}${actions}; read ${t.at}`, keys: [key], where: t.at })
       continue
@@ -587,12 +643,21 @@ function tabsChanged(a: Tab[], b: Tab[], say: Say, out: Change[]): Change[] {
 
     for (const k of [...Object.keys(t), ...Object.keys(old).filter((k) => !Object.hasOwn(t, k))]) {
       if (k === "facts" || same(old[k], t[k])) continue
-      if (k === "actions" && Array.isArray(old[k]) && Array.isArray(t[k])) {
-        const was = (old[k] as Json[]).map(String)
-        const is = (t[k] as Json[]).map(String)
-        const moved = [...is.filter((x) => !was.includes(x)).map((x) => `+ ${x}`), ...was.filter((x) => !is.includes(x)).map((x) => `- ${x}`)]
+      if (k === "actions" && isOffered(old[k]) && isOffered(t[k])) {
+        const was = old[k] as Offered[]
 
-        out.push({ line: `actions: ${moved.join(", ") || `order now ${is.join(", ")}`}`, keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
+        for (const place of t[k] as Offered[]) {
+          const before = was.find((p) => p.at === place.at)?.offers ?? []
+
+          // An action offered now, or changed, is told with its command, so acting on it needs no read; one withdrawn, by its name.
+          const fresh = place.offers.filter((o) => !before.some((b) => same(b as Json, o as Json)))
+          const gone = before.filter((b) => !place.offers.some((o) => o.name === b.name)).map((b) => `- ${b.name}`)
+          const lines = [...(gone.length ? [`actions at ${place.at}: ${gone.join(", ")}`] : []), ...block(fresh.map(fromOffer), { ...say, path: place.at })]
+
+          if (lines.length) out.push({ line: lines.join("\n"), keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
+        }
+        for (const place of was.filter((p) => !(t[k] as Offered[]).some((x) => x.at === p.at)))
+          out.push({ line: `actions at ${place.at}: none now`, keys: [`${key}.${k}`], where: t.at, tab: at.tab! })
       } else walk(old[k], t[k], { ...at, label: k, key: `${key}.${k}` }, out)
     }
 
@@ -623,13 +688,7 @@ export function diff(before: Json | undefined, now: Json | undefined, say: Say =
 
   // The root's own actions are the shell's standing ones, told whole: one offered once a tab is open is no event.
   const unhandled = (row: Row) => Object.fromEntries(Object.entries(row).filter(([, v]) => !isHandle(v))) as Row
-  const { [NEEDS]: na, ...a } = unhandled(own(before as Row))
-  const { [NEEDS]: nb, ...b } = unhandled(own(now as Row))
-  const ma = needsOf(na ?? [])
-  const mb = needsOf(nb ?? [])
-  const out = ma && mb ? needsChanged(ma, mb) : walk(na, nb, { label: NEEDS, key: NEEDS, where: "/", say }, [])
-
-  walk(a, b, { label: "", key: "", where: "/", say }, out)
+  const out = walk(unhandled(own(before as Row)), unhandled(own(now as Row)), { label: "", key: "", where: "/", say }, [])
 
   return tabsChanged(ta, tb, say, out)
 }
@@ -659,7 +718,7 @@ export function tell(changes: Change[], group: (change: Change) => string | unde
       for (const [i, change] of items.entries()) {
         const take = [...(!headed && head !== undefined ? [head] : []), ...(i === 0 && tab !== undefined ? [tab] : []), change.line].join("\n").split("\n")
 
-        if (room && out.length + take.length <= cap) {
+        if (change.whole || (room && out.length + take.length <= cap)) {
           out.push(...take)
           headed = true
         } else {

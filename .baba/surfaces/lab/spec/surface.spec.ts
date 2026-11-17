@@ -1,8 +1,7 @@
 // The lab's rules, as stories, with its outside faked: the framework's fake harness, whose stream the story emits as Claude
 // Code's would be read, and a fake of where runs live, so nothing is copied, started or written for real.
 import { expect, test } from "bun:test"
-import { story, type Json } from "babavoss/core/index.ts"
-import { fakeHarness, type HarnessEvent } from "babavoss/core/harness/index.ts"
+import { fakeHarness, story, type HarnessEvent, type Json } from "babavoss/core/index.ts"
 import type { Heard, Made, Runs } from "../src/runs.ts"
 import { END_MOVE, lab, type Model } from "../src/surface.ts"
 
@@ -26,8 +25,11 @@ function place(kept: Json[] = []) {
     swept: [] as { id: string; spared: boolean }[],
     /** The root under test's activity, as its /activity has it. */
     activity: [] as Heard[],
-    /** Something done on the page under test, as its activity keeps it. */
-    did: (who: string, at: string, what: string) => void world.activity.push({ n: world.activity.length + 1, when: Date.now(), who, surface: "queue", at, what }),
+    /** Something done on the page under test, as its activity keeps it, with the name its call was given where it was given one. */
+    did: (who: string, at: string, what: string, id?: string) =>
+      void world.activity.push({ n: world.activity.length + 1, when: Date.now(), who, surface: "queue", at, what, ...(id && { id }) }),
+    /** What the person does on the page under test while the lab's act is answered, as their click at that moment would. */
+    meanwhile: undefined as (() => void) | undefined,
     records: new Map<string, Json>(kept.map((r) => [(r as { id: string }).id, r])),
     fail: "",
   }
@@ -38,9 +40,10 @@ function place(kept: Json[] = []) {
 
       return { dir: DIR, ...MADE }
     },
-    async act(_project, _home, _session, at, handle, args) {
+    async act(_project, _home, _session, id, at, handle, args) {
       world.acts.push({ at, handle, args })
-      if (handle === "approve") world.did("person", at, `approve n=${(args as { n?: number }).n}`)
+      world.meanwhile?.()
+      if (handle === "approve") world.did("person", at, `approve n=${(args as { n?: number }).n}`, id)
 
       return handle === "approve" ? { ok: true, text: `written: ${handle} at ${at}` } : { ok: false, text: "refused: approve is offered" }
     },
@@ -60,8 +63,11 @@ function place(kept: Json[] = []) {
       world.forgotten.push(id)
       world.records.delete(id)
     },
+    // As where runs live has it, a closed run has nothing left to clear.
     async sweep(spared) {
-      world.swept = [...world.records.keys()].map((id) => ({ id, spared: spared(id, world.records.get(id)) }))
+      const held = [...world.records].filter(([, r]) => !["closed", "cleared"].includes((r as { status: string }).status))
+
+      world.swept = held.map(([id, r]) => ({ id, spared: spared(id, r) }))
 
       return world.swept.filter((r) => !r.spared).map((r) => r.id)
     },
@@ -202,11 +208,40 @@ test("while a turn runs the root stands still, so a wait ends with the turn; the
   expect((agent.sees("/injected/since/3") as { injected: Json[] }).injected).toEqual([expect.objectContaining({ text: "What changed: tabs.1.title" })])
 })
 
+test("a run says which hooks were heard, one that added nothing among them; a turn that ends with none heard says so plainly, once", async () => {
+  const told = await started()
+
+  expect(told.agent.sees()).toMatchObject({ hooks: "none heard yet" })
+  await told.agent.call("/", "say", { text: "Hi" })
+  told.harness.emit({ kind: "injected", event: "SessionStart", text: "baba's words" }, replay("Hi"), { kind: "hook", event: "UserPromptSubmit" }, turn(0.001))
+  await until(() => root(told.agent).status === "idle")
+  expect(told.agent.sees()).toMatchObject({ hooks: ["SessionStart", "UserPromptSubmit"] })
+  expect((told.agent.sees("/entries") as { entries: Row[] }).entries.map((r) => r.title)).not.toContain("no hook heard")
+
+  // A run whose harness ran no hook: the agent under test was never told of the surfaces, and the run does not pass for one that was.
+  const silent = await started()
+
+  for (const text of ["Hi", "Again"]) {
+    await silent.agent.call("/", "say", { text })
+    silent.harness.emit(replay(text), { kind: "reply", text: "Hello.", request: request(text) }, turn(0.001))
+    await until(() => root(silent.agent).status === "idle")
+  }
+
+  const rows = (silent.agent.sees("/entries") as { entries: Row[] }).entries
+  const note = rows.filter((r) => r.title === "no hook heard")
+
+  expect(silent.agent.sees()).toMatchObject({ hooks: "no hook heard: the agent under test was told nothing by baba's hooks" })
+  expect(note).toHaveLength(1)
+  expect(rows.indexOf(note[0]!)).toBe(rows.findIndex((r) => r.kind === "turn") + 1)
+  expect(silent.agent.sees(note[0]!.at)).toMatchObject({ kind: "note", error: true, text: expect.stringContaining("told nothing by baba's hooks") })
+  expect(silent.where.records.get(silent.where.made[0]!.id)).toMatchObject({ hooks: [], entries: expect.arrayContaining([expect.objectContaining({ title: "no hook heard" })]) })
+})
+
 test("a second turn adds its cost; the run's totals are the harness's", async () => {
   const { agent, harness } = await started()
 
   await agent.call("/", "say", { text: "Hi" })
-  harness.emit(turn(0.0042))
+  harness.emit({ kind: "hook", event: "UserPromptSubmit" }, turn(0.0042))
   await until(() => root(agent).status === "idle")
   await agent.call("/", "say", { text: "Again" })
   harness.emit(turn(0.0062))
@@ -257,9 +292,11 @@ test("a message is refused while no run is up", async () => {
   const { agent } = story(lab(fakeHarness().harness, place().runs), { effects: "real" })
 
   expect(agent.sees()).toMatchObject({ status: "no run", runs: { count: 0 } })
+  expect(agent.sees("/entries")).toEqual({ run: null, entries: [] })
+  expect(agent.sees("/injected")).toEqual({ run: null, injected: [] })
   expect(agent.offered()).toEqual(["start", "start_from"])
   expect(await agent.call("/", "say", { text: "hello" })).toMatchObject({ outcome: "refused" })
-  expect(await agent.call("/", "start", { model: "gpt" })).toEqual({ outcome: "refused", reason: "model is one of haiku, sonnet, opus" })
+  expect(await agent.call("/", "start", { model: "gpt" })).toEqual({ outcome: "refused", reason: 'start: model must be one of haiku, sonnet, opus, not "gpt"' })
 })
 
 test("close ends the process, takes back the login, deletes the project and home and keeps the record, with what was left changed", async () => {
@@ -318,19 +355,19 @@ test("a restored run whose process is gone is ended, its timeline kept", async (
 })
 
 test("past runs are listed from their records, and one is shown here when no run is up", async () => {
-  const { agent } = story(lab(fakeHarness().harness, place([KEPT]).runs), { effects: "real" })
+  const { agent } = story(lab(fakeHarness().harness, place([{ ...KEPT, status: "closed" }]).runs), { effects: "real" })
 
   await until(() => (agent.sees() as { runs: { count: number } }).runs.count === 1)
 
   const listed = agent.sees("/runs") as { runs: { id: string; status: string; open?: Json }[] }
 
-  expect(listed.runs).toMatchObject([{ id: KEPT.id, status: "ended", checkout: "/repo", commit: "fedcba9876", uncommitted: 0, turns: 0 }])
+  expect(listed.runs).toMatchObject([{ id: KEPT.id, status: "closed", checkout: "/repo", commit: "fedcba9876", uncommitted: 0, turns: 0 }])
   expect(agent.offered("/runs")).toEqual(["open", "forget"])
   expect(await agent.call("/runs", "open", { id: KEPT.id })).toMatchObject({ outcome: "written" })
   await until(() => root(agent).run === KEPT.id)
-  expect(agent.sees()).toMatchObject({ status: "ended", ended: expect.stringContaining("the lab that ran it is gone") })
+  expect(agent.sees()).toMatchObject({ status: "closed" })
   expect(agent.sees("/entries/1")).toMatchObject({ text: "hi" })
-  expect(agent.offered()).toEqual(["start", "start_from", "close"])
+  expect(agent.offered()).toEqual(["start", "start_from"])
 })
 
 test("a record is forgotten whole from the list of runs, the shown one once it is closed, and only the last 20 are kept", async () => {
@@ -356,17 +393,37 @@ test("a record is forgotten whole from the list of runs, the shown one once it i
 })
 
 test("on start, what a lab that is gone left is swept: every run but the one shown here and those of a lab still running", async () => {
-  const running = { ...KEPT, id: "2026-11-15T09-00-00-cd34", lab: process.ppid }
+  // Another lab still running is a process of this user's that lives through the story, as the spec's parent may not.
+  const other = Bun.spawn(["sleep", "30"])
+  const running = { ...KEPT, id: "2026-11-15T09-00-00-cd34", lab: other.pid }
   const gone = { ...KEPT, id: "2026-11-15T08-00-00-ef56", lab: 2 ** 22 + 1 }
   const where = place([KEPT, running, gone])
 
   story(lab(fakeHarness().harness, where.runs), { model: { next: 4, runs: [], run: KEPT } as unknown as Model, effects: "real" })
-  await until(() => where.swept.length === 3)
+  await until(() => where.swept.length === 3).finally(() => other.kill())
   expect(where.swept).toEqual([
     { id: KEPT.id, spared: true },
     { id: running.id, spared: true },
     { id: gone.id, spared: false },
   ])
+})
+
+test("a run swept on start reads as cleared, in the list and once shown: no project, no page, nothing to close, its record saying so", async () => {
+  const gone = { ...KEPT, id: "2026-11-15T08-00-00-ef56", lab: 2 ** 22 + 1, page: "http://127.0.0.1:5555/" }
+  const where = place([gone])
+  const { agent } = story(lab(fakeHarness().harness, where.runs), { effects: "real" })
+
+  await until(() => (agent.sees() as { runs: { count: number } }).runs.count === 1)
+  expect(agent.sees("/runs")).toMatchObject({ runs: [{ id: gone.id, status: "cleared" }] })
+  expect(where.records.get(gone.id)).toMatchObject({ status: "cleared" })
+  expect(await agent.call("/runs", "open", { id: gone.id })).toMatchObject({ outcome: "written" })
+  await until(() => root(agent).run === gone.id)
+  expect(agent.sees()).toMatchObject({ status: "cleared" })
+  expect(agent.sees()).not.toHaveProperty("project")
+  expect(agent.sees()).not.toHaveProperty("page")
+  expect(agent.offered()).toEqual(["start", "start_from"])
+  expect(agent.offered("/runs")).toEqual(["forget"])
+  expect((root(agent).recent ?? []).map((r) => r.title)).toEqual(["the developing agent", "process gone", "cleared"])
 })
 
 test("what the person does on the page under test joins the timeline once each, in order; what the lab did there as the person is not doubled", async () => {
@@ -394,4 +451,19 @@ test("what the person does on the page under test joins the timeline once each, 
   where.did("person", "/tabs/1", "too late")
   await Bun.sleep(30)
   expect(kinds().filter(([kind]) => kind === "person")).toHaveLength(2)
+})
+
+test("the person's click on the same tab as the lab's act, at the same moment, is the person's: the act is told by the name its call carried", async () => {
+  const { agent, where } = await started()
+  const kinds = () => (agent.sees("/entries") as { entries: Row[] }).entries.map((r) => [r.kind, r.line])
+
+  where.meanwhile = () => where.did("person", "/tabs/1", "approve n=2")
+  await agent.call("/", "act", { at: "/tabs/1", handle: "approve", args: '{"n":1}' })
+  await until(() => kinds().length === 3 && !(agent.sees("/entries/2") as { pending?: boolean }).pending)
+  await Bun.sleep(30)
+  expect(kinds()).toEqual([
+    ["note", expect.any(String)],
+    ["act", 'approve {"n":1} at /tabs/1'],
+    ["person", "approve n=2 at /tabs/1"],
+  ])
 })

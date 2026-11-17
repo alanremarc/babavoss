@@ -2,15 +2,19 @@
 // discovery, never a lock. A client finds a live service or wakes one, and treats a lost response as an uncertain outcome.
 // A service whose process lives on with nothing listening at its port, longer than one takes to close, is deaf: its
 // client ends that process, once and only where it is this session's runtime, and wakes a fresh one, which takes the state.
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
-import { sessionCwd } from "../state/state.ts"
+import { ownState, sessionCwd } from "../state/state.ts"
 
-export type Identity = { dir: string; token: string; pid: number }
+// The token is one instance's secret: the command and the hooks send it as a header, read from the endpoint file, and it
+// changes as the runtime starts again. It is kept in the state directory, its owner's alone, and never given to a client
+// that did not send it.
+/** `instance` names this runtime's process to the agent, as the token, a secret, cannot: a restart is followed by it. */
+export type Identity = { dir: string; token: string; pid: number; instance: string }
 /** `closing`: since when the service has been closing its door, as it does before it lets go of the session. */
 export type Endpoint = Identity & { port: number; closing?: number }
 /** The response header every answer of a service carries: its token. */
@@ -19,10 +23,12 @@ export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 /** The request header of a client's probe for whether the service is up: answered at once, as the code stands. */
 export const PROBE_HEADER = "babavoss-probe"
-/** The response header of a service that gave way to a new one without doing what it was asked: ask again. */
+/** The response header of a service that restarts for changed code without doing what it was asked: ask again, of the one in its place. */
 export const STALE_HEADER = "babavoss-stale"
 /** The request header naming one run of the word, one tool call of the agent's: what tells calls apart for the hooks' silence. */
 export const CALL_HEADER = "babavoss-call"
+/** The request header a client names a call it makes by, which the call carries: a program acting as the person finds its own by it. */
+export const CALL_ID_HEADER = "babavoss-call-id"
 export const STARTUP_MS = 10_000
 export const REQUEST_MS = 30_000
 /**
@@ -64,16 +70,20 @@ export const deniedState = (error: unknown, dir: string): unknown =>
 const failedWith = (error: unknown, code: string) =>
   error instanceof TypeError && [error, error.cause].some((e) => (e as { code?: string } | undefined)?.code === code)
 
-/** BSD flock locks follow the open descriptor across the short-lived locking utility and release on process death. */
-export function ownService(dir: string) {
-  mkdirSync(dir, { recursive: true })
-
-  const file = join(dir, "service.lock")
+/**
+ * Takes the lock of `file`, made where it is not, without waiting: the open descriptor it returns holds it until closed, or
+ * until the process dies. Undefined where another holds it. BSD flock locks follow the open descriptor across the
+ * short-lived locking utility and release on process death.
+ */
+export function holdLock(file: string): number | undefined {
   const fd = openSync(file, "a+", 0o600)
   const actual = fstatSync(fd)
   const expected = statSync(file)
 
-  if (actual.dev !== expected.dev || actual.ino !== expected.ino) throw new Error("The service lock changed under us")
+  if (actual.dev !== expected.dev || actual.ino !== expected.ino) {
+    closeSync(fd)
+    throw new Error("The service lock changed under us")
+  }
 
   const bsd = ["darwin", "freebsd", "openbsd"].includes(process.platform)
   const result = spawnSync(bsd ? "/usr/bin/lockf" : "flock", bsd ? ["-s", "-t", "0", "3"] : ["-n", "3"], {
@@ -90,7 +100,18 @@ export function ownService(dir: string) {
     )
   }
 
-  const identity: Identity = { dir, token: randomUUID(), pid: process.pid }
+  return fd
+}
+
+/** Owns the session's state directory: its lock, held while this process lives; undefined where another process holds it. */
+export function ownService(dir: string) {
+  ownState(dir, true)
+
+  const fd = holdLock(join(dir, "service.lock"))
+
+  if (fd === undefined) return undefined
+
+  const identity: Identity = { dir, token: randomUUID(), pid: process.pid, instance: randomUUID().slice(0, 8) }
   let released = false
 
   return {
@@ -175,7 +196,7 @@ const alive = (pid: number) => {
     return (error as NodeJS.ErrnoException).code === "EPERM"
   }
 }
-/** Whether a process is this session's runtime of this entry, by its command line: it was woken as `--hot ENTRY --serve SESSION`. */
+/** Whether a process is this session's runtime of this entry, by its command line: it was woken as `ENTRY --serve SESSION`. */
 export const isRuntime = (pid: number, entry: string, session: string): boolean => {
   if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return false
 
@@ -218,14 +239,14 @@ const deafSince = (endpoint: Endpoint, seen: number) => (typeof endpoint.closing
  * record, or when the recorded one is gone, in the waker's.
  */
 export function wakeService(dir: string, entry: string | URL, session: string, env: NodeJS.ProcessEnv = process.env): ChildProcess {
-  mkdirSync(dir, { recursive: true })
+  ownState(dir)
 
   const log = openSync(logFile(dir), "a", 0o600)
   const recorded = sessionCwd(dir)
 
   try {
-    // Under bun's hot reload: a change in the root's code is loaded into the runtime, which stays up at its address.
-    const child = spawn(process.execPath, ["--hot", typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
+    // Never under bun's hot reload: the runtime takes changed code by starting again, as its mode says (runtime.ts).
+    const child = spawn(process.execPath, [typeof entry === "string" ? entry : fileURLToPath(entry), "--serve", session], {
       detached: true,
       stdio: ["ignore", "ignore", log],
       env,
@@ -241,7 +262,8 @@ export function wakeService(dir: string, entry: string | URL, session: string, e
   }
 }
 
-export type Request = { method?: string; actor?: string; body?: string; accept?: string; signal?: AbortSignal }
+/** A request of the service; `id` names a call, as CALL_ID_HEADER carries it. */
+export type Request = { method?: string; actor?: string; id?: string; body?: string; accept?: string; signal?: AbortSignal }
 
 /** Why a runtime the environment refused gave up: the last line it logged, without the time it begins with. */
 const deniedReason = (dir: string): string => {
@@ -257,14 +279,6 @@ export const logSize = (dir: string) => {
     return statSync(logFile(dir)).size
   } catch {
     return 0
-  }
-}
-/** Whether the log says, after `offset`, that code did not load: bun writes a line beginning with `error: ` when a hot reload fails. */
-export const failedSince = (dir: string, offset: number): boolean => {
-  try {
-    return /^error: /m.test(readFileSync(logFile(dir)).subarray(offset).toString("utf8"))
-  } catch {
-    return false
   }
 }
 /** What a runtime that did not start logged after `offset`, as bun says why code does not load: the file and the error, its last lines. */
@@ -286,7 +300,6 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
     let child: ChildProcess | undefined
     let nextLaunch = 0
     let logged = 0
-    let erred = false
     let refusing: { token: string; seen: number } | undefined
 
     try {
@@ -318,12 +331,6 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
         if (child && !child.pid) throw new Denied("the environment refuses starting its runtime as a process of its own")
         if (child && (child.signalCode !== null || (child.exitCode !== null && child.exitCode !== 0)))
           throw new Error(`the runtime failed to start${saidSince(dir, logged).replace(/^(?=.)/, ": ")}`)
-        // Under hot reload a process whose code does not load stays, waiting for a change: once it said why, it is ended.
-        if (child && child.exitCode === null && erred) {
-          child.kill()
-          throw new Error(`the runtime failed to start: ${saidSince(dir, logged)}`)
-        }
-        erred = !!child && /^error: /m.test(saidSince(dir, logged))
         if ((!child || child.exitCode !== null) && Date.now() >= nextLaunch) {
           logged = logSize(dir)
           child = wakeService(dir, entry, session, env)
@@ -359,6 +366,7 @@ export function serviceClient(dir: string, session: string, entry: string | URL,
               "content-type": "application/json",
               [SERVICE_HEADER]: endpoint.token,
               ...(init.actor && { [ACTOR_HEADER]: init.actor }),
+              ...(init.id && { [CALL_ID_HEADER]: init.id }),
             },
           })
         } catch (error) {

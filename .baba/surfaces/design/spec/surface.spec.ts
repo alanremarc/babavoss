@@ -1,12 +1,14 @@
 // The design document's rules, as stories. The scenarios are played once for real, on the demo project through the
 // framework's hook, word and runtime, and the demo's shape read from its surfaces, both settled as the play command's
 // event: what is shown is what that code gave, and nothing told is written here.
-import { readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { beforeAll, expect, test } from "bun:test"
 import { story, whole, type Json } from "babavoss/core/index.ts"
-import { TELLS } from "babavoss/core/hook.ts"
+import { TELLS } from "../../../../framework/core/hook.ts"
+import { QUIET_LINE } from "../../../../framework/core/runtime/turn.ts"
 import design, { type Model } from "../src/surface.ts"
-import { play, WORD, type Page, type Play } from "../src/play.ts"
+import { play, PLAYS, SESSION, swept, WORD, type Page, type Play } from "../src/play.ts"
 import { SCENARIOS } from "../src/scenarios.ts"
 import { shape, type Shape } from "../src/shape.ts"
 import tasks from "../demo/surfaces/tasks/src/surface.ts"
@@ -92,12 +94,19 @@ test("a read's answer is the door's text of the view, and what is heard after a 
   expect(heard.text).toContain("the person acted on /tasks")
 })
 
-test("an ask: the wait ends with what the person decided on the page", async () => {
-  const { agent } = await played()
-  const { n, step } = stepOf("ask", "the wait ends")
+test("the person's decision: the agent's call tells it the task waits on approval, it takes it on their word, and is told when they take it on the page", async () => {
+  await played()
 
-  expect(step.tellings[0]!.text).toContain("Task 1, Write the notes, is approved (by the person)")
-  expect((agent.sees(`/scenarios/ask/${n}`) as Step).changed).toEqual("nothing")
+  const told = (did: string) => stepOf("decision", did).step.tellings.map((t) => t.text).join("\n")
+
+  // The task in review, told by the call's answer alone: the agent is offered approve and reopen, as the person is; whose
+  // decision it is, the person said in the conversation, never the surface.
+  expect(told(`${WORD} /tabs/1/tasks/1 done`)).toContain("+ action approve")
+  expect(told(`${WORD} /tabs/1/tasks/1 done`)).toContain('status: "todo" → "review"')
+  // On the person's word, said in the conversation, the agent approves.
+  expect(told(`${WORD} /tabs/1/tasks/1 approve`)).not.toContain("refused")
+  // Taken on the page, it is told with the person's next message, by them.
+  expect(told("says: Anything left?")).toContain("Task 2, Write the changelog, is approved (by the person)")
 })
 
 test("a scenario's path lists its steps with sizes and an at each; a step's path has its texts whole", async () => {
@@ -111,43 +120,49 @@ test("a scenario's path lists its steps with sizes and an at each; a step's path
   const step = agent.sees("/scenarios/work/3") as Step
 
   expect(step).toMatchObject({ who: "agent", did: `${WORD} / open surface=tasks` })
-  expect(step.changed).toContain("activity: agent · tasks /tasks · opened")
+  expect(step.changed).toContain("activity: agent · tasks /tasks · open surface=tasks")
   expect(agent.sees("/scenarios/work/99")).toBeUndefined()
   expect(agent.sees("/scenarios/none")).toBeUndefined()
 })
 
 test("a step carries what the person's page showed after it: each open tab at /, as the person reads it, and the tab in front", async () => {
   const { agent } = await played()
-  const at = (did: string) => agent.sees(`/scenarios/ask/${stepOf("ask", did).n}/page`) as Page
-  const task = (page: Page) => (page.tabs.find((t) => t.at === page.shown)!.view as { tasks: Json[] }).tasks[0]
+  const at = (did: string) => agent.sees(`/scenarios/decision/${stepOf("decision", did).n}/page`) as Page
+  const task = (page: Page) => (page.tabs.find((t) => t.at === "/tasks")!.view as { tasks: Json[] }).tasks[0]
   const done = at(`${WORD} /tabs/1/tasks/1 done`)
 
-  expect(at("says: Write the notes and have me check them.")).toEqual({ tabs: [] })
-  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toMatchObject({ shown: "/tasks", tabs: [{ at: "/tasks", surface: "tasks" }] })
+  expect(at("says: Write the notes and the changelog, and have me check each.")).toEqual({ tabs: [] })
+  // The agent opening a tab leaves the page on home, as the shell's page does until the person moves.
+  expect(at(`${WORD} /tabs/1 add 'title=Write the notes'`)).toEqual({ tabs: [expect.objectContaining({ at: "/tasks", surface: "tasks" })] })
   expect(task(at(`${WORD} /tabs/1 add 'title=Write the notes'`))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "todo" })
-  // In review, the task carries the person's asks, as their page has them, and the tab says they are waited for.
-  expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve", ask: true }, reopen: { ask: true } })
-  expect(done.tabs[0]!.view).toMatchObject({ attention: { who: "person", why: "to review task 1" } })
-  expect(task(at("on the page: approve n=1 at /tabs/1/tasks/1"))).toEqual({ at: "/tasks/1", n: 1, title: "Write the notes", status: "done" })
+  // In review, the task carries approve and reopen, as the agent's view has them.
+  expect(task(done)).toMatchObject({ status: "review", approve: { kind: "handle", name: "approve" }, reopen: { name: "reopen" } })
+  expect(task(at(`${WORD} /tabs/1/tasks/1 approve`))).toMatchObject({ at: "/tasks/2", n: 2, title: "Write the changelog", status: "todo" })
 
-  // The agent is never offered the asks, in no text of any play; the step lists the page in a line.
-  const told = plays.flatMap((p) => p.steps.flatMap((s) => s.tellings.map((t) => t.text)))
-
-  expect(told.filter((t) => /baba \S+ (approve|reopen)/.test(t))).toEqual([])
-  expect((agent.sees(`/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
-    at: `/scenarios/ask/${stepOf("ask", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
-    tabs: ["tasks /tasks (in front)"],
+  // The step lists the page in a line.
+  expect((agent.sees(`/scenarios/decision/${stepOf("decision", `${WORD} /tabs/1/tasks/1 done`).n}`) as { page: Json }).page).toEqual({
+    at: `/scenarios/decision/${stepOf("decision", `${WORD} /tabs/1/tasks/1 done`).n}/page`,
+    tabs: ["tasks /tasks"],
+    front: "home",
   })
 
-  // Where the person acts is in front, and a page that sleeps is as it last was.
+  // Where the person acts is in front from then on, and a page that sleeps is as it last was.
   const beside = plays.find((p) => p.name === "beside")!.steps
+  const acted = stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1
 
-  expect(beside.map((s) => s.page.shown).filter(Boolean).at(-1)).toBe("/tasks")
-  expect(beside[stepOf("beside", "on the page: add title=\"Bump the version\" at /tabs/1").n - 1]!.page.shown).toBe("/tasks")
+  expect(beside.slice(0, acted).map((s) => s.page.shown)).toEqual(Array(acted).fill(undefined))
+  expect(beside.slice(acted).every((s) => s.page.shown === "/tasks")).toBe(true)
+  // The agent's highlight brought to the front is gone to; a tab the person opens from home is gone to; one closed in front leaves the next, or home.
+  const shownAt = (name: string, did: string) => plays.find((p) => p.name === name)!.steps[stepOf(name, did).n - 1]!.page.shown
+
+  expect(shownAt("housekeeping", `${WORD} / highlight at=/tabs/1/tasks/1 'why=the notes are next' front=true`)).toBe("/tasks")
+  expect(shownAt("housekeeping", 'on the page: open surface="settings" at /')).toBe("/settings")
+  expect(shownAt("moved", "on the page: close n=1 at /")).toBeUndefined()
+  expect(shownAt("moved", 'on the page: open surface="tasks" at /')).toBe("/tasks")
   expect(plays.find((p) => p.name === "break")!.steps.find((s) => s.who === "root")!.page).toMatchObject({ asleep: true, tabs: [{}, {}] })
 })
 
-test("the demo's shape is read from its surfaces: places by pattern, their facts, the ask and the notice, what changes by itself", async () => {
+test("the demo's shape is read from its surfaces: places by pattern, their facts, the notice, what changes by itself", async () => {
   const { agent } = await played()
   const surfaces = (agent.sees("/demo") as { surfaces: Shape[] }).surfaces
   const tasks = surfaces.find((s) => s.name === "tasks")!
@@ -157,17 +172,24 @@ test("the demo's shape is read from its surfaces: places by pattern, their facts
   expect(surfaces.map((s) => s.name)).toEqual(["build", "tasks"])
   expect(tasks.description).toBe((await import("../demo/surfaces/tasks/src/surface.ts")).default.description)
   expect(tasks.views.map((v) => v.path)).toEqual(["/", "/tasks/:n"])
-  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status note", "attention"]), actions: [{ name: "add", inputs: ["title"] }] })
+  expect(tasks.views[0]).toMatchObject({ facts: expect.arrayContaining(["title", "tasks: at n title status note"]), actions: [{ name: "add", inputs: ["title"] }] })
   expect(tasks.views[0]!.actions[0]).not.toHaveProperty("notice")
-  expect(tasks.views[1]!.actions.map((a) => [a.name, a.ask ?? false, a.notice ?? false])).toEqual([
-    ["annotate", false, false],
-    ["done", false, true],
-    ["approve", true, true],
-    ["reopen", true, true],
+  expect(tasks.views[1]!.actions.map((a) => [a.name, a.notice ?? false])).toEqual([
+    ["annotate", false],
+    ["done", true],
+    ["approve", true],
+    ["reopen", true],
+  ])
+  // An action's description is said of any task, not of the one the exploration reached.
+  expect(tasks.views[1]!.actions.map((a) => a.description)).toEqual([
+    "what was done or found",
+    "it goes to review",
+    "",
+    "it is not done",
   ])
   // What the build's own command brings is in its facts too, as the plays saw it.
   expect(build).toMatchObject({ description: own.description, itself: ["watch"], views: [{ path: "/", actions: [{ name: "rerun", inputs: [] }] }] })
-  expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why", "attention"]))
+  expect(build.views[0]!.facts).toEqual(expect.arrayContaining(["status", "runs", "why"]))
 })
 
 test("pinned, every telling is the same as the pin; one that changed shows its delta, and its pinned text", async () => {
@@ -265,22 +287,13 @@ test("the page reads every told text without changing a character of it; a sessi
   expect(start[1]!.text.split("\n")[0]).toMatch(/^The shell of .* answered:$/)
 })
 
-test("what takes real time is played after the rest: the rest are shown at once, the play under way until it is in", async () => {
-  const { agent, world } = story(design)
-  const quick = plays.filter((p) => !SCENARIOS.find((s) => s.name === p.name)!.steps.some((step) => step.kind === "pause"))
+test("a pause passes at once on the demo's clock, and the framework finds it passed: the call after it is told the hooks are quiet", async () => {
+  const began = Date.now()
+  const quiet = await play(SCENARIOS.find((s) => s.name === "quiet")!)
+  const after = quiet.steps.findIndex((s) => s.did.includes("seconds pass")) + 1
 
-  expect(quick.length).toBeLessThan(plays.length)
-  await world.settle((c) => c.kind === "watch", { kind: "changed" })
-  await world.send((c) => c.kind === "play", { kind: "played", plays: quick, partial: true })
-
-  const rows = () => (agent.sees() as { scenarios: Row[] }).scenarios
-
-  expect(agent.sees()).toMatchObject({ playing: true })
-  expect(rows().filter((r) => r.tokens !== undefined).length).toBe(quick.length)
-  await world.settle((c) => c.kind === "play", { kind: "played", plays: plays.filter((p) => !quick.includes(p)) })
-  expect(agent.sees()).not.toHaveProperty("playing")
-  expect(rows().every((r) => r.tokens! > 0)).toBe(true)
-  expect(agent.noticed()).toEqual([])
+  expect(Date.now() - began).toBeLessThan(8000)
+  expect(quiet.steps[after]!.tellings[0]!.text.split("\n")[0]).toBe(QUIET_LINE)
 })
 
 test("the code changing plays again, and what then tells the agent otherwise is noticed", async () => {
@@ -297,6 +310,58 @@ test("the code changing plays again, and what then tells the agent otherwise is 
   const shorter = plays.map((p) => (p.name === "work" ? { ...p, steps: p.steps.slice(0, -2) } : p))
 
   await world.settle((c) => c.kind === "play", { kind: "played", plays: shorter })
-  expect(agent.noticed()).toEqual(["Played again: what work tells the agent changed"])
+  expect(agent.noticed()).toEqual(["highlight: Played again: what work tells the agent changed"])
   expect(agent.sees()).not.toHaveProperty("playing")
 })
+
+test("a play always ends: stopped, it stops the step under way and its processes; failed, or restored after a restart, it is not playing", async () => {
+  const stop = new AbortController()
+  const began = Date.now()
+  const waiting = play({ name: "waits", group: "noise", title: "", about: "", steps: [{ kind: "start", source: "startup" }, { kind: "wait", seconds: 30 }, { kind: "waited" }] }, stop.signal)
+
+  setTimeout(() => stop.abort(), 2000)
+  expect(await waiting).toMatchObject({ error: "stopped" })
+  expect(Date.now() - began).toBeLessThan(10_000)
+
+  const { agent, world } = story(design)
+
+  await world.settle((c) => c.kind === "watch", { kind: "changed" })
+  await world.settle((c) => c.kind === "play", { kind: "unplayed", error: "the play did not end within 120s, and was stopped" })
+  expect(agent.sees()).not.toHaveProperty("playing")
+  expect(agent.sees()).toMatchObject({ failure: "the play did not end within 120s, and was stopped" })
+  expect(design.restore!({ plays, playing: true, again: true })).toMatchObject({ playing: false })
+}, 20_000)
+
+test("a play leaves nothing behind; what a play whose process was killed left, its demo's runtime too, the next play's sweep removes", async () => {
+  const mine = () => readdirSync(PLAYS).filter((name) => name.startsWith(`${process.pid}-`))
+  const runs = (pid: number) => {
+    try {
+      return process.kill(pid, 0)
+    } catch {
+      return false
+    }
+  }
+
+  await play(SCENARIOS.find((s) => s.name === "start")!)
+  expect(mine()).toEqual([])
+
+  // A root killed mid-play: its process ends with the demo's runtime up and the wait under way.
+  const script = `import { play } from ${JSON.stringify(new URL("../src/play.ts", import.meta.url).pathname)}
+await play({ name: "killed", group: "noise", title: "", about: "", steps: [{ kind: "start", source: "startup" }, { kind: "wait", seconds: 30 }, { kind: "waited" }] })`
+  const killed = Bun.spawn([process.execPath, "-e", script], { stdout: "ignore", stderr: "ignore" })
+  const left = join(PLAYS, `${killed.pid}-`)
+  const service = () => readdirSync(PLAYS).map((name) => join(PLAYS, name, ".babavoss/sessions", SESSION, "baba/service.json")).find((file) => file.startsWith(left) && existsSync(file))
+  let file: string | undefined
+
+  for (let i = 0; i < 200 && !(file = service()); i++) await Bun.sleep(50)
+  expect(file).toBeDefined()
+
+  const { pid } = JSON.parse(readFileSync(file!, "utf8")) as { pid: number }
+
+  killed.kill("SIGKILL")
+  await killed.exited
+  expect(runs(pid)).toBe(true)
+  await swept()
+  expect(readdirSync(PLAYS).filter((name) => join(PLAYS, name).startsWith(left))).toEqual([])
+  expect(runs(pid)).toBe(false)
+}, 30_000)

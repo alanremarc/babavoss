@@ -1,27 +1,39 @@
-// What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers and
-// which are asks, ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
-// below a tab as its menu's search reads it; the tab's menu, and the dots on the way to what waits on the person; what an
+// What a tab offers the person, worked out without a page, from its surface's views alone: the actions a view offers,
+// ordered by the view's `menu` fact; the places a view names under `at` and what each is called; the tree
+// below a tab as its menu's search reads it; the tab's menu, and the dots on the way to a highlight; what an
 // input form's fields make of the inputs.
 import type { MenuItem } from "../../kit/layouts/menu.tsx"
-import { handles, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
+import { typeOf, type Args, type Handle, type Json, type Schema, type View } from "../../core/surface/view.ts"
 
-/** An action offered at a path: the handle, and whether it is an ask, the person's alone. */
-export type Offered = { path: string; handle: Handle; ask: boolean }
+/** An action offered at a path: the handle, and what the row it stands in is called, by its `title` or `name`, where it stands in one. */
+export type Offered = { path: string; handle: Handle; of?: string }
 /** A place a view names: its path within the tab, and what it is called, by its row's `title` or `name`, else its path's last part. */
 export type Place = { at: string; label: string }
 
 const key = (h: Handle) => `${h.name} ${JSON.stringify(h.args)}`
 
-/** The actions offered at `path` in the view the person reads, once each, in the view's order; an ask is the handle marked one. */
+/** The actions offered at `path` in its view, once each, in the view's order, each with what its row is called. */
 export function offered(path: string, view: View | undefined): Offered[] {
   const seen = new Set<string>()
+  const out: Offered[] = []
+  const walk = (value: Json | undefined, of: string | undefined) => {
+    if (!value || typeof value !== "object") return
+    if (Array.isArray(value)) return value.forEach((v) => walk(v, of))
+    if (value.kind === "handle") {
+      const handle = value as Handle
 
-  return handles(view).flatMap((handle) => {
-    if (seen.has(key(handle))) return []
-    seen.add(key(handle))
+      if (!seen.has(key(handle))) out.push({ path, handle, ...(of !== undefined && { of }) })
+      seen.add(key(handle))
 
-    return [{ path, handle, ask: handle.ask === true }]
-  })
+      return
+    }
+    for (const v of Object.values(value)) walk(v, called(value) ?? of)
+  }
+
+  // The view's own title names the place, not a row: its handles stand in none.
+  for (const v of Object.values(view ?? {})) walk(v, undefined)
+
+  return out
 }
 
 /** An action's name as a person reads it: `end_move` is "End move". */
@@ -31,23 +43,35 @@ export const named = (name: string): string => {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
+/** A handle's subject as words: the values it is bound to, "3" or "queue". */
+const subject = (h: Handle): string => Object.values(h.args).map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(" ")
+
 /**
- * Offered actions as entries of a menu: each by its name, or by its description where several share
- * one, the same handle bound to different subjects; with "…" where it asks for input first. Asks first.
+ * Offered actions as entries of a menu, with "…" where one asks for input first. Each by its name; where several share
+ * one, the same handle bound to different subjects, by its name and what tells them apart: the row it stands in, by its
+ * title or name, as "Close Queue", else its subject, as "Close 3"; and both where rows share a title, "Close Queue (3)".
+ * Its description, which adds what the name does not say, is its hint.
  */
-export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; ask: boolean; run: () => void }[] {
+export function actionItems(actions: Offered[], run: (action: Offered) => void): { id: string; name: string; label: string; hint: string; run: () => void }[] {
   const count = new Map<string, number>()
+  const tell = (a: Offered) => [named(a.handle.name), a.of ?? subject(a.handle)].filter(Boolean).join(" ")
+  const told = new Map<string, number>()
 
   for (const a of actions) count.set(a.handle.name, (count.get(a.handle.name) ?? 0) + 1)
+  for (const a of actions) told.set(tell(a), (told.get(tell(a)) ?? 0) + 1)
 
-  return [...actions.filter((a) => a.ask), ...actions.filter((a) => !a.ask)].map((a) => ({
-    id: `${a.path} ${key(a.handle)}`,
-    name: a.handle.name,
-    label: ((count.get(a.handle.name) ?? 0) > 1 ? a.handle.description : named(a.handle.name)) + (Object.keys(a.handle.open).length ? "…" : ""),
-    hint: a.handle.description,
-    ask: a.ask,
-    run: () => run(a),
-  }))
+  return actions.map((a) => {
+    const several = (count.get(a.handle.name) ?? 0) > 1
+    const label = !several ? named(a.handle.name) : (told.get(tell(a)) ?? 0) > 1 && a.of !== undefined ? `${tell(a)} (${subject(a.handle)})` : tell(a)
+
+    return {
+      id: `${a.path} ${key(a.handle)}`,
+      name: a.handle.name,
+      label: label + (Object.keys(a.handle.open).length ? "…" : ""),
+      hint: a.handle.description,
+      run: () => run(a),
+    }
+  })
 }
 
 /** A view's `menu` fact, how its actions are grouped and ordered: groups, each a label and the names of its actions. */
@@ -63,18 +87,17 @@ const menuFact = (value: Json | undefined): MenuFact =>
     : []
 
 /**
- * The actions offered at a place as a menu's entries: the asks first, marked as the person's; then the groups the view's
- * `menu` fact names, each under its label in its order; then the rest, in the view's order. A line between each.
+ * The actions offered at a place as a menu's entries: the groups the view's `menu` fact names, each under its label in its
+ * order; then the rest, in the view's order. A line between each.
  */
 export function grouped(actions: Offered[], menu: Json | undefined, run: (action: Offered) => void): MenuItem[] {
   const items = actionItems(actions, run)
   const groups = menuFact(menu)
   const grouped = new Set(groups.flatMap((g) => g.actions))
-  const entry = (i: (typeof items)[number]): MenuItem => ({ kind: "action", id: i.id, label: i.label, hint: i.hint, run: i.run, ...(i.ask && { mark: true }) })
+  const entry = (i: (typeof items)[number]): MenuItem => ({ kind: "action", id: i.id, label: i.label, hint: i.hint, run: i.run })
   const sections: { label?: string; list: typeof items }[] = [
-    { list: items.filter((i) => i.ask) },
-    ...groups.map((g) => ({ label: g.label, list: g.actions.flatMap((name) => items.filter((i) => !i.ask && i.name === name)) })),
-    { list: items.filter((i) => !i.ask && !grouped.has(i.name)) },
+    ...groups.map((g) => ({ label: g.label, list: g.actions.flatMap((name) => items.filter((i) => i.name === name)) })),
+    { list: items.filter((i) => !grouped.has(i.name)) },
   ].filter((s) => s.list.length)
 
   return sections.flatMap((s, n): MenuItem[] => [
@@ -114,12 +137,23 @@ export function labelOf(path: string, view: View | undefined, listed: Place[] = 
 /** The path above one within a tab, `/` at the top; none above `/`. */
 export const parentOf = (path: string): string | undefined => (path === "/" ? undefined : path.replace(/\/[^/]*$/, "") || "/")
 
-/** What an input form's fields hold, as the action's arguments: each open input of its type, or undefined while one is not. */
+/**
+ * The place above `route` the tab's menu reads, for its way back up: only one a view `known` names, so a parent path with
+ * no view, which the door answers with not found, is never asked for; none at `/` or just below it.
+ */
+export function aboveOf(route: string, known: readonly (View | undefined)[]): string | undefined {
+  const up = parentOf(route)
+
+  return up !== undefined && up !== "/" && known.some((view) => placesOf(view).some((p) => p.at === up)) ? up : undefined
+}
+
+/** What an input form's fields hold, as the action's arguments: each open input of its base type, or undefined while one is not. */
 export function argsOf(open: Schema, fields: Record<string, string | boolean | undefined>): Args | undefined {
   const args: Args = {}
 
-  for (const [name, type] of Object.entries(open)) {
+  for (const [name, input] of Object.entries(open)) {
     const value = fields[name]
+    const type = typeOf(input)
 
     if (type === "boolean") args[name] = value === true
     else if (type === "number") {
@@ -204,8 +238,8 @@ function met(f: Found, word: string): number | undefined {
 
 /**
  * What the search finds for a query: the places and actions that meet every word of it, by their label, their way in
- * the menu or what else says them, the best met first; among equals what waits on the person, then the order they were
- * read in, nearest `/` first. At most `cap`.
+ * the menu or what else says them, the best met first; among equals the order they were read in, nearest `/` first. At
+ * most `cap`.
  */
 export function search(found: Found[], query: string, cap = 30): Found[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -216,9 +250,9 @@ export function search(found: Found[], query: string, cap = 30): Found[] {
     .flatMap((f, order) => {
       const scores = words.map((w) => met(f, w))
 
-      return scores.some((score) => score === undefined) ? [] : [{ f, order, score: scores.reduce<number>((sum, score) => sum + score!, 0), ask: f.kind === "action" && f.action.ask }]
+      return scores.some((score) => score === undefined) ? [] : [{ f, order, score: scores.reduce<number>((sum, score) => sum + score!, 0) }]
     })
-    .sort((a, b) => a.score - b.score || Number(b.ask) - Number(a.ask) || a.order - b.order)
+    .sort((a, b) => a.score - b.score || a.order - b.order)
     .slice(0, cap)
     .map(({ f }) => f)
 }
@@ -227,10 +261,10 @@ export function search(found: Found[], query: string, cap = 30): Found[] {
 export const under = (path: string, place: string): boolean => place === "/" || path === place || path.startsWith(`${place}/`)
 
 /**
- * Where the tab's menu puts a dot on the way to what waits on the person elsewhere in the tab: `targets` are the paths
- * of asks and of unseen notices, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
+ * Where the tab's menu puts a dot on the way to a highlight elsewhere in the tab: `targets` are the paths of the
+ * highlights the person had not opened, `route` where the tab is, `go` the entries of Go, the way back up first. A place Go lists
  * is dotted where a target is at it or below; a way back up, where a target is below it and not below the route. What
- * stands at the route or at `/` is in the menu's sections, dotted there, and needs no way; a notice about no place is `/`.
+ * stands at the route or at `/` is where the menu already is, and needs no way; a highlight about no place is `/`.
  */
 export function dotted(targets: readonly string[], route: string, go: readonly { at: string; up?: boolean }[]): Set<string> {
   const away = targets.filter((t) => t !== route && t !== "/")
@@ -238,9 +272,9 @@ export function dotted(targets: readonly string[], route: string, go: readonly {
   return new Set(go.filter((g) => away.some((t) => (g.up ? under(t, g.at) && !under(t, route) : under(t, g.at)))).map((g) => g.at))
 }
 
-/** The unseen notices a tab is about, as paths within it: its own address, a notice about no place, as `/`. */
-export function noticesIn(address: string, notices: readonly { at: string | null }[]): string[] {
-  return notices.flatMap((n) => (n.at && (n.at === address || n.at.startsWith(`${address}/`)) ? [n.at.slice(address.length) || "/"] : []))
+/** The places highlights are about in a tab, as paths within it: its own address, a highlight about no place, as `/`. */
+export function highlightsIn(address: string, highlights: readonly { at: string | null }[]): string[] {
+  return highlights.flatMap((n) => (n.at && (n.at === address || n.at.startsWith(`${address}/`)) ? [n.at.slice(address.length) || "/"] : []))
 }
 
 /** A tab's menu as its parts make it: what the shell's own controls for every tab are, after a line. */
@@ -263,8 +297,7 @@ export const MANY = 8
 /**
  * The tab's menu, top to bottom: the surface's actions at `/`, with no title, the tab having it; where the tab is below `/`, the place's
  * actions under its name; Go, the places and the way back up, a submenu with a field where there are more than MANY;
- * then the shell's own controls. Asks stand first in their group, marked, and so does the label over them; Go and the
- * places in it carry a dot on the way to what waits elsewhere.
+ * then the shell's own controls. Go and the places in it carry a dot on the way to what waits elsewhere.
  */
 export function tabMenu({ surface, place, go, dots, start, navigate, controls }: TabMenuParts): MenuItem[] {
   // The surface's own actions stand without a heading: the tab the menu hangs from names it already.
@@ -273,7 +306,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
 
     if (!items.length || !titled) return items
 
-    return [{ kind: "label", id: `${id}-title`, label: s.label, strong: true, ...(s.actions.some((a) => a.ask) && { mark: true }) }, ...items]
+    return [{ kind: "label", id: `${id}-title`, label: s.label, strong: true }, ...items]
   }
   const ups = go.filter((g) => g.up)
   const places = go.filter((g) => !g.up)
@@ -298,7 +331,7 @@ export function tabMenu({ surface, place, go, dots, start, navigate, controls }:
   return parts.flatMap((p, n): MenuItem[] => [...(n ? [{ kind: "separator" as const, id: `part-${n}` }] : []), ...p])
 }
 
-/** What the search finds as entries of the tab's menu: a place goes there, an action starts, an ask marked. */
+/** What the search finds as entries of the tab's menu: a place goes there, an action starts. */
 export function foundItems(found: Found[], navigate: (at: string) => void, start: (action: Offered) => void): MenuItem[] {
   return found.map((f) =>
     f.kind === "place"
@@ -310,7 +343,6 @@ export function foundItems(found: Found[], navigate: (at: string) => void, start
           note: f.where,
           hint: f.action.handle.description,
           run: () => start(f.action),
-          ...(f.action.ask && { mark: true }),
         }
   )
 }
@@ -321,7 +353,7 @@ export function foundItems(found: Found[], navigate: (at: string) => void, start
  */
 export function controlsOf({ close, others, link, reload }: { close?: { hint: string; run: () => void }; others?: () => void; link: string; reload: () => void }): MenuItem[] {
   return [
-    { kind: "action", id: "close", label: "Close tab", note: "its state is dropped", hint: close?.hint, disabled: !close, run: () => close?.run() },
+    { kind: "action", id: "close", label: "Close tab", note: "kept read only in the archive", hint: close?.hint, disabled: !close, run: () => close?.run() },
     { kind: "action", id: "close-others", label: "Close other tabs", disabled: !others, run: () => others?.() },
     { kind: "action", id: "copy", label: "Copy link", hint: link, run: () => void navigator.clipboard?.writeText(link) },
     { kind: "action", id: "reload", label: "Reload", hint: "Read the tab's views again", run: reload },

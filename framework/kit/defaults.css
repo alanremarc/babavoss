@@ -7,6 +7,18 @@
 @source "./";
 
 @custom-variant dark (&:is(.dark *));
+/* The shell's conventions, which it sets on the page's root as the person prefers: data-motion (full, reduced), data-scale
+   with --scale, data-side (left, right: where a page's own sidebar stands), data-rail (left, right, top, bottom: where the
+   shell's tabs stand) and data-mode. The kit follows them unasked: everything it sizes is in rem, which the scale sizes,
+   and nothing moves where motion is reduced. A page reads them by these variants, or by the attributes on :root. */
+@custom-variant motion-safe (&:where(:root[data-motion="full"], :root[data-motion="full"] *));
+@custom-variant motion-reduce (&:where(:root[data-motion="reduced"], :root[data-motion="reduced"] *));
+@custom-variant side-left (&:where(:root[data-side="left"] *));
+@custom-variant side-right (&:where(:root[data-side="right"] *));
+@custom-variant rail-left (&:where(:root[data-rail="left"] *));
+@custom-variant rail-right (&:where(:root[data-rail="right"] *));
+@custom-variant rail-top (&:where(:root[data-rail="top"] *));
+@custom-variant rail-bottom (&:where(:root[data-rail="bottom"] *));
 /* The theming tokens: the contract a surface's page uses, through Tailwind classes, to follow the person's theme and
    mode without knowing them. Each name below is the class suffix: bg-primary, text-muted-foreground, border-border,
    rounded-lg, text-meta, h-bar, font-mono. The colours are derived per mode from the theme's numbers, in theme.css;
@@ -25,7 +37,8 @@
               border, input, ring          lines, field outlines, the focus ring
               sidebar                      the shell's chrome: the tab strip, side panels
               chart-1 … chart-5            series in a chart, in order: a ramp of the accent, light to dark
-   type       badge 9px, meta 11px, body 12px (the frame's default), large 13px; Tailwind's sm and up for headings
+   type       badge 9px, meta 11px, body 12px (the frame's default), large 13px: the kit and the shell use these four alone;
+              a surface may take Tailwind's sm and up for its headings
    font       sans (Inter), heading, mono
    radius     sm, md, lg (= --radius), xl, 2xl, 3xl, 4xl
    frame      menubar, bar, row: heights of a compact header, a bar, a row or an icon button;
@@ -118,38 +131,26 @@
   }
   html {
     @apply font-sans;
+    font-size: calc(var(--scale, 1) * 100%);
   }
 }
 
-/* Canonical rendered markdown: GitHub's markdown-body layout, coloured by the theme's tokens.
-   Unlayered like github-markdown-css, and after it, so these mappings win in every theme and mode. */
-.markdown-body {
-  --fgColor-default: var(--foreground);
-  --fgColor-muted: var(--muted-foreground);
-  --fgColor-accent: var(--foreground);
-  --fgColor-danger: var(--destructive);
-  --bgColor-default: transparent;
-  --bgColor-muted: var(--muted);
-  --bgColor-neutral-muted: color-mix(in oklab, var(--muted-foreground) 16%, transparent);
-  --bgColor-attention-muted: color-mix(in oklab, var(--primary) 18%, transparent);
-  --borderColor-default: var(--border);
-  --borderColor-muted: var(--border);
-  --borderColor-neutral-muted: var(--border);
-  --borderColor-accent-emphasis: var(--ring);
-  --focus-outlineColor: var(--ring);
-  color-scheme: inherit;
-  font-family: inherit;
-  font-size: inherit;
-  & a {
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
+/* Still where motion is reduced: by the convention where the shell sets it, by the browser's preference where nothing does. */
+:root[data-motion="reduced"] {
+  &,
+  & *,
+  & *::before,
+  & *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  :root:not([data-motion]) *,
+  :root:not([data-motion]) *::before,
+  :root:not([data-motion]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

@@ -1,14 +1,28 @@
-// What the queue's two views share: the shapes of its views, the marks of where an issue stands, an issue as a one-liner,
-// the toolbar that switches between the list, the map and the archive, and each narrative's hue.
+// What the queue's views share: the shapes of its views, the marks of where an issue stands, an issue as a one-liner,
+// the toolbar that switches between the list, the narratives and the archive, and each narrative's hue.
 import type { ReactNode } from "react"
-import { ArchiveIcon, CircleCheckIcon, CircleDashedIcon, CircleIcon, ListIcon, LoaderCircleIcon, WaypointsIcon } from "lucide-react"
+import { ArchiveIcon, CircleCheckIcon, CircleDashedIcon, CircleIcon, ListIcon, ListTreeIcon, LoaderCircleIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 
 export type Status = "draft" | "backlog" | "lane" | "done"
 export type Row = { at: string; n: number; title: string; status: Status; lane?: number; narrative: string; from?: number[]; note?: string }
 export type Story = { at: string; id: string; title: string; issues: number; open: number }
-export type Root = { lanes: number; free: number[]; narratives: Story[]; issues: Row[] }
-export type Told = { id: string; title: string; about: string; issues: (Row & { iterations: number })[] }
+/** `reading`: a new tab has not heard the session's work yet. */
+export type Root = { lanes: number; free: number[]; narratives: Story[]; issues: Row[]; reading?: true }
+/** An issue in its place in a narrative's outline; `from` and `to` a line per other narrative, as "leftovers: 50, 51". */
+export type Placed = Omit<Row, "narrative" | "from"> & { depth: number; also?: number[]; from?: string[]; to?: string[] }
+
+/** The lines of `from` or `to` as each narrative's id with its issues. */
+export const across = (lines: string[] = []): [string, number[]][] =>
+  lines.map((line) => {
+    const [id = "", ns = ""] = line.split(": ")
+
+    return [id, ns.split(", ").map(Number)]
+  })
+/** The narratives as listed, those with open issues first. */
+export type Listed = { narratives: (Story & { about: string })[] }
+/** A narrative with its outline: every issue, or with `only`, the open ones and the path to them. */
+export type Outline = Story & { about: string; only?: "open"; outline: Placed[] }
 export type Ref = { at: string; n: number; title: string; status: Status }
 export type Iteration = { n: number; title: string; why: string; decided: string; outcome: string }
 export type Whole = Omit<Row, "narrative" | "from"> & {
@@ -26,7 +40,7 @@ export const NAMES: Record<Status, string> = { lane: "In progress", backlog: "Ba
 
 const HUES = 6
 /** A narrative's hue, by its place among the narratives: the surface's own tokens, a step lighter in dark mode. */
-export const hue = (i: number) => `var(--map-${(Math.max(0, i) % HUES) + 1})`
+export const hue = (i: number) => `var(--narrative-${(Math.max(0, i) % HUES) + 1})`
 
 /** Where an issue stands, as an icon; in `color`, its narrative's hue, where one is given. */
 export function Mark({ status, className = "size-3.5", color }: { status: Status; className?: string; color?: string }) {
@@ -61,11 +75,11 @@ export function Line({ to, color, onPick }: { to: { n: number; title: string; st
   )
 }
 
-export type Lens = "list" | "map" | "archive"
+export type Lens = "list" | "narratives" | "archive"
 
 const LENSES: { lens: Lens; label: string; icon: ReactNode }[] = [
   { lens: "list", label: "List", icon: <ListIcon aria-hidden /> },
-  { lens: "map", label: "Map", icon: <WaypointsIcon aria-hidden /> },
+  { lens: "narratives", label: "Narratives", icon: <ListTreeIcon aria-hidden /> },
   { lens: "archive", label: "Archive", icon: <ArchiveIcon aria-hidden /> },
 ]
 

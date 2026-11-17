@@ -2,13 +2,16 @@
 // for each of Codex's events that is one of the framework's moments, among the person's own hooks, which are left as they
 // are; and, where the option asks, the sandbox's network opened in .codex/config.toml, so the shell's command reaches its
 // runtime over loopback. Codex loads project hooks in a trusted project only, once the person has reviewed them. Hooks:
-// Codex's input and output, which follow Claude Code's names. There is no run face: the lab does not run Codex yet.
-// The hook face and the file's format are from Codex's documentation (developers.openai.com/codex/hooks), not run here.
-import { existsSync, readFileSync } from "node:fs"
+// Codex's input and output, which follow Claude Code's names. Run: `codex exec`, a process a turn, the first starting
+// the thread and each after resuming it, in a home of its own (CODEX_HOME), the person's login file linked there; the
+// project is trusted and its hooks run unreviewed by flags given to that run alone. The hook face and the file's format
+// are from Codex's documentation (learn.chatgpt.com/docs/hooks); the run face was run against codex-cli 0.169.0.
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import type { Json } from "../surface/view.ts"
-import { postToolUse } from "./claude.ts"
-import { sourceOf, type Adapter, type HookEvent, type Moment, type SetUp } from "./harness.ts"
+import { cleanEnv, postToolUse, redact, WORD } from "./claude.ts"
+import { NONE, sourceOf, type Adapter, type Harness, type HarnessEvent, type HookEvent, type Moment, type Session, type SetUp, type Start } from "./harness.ts"
 import { editJson, removed, SKILL, withHooks, without, written, type Group, type Hooks } from "./setup.ts"
 
 /** Codex's hook events the framework is told at: an interrupted turn ends as a stop does. */
@@ -96,6 +99,274 @@ function closeNetwork(project: string): boolean {
   return left === undefined ? removed(file, project) : written(file, left)
 }
 
+/**
+ * What a turn of a session is started with: the thread's first, or one resuming `thread`. The project is trusted for the
+ * run with --trust, which writes it into the run's own CODEX_HOME, and its hooks run unreviewed with
+ * --dangerously-bypass-hook-trust, for this invocation only (`codex exec --help`; learn.chatgpt.com/docs/hooks). As
+ * Claude Code's run bypasses permissions, commands run unsandboxed in the project's copy. Codex sets no budget.
+ */
+export const codexArgs = ({ project, model }: Pick<Start, "project" | "model">, thread?: string): string[] => [
+  "codex",
+  "exec",
+  ...(thread ? ["resume", thread] : []),
+  ...["--json", "-m", model, "--trust", "--dangerously-bypass-hook-trust", "--dangerously-bypass-approvals-and-sandbox"],
+  // resume takes no --cd: the thread keeps the directory it began in, which is the process's own.
+  ...(thread ? [] : ["-C", project]),
+  // The message is read from standard input.
+  "-",
+]
+
+type O = { [key: string]: Json | undefined }
+const o = (value: Json | undefined): O => (value && typeof value === "object" && !Array.isArray(value) ? value : {})
+const s = (value: Json | undefined): string => (typeof value === "string" ? value : "")
+const n = (value: Json | undefined): number => (typeof value === "number" ? value : 0)
+
+/** A command as the agent wrote it: Codex runs each in a login shell, `/bin/zsh -lc '…'`. */
+const unwrapped = (command: string): string => {
+  const m = command.match(/^\S*\/(?:ba|z)?sh -l?c (?:(['"])([\s\S]*)\1|(\S+))$/)
+
+  return m ? (m[2] ?? m[3]!) : command
+}
+
+/** The framework's events in one line of `codex exec --json`, as documented at learn.chatgpt.com/docs/non-interactive-mode. */
+export function codexEvents(line: Json): HarnessEvent[] {
+  const e = o(line)
+  const item = o(e.item)
+  const type = s(e.type)
+
+  if (type === "item.started" && item.type === "command_execution") {
+    const input = unwrapped(s(item.command))
+
+    return [{ kind: "call", id: s(item.id), tool: "shell", input: redact(input), word: WORD.test(input) }]
+  }
+  if (type === "item.completed") {
+    if (item.type === "command_execution") return [{ kind: "result", id: s(item.id), text: redact(s(item.aggregated_output)), ...(n(item.exit_code) !== 0 && { error: true }) }]
+    if (item.type === "agent_message" && s(item.text)) return [{ kind: "reply", text: redact(s(item.text)) }]
+    if (item.type === "reasoning" && s(item.text)) return [{ kind: "thinking", text: redact(s(item.text)) }]
+    if (item.type === "file_change" || item.type === "mcp_tool_call" || item.type === "web_search") {
+      const id = s(item.id)
+
+      return [
+        { kind: "call", id, tool: s(item.type), input: redact(JSON.stringify({ ...item, id: undefined, type: undefined })), word: false },
+        { kind: "result", id, text: s(item.status) },
+      ]
+    }
+  }
+
+  return []
+}
+
+/** A turn's end in `codex exec --json`: its tokens, those read from the cache apart; undefined for any other line. */
+export function codexTurn(line: Json, ms: number, calls: number): HarnessEvent | undefined {
+  const e = o(line)
+  const u = o(e.usage)
+  const cached = n(u.cached_input_tokens)
+
+  if (e.type === "turn.completed")
+    return {
+      kind: "turn",
+      ok: true,
+      text: "",
+      tokens: { input: n(u.input_tokens) - cached, cache_write: n(u.cache_write_input_tokens), cache_read: cached, output: n(u.output_tokens) },
+      total: 0,
+      ms,
+      calls,
+    }
+  if (e.type === "turn.failed" || e.type === "error") return { kind: "turn", ok: false, text: redact(s(o(e.error).message) || s(e.message) || s(e.type)), tokens: NONE, total: 0, ms, calls }
+
+  return undefined
+}
+
+/**
+ * What hooks added to the context, in lines of a session's file under CODEX_HOME/sessions. Codex's stream does not say
+ * when a hook ran; its session file keeps what one added, as a developer message within a turn, where Codex writes its own
+ * before the first. Which hook added it is told by where it stands: before the turn's message, the session's start;
+ * after it, the message's own; after a tool's output, the tool's. A hook that added nothing leaves no trace here. The
+ * file's format is not documented: it is read as codex-cli 0.169.0 writes it.
+ */
+export function codexInjected(lines: Json[]): HarnessEvent[] {
+  const found: HarnessEvent[] = []
+  let at: "out" | "start" | "message" | "tool" = "out"
+
+  for (const line of lines) {
+    const e = o(line)
+    const p = o(e.payload)
+
+    if (e.type === "turn_context") at = "start"
+    else if (e.type === "event_msg" && p.type === "task_complete") at = "out"
+    else if (at === "out" || e.type !== "response_item") continue
+    else if (p.type === "message" && p.role === "user") at = "message"
+    else if (p.type === "custom_tool_call_output" || p.type === "function_call_output") at = "tool"
+    else if (p.type === "message" && p.role === "developer") {
+      const text = (Array.isArray(p.content) ? p.content : []).map((c) => s(o(c).text)).join("\n")
+      const event = at === "start" ? "SessionStart" : at === "message" ? "UserPromptSubmit" : "PostToolUse"
+
+      if (text) found.push({ kind: "injected", event, text: redact(text) })
+    }
+  }
+
+  return found
+}
+
+/** The session file of `thread` under `codexHome`, where Codex has written one. */
+function sessionFile(codexHome: string, thread: string): string | undefined {
+  const dir = join(codexHome, "sessions")
+
+  if (!existsSync(dir)) return undefined
+
+  const found = readdirSync(dir, { recursive: true, encoding: "utf8" }).find((path) => path.endsWith(`-${thread}.jsonl`))
+
+  return found && join(dir, found)
+}
+
+const jsonLines = (text: string): Json[] =>
+  text.split("\n").flatMap((line) => {
+    try {
+      return line.trim() ? [JSON.parse(line) as Json] : []
+    } catch {
+      return []
+    }
+  })
+
+/** JSON lines from a byte stream, each as it comes; a line that is not JSON is passed over. */
+async function* streamed(stream: ReadableStream<Uint8Array>): AsyncIterable<Json> {
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  for await (const chunk of stream) {
+    buffer += decoder.decode(chunk, { stream: true })
+
+    const lines = buffer.split("\n")
+
+    buffer = lines.pop() ?? ""
+    yield* jsonLines(lines.join("\n"))
+  }
+  yield* jsonLines(buffer)
+}
+
+/**
+ * Codex, with the person's home `own`: the one its login file is read from, by a link. Codex names its thread itself, so
+ * a session's `session` is not its id: its hooks speak for the thread, whose id `started` reports.
+ */
+export function codexCli(own: string = homedir()): Harness {
+  return {
+    name: "codex",
+    home(home) {
+      const codexHome = join(home, ".codex")
+      const from = join(own, ".codex/auth.json")
+      const to = join(codexHome, "auth.json")
+
+      mkdirSync(codexHome, { recursive: true })
+      if (existsSync(from)) {
+        // Codex writes its login through the link when it refreshes it, so the person's stays the one in use.
+        if (!lstatSync(to, { throwIfNoEntry: false })) symlinkSync(realpathSync(from), to)
+
+        return "the person's Codex login file, linked"
+      }
+
+      return cleanEnv().CODEX_API_KEY ? "CODEX_API_KEY, from the environment" : "none found: the session is not logged in"
+    },
+    release(home) {
+      const codexHome = join(home, ".codex")
+
+      // Only the link is taken back, never what it points at; the rest is Codex's state of the run and of the account, but its transcripts.
+      if (!existsSync(codexHome)) return
+      for (const entry of readdirSync(codexHome)) if (entry !== "sessions") rmSync(join(codexHome, entry), { recursive: true, force: true })
+    },
+    start: (options) => spawnCodex(options),
+  }
+}
+
+function spawnCodex(options: Start): Session {
+  const codexHome = join(options.home, ".codex")
+  const env = { ...cleanEnv(), HOME: options.home, CODEX_HOME: codexHome }
+  const queue: (HarnessEvent | undefined)[] = []
+  const waiting: string[] = []
+  let wake: (() => void) | undefined
+  let thread: string | undefined
+  let child: Bun.Subprocess<"pipe", "pipe", "pipe"> | undefined
+  let read = 0
+  let ended = false
+  const push = (event: HarnessEvent | undefined) => {
+    queue.push(event)
+    wake?.()
+  }
+
+  /** One turn: a process of its own, its stream read as the framework's events, then what hooks added, from the session file. */
+  async function turn(text: string) {
+    const began = Date.now()
+    let calls = 0
+    let last: HarnessEvent | undefined
+
+    const proc = Bun.spawn(codexArgs(options, thread), { cwd: options.project, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" })
+
+    child = proc
+    proc.stdin.write(text)
+    proc.stdin.end()
+
+    const stderr = new Response(proc.stderr).text()
+
+    push({ kind: "message", text })
+    for await (const line of streamed(proc.stdout)) {
+      const e = o(line)
+
+      if (e.type === "thread.started" && !thread) {
+        thread = s(e.thread_id)
+        push({ kind: "started", session: thread, loaded: { model: options.model, cwd: options.project, tools: [], skills: [], plugins: [], mcp: [], commands: [] } })
+      }
+      for (const event of codexEvents(line)) {
+        if (event.kind === "call") calls++
+        push(event)
+      }
+      last = codexTurn(line, Date.now() - began, calls) ?? last
+    }
+
+    const code = await proc.exited
+    const file = thread && sessionFile(codexHome, thread)
+
+    if (file) {
+      const lines = jsonLines(readFileSync(file, "utf8"))
+
+      codexInjected(lines.slice(read)).forEach(push)
+      read = lines.length
+    }
+    child = undefined
+    push(last ?? { kind: "turn", ok: false, text: redact((await stderr).trim().split("\n").at(-1) ?? `exit code ${code}`), tokens: NONE, total: 0, ms: Date.now() - began, calls })
+  }
+
+  async function next() {
+    while (waiting.length && !ended) await turn(waiting.shift()!)
+  }
+
+  return {
+    events: (async function* () {
+      for (;;) {
+        if (!queue.length) await new Promise<void>((done) => (wake = done))
+
+        const event = queue.shift()
+
+        if (event === undefined) return
+        yield event
+      }
+    })(),
+    // A message to a turn that runs waits for it, and starts the next.
+    say(text) {
+      waiting.push(text)
+      if (waiting.length === 1 && !child) void next()
+    },
+    stop: () => void child?.kill("SIGINT"),
+    async end() {
+      if (ended) return
+      ended = true
+      waiting.length = 0
+      child?.kill()
+      await child?.exited
+      push({ kind: "ended", code: 143, stderr: "" })
+      push(undefined)
+    },
+  }
+}
+
 export const codex: Adapter<CodexOptions> = {
   name: "codex",
   defaults: { events: [...CODEX_EVENTS], network: false },
@@ -107,7 +378,7 @@ export const codex: Adapter<CodexOptions> = {
     if (written(join(project, SKILL_AT), readFileSync(SKILL, "utf8"))) paths.push(dirname(SKILL_AT))
     if (editJson(join(project, HOOKS), hooked, true)) {
       paths.push(HOOKS)
-      said.push("Codex asks you to review these hooks once: run /hooks in Codex and trust baba's")
+      said.push("If you use Codex: it asks you to review these hooks once: run /hooks in Codex and trust baba's")
     }
     if (options.network) {
       const file = join(project, CONFIG)
@@ -138,4 +409,5 @@ export const codex: Adapter<CodexOptions> = {
   },
   // As Claude Code's: plain text adds context at a session's start and with a prompt, and after a tool call only JSON does.
   hookOutput: postToolUse,
+  run: () => codexCli(),
 }

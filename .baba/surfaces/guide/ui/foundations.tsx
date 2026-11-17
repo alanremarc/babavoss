@@ -4,6 +4,7 @@
 import { useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react"
 import { derive, PRESETS, varsOf } from "babavoss/kit/index.ts"
 import type { EntryOf } from "../src/catalogue.ts"
+import { ConventionsSpecimen } from "./conventions.tsx"
 import { State, States } from "./frame.tsx"
 
 /** The colour tokens, in the families defaults.css gives them: each a fill, with the text drawn on it where it has one. */
@@ -199,4 +200,4 @@ function Frame() {
   )
 }
 
-export const foundations: Record<EntryOf<"foundations">, ComponentType> = { colour: Colour, type: Type, radius: Radius, frame: Frame }
+export const foundations: Record<EntryOf<"foundations">, ComponentType> = { colour: Colour, type: Type, radius: Radius, frame: Frame, conventions: ConventionsSpecimen }

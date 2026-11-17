@@ -1,17 +1,24 @@
 // A view is structured facts with offered handles embedded where they belong. Presentation belongs to clients.
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json | undefined }
 export type Args = Record<string, Json>
-export type Schema = Record<string, "string" | "number" | "boolean">
+/** An input's base type, as a call's JSON carries it. */
+export type Type = "string" | "number" | "boolean"
+/**
+ * An input as a handle declares it: its base type, alone or with what it means, which is said in place of the type. `kind`
+ * is a word for what it is: `line`, `markdown` and `path` are text of one line, of several and a place, which a form knows,
+ * and any other is the surface's own, as `id`; `choices` are the values it may take; `range`, the whole numbers from the first to the last.
+ */
+export type Input = Type | { type: Type; kind?: string; choices?: (string | number)[]; range?: [number, number] }
+export type Schema = Record<string, Input>
 export type View = { [key: string]: Json | undefined }
 
 /**
- * `kind: "handle"` is reserved in views. Fixed args and open inputs are data, never more offered handles. `ask` marks an
- * action that is the person's alone, in the view the person reads; the agent is never offered one.
+ * `kind: "handle"` is reserved in views. Fixed args and open inputs are data, never more offered handles. A handle is offered
+ * to whoever reads the view: the agent and the person are offered the same.
  */
-export type Handle = { kind: "handle"; name: string; args: Args; open: Schema; description: string; ask?: true }
+export type Handle = { kind: "handle"; name: string; args: Args; open: Schema; description: string }
 
-export const handle = (name: string, description: string, args: Args = {}, open: Schema = {}, ask = false): Handle =>
-  ask ? { kind: "handle", name, args, open, description, ask: true } : { kind: "handle", name, args, open, description }
+export const handle = (name: string, description: string, args: Args = {}, open: Schema = {}): Handle => ({ kind: "handle", name, args, open, description })
 
 /**
  * `kind: "detail"` is reserved in views too: a fact or a row that is detail. It is told where it stands, at its own path
@@ -42,6 +49,36 @@ export function handles(value: Json | undefined): Handle[] {
   return Object.values(value).flatMap(handles)
 }
 
+/** An input's base type. */
+export const typeOf = (input: Input): Type => (typeof input === "string" ? input : input.type)
+
+/** The kinds of text the framework knows, said alone: their base type goes without saying. */
+const TEXT = ["line", "markdown", "path"]
+
+/**
+ * An input as the agent reads it after `name=`: its choices, a|b; its range, 1..5; a kind of text the framework knows, alone;
+ * any other kind with its base type, as id(string), so a word that could be a list or a number is never taken for one; else
+ * its base type.
+ */
+export function meant(input: Input): string {
+  if (typeof input === "string") return input
+  if (input.choices?.length) return input.choices.join("|")
+  if (input.range) return `${input.range[0]}..${input.range[1]}`
+  if (input.kind === undefined) return input.type
+
+  return input.type === "string" && TEXT.includes(input.kind) ? input.kind : `${input.kind}(${input.type})`
+}
+
+/** Why a value of the input's base type is not one it may take, in words that say what it may; undefined where it may. */
+export function outside(input: Input, value: Json | undefined): string | undefined {
+  if (typeof input === "string") return undefined
+  if (input.choices?.length && !input.choices.some((c) => c === value)) return `one of ${input.choices.join(", ")}`
+  if (input.range && !(typeof value === "number" && Number.isInteger(value) && value >= input.range[0] && value <= input.range[1]))
+    return `a whole number from ${input.range[0]} to ${input.range[1]}`
+
+  return undefined
+}
+
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Admission of a call against the view at its path: the offered handle, or why the call is refused. A view that says
@@ -57,7 +94,14 @@ export function admit(view: View, path: string, name: string, args: Args): Handl
 
     return `${name} ${JSON.stringify(args)} is not offered at ${path}; offered: ${list}${typeof view.broken === "string" ? `; ${view.broken}` : ""}`
   }
-  for (const [k, type] of Object.entries(h.open)) if (typeof args[k] !== type) return `${name}: ${k} must be a ${type}`
+  // The base type, then the values it may take where they are declared; a refusal says what is allowed.
+  for (const [k, input] of Object.entries(h.open)) {
+    const typed = typeof args[k] === typeOf(input)
+    const allowed = outside(input, typed ? args[k] : undefined)
+
+    if (allowed !== undefined) return `${name}: ${k} must be ${allowed}${k in args ? `, not ${JSON.stringify(args[k])}` : ""}`
+    if (!typed) return `${name}: ${k} must be a ${typeOf(input)}`
+  }
   for (const k of Object.keys(args)) if (!Object.hasOwn(h.args, k) && !Object.hasOwn(h.open, k)) return `${name} takes no ${k}`
 
   return h

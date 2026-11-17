@@ -1,9 +1,14 @@
-// The settings' page, shown in their tab: the appearance, the shortcuts and the mark, each as it is with the control that
-// changes it, every change a call of the surface. A theme is chosen from swatches, each painted in its own theme; Dynamic
+// The settings' page, shown in their tab: the appearance, where the tabs stand, the preferences every page follows by
+// convention, each a row of its choices, and the mark's motion among it, then the
+// shortcuts, each as it is with the control that changes it, every change a call of the surface. A theme is chosen from swatches, each painted in its own theme; Dynamic
 // shows the picker, which paints the page as it is dragged and keeps the numbers once let go. With one theme for both
 // modes there is one choice, else one for each. A shortcut is rebound by clicking its keys and pressing new ones; Escape
-// gives up, and a clash or keys that cannot be a binding is said on its row. Beside the mark's switch, the mark as it is
-// while the agent works. As the surface says them, the settings are told to the page, which applies them at once.
+// gives up, and a clash or keys that cannot be a binding is said on its row. Where the tabs stand asks next what the side
+// chosen needs: the end the mark is at for a rail at a side, where a drawer opens for one along the top or bottom. Beside
+// the mark's switch, the mark as it is while the agent works. As the surface says them, the settings are told to the page
+// whole, which applies them at once. Last, the closed tabs: how long the archive keeps them and how large it may grow,
+// the person's in every project as the rest is; then, set apart and named by the project's path, the two clears that act on
+// this project alone, each saying what it frees, and asking once more before it is taken.
 import { useEffect, useState, type ReactNode } from "react"
 import { MonitorIcon, MoonIcon, SettingsIcon, SunIcon } from "lucide-react"
 import type { Handle } from "../../../core/index.ts"
@@ -14,35 +19,57 @@ import { PRESETS, varsOf, type Theme } from "../../../kit/theme.ts"
 import { announce, paintTheme, useSystemDark } from "../../ui/appearance.ts"
 import { Logo } from "../../ui/mark.tsx"
 import { mac, RECORDING_MARK } from "../../ui/shortcuts.ts"
-import { useLive, useTab } from "../../ui/tab.tsx"
+import { useConventions, useLive, useTab } from "../../ui/tab.tsx"
 import { chordOf, COMMANDS, isCommand, shown, type CommandId } from "../src/keys.ts"
-import { appearanceOf, choiceIn, nameOf, numbersOf, resolveMode, settingsOf, type Choice, type Mode } from "../src/settings.ts"
+import {
+  choiceIn,
+  nameOf,
+  numbersOf,
+  PREFERENCE_NAMES,
+  PREFERENCES,
+  resolveMode,
+  settingsFromView,
+  type Choice,
+  type Preference,
+  type Rail,
+  type SettingsView,
+} from "../src/settings.ts"
 
 export const icon = <SettingsIcon aria-hidden />
 
-/** A theme as the surface tells it: a preset's id, or dynamic with its numbers. */
-type Told = string | ({ theme: "dynamic" } & Theme)
-type Root = {
-  appearance: { mode: Mode | "system"; same: true; theme: Told } | { mode: Mode | "system"; same: false; light: Told; dark: Told }
-  shortcuts: Record<CommandId, string>
-  logo: { animate: boolean }
+type Root = SettingsView & { [P in Preference]?: Handle } & {
   unsaved?: string
   mode?: Handle
   theme?: Handle
   dynamic?: Handle
   same?: Handle
+  rail?: Handle
   animate?: Handle
 }
 type Row = { command: CommandId; does: string; keys: string; default?: string }
 type Shortcuts = { commands: Row[]; bind?: Handle; reset?: Handle }
+type Freeing = { tabs: number; sessions?: number; size: string; running?: string }
+type Archive = {
+  project: string
+  window: { days: number; megabytes: number }
+  keep?: Handle
+  measure?: Handle
+  session?: Freeing
+  wholeProject?: Freeing
+  clearing?: "session" | "project"
+  clearSession?: Handle
+  clearProject?: Handle
+}
 
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "OS", "Hyper", "Super"])
 
 export default function Settings() {
   const root = useLive<Root>("/").view
   const shortcuts = useLive<Shortcuts>("/shortcuts").view
+  const archive = useLive<Archive>("/archive").view
   const { call } = useTab()
   const systemDark = useSystemDark()
+  const { motion } = useConventions()
   const [refused, setRefused] = useState<{ at: string; reason: string }>()
   const run = async (at: string, handle: Handle | undefined, args: Record<string, string | number | boolean>, path = "/") => {
     if (!handle) return false
@@ -54,26 +81,25 @@ export default function Settings() {
     return answer.outcome !== "refused"
   }
 
-  // What the surface says is what the page applies, as soon as it says it.
+  // What the surface says is what the page applies, the whole of it, as soon as it says it.
   useEffect(() => {
-    if (!root || !shortcuts) return
-
-    const keys = Object.fromEntries(shortcuts.commands.filter((r) => r.default !== undefined).map((r) => [r.command, r.keys]))
-
-    announce(settingsOf({ appearance: keptOf(root.appearance), keys, logo: root.logo }))
-  }, [root, shortcuts])
+    if (root) announce(settingsFromView(root))
+  }, [root])
 
   if (!root) return <p className="p-6 text-muted-foreground">Reading the settings…</p>
 
-  const appearance = appearanceOf(keptOf(root.appearance))
+  const { appearance } = settingsFromView(root)
   const mode = resolveMode(appearance, systemDark)
+  const placed = appearance.rail
+  const place = (change: Partial<Rail>) => void run("rail", root.rail, { ...placed, ...change })
+  const atSide = placed.side === "left" || placed.side === "right"
   const changed = shortcuts?.commands.some((r) => r.default !== undefined) ?? false
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex w-full max-w-xl flex-col gap-7 px-5 py-8 text-body">
         <header className="flex flex-col gap-0.5">
-          <h1 className="text-sm font-semibold">Settings</h1>
+          <h1 className="text-large font-semibold">Settings</h1>
           <p className="text-muted-foreground">Yours, the same in every session and project. The agent can change them too.</p>
           {root.unsaved && <p className="text-destructive">{root.unsaved}</p>}
         </header>
@@ -129,7 +155,55 @@ export default function Settings() {
               keep={(t) => void run(`theme ${m}`, root.dynamic, { mode: m, ...t })}
             />
           ))}
-          {refused && (refused.at === "mode" || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
+          <Line label="Tabs" note="the side of the page the rail of tabs stands at">
+            <Choose label="Where the tabs stand" value={placed.side} options={SIDE_OPTIONS} set={(side) => place({ side })} />
+          </Line>
+          {atSide ? (
+            <Line label="Tabs start from" note="the end the mark is at; the newest tab is next to it">
+              <Choose label="Where the tabs start" value={placed.from} options={END_OPTIONS} set={(from) => place({ from })} />
+            </Line>
+          ) : (
+            <Line label="Drawer opens" note="the side a tab's drawer comes in from">
+              <Choose label="Where a drawer opens" value={placed.drawer} options={DRAWER_OPTIONS} set={(drawer) => place({ drawer })} />
+            </Line>
+          )}
+          {PREFERENCE_NAMES.map((name) => {
+            const { label, does, choices, default: usual } = PREFERENCES[name]
+
+            return (
+              <Line key={name} label={label} note={does}>
+                <Choose
+                  label={label}
+                  value={String(root.preferences[name])}
+                  options={choices.map((value) => ({ value: String(value), label: choiceLabel(value) }))}
+                  set={(value) => void run(name, root[name], { [name]: typeof usual === "number" ? Number(value) : value })}
+                />
+              </Line>
+            )
+          })}
+          <Line
+            label="Animate while the agent works"
+            note={motion === "reduced" ? "still while motion is reduced, tinted" : root.logo.animate ? "the mark looks about" : "the mark stays still, tinted"}
+          >
+            <span className="flex items-center gap-3">
+              <span className="grid size-7 place-items-center rounded-full bg-foreground/3 text-muted-foreground" aria-label="The mark while the agent works" role="img">
+                <Logo standing={{ state: "working", waiting: 0, said: "" }} animate={root.logo.animate} />
+              </span>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={0}
+                value={root.logo.animate ? "on" : "off"}
+                aria-label="Animate the mark"
+                onValueChange={(value) => value && void run("animate", root.animate, { on: value === "on" })}
+              >
+                <ToggleGroupItem value="on">On</ToggleGroupItem>
+                <ToggleGroupItem value="off">Off</ToggleGroupItem>
+              </ToggleGroup>
+            </span>
+          </Line>
+          {refused && (["mode", "rail", ...PREFERENCE_NAMES].includes(refused.at) || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
         </Section>
 
         <Section
@@ -155,35 +229,148 @@ export default function Settings() {
           <p className="text-meta text-muted-foreground">Click a shortcut, then press the keys; Escape gives up. They work anywhere but while you write in a field.</p>
         </Section>
 
-        <Section title="Logo">
-          <Line label="Animate while the agent works" note={root.logo.animate ? "the mark looks about" : "the mark stays still, tinted"}>
-            <span className="flex items-center gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-foreground/3 text-muted-foreground" aria-label="The mark while the agent works" role="img">
-                <Logo standing={{ state: "working", waiting: 0, said: "" }} animate={root.logo.animate} />
-              </span>
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                spacing={0}
-                value={root.logo.animate ? "on" : "off"}
-                aria-label="Animate the mark"
-                onValueChange={(value) => value && void run("animate", root.animate, { on: value === "on" })}
-              >
-                <ToggleGroupItem value="on">On</ToggleGroupItem>
-                <ToggleGroupItem value="off">Off</ToggleGroupItem>
-              </ToggleGroup>
-            </span>
-          </Line>
-        </Section>
+        {archive && <ClosedTabs archive={archive} run={run} refused={refused?.at.startsWith("archive") ? refused.reason : undefined} />}
       </div>
     </div>
   )
 }
 
-/** The appearance the surface tells, as its file keeps it. */
-const keptOf = (a: Root["appearance"]) =>
-  a.same ? { mode: a.mode, same: true, themes: { light: a.theme, dark: a.theme } } : { mode: a.mode, same: false, themes: { light: a.light, dark: a.dark } }
+const DAYS = [7, 14, 30, 90, 365]
+const MEGABYTES = [50, 100, 200, 500, 1000]
+/** A number's choices, with the one set where it is not among them, as the agent may set any. */
+const around = (options: number[], value: number, label: (n: number) => string) =>
+  [...new Set([...options, value])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: label(n) }))
+
+/** What a clear frees, as the button says it. */
+const freeing = (f: Freeing) =>
+  [`${f.tabs} closed tab${f.tabs === 1 ? "" : "s"}`, ...(f.sessions ? [`${f.sessions} ended session${f.sessions === 1 ? "" : "s"}`] : []), f.size].join(" · ")
+
+/**
+ * The archive of closed tabs: its window, the person's everywhere; and the clears of this project, set apart under its path,
+ * each a button that says what it frees and asks once more. What it would free is measured as the section is shown.
+ */
+function ClosedTabs({
+  archive,
+  run,
+  refused,
+}: {
+  archive: Archive
+  run: (at: string, handle: Handle | undefined, args: Record<string, string | number | boolean>, path?: string) => Promise<boolean>
+  refused?: string
+}) {
+  const { days, megabytes } = archive.window
+  const keep = (change: Partial<Archive["window"]>) => void run("archive keep", archive.keep, { days, megabytes, ...change }, "/archive")
+  const measure = archive.measure
+
+  // What a clear would free is measured again each time the section is shown, quietly.
+  useEffect(() => {
+    if (measure) void run("archive measure", measure, {}, "/archive")
+  }, [measure?.name])
+
+  return (
+    <Section title="Closed tabs">
+      <p className="text-meta text-muted-foreground">
+        A closed tab is kept read only, its state and its log, for the agent to read. How long, and how much, is yours in every project.
+      </p>
+      <Line label="Keep for" note="a closed tab, or a session that ended, goes this long after">
+        <Choose label="Keep closed tabs for" value={String(days)} options={around(DAYS, days, (n) => `${n} d`)} set={(v) => keep({ days: Number(v) })} />
+      </Line>
+      <Line label="At most" note="past this, a project's oldest go first">
+        <Choose
+          label="Largest archive"
+          value={String(megabytes)}
+          options={around(MEGABYTES, megabytes, (n) => (n >= 1000 ? `${n / 1000} GB` : `${n} MB`))}
+          set={(v) => keep({ megabytes: Number(v) })}
+        />
+      </Line>
+      {archive.measure && (
+        <div className="mt-2 flex flex-col gap-1 rounded-md border px-3 py-2" aria-label="Clear in this project">
+          <span className="flex min-w-0 flex-col">
+            <span className="font-medium text-foreground">Clear in this project only</span>
+            <span className="truncate font-mono text-meta text-muted-foreground" title={archive.project}>
+              {archive.project}
+            </span>
+          </span>
+          <Clear
+            label="This session"
+            note="the tabs closed in this session"
+            freeing={archive.session}
+            busy={archive.clearing === "session"}
+            clear={archive.clearSession && (() => run("archive clear", archive.clearSession, {}, "/archive"))}
+          />
+          <Clear
+            label="Every session of this project"
+            note={archive.wholeProject?.running ?? "every session no agent runs in now, and the folders of those that ended"}
+            freeing={archive.wholeProject}
+            busy={archive.clearing === "project"}
+            clear={archive.clearProject && (() => run("archive clear", archive.clearProject, {}, "/archive"))}
+          />
+        </div>
+      )}
+      {refused && <p className="text-destructive">{refused}</p>}
+    </Section>
+  )
+}
+
+/** One clear: what it frees on its button, which asks once more before it is taken; nothing to free, nothing offered. */
+function Clear({ label, note, freeing: what, busy, clear }: { label: string; note: string; freeing?: Freeing; busy: boolean; clear?: () => Promise<boolean> }) {
+  const [asking, setAsking] = useState(false)
+  const empty = !what || (!what.tabs && !what.sessions)
+
+  return (
+    <Line label={label} note={note}>
+      {busy ? (
+        <span className="text-muted-foreground">Clearing…</span>
+      ) : empty ? (
+        <span className="text-muted-foreground">{what ? "Nothing to clear" : "Measuring…"}</span>
+      ) : asking ? (
+        <span className="flex items-center gap-1">
+          <Button variant="ghost" size="xs" onClick={() => setAsking(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" size="xs" onClick={() => void clear?.().finally(() => setAsking(false))}>
+            Clear {what.size} for good
+          </Button>
+        </span>
+      ) : (
+        <Button variant="outline" size="xs" disabled={!clear} onClick={() => setAsking(true)}>
+          Clear {freeing(what)}
+        </Button>
+      )}
+    </Line>
+  )
+}
+
+const SIDE_OPTIONS = [
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+  { value: "top", label: "Top" },
+  { value: "bottom", label: "Bottom" },
+] as const
+const END_OPTIONS = [
+  { value: "top", label: "Top" },
+  { value: "bottom", label: "Bottom" },
+] as const
+const DRAWER_OPTIONS = [
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+] as const
+
+/** A preference's choice as its row says it: a word as it is, capitalised, a share as a percentage. */
+const choiceLabel = (value: string | number): string => (typeof value === "number" ? `${Math.round(value * 100)}%` : value.charAt(0).toUpperCase() + value.slice(1))
+
+/** One choice among a few, as a row of toggles: the one chosen pressed. */
+function Choose<T extends string>({ label, value, options, set }: { label: string; value: T; options: readonly { value: T; label: string }[]; set: (value: T) => void }) {
+  return (
+    <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={value} aria-label={label} onValueChange={(to) => to && to !== value && set(to as T)}>
+      {options.map((o) => (
+        <ToggleGroupItem key={o.value} value={o.value}>
+          {o.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
 
 /**
  * A mode's theme: a swatch for each preset and Dynamic, each painted in its own theme in that mode, and under Dynamic the

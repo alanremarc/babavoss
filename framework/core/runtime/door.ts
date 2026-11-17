@@ -2,33 +2,46 @@
 //   GET  /p   application/json   the view at /p for the actor in the header     GET /p  text/html  the root's page
 //   GET  /    text/event-stream  change { version } and work { jobs }           POST /p { handle, args }  a call
 //                                 call { path, handle, args, actor, refused? }, each call through this door as it is answered
-//                                 notice { text, at?, from?, by? }, each notice as it is heard, `by` absent where the person
+//                                 notice { text, at?, from?, highlight?, by? }, each notice as heard, `by` absent where the person
 //                                 caused it; a line about the root's own code is one too, and is given to a page that connects
 //                                 within NOTE_MS of it, as one does when the runtime started again. Nothing else is replayed.
-//                                 turn { agent, since, waiting, drivable }, whose move it is (turn.ts), as it changes and on connect
+//                                 turn { agent, since, waiting, drivable, harness?, unheard? }, whose move it is (turn.ts), as it
+//                                 changes and on connect; `unheard` while the hooks' silence the agent was told of lasts, for the person
+//                                 asleep {}, as the runtime goes to sleep: the page says so, and finds it again when it is woken
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
+//   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it;
+//                                   in text too, where a program names each of its calls by its one name (bv.ts)
+//   POST /_/restart text/plain      the runtime restarts, at once or once its work ended (runtime.ts): 200 at once, 202 draining
+//   POST /_/close text/plain        the runtime goes to sleep, its state kept: the agent's word `sleep`, or `close`
+// Each request is a signal of how long it keeps the runtime up (wake.ts), classified as it enters; a hook's word on the turn
+// once its event is read.
 // /_/ is the page's own. The framework owns no page, it serves the root's; a page that cannot be served is an error, never
 // the view in its place. The page is served with meta tags saying whose it is (root, version, session): presentation, so
 // never in a view. And with what it shows first, so its first frame is whole: an island of JSON, the root's state as the
 // person reads it now: the change it counts the stream from, whose move it is, and the views at the paths the root names
 // for the page's path. The page reads it before it draws, and the stream's first change says whether it is still so.
-// Only this machine's clients: loopback host, own origin, the service token on everything but the page, as a header or
-// as the cookie the page response sets, named after the port. A runtime that gives way answers 503 with STALE_HEADER, having
-// done nothing, and ends: its clients ask again, of the one in its place. A client's probe for whether it is up never waits.
+// Only this machine's clients: a loopback host and the runtime's own origin, where a request has one, and nothing a
+// browser says another site started (`foreign`). A program proves itself by the service token as a header, and only it is
+// told the token back, so it knows it reached its own runtime; only it reads and calls as the agent, and only it is answered
+// in text: the agent's door, the hooks, a restart, sleep. A browser is admitted as the person, at the bare address, with
+// nothing to prove: what stands between the page and another user of the machine is the account, not a secret. A runtime
+// that restarts for changed code answers 503 with STALE_HEADER, having done nothing, and ends: its clients ask again, of
+// the one in its place. A runtime draining to restart refuses calls, saying so. A client's probe for whether it is up never waits.
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { timingSafeEqual } from "node:crypto"
 import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Noticed, Running } from "../surface/run.ts"
 import { textArgs, textSession, textView } from "./text.ts"
-import { NEEDS } from "../present/present.ts"
 import { revealed, type Args, type Json } from "../surface/view.ts"
 import { isPerson } from "../session.ts"
-import { ACTOR_HEADER, CALL_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
-import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
+import { signalOf, type Request, type Signal } from "./wake.ts"
+import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unheardOf, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
 export type UiHosting = (
@@ -45,13 +58,19 @@ export type DoorOptions = {
   command?: string
   identity: Identity
   ui: Ui
-  /** Called on every request, so an idle timer can be reset. */
-  touched?: () => void
+  /** Each request the service token admits, as the signal it is, so the runtime knows how long to stay up for it. */
+  woken?: (signal: Signal) => void
   end?: () => void
   /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
   current?: () => Promise<string | undefined>
-  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. */
-  about?: Record<string, string>
+  /** The lines that open the agent's read of / when it opens the root: its name and version, and what stands of its code. */
+  opened?: () => string[]
+  /** The agent asks the runtime to restart: what to answer, and what to do once answered. */
+  restart?: () => { status: number; text: string; after?: () => void }
+  /** Why calls are refused now, as while the runtime drains to restart; undefined while they are taken. */
+  refusing?: () => string | undefined
+  /** What the page is the page of, put in its head as `<meta name="babavoss:KEY">`: root, version, session; update, a later release out. A key read as undefined is left out. */
+  about?: Record<string, string | undefined>
   /** The paths whose views the page at a path needs first, given with its html in the boot island. */
   boot?: (path: string) => string[]
 }
@@ -87,7 +106,6 @@ export const admitted = (req: IncomingMessage, port: number): boolean => {
 
   return true
 }
-
 const wants = (req: IncomingMessage, type: string) => (req.headers.accept ?? "").split(",").some((part) => part.trim().startsWith(type))
 const json = (res: ServerResponse, status: number, value: unknown) => {
   res.writeHead(status, { "content-type": "application/json" })
@@ -102,21 +120,43 @@ const body = (req: IncomingMessage) =>
     req.on("end", () => done(text))
     req.on("error", fail)
   })
-// Cookies ignore ports, and several runtimes share 127.0.0.1, so each names its cookie after its port; a page embedding another root's page keeps its own.
-const cookieName = (port: number) => `babavoss-service-${port}`
-const tokenOf = (req: IncomingMessage, port: number): string | undefined => {
-  const header = req.headers[SERVICE_HEADER]
+/** Whether `given` is `secret`, in a time that does not tell how much of it was right. */
+const same = (given: unknown, secret: string) => {
+  if (typeof given !== "string") return false
 
-  if (typeof header === "string") return header
+  const a = Buffer.from(given)
+  const b = Buffer.from(secret)
 
-  return new RegExp(`(?:^|;\\s*)${cookieName(port)}=([^;]+)`).exec(req.headers.cookie ?? "")?.[1]
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+/**
+ * Whether the browser says another site started the request: Sec-Fetch-Site, which a page cannot set, as `cross-site`, or
+ * `same-site`, another port of this host. Their reads, calls, images, scripts and frames are refused, since a request
+ * that carries no Origin, as an image does, passes `admitted`. One thing is let in: a navigation to the page itself, GET
+ * for its html outside /_/, as a link clicked in a harness's web page is; from another port of this host into a frame
+ * too, as the lab shows the page under test. It is served the page and nothing more: it is no action, and wakes nothing.
+ * A request without the header, a program's or an older browser's, is judged by `admitted` alone.
+ */
+export const foreign = (req: IncomingMessage): boolean => {
+  const site = req.headers["sec-fetch-site"]
+
+  if (site !== "cross-site" && site !== "same-site") return false
+
+  const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname
+  const into = site === "same-site" ? ["document", "iframe"] : ["document"]
+  const page =
+    req.method === "GET" &&
+    req.headers["sec-fetch-mode"] === "navigate" &&
+    into.includes(String(req.headers["sec-fetch-dest"])) &&
+    !path.startsWith("/_/") &&
+    wants(req, "text/html")
+
+  return !page
 }
 
 export type Door = {
   server: Server
   close(): Promise<void>
-  /** The root's code was loaded again: its ui, as it is defined now, takes the place of the one served. */
-  replace(ui: Ui): Promise<void>
   /** A file the page may be made of changed: the open pages are told to load again if the page is no longer the one they hold. */
   refresh(file: string): Promise<void>
   /**
@@ -124,10 +164,12 @@ export type Door = {
    * `agent` is false, as for what does not change what the agent should do; a later one takes its place.
    */
   note(line: string, agent?: boolean): void
+  /** The runtime goes to sleep: the open pages are told, before their streams end. */
+  asleep(): void
 }
 
 export function door<M>(running: Running<M>, options: DoorOptions): Door {
-  let ui = options.ui
+  const ui = options.ui
   const uiDir = () => (typeof ui === "function" ? undefined : typeof ui === "string" ? ui : fileURLToPath(ui))
   const hosting = () => (typeof ui === "function" ? ui : undefined)
   let hosted: ReturnType<UiHosting> | undefined
@@ -153,9 +195,10 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     }
   }
   const escaped = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-  // Read at each page: the version is the code's, and the code may have been loaded again.
+  // Read at each page: a key may change while the runtime runs, as a later release does.
   const about = () =>
     Object.entries(options.about ?? {})
+      .flatMap(([key, value]) => (value === undefined ? [] : [[key, value] as const]))
       .map(([key, value]) => `<meta name="babavoss:${escaped(key)}" content="${escaped(value)}">`)
       .join("")
   const actorText = `agent:${options.about?.session ?? "session"}`
@@ -186,7 +229,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
     said = undefined
 
-    return line === undefined ? answer : `${line}\n${answer}`
+    return line === undefined ? answer : answer ? `${line}\n${answer}` : line
   }
   const change = () => `event: change\ndata: ${JSON.stringify({ version: running.version(), jobs: running.jobs() })}\n\n`
   const notice = (value: { text: string; at?: string; from?: string; by?: string }) => `event: notice\ndata: ${JSON.stringify(value)}\n\n`
@@ -200,29 +243,50 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   let turnSent = ""
   let stale: ReturnType<typeof setTimeout> | undefined
   // Whether the hooks speak between the agent's runs of the word (turn.ts); whether any did, and whether it was told they
-  // are quiet, kept beside the session's state so a runtime that starts again tells it once.
+  // are quiet, and since when, kept beside the session's state so a runtime that starts again tells it once; and the page,
+  // which shows the person that silence while it lasts, by the turn.
   const hooksFile = join(options.identity.dir, "hooks.json")
   let hooks: Hooks = unheardHooks()
 
   try {
     const kept = JSON.parse(readFileSync(hooksFile, "utf8")) as Partial<Hooks>
+    const told = kept.told === true
 
-    hooks = { ever: kept.ever === true, told: kept.told === true, ...(harnessOf(kept.harness) && { harness: harnessOf(kept.harness) }) }
+    // Kept before its time was: the silence is dated from now.
+    hooks = {
+      ever: kept.ever === true,
+      told,
+      ...(told && { since: typeof kept.since === "number" ? kept.since : Date.now() }),
+      ...(harnessOf(kept.harness) && { harness: harnessOf(kept.harness) }),
+    }
   } catch {}
 
   const keepHooks = (next: Hooks) => {
-    const changed = next.ever !== hooks.ever || next.told !== hooks.told || next.harness !== hooks.harness
+    const changed = next.ever !== hooks.ever || next.told !== hooks.told || next.since !== hooks.since || next.harness !== hooks.harness
 
     hooks = next
-    if (changed)
-      try {
-        writeFileSync(hooksFile, JSON.stringify({ ever: next.ever, told: next.told, ...(next.harness && { harness: next.harness }) }))
-      } catch {}
+    if (!changed) return
+
+    // What was heard of the runs is the runtime's alone.
+    const { last: _, ...kept } = next
+
+    try {
+      writeFileSync(hooksFile, JSON.stringify(kept), { mode: 0o600 })
+    } catch {}
+    pushTurn()
   }
   const turnNow = () => {
     const { agent, since } = reading(turn, Date.now(), busy > 0 && !hooks.told)
+    const unheard = unheardOf(hooks)
 
-    return { agent, since, waiting: text.waiting(), drivable: !!driverOf(options.about?.session ?? "session"), ...(hooks.harness && { harness: hooks.harness }) }
+    return {
+      agent,
+      since,
+      waiting: text.waiting(),
+      drivable: !!driverOf(options.about?.session ?? "session"),
+      ...(hooks.harness && { harness: hooks.harness }),
+      ...(unheard && { unheard }),
+    }
   }
   const turnEvent = () => `event: turn\ndata: ${(turnSent = JSON.stringify(turnNow()))}\n\n`
   const pushTurn = () => {
@@ -246,16 +310,33 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
   })
 
   const server = createServer(async (req, res) => {
-    options.touched?.()
-    res.setHeader(SERVICE_HEADER, options.identity.token)
-
     const port = (server.address() as { port: number } | null)?.port ?? 0
+    // A program's proof: the token as a header. A browser has none to give.
+    const program = same(req.headers[SERVICE_HEADER], options.identity.token)
 
+    if (program) res.setHeader(SERVICE_HEADER, options.identity.token)
     if (!admitted(req, port)) return json(res, 403, { error: "not this machine's client" })
+    if (foreign(req)) return json(res, 403, { error: "not this page's request: another site started it" })
 
     const url = new URL(req.url ?? "/", "http://127.0.0.1")
     const path = url.pathname
     const html = req.method === "GET" && wants(req, "text/html") && !wants(req, "application/json")
+    const request: Request = {
+      method: req.method ?? "GET",
+      path,
+      open: url.searchParams.has("open"),
+      plain: wants(req, "text/plain"),
+      stream: wants(req, "text/event-stream"),
+      html,
+      probe: req.headers[PROBE_HEADER] !== undefined,
+      agent: program && req.headers[ACTOR_HEADER] === actorText,
+    }
+    // Text is the agent's and the hooks': a request in it wakes the runtime only with the token.
+    const wake = (r: Request) => {
+      if (program || !r.plain) options.woken?.(signalOf(r))
+    }
+
+    if (!(request.plain && request.method === "POST" && path === "/_/turn")) wake(request)
     const why = req.headers[PROBE_HEADER] === undefined && (!path.startsWith("/_/") || path === "/_/wait") ? await options.current?.() : undefined
 
     if (why !== undefined) {
@@ -272,11 +353,12 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         res.end(hush ? `${hush}\n${value}` : value)
       }
 
-      if (tokenOf(req, port) !== options.identity.token) return reply(401, "service token required")
+      if (!program) return reply(401, "service token required")
       if (req.method === "POST" && path === "/_/turn") {
         const event = (await body(req)).trim() as TurnEvent
 
         if (!TURN_EVENTS.includes(event)) return reply(400, `the turn is told as one of ${TURN_EVENTS.join(", ")}`)
+        wake({ ...request, turn: event })
         // The hook says whose it is: the session's harness is the one last heard, and kept where a hook does not say.
         keepHooks(hooksHeard(harnessOf(req.headers[HARNESS_HEADER]) ?? hooks.harness))
         turn = turned(turn, event, Date.now())
@@ -304,7 +386,15 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         if (req.method === "POST" && path === "/_/close") {
           res.once("finish", () => options.end?.())
 
-          return reply(200, `${options.about?.root} closed; any call wakes it`)
+          return reply(200, `${options.about?.root} asleep; any call wakes it, its state kept`)
+        }
+        if (req.method === "POST" && path === "/_/restart") {
+          const asked = options.restart?.()
+
+          if (!asked) return reply(405, `${options.about?.root} does not restart`)
+          if (asked.after) res.once("finish", asked.after)
+
+          return reply(asked.status, asked.text)
         }
         if (req.method === "GET" && path === "/_/wait") {
           const seconds = Number(url.searchParams.get("seconds") ?? 600)
@@ -312,9 +402,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (!Number.isFinite(seconds) || seconds < 0) return reply(400, "seconds must be a nonnegative number")
 
           // `tell=notices`, what was heard alone, as after a tool call; otherwise a boundary: what was heard, then what changed
-          // at /. A wait ends on what was heard, or on who is needed changing: a fact a surface changed by itself waits for the next.
+          // at /. A wait ends on what was heard: a fact a surface changed by itself waits for the next.
           const heard = url.searchParams.get("tell") === "notices"
-          const due = () => text.noticed() > 0 || (!heard && text.changed().some((c) => c.keys.some((k) => k === NEEDS || k.startsWith(`${NEEDS}[`))))
+          const due = () => text.noticed() > 0
 
           if (!due() && said === undefined)
             await new Promise<void>((done) => {
@@ -336,7 +426,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           if (res.destroyed) return
 
           // Answered even when nothing is told: what only the agent's own calls changed is passed over, not kept for later.
-          return reply(200, told((heard ? text.heard() : text.tell()) || "nothing changed"))
+          return reply(200, told((heard ? text.heard() : text.tell()) || (said === undefined ? "nothing changed" : "")))
         }
         if (req.method === "GET") {
           const view = running.read(path, actorText) ?? factAt(path)
@@ -344,7 +434,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const lines = view === undefined ? [running.absent(path)] : textView(view, path, options.command ?? "bv root")
 
           if (path !== "/") text.touch(path)
-          const use = open ? [`${options.about?.root} ${options.about?.version}`] : []
+          const use = path !== "/" ? [] : open ? (options.opened?.() ?? [`${options.about?.root} ${options.about?.version}`]) : (options.opened?.().slice(1) ?? [])
 
           // A read of / is the present whole, and what changes is counted from it; any other read is its own, and what was heard.
           return reply(view === undefined ? 404 : 200, told(path === "/" && view !== undefined ? text.tell([...use, ...lines], true) : text.answer(lines)))
@@ -354,11 +444,16 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
           if (!call || typeof call.handle !== "string") return reply(400, "a call names a handle")
 
+          const refusing = options.refusing?.()
+
+          if (refusing) return reply(409, told(text.answer([`refused: ${refusing}`])))
+
           const before = running.read(path, actorText)
           const args = textArgs(before, call.handle, call.args ?? {})
 
           text.touch(path)
-          const answer = await running.call(path, call.handle, args, actorText)
+          const id = req.headers[CALL_ID_HEADER]
+          const answer = await running.call(path, call.handle, args, actorText, typeof id === "string" && id ? id : undefined)
           const heard = { path, handle: call.handle, args, actor: actorText, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
           for (const stream of streams) stream.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
@@ -376,8 +471,6 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       }
     }
     if (req.method === "POST" && path === "/_/turn") {
-      if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
-
       let message: unknown
 
       try {
@@ -424,17 +517,13 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       const boot = island({ version, turn: turnNow(), views })
 
       // The page carries the state it was served with, so it is never kept: a refresh is served it anew.
-      res.writeHead(200, {
-        "content-type": "text/html",
-        "cache-control": "no-store",
-        "set-cookie": `${cookieName(port)}=${options.identity.token}; Path=/; SameSite=Strict; HttpOnly`,
-      })
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" })
 
-      return res.end(served.html.replaceAll("%TOKEN%", options.identity.token).replace("</head>", () => `${boot}${about()}</head>`))
+      return res.end(served.html.replace("</head>", () => `${boot}${about()}</head>`))
     }
-    if (tokenOf(req, port) !== options.identity.token) return json(res, 401, { error: "service token required" })
 
-    const actor = typeof req.headers[ACTOR_HEADER] === "string" ? req.headers[ACTOR_HEADER] : "person"
+    // Without the token, the person: no header makes a request the agent's.
+    const actor = program && typeof req.headers[ACTOR_HEADER] === "string" ? req.headers[ACTOR_HEADER] : "person"
 
     if (req.method === "GET" && wants(req, "text/event-stream")) {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" })
@@ -448,7 +537,13 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     }
     if (req.method === "GET") {
       try {
-        const view = running.read(path, actor)
+        // The agent's program reads one fact of a view by its path, as the command's own read does: the fact's value alone.
+        const fact = () => {
+          const found = actor === actorText ? factAt(path) : undefined
+
+          return found && Object.values(found)[0]
+        }
+        const view = running.read(path, actor) ?? fact()
 
         // A program's read of / gives the agent the present whole, as the word's does.
         if (path === "/" && actor === actorText && view !== undefined) text.seen()
@@ -470,9 +565,14 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       }
       if (typeof call.handle !== "string") return json(res, 400, { error: "a call names a handle" })
 
+      const refusing = options.refusing?.()
+
+      if (refusing) return json(res, 409, { outcome: "refused", reason: refusing })
+
       if (actor === actorText) text.touch(path)
 
-      const answer = await running.call(path, call.handle, (call.args ?? {}) as Args, actor)
+      const id = req.headers[CALL_ID_HEADER]
+      const answer = await running.call(path, call.handle, (call.args ?? {}) as Args, actor, typeof id === "string" && id ? id : undefined)
       const heard = { path, handle: call.handle, args: call.args ?? {}, actor, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
       for (const res of streams) res.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
@@ -489,13 +589,6 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
   return {
     server,
-    async replace(next) {
-      const held = hosted
-
-      hosted = undefined
-      ui = next
-      await ended(held)
-    },
     async refresh(file) {
       if (!streams.size || served === undefined) return
 
@@ -512,6 +605,9 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       health = { line, at: Date.now() }
       for (const res of streams) res.write(notice({ text: line, ...(options.about?.root && { from: options.about.root }) }))
       for (const finish of Array.from(noted)) finish()
+    },
+    asleep() {
+      for (const res of streams) res.write("event: asleep\ndata: {}\n\n")
     },
     // Streams and keep-alive connections are cut first, or a browser that reconnects keeps the server open forever.
     close: async () => {

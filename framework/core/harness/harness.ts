@@ -12,13 +12,15 @@ export type Request = { id: string; context: number }
 export type Loaded = { model: string; cwd: string; tools: string[]; skills: string[]; plugins: string[]; mcp: string[]; commands: string[] }
 
 /**
- * A session's stream, normalised. `injected` is context a hook added; `message` a message as it entered the context; a
+ * A session's stream, normalised. `injected` is context a hook added, `hook` a hook that ran and added none, so a session
+ * whose hooks never ran is told from one they told nothing; `message` a message as it entered the context; a
  * `call` is a tool's, `word` where it is the root's word, and its `result` follows under the same id; a `turn` ends one,
  * with its tokens and the session's cost so far; `ended` is the process's end, the stream's last event.
  */
 export type HarnessEvent =
   | { kind: "started"; session: string; loaded: Loaded }
   | { kind: "injected"; event: string; text: string; error?: boolean }
+  | { kind: "hook"; event: string }
   | { kind: "message"; text: string }
   | { kind: "call"; id: string; tool: string; input: string; word: boolean; request?: Request }
   | { kind: "result"; id: string; text: string; error?: boolean }
@@ -52,7 +54,10 @@ export interface Harness {
   name: string
   /** Makes `home` a home the harness can run in, its login reached from the person's by a link and never a copy; answers with how. */
   home(home: string): string
-  /** Takes back from `home` what `home` linked there, and what the harness kept there of the session and the account; its transcripts stay. */
+  /**
+   * Takes back from `home` what `home` linked there, and what the harness kept there of the session and the account. Its
+   * transcripts it leaves to whoever made the home: they go only with the home, where that is deleted.
+   */
   release(home: string): void
   start(options: Start): Session
 }
@@ -82,6 +87,11 @@ export interface Adapter<O extends { events: string[] } = { events: string[] }> 
   events: readonly string[]
   /** Writes into `project` what makes the harness aware of its surfaces, and only what differs. */
   provision(project: string, options: O): SetUp
+  /**
+   * What keeps the harness on this machine from running what `provision` wrote, as an organisation's policy can, in one line
+   * for the person with what they can do; undefined where nothing that can be read does. It reads, and changes nothing.
+   */
+  blocked?(): string | undefined
   /** Removes from `project` what `provision` wrote there, and nothing else. */
   withdraw(project: string): SetUp
   /** The framework's moment in what the harness gave its hook on standard input; undefined where it is none of them. */

@@ -87,6 +87,30 @@ test("new makes a surface from the template, with a passing spec, and the root i
   expect(spec.stderr).toContain("3 pass")
 })
 
+test("a project imports the framework by its entries alone: a new surface's types check, the root's page builds with its styles, and a path not exported does not resolve", () => {
+  const out = mkdtempSync(join(tmpdir(), "baba-page-"))
+  const page = join(baba, "surfaces/entries/ui/index.tsx")
+  const check = () => spawnSync(process.execPath, ["check"], { cwd: baba, encoding: "utf8" })
+  const build = () => spawnSync(process.execPath, ["node_modules/babavoss/framework/shell/scripts/build.ts", ".root", out], { cwd: baba, encoding: "utf8" })
+
+  try {
+    expect(run(["new", "entries"]).status).toBe(0)
+    expect(check().status, check().stdout).toBe(0)
+
+    const built = build()
+
+    expect(built.status, built.stderr).toBe(0)
+    expect(readdirSync(out).some((name) => name.endsWith(".css"))).toBe(true)
+    writeFileSync(page, `${readFileSync(page, "utf8")}\nimport { cn } from "babavoss/kit/cn.ts"\nexport const merged = cn("a")\n`)
+    expect(check().status).not.toBe(0)
+    expect(build().stderr).toContain('Could not resolve: "babavoss/kit/cn.ts"')
+  } finally {
+    rmSync(join(baba, "surfaces/entries"), { recursive: true, force: true })
+    rmSync(out, { recursive: true, force: true })
+    run(["provision"])
+  }
+}, 60_000)
+
 test("provision generates the root from the surfaces that are there, from anywhere in the project", () => {
   expect(run(["new", "reel-maker"]).status).toBe(0)
   expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).toContain('"reel-maker": () => import(')
@@ -94,6 +118,22 @@ test("provision generates the root from the surfaces that are there, from anywhe
   expect(run(["provision"], project).status).toBe(0)
   expect(readFileSync(join(baba, ".root/surfaces.ts"), "utf8")).not.toContain("reel-maker")
   for (const folder of FOLDERS) expect(existsSync(skill(folder, "baba"))).toBe(true)
+})
+
+test("a project's own home, .baba/home.tsx, takes the desktop's place in the root's page, and leaves it when it goes", () => {
+  const main = () => readFileSync(join(baba, ".root/main.tsx"), "utf8")
+
+  expect(main()).not.toContain("home.tsx")
+  writeFileSync(
+    join(baba, "home.tsx"),
+    'import type { HomeProps } from "babavoss/shell/ui/index.tsx"\n\nexport default function Home({ title, foot }: HomeProps) {\n  return <main>{title}{foot}</main>\n}\n'
+  )
+  expect(run(["provision"]).status).toBe(0)
+  expect(main()).toContain('import Home from "../home.tsx"')
+  expect(main()).toContain(" home={Home} />")
+  rmSync(join(baba, "home.tsx"))
+  expect(run(["provision"]).status).toBe(0)
+  expect(main()).not.toContain("home={Home}")
 })
 
 test("a surface's own stylesheet joins the root's page after the shell's, scoped to its tabs, and one whose braces do not balance is left out", () => {
@@ -195,7 +235,7 @@ test("provision writes the framework's hook into Codex's project hooks for each 
   const provisioned = run(["provision"])
 
   expect(provisioned.out).toContain("provisioned .codex/hooks.json\n")
-  expect(provisioned.out).toContain("Codex asks you to review these hooks once")
+  expect(provisioned.out).toContain("If you use Codex: it asks you to review these hooks once")
   expect(run(["provision"]).out).not.toContain(".codex/hooks.json")
   expect(hooks().Stop).toEqual([theirs, expect.objectContaining({ hooks: [expect.objectContaining({ type: "command" })] })])
   expect(hooks().PreToolUse).toEqual([theirs])
@@ -283,6 +323,32 @@ test("the hook reads the configuration as it runs: an event not listed tells not
   }
 }, 60_000)
 
+test("provision and start say in one line where an organisation's managed settings keep Claude Code from running baba's hook; a harness not enabled is not read for", () => {
+  const managed = mkdtempSync(join(tmpdir(), "managed-"))
+  const env = { ...process.env, BABAVOSS_MANAGED: managed, CLAUDE_CODE_SESSION_ID: "managed", CODEX_THREAD_ID: "" }
+  const baba_ = (args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: baba, encoding: "utf8", env })
+  const line = `baba: Claude Code's managed settings (${join(managed, "managed-settings.json")}) disable every hook (disableAllHooks), baba's among them;`
+
+  try {
+    expect(baba_(["provision"]).stdout).not.toContain("managed settings")
+    writeFileSync(join(managed, "managed-settings.json"), JSON.stringify({ disableAllHooks: true }))
+    expect(baba_(["provision"]).stdout).toContain(line)
+
+    const started = baba_(["start"])
+
+    expect(started.status, started.stderr).toBe(0)
+    expect(started.stderr.split("\n").filter((l) => l.startsWith("baba: "))).toEqual([expect.stringContaining(line)])
+    expect(started.stdout).toContain("page: ")
+    config("{ harnesses: { claude: { enable: false } } }")
+    expect(baba_(["start"]).stderr).not.toContain("managed settings")
+  } finally {
+    rmSync(join(baba, "baba.config.ts"), { force: true })
+    baba_(["provision"])
+    baba_(["start", "close"])
+    rmSync(managed, { recursive: true, force: true })
+  }
+}, 60_000)
+
 test("a session's start gives what the skill baba gives and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)
 
@@ -317,9 +383,9 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const word = join(project, ".babavoss/bin/baba")
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
-    expect(started.stdout).toContain('"desk"\t"Keep a greeting the person has agreed to. Use when the greeting is to be changed."')
+    expect(started.stdout).toContain('"desk"\t"The greeting in use, and one proposed in its place. Use when the greeting is read or changed."')
     // Two surfaces, one open action: its argument is the table's name column.
-    expect(started.stdout).toContain(".babavoss/bin/baba / open surface=NAME   open a NAME tab")
+    expect(started.stdout).toContain("actions: .babavoss/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
 
     // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
     const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
@@ -361,36 +427,31 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
     const tab = /\+ (\/desk) "Greeting"/.exec(opened)![1]!
 
-    expect(call(tab).stdout).toContain('how: "Propose a greeting when the person asks for another.')
+    expect(call(tab).stdout).toContain('how: "The greeting in use, and one proposed, if any')
     expect(call(tab).stdout).toContain('greeting: "hello"')
 
-    // The tab's own path offers its actions, as the exact commands.
-    expect(call(tab).stdout).toContain(`.babavoss/bin/baba ${tab} propose text=string`)
+    // The tab's own path offers its actions, the command once and a line each, an input as what it means.
+    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   stands beside the greeting in use until accepted or declined`)
 
     // The page holds the surface's component in its tab.
+    // At its bare address: no link, no key, no cookie.
     const html = await (await fetch(address, { headers: { accept: "text/html" } })).text()
     const script = /\/_\/[^"]*\.js/.exec(html)![0]
 
-    expect(await (await fetch(address + script)).text()).toContain("The agent proposes")
+    expect(await (await fetch(address + script)).text()).toContain("A greeting proposed shows here")
     expect(hook("UserPromptSubmit")).toMatchObject({ status: 0, stdout: "" })
 
     // The person proposes there: a call the agent did not make.
     expect((await person(tab, "propose", { text: "good morning" })).status).toBe(200)
 
-    // After a tool call, what was heard alone, one line; what it changed comes with the person's next message.
+    // After a tool call, what was heard alone, one line: the surface's highlight; it stands for what the call changed.
     expect(JSON.parse(hook("PostToolUse").stdout)).toEqual({
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
-        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nthe person acted on ${tab}`,
+        additionalContext: `Heard in the shell of .baba/ while you worked:\nnotices:\nhighlight ${tab}: "good morning" is proposed, to accept or decline (by the person)`,
       },
     })
-
-    const told = hook("UserPromptSubmit").stdout
-
-    expect(told).toStartWith("In the shell of .baba/: what was heard, then what changed at / since you were last told it, by who changed it:\nchanged by the person:\n")
-    expect(told).toContain(`+ need: the person, at ${tab}, to accept or decline the proposed greeting`)
-    // The agent has not worked in the tab this turn or the last: it is told in one line, who changed it, and to read it.
-    expect(told).toMatch(new RegExp(`\\n\\${tab} "Greeting" \\(tab \\d+\\): changed by the person; read it`))
+    // With the person's message, nothing more: the highlight told what changed.
     expect(call(tab).stdout).toContain("good morning")
     // Told once: the session has now been answered.
     expect(hook("UserPromptSubmit").stdout).toBe("")
@@ -401,48 +462,67 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(hook("SessionEnd", { reason: "other" })).toMatchObject({ status: 0, stdout: "" })
     expect(await turn()).toMatchObject({ agent: "unknown" })
 
-    // A session resumed or compacted had the words: it is given their reminder, then the present whole.
-    const reminder = readFileSync(join(checkout, "skill/reminder.md"), "utf8").trim()
-
-    for (const source of ["resume", "compact"]) {
+    // A session resumed, compacted or forked lost what it held: it is given the same as a start, the words and the present
+    // whole, every tab's actions with their commands among it; once a boundary, so a compaction at once after a resume is
+    // given nothing again, and one after a message is given them.
+    for (const source of ["resume", "compact", "fork"]) {
       const again = hook("SessionStart", { source }).stdout
 
-      expect(again).toStartWith(`${reminder}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
+      expect(again).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
       expect(again).toContain(`${tab} "Greeting" (tab `)
+      expect(again).toContain(`actions: .babavoss/bin/baba ${tab} ACTION`)
+      expect(hook("SessionStart", { source: "compact" })).toMatchObject({ status: 0, stdout: "" })
+      hook("UserPromptSubmit")
+      // The same present a start gives at the same moment.
+      expect(hook("SessionStart", { source: "clear" }).stdout).toBe(again)
+      hook("UserPromptSubmit")
     }
-    expect(hook("SessionStart", { source: "clear" }).stdout).toStartWith(body)
 
     // The agent's own calls, through a program, are not told back to it: the program's answers told it.
     expect(call("-e", `console.log(await root.call(${JSON.stringify(tab)}, "propose", { text: "good evening" }))`).status).toBe(0)
     expect(hook("PostToolUse").stdout).toBe("")
 
-    // Fully from the surface: what its code says it is for is what the shell lists, as soon as the code says it; and a
-    // surface made by hand is in the root as soon as it is on disk. Nothing is provisioned for either.
+    // Fully from the surface: what its code says it is for is what the shell lists, once the shell runs that code; and a
+    // surface made by hand is in the root once it runs. Nothing is provisioned for either. In normal mode, the default, the
+    // shell runs the code it started with, says when it changed, and runs it once restarted.
     const code = join(baba, "surfaces/desk/src/surface.ts")
+    const restarted = () => {
+      const answer = call("restart")
 
-    writeFileSync(code, readFileSync(code, "utf8").replace("Keep a greeting the person has agreed to.", "Keep the house greeting."))
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("Keep the house greeting.")
+      expect(answer.stdout, answer.stderr).toMatch(/^baba: instance [0-9a-f]+ restarts\nbaba: instance [0-9a-f]+ answers\n$/)
+    }
+
+    writeFileSync(code, readFileSync(code, "utf8").replace("The greeting in use, and one proposed in its place.", "Keep the house greeting."))
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    expect(call("/").stdout).not.toContain("Keep the house greeting.")
+    restarted()
+    expect(call("/").stdout).toContain("Keep the house greeting.")
+    expect(call("/").stdout).not.toContain("code: changed on disk")
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/by-hand"), { recursive: true })
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    restarted()
+    expect(call("/").stdout).toContain('"by-hand"')
 
-    // surfaces/ made anew, as a checkout may leave it: the root follows the new one, and its next answer is of the code there.
+    // surfaces/ made anew, as a checkout may leave it: the root follows the new one, and once restarted runs the code there.
     cpSync(join(baba, "surfaces"), join(baba, "surfaces.new"), { recursive: true })
     rmSync(join(baba, "surfaces"), { recursive: true })
     renameSync(join(baba, "surfaces.new"), join(baba, "surfaces"))
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"by-hand"')
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/after-checkout"), { recursive: true })
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain('"after-checkout"')
+    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    restarted()
+    expect(call("/").stdout).toContain('"after-checkout"')
   } finally {
     command("start", "close")
   }
   expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], { cwd: project, encoding: "utf8", env, input: "not json" })).toMatchObject({ status: 0, stdout: "" })
 }, 60_000)
 
-test("the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
-  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "" }
+test("in dev mode the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "", BABAVOSS_DEV: "1" }
   const word = join(project, ".babavoss/bin/baba")
   const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
   const code = join(baba, "surfaces/by-hand/src/surface.ts")
+  const missing = join(baba, "surfaces/by-hand/src/later.ts")
   const mended = readFileSync(code, "utf8")
 
   writeFileSync(code, `${mended}\nthrow new Error("not configured")\n`)
@@ -464,7 +544,14 @@ test("the root starts with the surfaces that load, lists one that does not as br
     expect(call("/tabs/1").stdout).toContain('greeting: "hello"')
     writeFileSync(code, mended)
     await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain('proposed: "kept"')
+
+    // Broken by an import of a file that is not there, it loads again once the file is made, its own code left as it is.
+    writeFileSync(code, `import { later } from "./later.ts"\n${mended}\nlater()\n`)
+    await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain("./later.ts")
+    writeFileSync(missing, "// Made after the surface that imports it.\nexport const later = () => {}\n")
+    await poll(() => call("/tabs/2").stdout, { timeout: 20_000 }).toContain('proposed: "kept"')
   } finally {
+    rmSync(missing, { force: true })
     writeFileSync(code, mended)
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
   }

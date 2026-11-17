@@ -1,14 +1,13 @@
-// The guide's page: the groups and their specimens down the left, the one group shown at the right, each specimen the
+// The guide's page: the groups and their specimens down a sidebar at the side the person prefers, the one group shown beside it, each specimen the
 // framework's real component drawn with sample data in its states. Where the page is, the group and the specimen, is the
 // tab's route, /GROUP/ENTRY, so the agent's pointing and a refresh land on it; scrolling marks the specimen in view on
-// the left without moving the route. What each specimen draws is in the group's own module.
+// the sidebar without moving the route. What each specimen draws is in the group's own module.
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react"
 import { SwatchBookIcon } from "lucide-react"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
 import type { EntryOf, GroupId } from "../src/catalogue.ts"
 import { Specimen } from "./frame.tsx"
 import { foundations } from "./foundations.tsx"
-import { layouts } from "./layouts.tsx"
 import { mark } from "./mark.tsx"
 import { primitives } from "./primitives.tsx"
 import { shell } from "./shell.tsx"
@@ -16,7 +15,7 @@ import { shell } from "./shell.tsx"
 export const icon = <SwatchBookIcon aria-hidden />
 
 /** What each specimen draws, by group and entry: every entry of the catalogue has one. */
-const DRAWN: { [G in GroupId]: Record<EntryOf<G>, ComponentType> } = { mark, foundations, primitives, layouts, shell }
+const DRAWN: { [G in GroupId]: Record<EntryOf<G>, ComponentType> } = { mark, foundations, primitives, shell }
 
 type Row = { at: string; title: string; states: string[] }
 type Root = { groups: { at: string; title: string; about: string; specimens: number }[]; specimens: Row[] }
@@ -34,14 +33,14 @@ export default function Guide() {
   const [inView, setInView] = useState<string>()
   const draw = DRAWN[group.at.slice(1) as GroupId] as Record<string, ComponentType>
 
-  // The route's specimen is brought into view; a group alone, its top. Again a moment later: a command list scrolls its
-  // chosen item into view as it mounts, which would move the page.
+  // The route's specimen is brought into view; a group alone, its top. Again a moment later, once what mounts with the
+  // group has settled its size.
   useLayoutEffect(() => {
     const place = () => {
       const target = entry ? document.getElementById(idOf(`${group.at}/${entry}`)) : null
       const box = main.current
 
-      // The content scrolls, never the page around it, which the strip heads.
+      // The content scrolls, never the page around it, which the rail stands beside.
       if (box) box.scrollTop = target ? target.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12 : 0
       document.scrollingElement?.scrollTo({ top: 0 })
     }
@@ -52,7 +51,7 @@ export default function Guide() {
     return () => clearTimeout(later)
   }, [group.at, entry, shown])
 
-  // The specimen nearest the top of the content is the one marked on the left.
+  // The specimen nearest the top of the content is the one marked in the sidebar.
   useEffect(() => {
     const sections = [...(main.current?.querySelectorAll<HTMLElement>("section[id^=specimen]") ?? [])]
     const seen = new Map<string, boolean>()
@@ -70,8 +69,8 @@ export default function Guide() {
   }, [shown])
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <nav aria-label="Specimens" className="flex w-52 shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 py-3">
+    <div className="flex min-h-0 flex-1 side-right:flex-row-reverse">
+      <nav aria-label="Specimens" className="flex w-52 shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 py-3 side-right:border-r-0 side-right:border-l">
         {root!.groups.map((g) => {
           const open = g.at === group.at
 

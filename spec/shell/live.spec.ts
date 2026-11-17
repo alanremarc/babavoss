@@ -17,13 +17,13 @@ const door = () => {
 const settled = () => new Promise((done) => setTimeout(done, 0))
 
 describe("the page's boot", () => {
-  it("names the shell, its notices, and a tab's views at its / and its route, for the page's path", () => {
-    expect(bootPaths("/")).toEqual(["/", "/activity/notices"])
-    expect(bootPaths("/activity")).toEqual(["/", "/activity/notices"])
-    expect(bootPaths("/settings")).toEqual(["/", "/activity/notices", "/settings"])
-    expect(bootPaths("/queue/issues/40")).toEqual(["/", "/activity/notices", "/queue", "/queue/issues/40"])
-    expect(bootPaths("/tabs/3")).toEqual(["/", "/activity/notices", "/tabs/3"])
-    expect(bootPaths("/tabs/3/issues/40")).toEqual(["/", "/activity/notices", "/tabs/3", "/tabs/3/issues/40"])
+  it("names the shell, its highlights, and a tab's views at its / and its route, for the page's path", () => {
+    expect(bootPaths("/")).toEqual(["/", "/activity/highlights"])
+    expect(bootPaths("/activity")).toEqual(["/", "/activity/highlights"])
+    expect(bootPaths("/settings")).toEqual(["/", "/activity/highlights", "/settings"])
+    expect(bootPaths("/queue/issues/40")).toEqual(["/", "/activity/highlights", "/queue", "/queue/issues/40"])
+    expect(bootPaths("/tabs/3")).toEqual(["/", "/activity/highlights", "/tabs/3"])
+    expect(bootPaths("/tabs/3/issues/40")).toEqual(["/", "/activity/highlights", "/tabs/3", "/tabs/3/issues/40"])
   })
 
   it("reads the island back, and nothing where there is none or it does not read", () => {
@@ -147,6 +147,9 @@ describe("the page's stream", () => {
   it("says nothing while it is up or a load is normal, and only a loss that lasts", () => {
     expect([said("up", 60_000), said("connecting", 1000), said("lost", 500)]).toEqual([undefined, undefined, undefined])
     expect([said("lost", 700), said("connecting", 4000)]).toEqual(["Reconnecting", "Connecting"])
+  })
+  it("says at once that its runtime is asleep, and that the agent wakes it", () => {
+    expect(said("asleep", 0)).toBe("Asleep; it wakes when the agent next works with it")
   })
 })
 

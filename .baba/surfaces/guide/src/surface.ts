@@ -1,7 +1,7 @@
 // The design guide: the UI the framework is built with, drawn live on the page from the framework's own code with sample
 // data, so the person sees it and iterates on it. Nothing here changes: the guide is the catalogue (catalogue.ts), its
-// groups at /, each group's specimens at /GROUP, a specimen at /GROUP/ENTRY. The agent reads where a thing is and shows
-// it to the person with the shell's show; the page follows the code as it changes.
+// groups at /, each group's specimens at /GROUP, a specimen at /GROUP/ENTRY. The agent reads where a thing is and brings
+// it to the front of the person's page with the shell's highlight; the page follows the code as it changes.
 import { detail, surface, view } from "babavoss/core/index.ts"
 import { entries, GROUPS, type Entry, type Group } from "./catalogue.ts"
 
@@ -14,8 +14,8 @@ const pages = view<Model, never>([], {
   "/": () => ({
     title: "Design Guide",
     how:
-      "Each specimen is the framework's real component drawn with sample data, in its states, at /GROUP/ENTRY: show it to the person there " +
-      "when they ask to see or change a piece of the UI. To change one, change the framework's file it names; the guide follows.",
+      "Each specimen is the framework's real component drawn with sample data, in its states, at /GROUP/ENTRY, where a highlight shows it to " +
+      "the person. A specimen names the framework's files it is drawn from: a change to them is what changes it, and the guide follows.",
     groups: GROUPS.map((group: Group) => ({ at: `/${group.id}`, title: group.title, about: group.about, specimens: group.sections.reduce((n, s) => n + s.entries.length, 0) })),
     specimens: detail(entries().map(({ group, entry }) => row(group, entry))),
   }),
@@ -38,7 +38,7 @@ const pages = view<Model, never>([], {
 })
 
 export default surface<Model, never, never>({
-  description: "See the UI babavoss is built with, live: the mark, the design tokens, the kit's primitives and layouts and the shell's elements, each in its states. Use when the person wants to look at or iterate on how a piece of it looks.",
+  description: "See the UI babavoss is built with, live: the mark, the design tokens, the kit's primitives and the shell's elements, each in its states. Use when how a piece of it looks is shown or changed.",
   init: () => ({}),
   update: (m) => ({ model: m }),
   view: pages.view,

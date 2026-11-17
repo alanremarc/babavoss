@@ -1,6 +1,331 @@
 # Changelog
 
-What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
+What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its surfaces ran on up, to adapt them.
+
+## Adapting across several releases
+
+Read every section from the version the surfaces ran on up, then write to the newest: where a later section says otherwise than an earlier one, the later stands. Taken from before 0.72.0, two things are easy to get wrong:
+
+- **Who decides is never in a surface.** 0.71.0 said to write in `how` that a decision is the person's, and to keep `attention`; 0.72.0 removed `attention`, and 0.76.0 says a surface's words never say who decides or when to act. Write neither: baba's words have the agent raise such a decision in the conversation. What waits on the person is told by a highlight, the notice of the update that made it wait.
+- **A `kind` changes how an input is shown and printed, never what is admitted.** Admission checks the base type, `choices` and `range` alone. Declare `{ type: "string", kind: "line" }` on a text input and keep your own check that it is not empty; drop only the checks that `choices` and `range` now make.
+
+Then run `bun check` and the specs in `.baba/`, and restart the shell.
+
+## 0.77.0
+
+**Making a surface is learned from the manual alone.** `skill/making-surfaces.md` is rewritten in the order a first surface is made, each statement checked against the code. It covers route params, `view(...)`, the rule that puts an action in a list's pattern, hearing the world by a session command named for what it hears, highlights, and stories that `await` the world's events and name a command by a test. It no longer teaches `useShell().toast`. The template's comments teach the same shape.
+
+- `baba init`, the shell's answer in a project with no surfaces of its own, and the note of a later release say what is there and how: they no longer urge a surface or an update. Whether a later release is taken is the person's.
+- The command ends quietly where its reader closed early, as with `| head`. The line about reviewing Codex's hooks says it is for those who use Codex. The client's `VERSION` is 20 and replaces itself.
+- The site, babavoss.org, is in this repository's `site/`: its page, and `llms.txt`, what an agent asked to install follows.
+
+Measured on a fresh project, against the release before: a first surface takes a median 6 tool calls where it took 14, and the agent reads nothing past the manual, where it read the framework's source about 7 times a run; every rule of a correct surface passed in both. An agent given only the README's line installed, started the shell and gave the page's address in 10 runs of 10.
+
+Nothing in a project's surfaces needs to change.
+
+## 0.76.0
+
+**Baba's words are rewritten: the agent holds the state and carries the intent.** They say that the present is given whole once and every change after it as a change, so the agent does not read again to check; that a surface says what is true and what can be done, never what to do; that values from a surface are read by the program that uses them; that what is printed is the whole of the syntax; that a refusal is news about the state.
+
+- **Breaking: no more reminder.** `skill/reminder.md` is removed. After a compaction, a resume or a fork the agent is given the same words and the whole present as at a start. A project that copied the reminder anywhere removes the copy.
+- **Each open tab's actions are printed with their commands at `/`,** and the actions every row of a list offers at its own path once, as a pattern, `/NAME/items/N ACTION n=N`: acting on a row needs no read. For a surface's action to be in the pattern, give each row its own path under `at`, and offer the action there with the same inputs and the row's value as its argument. The shell's `/` view carries `actions` as `[{ at, offers }]`, where it was a list of names.
+- **Opening a tab answers with the tab whole.** A short change in a tab the agent is not working in is told in full, where it was "read it". A program's `read(path)` of a fact's path returns that fact, as the command does.
+- **`baba new` copies the template's own files only,** not what a file manager left beside them.
+
+**Adapt each surface to mechanics only.** Its `how`, descriptions and facts say what things are, what actions do and what must hold for them: never when to act, how to run the work, or who decides. A standing behaviour a project wants is the person's to write in the project's own instructions to its agent; babavoss writes it nowhere.
+
+- Before: `how: "Start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged"`
+- After: `how: "Each of the 5 lanes holds one issue at a time. Done means the issue's work is merged into main. A note is one line on where an issue stands."`
+
+Measured, on 23 tasks against the release before it: every run passed where 5 of 115 had failed; a single action is one call and no read, where it was a read of a whole view and a call; what an agent is told after a session's start is down by more than half. A `how` that dictated made agents take actions nobody asked for, whatever the words said.
+
+## 0.75.0
+
+**Breaking: handles are printed once a view, descriptions follow one convention, and inputs declare what they mean.**
+
+An answer prints a view's handles as one block: `actions: COMMAND PATH ACTION <shared args> name=value…`, then a line a handle with its name, its own arguments and its description. A view's key is never printed for a handle; its name is.
+
+**Rewrite every handle's description** to one clause that adds what the name does not say: the effect, or when to use it. Never repeat the name, its subject or the command; lower case, no full stop; empty where the name says it all. A surface's own `description` stays a phrase and a "use when".
+
+- Before: ``description: ({ n }) => `Give issue ${n} to a lane, 1 to 5, when a subagent begins on it` ``
+- After: `description: "when a subagent begins on it"`
+
+**Declare what an input means** where its type alone does not say: `{ type, kind }`, `{ type, choices }` or `{ type, range }` in place of the bare type.
+
+- Before: `inputs: { lane: "number", about: "string", mode: "string" }`
+- After: `inputs: { lane: { type: "number", range: [1, 5] }, about: { type: "string", kind: "markdown" }, mode: { type: "string", choices: ["light", "dark"] } }`
+- `line`, `markdown` and `path` are text the form knows. Any other kind is the surface's own word, printed with its type, as `id(string)`.
+- Admission refuses a value outside the choices or the range and says what is allowed: drop your own checks for these. The refusal reads `HANDLE: INPUT must be …`: update a spec that expected your old wording.
+- The shell's form draws a picker for choices or a narrow range, and a box of several lines for markdown.
+
+**Menu entries** for one handle bound to several subjects are named by the `title` or `name` of the row the handle stands in, "Close Queue", no longer by its description: put such handles in rows that have one.
+
+Baba's line on reading an answer changed with the form. Measured against the form before it: the same pass rate, an issue's page about 30% smaller.
+
+## 0.74.0
+
+**The drawer shows highlights; the rest is folded.** A tab's drawer shows its highlights, each with who raised it, when and where it goes. Every other entry, a surface's ordinary notice lines among them, sits in a fold between the highlights, one line saying how many and by whom ("14 actions: 9 by the agent, 3 by you, 2 heard"), opened in place. Only the newest ordinary entry shows unasked, as one faint line under the fold at the foot.
+
+- So a line the person must see is a highlight, `notices: [{ text, highlight: true }]`; an ordinary notice is found only by opening the fold.
+- The calls of one `-e` program fold into one line, "12 calls by the agent, one command", saying where a refusal stopped it.
+- Home's drawer lists the closed tabs under its thread, newest first, each opening its log read only.
+- A custom `.baba/home.tsx` changes nothing: the drawer is the shell's, and `HomeProps` is as it was.
+
+## 0.73.0
+
+**The program door.** `COMMAND [PATH] -e - <<'EOF' … EOF` runs the JavaScript or TypeScript that follows. In scope: `await read(path)`, a view as data with each action as `{ handle, args, inputs }` and each input as `{ type }`; `await call(path, handle, {name: value})`, which returns what the call changed and throws on a refusal; and `print(…)`.
+
+- A path before `-e` is the base for relative paths.
+- The answer is what the program printed, then one summary of its calls: the same change grouped once with its count, and each refusal with why.
+- A refusal ends the program unless it is caught; the calls before it stay done. A program that arrives split into words, or put after a handle, is refused with the reason.
+- `root.read`, `root.call`, `root.wait` and `root.page` still work.
+- Every call of one program carries the id `program:XXXXXXXX` in `/activity`, and the drawer folds them into one line: "Agent made 12 calls in one command, the 12th refused".
+- Baba's line about batches teaches the heredoc program. The client's `VERSION` is 19 and replaces itself.
+
+Measured against the door before it, on four batch tasks: the same pass rate, a fifth less cost and fewer tool calls, no refusal. Nothing in a project's surfaces needs to change.
+
+## 0.72.0
+
+**Breaking: highlight replaces `attention`, `show` and `/activity/notices`.** A surface no longer says who is needed at `/`. Where it said `attention` because something waits on the person, mark the notice that tells what happened as a highlight: their tab gets a bubble and a dot until they open its drawer, and the agent hears it first among its notices.
+
+Before:
+
+```ts
+"/": (m) => ({ …, ...(m.proposed && { attention: { who: "person", why: "to accept or decline" } }) })
+update: … ({ model: { ...m, proposed: text } })
+```
+
+After:
+
+```ts
+"/": (m) => ({ … })
+update: … ({ model: { ...m, proposed: text }, notices: [{ text: `"${text}" is proposed, to accept or decline`, highlight: true }] })
+```
+
+- Remove every `attention` fact. One that was for the agent goes too, or becomes a plain fact or a highlighted notice. `/` no longer has `needs`.
+- A bubble appears only for a highlight; an ordinary notice is kept in its entry of the log and told to the agent once, as before.
+- The agent's `show at=…` is `highlight at=… why=… front=true`: a place marked for the person, with why, and brought to the front where asked.
+- `/activity/notices` is gone: the surfaces' lines are in `/activity`, the highlights in `/activity/highlights`. The person's `seen` and `looked` are gone; opening a tab's drawer is what clears its dot.
+- In stories, `noticed()` gives a highlight as `highlight: TEXT`, and `agent.told()` no longer has `- attention` or `need` lines.
+- A home page's `HomeProps.tabs[].mark` is `"broken" | "highlight"`, where it was `"broken" | "person" | "agent"`.
+
+**The shell's state is kept per tab, and closed tabs are archived.** A session's root no longer keeps one `model.json`: `shell.json` holds the shell's own part, and each open tab has `tabs/N/state.json` and `tabs/N/log.jsonl`. A session kept from before is migrated on its first start.
+
+- Closing a tab no longer drops its state: it is kept read only in `closed/N`, and the agent reads it at `/activity/closed` and `/activity/closed/N`. A closed tab is never reopened with its state.
+- The archive clears itself as a runtime starts, at most once a day: closed tabs and the folders of sessions that are over go after 30 days, and the oldest first past 200 MB a project. Both numbers are the person's settings, at `/settings/archive`, which also clears this session's closed tabs or the project's.
+- The log holds a tab's newest 200 entries in the model, per tab; the rest stay on disk.
+- Surfaces need no change. A tool that read `.babavoss/sessions/S/ROOT/model.json` reads `shell.json` and `tabs/N/state.json` instead.
+
+## 0.71.0
+
+Three changes to the shape of a surface and its page.
+
+**Breaking: `ask` is removed.** An action no longer takes `ask`, `handle()` no longer takes a fifth argument, and a handle carries no `ask` mark. The agent is offered and may call every handle the person can. A tab's surface is no longer given the reading actor in `view(model, path, actor)`. To adapt:
+
+- Delete `ask: true` from every `action({...})`, and the fifth argument of `handle(...)`. Drop any `actor` branching in a surface's `view`.
+- A page that read `handle.ask`, or a tab row's `asks`, reads nothing in their place.
+- Where a decision is the person's, say so in the view, in `how` or where it stands: "Approving it is the person's decision: ask them in the conversation, and approve or reopen it as they say; they may do it on the page instead." Keep `attention` while their word is waited for. Since 0.76.0 a surface's words say mechanics only: write neither this nor `attention`; see "Adapting across several releases" above.
+- Rewrite specs that asserted the agent was refused an ask: both actors are offered it.
+
+**The activity is a log of actions, each with its actor.** An entry at `/activity` is one action: `who` (`person`, `agent` or `world`), `by` (the world's hearer), `at`, `did` (the handle and its inputs, or the event heard), `times`, `refused`, `said` (the surface's lines), `own` and `id`; `surface` only where `at` does not name it. It replaces `kind`, `tab` and `what`.
+
+- Refused calls are kept, with why. Inputs past 200 characters are cut, with their length; values that look like credentials are kept as `(hidden)`.
+- An event from a session command is the world's, named by the command's `kind`: name commands for what they hear. Its silent events in a row fold into one entry with a count; one that changed nothing and said nothing leaves no entry.
+- `/activity/notices` lists the entries that carry `said`. A surface may give `refused(model, call, reason)`; the shell uses it.
+- To adapt: code that reads `/activity` reads `did` and `said` for `what`, `who: "world"` for `"surface"`, and `own` for `tab`. State kept from before is migrated as it is restored.
+
+**The page opens at its bare address again.** `page:` is `http://127.0.0.1:PORT`, with no `?key=`: give the person that address. `page.key`, its cookie and the "opened by the link" page are gone, with `pageKey`, `pageKeyFile`, `pageLink` and `PAGE_KEY_PARAM`.
+
+- A request a browser labels `cross-site` or `same-site` is refused, 403, except a GET navigation to the page's HTML: into a window from another site, or into a window or frame from another port of this host. A page that frames a root's page uses the same host name as it.
+- Without the service token `babavoss-actor` is ignored: such a request is the person's.
+- The session's state folder is private: directories 0700, files 0600, older folders made so as a runtime starts.
+- The client's `VERSION` is 18 and replaces itself.
+
+## 0.70.0
+
+A runtime stays up for what woke it, in place of 30 minutes after any request.
+
+- A session's start, resume or compaction keeps it 5 minutes. The person's message, the agent's commands, a hook after a tool call and the person's actions on the page keep it 30 minutes. A page that only watches no longer keeps it up. The session's end leaves 1 minute.
+- It sleeps, its state kept, once that time is spent and nothing runs; any command wakes it. A restart keeps the time that was left.
+- `<word> sleep` puts the root to sleep when the agent's work with the surfaces is over; baba's words say so. `close` still works and means the same.
+- The page says when the runtime is asleep: "Asleep; it wakes when the agent next works with it". It finds the runtime again once it is back, and never wakes it.
+- Breaking, for code that starts a runtime itself: the `idleMs` option is gone, use `strengths: { weak, strong, end }` in milliseconds or `BABAVOSS_WAKE_MS=weak=…,strong=…,end=…`; `IDLE_MS` is no longer exported; the door's option `touched` is `woken(signal)`.
+- The client's `VERSION` is 17 and replaces itself.
+
+No surface code needs to change.
+
+## 0.69.0
+
+Breaking: the package exports only its entries. A surface's source and specs import `babavoss/core/index.ts`; a page `babavoss/kit/index.ts` and `babavoss/shell/ui/index.tsx`; `.baba/baba.config.ts` imports `babavoss/core/config.ts`; the generated root's stylesheet `babavoss/shell/ui/styles.css`. Any other path into the package no longer resolves. Search the surfaces for `babavoss/` and change each import:
+
+- `babavoss/kit/cn.ts` → `cn` from `babavoss/kit/index.ts`
+- `babavoss/kit/components/*.tsx` → `babavoss/kit/index.ts` (`Toggle` and `toggleVariants` are there too now)
+- `babavoss/kit/theme.ts` → `babavoss/kit/index.ts` (`PRESETS`, `presetOf`, `derive`, `varsOf`, `Theme`, `PresetId`)
+- `babavoss/kit/layouts/*` → `babavoss/kit/index.ts` (`MenuItem`, `WorkbenchToolbar`, `WorkbenchSpacer`, `WorkbenchSegments`, `WorkbenchPage`, `WorkbenchEmpty`, `useNarrow`); what is not exported there, copy into the surface's own folder
+- `babavoss/kit/styles.css` → nothing: the root's stylesheet already brings the kit's design language, and a surface's `ui/styles.css` is scoped under it
+- `babavoss/core/state/session-dir.ts` → `sessionDir` from `babavoss/core/index.ts`
+- `babavoss/core/harness/index.ts` → `babavoss/core/index.ts`: `claudeCode`, `fakeHarness`, `sessionEnv`, `NONE`, and the types `Harness`, `HarnessEvent`, `Tokens`, `FakeHarness` and `ClaudeOptions`; its `Session` type is `HarnessSession` there
+- `babavoss/core/surface/*`, `babavoss/core/runtime/*` → `babavoss/core/index.ts`, which exports what a surface uses from them
+- `babavoss/shell/ui/*` other than `index.tsx`, `babavoss/shell/src/*`, `babavoss/shell/settings/*`, `babavoss/core/hook.ts`, `babavoss/core/update.ts`, `babavoss/core/bv/*` → not for surfaces. Use `useTab`, `useLive`, `useShell`, `useConventions`, `read`, `call`, `changes` and their types from `babavoss/shell/ui/index.tsx`, and keep anything more in the surface's own folder.
+
+The kit and the shell keep to the type scale of four: `text-badge`, `text-meta`, `text-body`, `text-large`. The kit's titles (`EmptyTitle`, `DialogTitle`, `PopoverTitle`) are 13px where they were 14px, and `Input` and `Textarea` are 13px where they were 14px below 768px wide. For a surface the scale is advice: one that wants another size sets it by its own class.
+
+To adapt: run `bun check` in `.baba/`; each import it cannot find is in the list above.
+
+## 0.68.0
+
+Breaking: the page is opened only by its link.
+
+- The shell's answer names the page as `page: http://127.0.0.1:PORT/?key=…`: give the person that link whole. It opens the page in any browser, which then keeps a cookie for 30 days, so reloads and runtime restarts need nothing more. `localhost` and `127.0.0.1` each need the link once.
+- Opened without the key, the page says only that it is opened by the link its agent gives. A tab open before this release shows that once: give the person the link again.
+- The key is the session's, kept in its state directory as `page.key`, readable by its owner alone. Never write it into files, commits or notices.
+- A program that fetches the page or its `/_/` files sends the service token from `service.json` in the `babavoss-service` header, as it already does for reads and calls.
+- The runtime no longer sends the token back in answers, except to a request that carried it, and no longer replaces `%TOKEN%` in a root's `index.html`.
+- The client's `VERSION` is 16 and replaces itself.
+
+No surface code needs to change.
+
+## 0.67.0
+
+Breaking: the shell no longer reloads its code under running work. There are two modes, each simple.
+
+- **Normal mode, the default.** A runtime runs the code it started with; it no longer runs under `bun --hot`. After changing `.baba/` or taking a release, run `<word> restart`. Until then `/` and the hooks say `code: changed on disk since instance … started; it runs once restarted`.
+- **Restart with work under way drains.** The runtime takes no new calls, restarts once the work has ended, and the command exits at once, naming the instance. `<word> follow ID [SECONDS]` returns when the next instance answers, or at once where that instance is already gone. `<word> close` cuts the work instead.
+- **Dev mode.** `dev: true` in `.baba/baba.config.ts`, or `BABAVOSS_DEV=1` (`0` turns it off). Any change to the code the runtime loaded restarts it at once and cuts running commands; the next answer says what was cut. Use it while surfaces are being built.
+- A restart, in either mode, is a fresh process at the same address with the state as saved; an open page reloads itself.
+- The version told is the one running. The client's `VERSION` is 15 and replaces itself.
+- A runtime ends within a moment of its state directory being removed, so none is left behind by a deleted project.
+
+To adapt a project's surfaces:
+
+- A cut command sends no event: make long work resumable from the model, and do not count running jobs in the model.
+- Nothing on `globalThis` survives a reload any more.
+- A spec that starts a real runtime and expects an edit to be live sets `BABAVOSS_DEV=1`.
+- Decide the project's mode: set `dev: true` while its surfaces are being made, and leave it out otherwise.
+
+## 0.66.0
+
+Conventions: the shell hands every page, home included, how the person wants pages to be.
+
+- `motion`: `full` or `reduced`. `scale`: the text size, 1 by default. `side`: `left` or `right`, where a page's own sidebar stands. `rail`: where the shell's tabs stand. `mode`: `light` or `dark`, as shown.
+- Read them with `useConventions()` from `babavoss/shell/ui/index.tsx`, or in CSS: each stands on the page's root as `data-NAME`, a number also as `--NAME`, with the variants `motion-safe:`, `motion-reduce:`, `side-left:`, `side-right:`, `rail-left:`, `rail-right:`, `rail-top:` and `rail-bottom:`.
+- The kit follows them unasked: nothing animates where motion is reduced, and everything sized in rem follows the scale. `motion-safe:` and `motion-reduce:` now follow the person's setting, and the browser's preference only where there is none.
+- The settings gain `preferences`: `motion` (system, full, reduced), `scale` (0.9, 1, 1.1, 1.25, 1.5) and `side`, each with an action of its name at `/settings`, and a row under Appearance.
+- A page follows them by its own code. It is expected and never enforced: a page that follows none works as before.
+
+To adapt a project's surfaces: stand a page's sidebar at `side`, for example `side-left:flex-row-reverse` on its row with the border swapped; check `motion` before animating or scrolling smoothly in script; size text in rem, never px.
+
+## 0.65.0
+
+Breaking: the kit is shadcn's primitives with one layer of opinions, and nothing else. What it no longer holds, and what to use instead:
+
+- `Workbench`, `Plain`, `Welcome` and their types: draw the page in the surface's own `ui/`, with the kit's `WorkbenchToolbar`, `WorkbenchSpacer`, `WorkbenchSegments`, `WorkbenchPage` and `WorkbenchEmpty` where they fit; `useNarrow` stays too.
+- `WorkbenchButton`, `WorkbenchProperties`, `WorkbenchCode`, `WorkbenchInfo`, `WorkbenchPicker`, `WorkbenchMark`, `WorkbenchMeter`, `WorkbenchNotice`, `WorkbenchSection`, `WorkbenchFold`, `WorkbenchSetting`, `WorkbenchList`, `WorkbenchTree`, `WorkbenchSplitter`, `Dismiss`, and the types `WorkbenchAction`, `WorkbenchChoice`, `WorkbenchIcon`, `WorkbenchFacts`, `WorkbenchOption`, `WorkbenchRow`, `WorkbenchGroup`, `WorkbenchNode`: write what you use in the surface's own folder. For a fold, `bunx shadcn@latest add collapsible` in `.baba/`; for a splitter, the kit's `ResizableHandle`; for a picker, the kit's `DropdownMenu`.
+- From `babavoss/kit/layouts/menu.tsx`: `MenuItems`, `SearchMenu`, `MenuDropdown`, `MenuTriggers`, `ContextKit`, `DropdownKit`, `menuContent`, `menuRow`, the `Menu` type and `muted`. A menu of actions in a page is the kit's `DropdownMenu`. `MenuItem`, `filtered`, `matches` and `quietScroll` stay.
+- From `babavoss/kit/layouts/parts.tsx`: `SearchField` and the class constants `muted`, `ring`, `iconButton` and `bar`.
+- `Command…`: `bunx shadcn@latest add command` in `.baba/`. `Sheet`, `SheetContent`, `SheetTitle`: `bunx shadcn@latest add sheet`.
+- `Toasts`, `TOAST_MS`, `ToastItem`: `useShell().toast(text, at?)`, a bubble beside the tab.
+- The conversation set, `Thread…`, `useThreadDetail`, `Composer`, `ComposerCompletion`, `Message…`, `Bubble…`, `MessageScroller…`, `useMessageScroller`, `Trace…`, `Marker…`, `CodeBlock…`, `InputGroup…`, `Collapsible…`: it is the lab's own now. Copy what you use from this repository's `.baba/surfaces/lab/ui/components/` into the surface's own `ui/`, or add shadcn's own with its CLI. A copied message scroller needs `bun add @shadcn/react` in `.baba/`.
+- The files `babavoss/kit/components/{command,sheet,toast,thread,composer,bubble,message,message-scroller,trace,marker,code-block,collapsible,input-group}.tsx`, `babavoss/kit/layouts/{workbench,plain,welcome}.tsx` and `babavoss/kit/layouts/arrange.ts` are gone.
+- `cmdk` and `@shadcn/react` are no longer the package's dependencies: a project that imports either adds it to `.baba/`.
+- The `.markdown-body` styles are gone from the kit's CSS: a page that renders markdown with that class styles it itself.
+
+To adapt: run `bun check` in `.baba/`; each import it cannot find is in the list above.
+
+## 0.64.1
+
+- A tab's close, offered at `/`, names what runs in the tab beside its number: "close tab 3, Queue; its state is dropped". Home's menu, drawn from it, tells several tabs apart. The command is unchanged: `close n=3`.
+- docs/DESIGN.md says the rail and a tab's drawer, as built in 0.61.0.
+
+Nothing to adapt in a project's surfaces.
+
+## 0.64.0
+
+- Home tells the person when the session's hooks are not heard, never heard or heard and gone quiet: a bubble beside the mark, kept in home's thread, a dot on the mark, and a line pinned in home's drawer that says what to do. The dot and the line clear when a hook is heard again. It begins when the runtime tells the agent its one line of the silence, never from a timer of the page's.
+- The runtime's turn carries `unheard: { ever, since }` while that lasts, and the session's `hooks.json` keeps `since`. What the agent is told is unchanged. Nothing to adapt.
+
+## 0.63.0
+
+- An agent run non-interactively through an adapter gets baba's hooks. Claude Code's run loads the project's plugin by `--plugin-dir`: a plugin in `.claude/skills` runs its hooks only in a folder trusted in the home, and a `-p` run does not count as trust, so the skill loaded and no hook ran. The plugin's manifest says `"skills": []`, so its `SKILL.md` stays one skill.
+- Codex's adapter has a run face: `codex exec`, a process a turn, the later ones resuming the thread, with `--trust` and `--dangerously-bypass-hook-trust` for that run alone, the person's login linked into the run's home and never copied. What a hook added is read from Codex's session file, whose format is not documented.
+- A run's stream carries `hook` for a hook that ran and added nothing.
+- In this repository a lab run lists the hooks it heard, and says "no hook heard" on its timeline and its page when there were none. The lab still starts Claude Code only.
+- Nothing to adapt in a project's surfaces.
+
+## 0.62.0
+
+- `baba init`, `provision` and `start` say in one line when Claude Code's managed settings keep baba's plugin or its hook from running, naming the settings file and what to do: `strictPluginOnlyCustomization`, a `strictKnownMarketplaces` without `{ "source": "skills-dir" }`, `blockedMarketplaces` naming it, `enabledPlugins` turning `baba@skills-dir` off, `disableAllHooks`, or `allowManagedHooksOnly`. Settings given from the claude.ai console and the Windows registry are not read. An adapter may say the same of its harness by an optional `blocked()`.
+- "This session's hooks are not being heard" is no longer said because of runs made in the session's name from elsewhere, another session's agent using `--session` or a script: only the session's own agent's runs count. The client is version 14 and replaces installed copies.
+- After a resume followed at once by a compaction, baba's short words and the present are given once, not again at each start with nothing heard between.
+- Nothing to adapt in a project's surfaces.
+
+## 0.61.1
+
+- In this repository the queue's map is replaced by Narratives: a list of the narratives and a page for each with its issues as an outline of what came out of what, links to other narratives said in words. The agent reads it at `/queue/narratives`, `/queue/narratives/ID` and `/queue/narratives/ID/open`; `/queue/map` is gone. The package is unchanged. Nothing to adapt.
+
+## 0.61.0
+
+- Breaking: the strip, the activity button and its drawer, toasts, the tab's dropdown menu and home's palette are gone. The tabs stand on a rail at a side of the page the person chooses, left, right, top or bottom, and every tab, home included, has a drawer: its menu at the head, drawn from its surface's views as before, over its activity as a thread, newest at the foot. A click shows a tab; a click on the tab shown, a right click, the menu key or the shortcut opens its drawer.
+- Breaking: the `home` shortcut is `drawer`, mod+p by default: it opens and closes the shown tab's drawer. A person's own `home` binding carries over to it. The `menu` command is gone; shift+F10 and the menu key still open the drawer of a focused tab.
+- Breaking: when a tab closes its activity entries go with it; home's thread keeps the line that it closed. An entry of `/activity` no longer gives `title`. `show` at `/` is offered to the agent alone.
+- Breaking, for code that imported the shell's page: `babavoss/shell/ui/home.tsx`, `notifications.tsx`, `activity.tsx`, `channels.ts` and `strip.ts` are gone; there are `rail.ts` and `rail.tsx`, `thread.ts`, `drawer.tsx` and `feed.ts`, and `TabMenu` is `useTabMenu`. A surface that used `useShell().toast` needs no change: it shows a bubble beside the tab.
+- A notice appears as a bubble beside the tab it is in, beside the mark where it is in none, for three seconds; hovering keeps it and a click opens that tab's drawer. Opening a drawer marks its tab's notices seen.
+- Home is a desktop, an icon a surface. A project draws its own with `.baba/home.tsx`: its default export, given `HomeProps` from `babavoss/shell/ui/index.tsx`, the title, the surfaces each with a way to open one, the open tabs each with a way to go there, and what home's foot says. See `skill/making-surfaces.md`.
+- The person's settings have `appearance.rail: { side, from, drawer }`: where the rail stands, the end it starts from at a side, and the side a drawer opens at under a rail along the top or bottom; left, bottom and left by default, and a file from before reads so. The settings surface sets it by one quiet action, `rail`, and its page has the mark's animation under Appearance.
+- What a surface's people were told of "the strip" or "notifications" should speak of the rail and a tab's drawer. An action's description shown as a menu's entry starts with a capital.
+
+## 0.60.0
+
+- The mark is drawn exactly: its eyes are two round patches of one size on a sphere, seen by a camera three and a half of its radii away, and each is the true outline of its edge as that camera sees it. Near the middle an eye is large; towards the limb it is smaller and, faster, narrower; over the camera's horizon it is cut by the sphere's own outline, and behind it is gone. The ellipse squashed by one rule and shrunk by a lens is gone.
+- Breaking, for code that drew the mark itself: `framework/shell/ui/gaze.ts` no longer has `drawn`, `EYES`, `Eye`, `Drawn`, `TURNED` or the old `SPHERE`. It has `SPHERE`, a `Sphere` of `camera`, `radius`, `eye`, `apart` and `turned`; `SIDES`; `outline(side, gaze, sphere?)`, an eye as an SVG path; `edgeOf`, its points and whether it is cut; `centreOf` and `seen`. `Logo` and `Eyes` are as they were. The moves turn the head a fifth further. Nothing to adapt in a project that only uses the shell.
+- This repository's Design Guide tunes the sphere at `/guide/mark/sphere`: its numbers on sliders beside the shell's mark, through each move, and following the pointer.
+
+## 0.59.4
+
+- The exact sphere tried in this repository's Design Guide starts from the numbers the person chose. Nothing to adapt.
+
+## 0.59.3
+
+- This repository's Design Guide has a pad at `/guide/mark/sphere` where the exact sphere and the shell's mark both look where the pointer is, so any pose can be held and looked at with no move played. Nothing to adapt.
+
+## 0.59.2
+
+- This repository's Design Guide tries the mark as an exact sphere at `/guide/mark/sphere`: two round patches of one size seen by a close camera, each drawn as the true outline of its edge and cut by the sphere's horizon, beside the shell's mark, with the camera's distance, the sphere's and the eyes' size, their spacing and the resting turn on sliders. The shell's mark is unchanged. Nothing to adapt.
+
+## 0.59.1
+
+- The mark's lens is one smooth curve: an eye that turns away from the middle shrinks all the way to nothing at the sphere's edge as it narrows. It used to stop at a least size a third of the way round and go on narrowing, a sliver of fixed height. At rest the eyes are as they were. Nothing to adapt.
+
+## 0.59.0
+
+- A caller may name a call: the request header `babavoss-call-id`, `CALL_ID_HEADER`, which `serviceClient` can send. The name is on the call, `Call.id`, and the shell's activity keeps it on the entry, given as `id` at `/activity`, so whoever made a call can tell its entry from another's made at the same moment. Nothing to adapt.
+- `Harness.release` is said as it is: it leaves the transcripts to whoever made the home.
+- In this repository the lab reads a run cleared at its start as cleared, with nothing to close; tells its own act from the person's click by the call's name, not by time; and answers its timeline empty when no run is shown. Two specs that failed on a busy machine wait for what they test.
+
+## 0.58.1
+
+- This repository's Design Document plays dependably: a play always ends, played or failed with its reason; a full play takes 3 seconds where it took 13, a scenario's pause passing on a clock the demo reads; a play removes its directory and its demo runtime on every way out, and the next one sweeps what a killed one left; the strip tells a hook that ran and said nothing, `0 tok`, from no hook, `—`; and the preview puts in front the tab the shell's page would, home until the person moves. The package is unchanged. Nothing to adapt.
+
+## 0.58.0
+
+- A call's value may be a file: `name=@PATH`, where PATH begins `/`, `./`, `../` or `~/`, is read from that file, and refused where there is none; it used to be sent as that text. `name=@-` reads standard input as before, and is how text that looks like such a path is given. Other text that begins with `@` is sent as written. The client is version 13 and replaces installed copies.
+- In a story, `world.idle()` no longer waits for a session command, which never ends, only for work that does: a spec that waited by a timer for a surface with a store can call `idle()`.
+- In this repository the queue shows a tab just opened as reading, not as empty; begins again when the session's `work.json` is removed; and groups its archive by narrative, newest first, saying so when nothing is done. Nothing to adapt.
+
+## 0.57.0
+
+- The root's title is the project's: an optional `title` in `.baba/baba.config.ts`, else the name of the project's directory, where it was the word "baba". It is home's heading, the page's title and the `title` the agent is told at `/`. The root reads it as it starts. A spec that matched `title: "baba"` must match the directory's name, or the project sets `title`.
+- A tab not shown is dotted for an ask at any depth of its surface, not only at its top or where it was last shown: at `/` the person's row of each tab carries `asks`, how many are offered anywhere in it. The agent's `/` has no such fact.
+- The activity names each channel for one tab: a closed tab keeps the title it had across a reload, a row of `/activity` giving it as `title`, and channels that would share a name add their tab's address, "Queue · /tabs/3".
+- A tab's menu no longer reads a place above its route that no view names, so the browser's console is not told of a 404 each time.
+- Home's foot says that Enter with the command key opens another tab while the chosen line is an open tab; the alert for a place the agent points to wraps a long path beside its buttons.
+- In the framework's code `shell()` takes `title` as its fifth parameter and `activityView` takes `{ at, title }` where it took a function. Nothing else to adapt.
+
+## 0.56.0
+
+- Breaking: an ask inside a list is kept from the agent, as one that is an object's property always was; it used to reach the agent as an ordinary action it could call. A surface that relied on the agent calling such an action must offer it as an ordinary one.
+- Breaking: `laterRelease` is gone from `babavoss/core/update.ts`. `latestRelease` gives the latest release whatever runs, and `running()` the package's version as it is now; the runtime's `latest` option gives the latest release, unfiltered. A later release is told against the version running, so a root whose package was updated under it no longer offers the release it runs.
+- A surface broken by importing a file that does not exist comes back by itself once the file is made, where the file is under `surfaces/`. Nothing to adapt.
 
 ## 0.55.0
 

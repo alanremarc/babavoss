@@ -1,7 +1,7 @@
 // A run's timeline: every chunk that entered the agent under test's context, in order, from the harness's normalised
 // events, what the developing agent did on the page under test, as the person, and what the person did there. Pure: `stream` takes the timeline and
 // one event and answers with the next, so the surface's update stays the one writer.
-import { NONE, type HarnessEvent, type Tokens } from "babavoss/core/harness/index.ts"
+import { NONE, type HarnessEvent, type Tokens } from "babavoss/core/index.ts"
 
 export type { Tokens }
 export type Kind = "hook" | "message" | "word" | "tool" | "reply" | "thinking" | "turn" | "act" | "person" | "note"
@@ -37,9 +37,19 @@ export type Timeline = {
   /** What the run has cost so far, as the harness reports it. */
   cost: number
   turns: number
+  /** The hooks heard, by their event, in the order each was first heard: one that added nothing is heard too. */
+  hooks: string[]
 }
 
-export const empty = (): Timeline => ({ entries: [], senders: [], tokens: NONE, cost: 0, turns: 0 })
+export const empty = (): Timeline => ({ entries: [], senders: [], tokens: NONE, cost: 0, turns: 0, hooks: [] })
+
+/** The note a run is given when a turn ends and no hook was heard in it: the agent was never told of the surfaces. */
+export const NO_HOOK = "no hook heard"
+export const NO_HOOK_TEXT =
+  "No hook of the harness ran in this run: the agent under test was told nothing by baba's hooks, at its start or with its " +
+  "messages, so what it did, it did without the surfaces' words and present. This run does not show what an agent is told."
+/** The timeline with a hook of `event` heard. */
+const heard = (tl: Timeline, event: string): Timeline => (tl.hooks.includes(event) ? tl : { ...tl, hooks: [...tl.hooks, event] })
 
 export const add = (a: Tokens, b: Tokens): Tokens => ({
   input: a.input + b.input,
@@ -70,7 +80,8 @@ export function stream(tl: Timeline, t: number, e: HarnessEvent): Timeline {
 
     return append(tl, t, { kind: "note", title: `init ${e.loaded.model}`, text })
   }
-  if (e.kind === "injected") return append(tl, t, { kind: "hook", title: e.event, text: e.text, ...(e.error && { error: true }) })
+  if (e.kind === "injected") return append(heard(tl, e.event), t, { kind: "hook", title: e.event, text: e.text, ...(e.error && { error: true }) })
+  if (e.kind === "hook") return heard(tl, e.event)
   if (e.kind === "message") {
     const [by, ...rest] = tl.senders
 
@@ -89,8 +100,8 @@ export function stream(tl: Timeline, t: number, e: HarnessEvent): Timeline {
 
     return append(next, t, { kind: e.kind, title: e.kind, text: e.text, ...at })
   }
-  if (e.kind === "turn")
-    return append({ ...tl, tokens: add(tl.tokens, e.tokens), cost: Math.max(tl.cost, e.total), turns: tl.turns + 1 }, t, {
+  if (e.kind === "turn") {
+    const next = append({ ...tl, tokens: add(tl.tokens, e.tokens), cost: Math.max(tl.cost, e.total), turns: tl.turns + 1 }, t, {
       kind: "turn",
       title: `turn ${tl.turns + 1}`,
       text: e.text,
@@ -100,6 +111,12 @@ export function stream(tl: Timeline, t: number, e: HarnessEvent): Timeline {
       calls: e.calls,
       ...(!e.ok && { error: true }),
     })
+
+    // Said once, at the first turn that ends with none heard; a hook heard later is on the timeline after it.
+    return next.hooks.length || next.entries.some((entry) => entry.title === NO_HOOK)
+      ? next
+      : append(next, t, { kind: "note", title: NO_HOOK, text: NO_HOOK_TEXT, error: true })
+  }
 
   return tl
 }

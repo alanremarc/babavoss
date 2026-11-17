@@ -4,15 +4,16 @@ import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import type { RootDefinition } from "../root.ts"
-import { startRuntime } from "../runtime/runtime.ts"
+import { startRuntime, type RuntimeOptions } from "../runtime/runtime.ts"
 import { checkConfig, loadConfig } from "../config.ts"
 import { ADAPTERS } from "../harness/index.ts"
 import { findBaba } from "../provision.ts"
-import { laterRelease, updateNote } from "../update.ts"
+import { latestRelease, updateNote } from "../update.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenRoot } from "./bv.ts"
 
-export async function main(root: RootDefinition) {
+/** `serve`: how its runtime runs, as the root's entry knows it: its mode, what its page is made of, and code it runs that it did not load. */
+export async function main(root: RootDefinition, serve: Pick<RuntimeOptions, "dev" | "watch" | "code"> = {}) {
   const args = process.argv.slice(2)
   const directory = dirname(dirname(realpathSync(process.argv[1]!)))
   // A root is of a .baba/ directory and keeps what it writes beside it: in the person's home, or in a project. One run
@@ -24,7 +25,7 @@ export async function main(root: RootDefinition) {
   process.env.BABAVOSS_HOME ??= join(project ?? homedir(), ".babavoss")
 
   if (args[0] === "--serve") {
-    // Woken under hot reload: a runtime that gives way wakes its successor as it was woken itself, logging where it logs.
+    // A runtime that restarts wakes its successor as it was woken itself, logging where it logs.
     const successor = () =>
       spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
         cwd: process.cwd(),
@@ -32,10 +33,10 @@ export async function main(root: RootDefinition) {
         stdio: ["ignore", "ignore", "inherit"],
       }).unref()
 
-    // Another process serves this session already. Under hot reload a process with nothing to do would stay, so it ends here.
-    const latest = at < 0 ? undefined : () => laterRelease(process.env.BABAVOSS_HOME!)
+    // Another process serves this session already: this one, with nothing to do, ends here.
+    const latest = at < 0 ? undefined : () => latestRelease(process.env.BABAVOSS_HOME!)
 
-    if (!(await startRuntime(root, ["--session", args[1]!], { command: args[2] ?? `bv ${root.name}`, successor, latest }))) process.exit(0)
+    if (!(await startRuntime(root, ["--session", args[1]!], { ...serve, command: args[2] ?? `bv ${root.name}`, successor, latest }))) process.exit(0)
 
     return
   }

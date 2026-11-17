@@ -8,12 +8,15 @@
 // gives it, and a harness that no longer runs the hooks gives none. Nothing told is
 // made here: the player only records it, with what changed in the project, read as the person's page reads it, and what
 // that page showed: each open tab's view at /, as the person reads it, and the tab in front.
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Json } from "babavoss/core/index.ts"
+import { endDeaf, type Endpoint } from "../../../../framework/core/runtime/service.ts"
+import { HOME, placeOf, pointedSince, type Pointed } from "../../../../framework/shell/ui/pointing.ts"
+import { newestFirst, successor } from "../../../../framework/shell/ui/rail.ts"
 import type { Scenario, Scripted, Step } from "./scenarios.ts"
 
 /** The session the demo runs in, as the harness names it. */
@@ -41,9 +44,9 @@ export type Played = {
 /** An open tab as the person's page draws it: its path, its surface, and its view at /, the paths in it the tab's own and each handle kept to what a page draws. */
 export type Drawn = { at: string; surface: string; view: Json }
 /**
- * What the person's page showed after a step: the open tabs, and the one in front, `shown`: where the person last acted,
- * or where the agent last pointed them; before either, the tab opened last, which the strip marks for them. `asleep`: the
- * root was asleep, so the page is as it last was.
+ * What the person's page showed after a step: the open tabs, and the one in front, `shown`, by the shell's page's own rule:
+ * none, home, until the person moves, and then where they moved or the agent pointed them. `asleep`: the root was asleep,
+ * so the page is as it last was.
  */
 export type Page = { tabs: Drawn[]; shown?: string; asleep?: true }
 export type Play = { name: string; steps: Played[]; error?: string }
@@ -52,8 +55,61 @@ const FRAMEWORK = realpathSync(dirname(fileURLToPath(import.meta.resolve("babavo
 const BABA = join(FRAMEWORK, "bin/baba.ts")
 const SURFACES = realpathSync(fileURLToPath(new URL("../demo/surfaces", import.meta.url)))
 const BUILD = "build.txt"
+/** The demo's clock, which a pause puts ahead (clock.ts), and the file it reads, both in the demo's directory. */
+const CLOCK = fileURLToPath(new URL("./clock.ts", import.meta.url))
+const AHEAD = "clock"
 /** How long a reload is waited for before the step says it was not seen. */
 const RELOAD_MS = 10_000
+/** The demo's runtime entry, as the framework names it, and as a copy of the demo's surfaces finds it. */
+const ENTRIES = (dir: string) => [join(FRAMEWORK, "framework/shell/scripts/open.ts"), join(dir, ".baba/node_modules/babavoss/framework/shell/scripts/open.ts")]
+
+/**
+ * Where this root's plays are made: one directory of the temporary ones for each checkout's design surface, each play's
+ * directory in it named by the process that plays it. Kept apart, so what one root's plays left is that root's to remove.
+ */
+export const PLAYS = join(realpathSync(tmpdir()), `babavoss-design-${Bun.hash(SURFACES).toString(36)}`)
+const LIVE = Symbol.for("babavoss.design.plays")
+/** The plays under way in this process, by directory: kept on globalThis, which a reload of the root's code leaves as it is. */
+const live = (): Set<string> => ((globalThis as { [LIVE]?: Set<string> })[LIVE] ??= new Set())
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
+/** Removes a play's directory, after ending the demo's runtime it woke, where one still runs: by its pid, only if it is that runtime. */
+async function removed(dir: string) {
+  try {
+    const at = JSON.parse(readFileSync(join(dir, ".babavoss/sessions", SESSION, "baba/service.json"), "utf8")) as Endpoint
+
+    for (const entry of ENTRIES(dir)) if (alive(at.pid) && (await endDeaf(at, entry, SESSION))) break
+  } catch {}
+  rmSync(dir, { recursive: true, force: true })
+}
+
+/**
+ * Removes what earlier plays of this root left, as a play cut short, or one whose root was reloaded or killed, leaves it:
+ * every play's directory and runtime but those of plays under way, here or in another live process.
+ */
+export async function swept() {
+  let names: string[] = []
+
+  try {
+    names = readdirSync(PLAYS)
+  } catch {}
+  await Promise.all(
+    names.map((name) => {
+      const dir = join(PLAYS, name)
+      const owner = Number(name.split("-")[0])
+
+      return live().has(dir) || (owner !== process.pid && alive(owner)) ? undefined : removed(dir)
+    }),
+  )
+}
 
 /** A value as one line of what changed: JSON, cut where long. */
 const short = (v: Json | undefined) => {
@@ -118,33 +174,58 @@ export function changes(before: Json | undefined, after: Json | undefined): stri
 const quoted = (s: string) => (/^[\w./=:@-]+$/.test(s) ? s : `'${s.replaceAll("'", "'\\''")}'`)
 const argsOf = (args: Record<string, string> = {}) => Object.entries(args).map(([k, v]) => `${k}=${v}`)
 
-/** A tab's view as its page draws it: its paths within the tab, as the shell gives them to a page, and a handle by its name, description, inputs and whether it is an ask. */
+/** A tab's view as its page draws it: its paths within the tab, as the shell gives them to a page, and a handle by its name, description and inputs. */
 function drawn(value: Json | undefined, address: string): Json {
   if (Array.isArray(value)) return value.map((v) => drawn(v, address))
   if (!value || typeof value !== "object") return value ?? null
-  if (value.kind === "handle") return { kind: "handle", name: value.name ?? "", description: value.description ?? "", open: value.open ?? {}, ...(value.ask === true && { ask: true }) }
+  if (value.kind === "handle") return { kind: "handle", name: value.name ?? "", description: value.description ?? "", open: value.open ?? {} }
 
   return Object.fromEntries(
     Object.entries(value).map(([k, v]) => [k, k === "at" && typeof v === "string" && (v === address || v.startsWith(`${address}/`)) ? v.slice(address.length) || "/" : drawn(v, address)]),
   )
 }
 
-/** Plays `scenario` on a demo project of its own, made and removed here; aborted, it stops after the step under way. */
+/**
+ * Plays `scenario` on a demo project of its own, made here and, with the runtime it woke, removed on every way out; aborted,
+ * it stops the step under way and its processes. What a process that ended mid-play left, `swept` removes.
+ */
 export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Play> {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-design-")))
+  mkdirSync(PLAYS, { recursive: true })
+
+  const dir = mkdtempSync(join(PLAYS, `${process.pid}-`))
+
+  live().add(dir)
+  try {
+    return await played(scenario, dir, signal)
+  } catch (error) {
+    return { name: scenario.name, steps: [], error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    await removed(dir)
+    live().delete(dir)
+  }
+}
+
+async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Promise<Play> {
   const home = join(dir, ".babavoss")
-  // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are.
+  // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are. Every process of the
+  // demo reads the time by its clock; bun's options take no quoting, so it is preloaded from the demo's directory.
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     BABAVOSS_HOME: home,
     BABAVOSS_LATEST: "",
     BABAVOSS_SETTINGS: join(dir, "settings.json"),
     CLAUDE_CODE_SESSION_ID: SESSION,
+    BUN_OPTIONS: `--preload ${join(dir, "clock.ts")}`,
+    DESIGN_CLOCK: join(dir, AHEAD),
   }
+  let ahead = 0
 
   for (const key of ["CODEX_THREAD_ID", "BABAVOSS_BIN"]) delete env[key]
+  // A scenario that changes the code plays the root in dev mode, where it takes the change at once; any other, in normal mode.
+  env.BABAVOSS_DEV = scenario.steps.some((s) => s.kind === "code") ? "1" : "0"
   mkdirSync(join(dir, ".baba"), { recursive: true })
   writeFileSync(join(dir, ".baba/package.json"), JSON.stringify({ name: "demo", private: true, type: "module" }))
+  cpSync(CLOCK, join(dir, "clock.ts"))
   if (scenario.steps.some((s) => s.kind === "code")) {
     // A copy the scenario may change, which finds the framework and the page's packages where the demo's own do.
     cpSync(SURFACES, join(dir, ".baba/surfaces"), { recursive: true, dereference: true })
@@ -154,8 +235,11 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
   } else symlinkSync(SURFACES, join(dir, ".baba/surfaces"))
 
   const own = (text: string) => text.replaceAll(dir, PROJECT).trimEnd()
-  const run = async (cmd: string[], stdin?: string) => {
-    const child = Bun.spawn(cmd, { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe" })
+  /** Time let pass within a step, cut short once the play is stopped. */
+  const nap = (ms: number) => sleep(ms, undefined, signal && { signal })
+  /** A process of the demo's, killed once the play is stopped, unless it is what tidies up after it. */
+  const run = async (cmd: string[], stdin?: string, stop: AbortSignal | undefined = signal) => {
+    const child = Bun.spawn(cmd, { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe", ...(stop && { signal: stop }) })
     const [out, err] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
 
     return own([out.trimEnd(), err.trimEnd()].filter(Boolean).join("\n"))
@@ -203,7 +287,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         method: call ? "POST" : "GET",
         headers: { accept: "application/json", "babavoss-service": at.token, "babavoss-actor": "person", "content-type": "application/json" },
         ...(call && { body: JSON.stringify(call) }),
-        signal: AbortSignal.timeout(5000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
       })
 
       return (await response.json()) as Json
@@ -212,37 +296,63 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
     }
   }
   const tabsOf = (root: Json | undefined) => (root as { tabs?: { at: string; n: number; surface: string }[] } | undefined)?.tabs ?? []
-  /** The address of the open tab a path is in, by that address or by its number, /tabs/N. */
-  const tabIn = (root: Json | undefined, path: string) => {
-    const under = (at: string) => path === at || path.startsWith(`${at}/`)
-
-    return tabsOf(root).find((t) => under(t.at) || under(`/tabs/${t.n}`))?.at
-  }
   /** The project as the page has it: /, what /activity added since the last look, and each open tab at /. */
   let seen = 0
   const look = async () => {
     const root = await page("/")
-    const activity = (await page("/activity")) as { entries?: { n: number; who: string; surface: string; at: string | null; what: string }[] | string } | undefined
+    type Entry = { n: number; who: string; by?: string; surface: string; at: string | null; did?: string; times?: number; refused?: string; said?: string[]; highlight?: true }
+    const activity = (await page("/activity")) as { entries?: Entry[] | string } | undefined
     const fresh = Array.isArray(activity?.entries) ? activity.entries.filter((e) => e.n > seen).reverse() : []
     const tabs = await Promise.all(tabsOf(root).map(async (t): Promise<Drawn> => ({ at: t.at, surface: t.surface, view: drawn(await page(t.at), t.at) })))
 
     seen = Math.max(seen, ...fresh.map((e) => e.n))
 
-    return { root, tabs, activity: fresh.map((e) => `activity: ${e.who} · ${e.surface} ${e.at ?? ""} · ${e.what}`) }
+    const line = (e: Entry) =>
+      [
+        `activity: ${e.who}${e.by ? ` ${e.by}` : ""} · ${e.surface} ${e.at ?? ""} · ${e.did ?? ""}${e.times ? ` ×${e.times}` : ""}`,
+        ...(e.refused !== undefined ? [`refused: ${e.refused}`] : []),
+        ...(e.said ?? []).map((s) => `${e.highlight ? "highlight" : "said"}: ${s}`),
+      ].join(" · ")
+
+    return { root, tabs, activity: fresh.map(line) }
   }
   const tabOf = (root: Json | undefined, surface: string) => tabsOf(root).find((t) => t.surface === surface)?.at
-  /** The tab in front: where the person acted or the agent pointed, held until it closes; else the tab opened last. */
-  let front: string | undefined
+  /**
+   * Where the person's page stands, as the shell's page keeps it in its URL (shell.tsx): home until the person moves. The
+   * person's call at a tab is made in it; opened from home, a tab is gone to; closed while in front, the page goes to the
+   * next older tab, or home. The agent's highlight with `front` is gone to, where its tab is open, as when the person is not busy, but
+   * not one made before the page first looked. A tab in front that closes otherwise leaves home in front, unless the URL's
+   * number names a tab that now stands at its surface's name.
+   */
+  let at = HOME
   let pointed: number | undefined
-  const shownAfter = (step: Step, root: Json | undefined, tabs: Drawn[]) => {
-    const point = (root as { pointed?: { at: string; n: number } } | undefined)?.pointed
+  const activeIn = (rows: { at: string; n: number }[]) => (at === HOME || rows.some((r) => r.at === at) ? at : (rows.find((r) => at === `/tabs/${r.n}`)?.at ?? HOME))
+  const shownAfter = (step: Step, previous: Json | undefined, root: Json | undefined) => {
+    const rows = tabsOf(root)
+    const active = () => activeIn(rows)
+    const front = activeIn(tabsOf(previous))
+    const moved = (path: string, handle: string, args: Record<string, Json> = {}) => {
+      const key = placeOf(path).key
 
-    if (step.kind === "act") front = tabIn(root, step.path)
-    else if (point && point.n !== pointed) front = tabIn(root, point.at)
-    pointed = point?.n ?? pointed
-    if (front && !tabs.some((t) => t.at === front)) front = undefined
+      if (key !== HOME) at = key
+      else if (handle === "open") at = newestFirst(rows.filter((r) => r.surface === args.surface))[0]?.at ?? at
+      else if (handle === "close") {
+        const closed = tabsOf(previous).find((t) => t.n === args.n)
 
-    return front ?? tabs.at(-1)?.at
+        if (closed?.at === front) at = successor(newestFirst(tabsOf(previous)), closed.at) ?? HOME
+      }
+    }
+
+    if (step.kind === "act") moved(step.path, step.handle, step.args)
+    if (step.kind === "acts") for (const c of step.calls) moved(c.path, c.handle, c.args)
+
+    const { seen, fresh } = pointedSince(pointed, (root as { pointed?: Pointed } | undefined)?.pointed)
+
+    pointed = seen
+    if (fresh && rows.some((r) => r.at === placeOf(fresh.at).key)) at = placeOf(fresh.at).key
+    if (!rows.some((r) => at === `/tabs/${r.n}`)) at = active()
+
+    return at === HOME ? undefined : active()
   }
   let waiting: Promise<Telling> | undefined
   const steps: Played[] = []
@@ -282,7 +392,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       case "wait":
         waiting = word(["wait", String(step.seconds)])
         // The wait is under way at the door before anyone moves, as when the agent waits for the person.
-        await sleep(400)
+        await nap(400)
 
         return { who: "agent", did: `${WORD} wait ${step.seconds}, and waits`, tellings: [] }
       case "waited": {
@@ -313,24 +423,20 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         return { who: "person", did: `on the page: ${step.what}${refused ? `, ${refused} refused` : ""}`, tellings: [] }
       }
       case "look": {
-        const notices = (await page("/activity/notices")) as { entries?: { n: number }[] | string } | undefined
-        const newest = Array.isArray(notices?.entries) ? Math.max(0, ...notices.entries.map((e) => e.n)) : 0
+        const highlights = (await page("/activity/highlights")) as { unopened?: number[] } | undefined
+        const newest = Math.max(0, ...(highlights?.unopened ?? []))
 
-        if (newest) await page("/activity/notices", { handle: step.mark, args: { n: newest } })
+        if (newest) await page("/activity/highlights", { handle: "opened", args: { n: newest } })
 
-        return {
-          who: "person",
-          did: step.mark === "seen" ? "opens their notifications, which marks every notice seen" : "clicks the newest notice's toast, which marks it seen",
-          tellings: [],
-        }
+        return { who: "person", did: "opens the drawer of the newest highlight's tab, which opens its highlights", tellings: [] }
       }
       case "go": {
         const root = await page("/")
-        const point = (root as { pointed?: { at: string } } | undefined)?.pointed
+        const point = (root as { pointed?: Pointed } | undefined)?.pointed
 
-        front = point && tabIn(root, point.at)
+        if (point && tabsOf(root).some((r) => r.at === placeOf(point.at).key)) at = placeOf(point.at).key
 
-        return { who: "person", did: `goes where the agent pointed them${point ? `: ${point.at}` : ", but it pointed nowhere"}`, tellings: [] }
+        return { who: "person", did: `goes where the agent brought them${point ? `: ${point.at}` : ", but it brought them nowhere"}`, tellings: [] }
       }
       case "code": {
         const file = join(dir, ".baba/surfaces", step.surface, step.file)
@@ -348,7 +454,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       case "reloaded": {
         const until = Date.now() + RELOAD_MS
 
-        while (Date.now() < until && (await descriptions()) === loaded) await sleep(50)
+        while (Date.now() < until && (await descriptions()) === loaded) await nap(50)
 
         const seen = (await descriptions()) !== loaded
 
@@ -360,7 +466,9 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
         }
       }
       case "pause":
-        await sleep(step.seconds * 1000)
+        // Passed at once, on the demo's clock.
+        ahead += step.seconds * 1000
+        writeFileSync(join(dir, AHEAD), String(ahead))
 
         return { who: "root", did: `${step.seconds} seconds pass with no call, as while the agent thinks`, tellings: [] }
       case "hooks":
@@ -376,7 +484,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 
         for (let i = 0; at && i < 100; i++) {
           if (((await page(at)) as { status?: string } | undefined)?.status === status) break
-          await sleep(20)
+          await nap(20)
         }
 
         return { who: "surface", did: `the build moves by itself: ${step.line}`, tellings: [] }
@@ -384,10 +492,10 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       case "stop":
         return { who: "harness", did: "the agent's turn ends", tellings: await hook("Stop", { stop_hook_active: false }) }
       case "sleep":
-        await run([join(dir, WORD), "close"])
-        for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
+        await run([join(dir, WORD), "sleep"])
+        for (let i = 0; endpoint() && i < 100; i++) await nap(20)
 
-        return { who: "root", did: "the root goes to sleep, as when nothing called it for a while", tellings: [] }
+        return { who: "root", did: "the root goes to sleep, as when its work is over or nothing used it for a while", tellings: [] }
     }
   }
 
@@ -399,7 +507,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
       const done = { ...(await one(step)), ...(step.timing && { timing: step.timing }), ...(unhooked ? { unhooked: true as const } : {}) }
       const after = await look()
 
-      const shown = after.root === undefined ? undefined : shownAfter(step, after.root, after.tabs)
+      const shown = after.root === undefined ? undefined : shownAfter(step, before.root, after.root)
       const page: Page =
         after.root === undefined ? { ...(steps.at(-1)?.page ?? { tabs: [] }), asleep: true } : { tabs: after.tabs, ...(shown && { shown }) }
 
@@ -409,11 +517,10 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 
     return { name: scenario.name, steps }
   } catch (error) {
-    return { name: scenario.name, steps, error: error instanceof Error ? error.message : String(error) }
+    return { name: scenario.name, steps, error: signal?.aborted ? "stopped" : error instanceof Error ? error.message : String(error) }
   } finally {
     await waiting?.catch(() => {})
-    if (endpoint()) await run([join(dir, WORD), "close"]).catch(() => "")
+    if (endpoint()) await run([join(dir, WORD), "close"], undefined, AbortSignal.timeout(10_000)).catch(() => "")
     for (let i = 0; endpoint() && i < 100; i++) await sleep(20)
-    rmSync(dir, { recursive: true, force: true })
   }
 }
