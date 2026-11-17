@@ -24,7 +24,7 @@ Its answer names the page's address, the command to use, the surfaces and the op
 - `/activity` has who did what in this session, newest first, with what the surfaces said: read it first to catch up after a break or a compaction.
 - What the person did is a move to take up and build on, never to undo or overwrite. Where they changed what you were about to, theirs stands: read again and work from it.
 - A refusal gives its reason, which may be that the person or the surface moved first. Read again and act on what is offered; do not repeat the call.
-- For more than a few calls of one kind, write one program with the command's `-e`: `root.read(path)`, `root.call(path, handle, args)` and `root.wait(seconds)`. Print each result and stop at the first refusal.
+- For more than a few calls, run one program: the command's `-e - <<'EOF'` runs the JavaScript that follows, with `await read(path)`, a view as data, `await call(path, handle, {name: value})` and `print(…)`. A refusal ends it; the answer is what it printed and a summary of its calls.
 
 ## Surfaces
 

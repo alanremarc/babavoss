@@ -2,6 +2,19 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.73.0
+
+**The program door.** `COMMAND [PATH] -e - <<'EOF' … EOF` runs the JavaScript or TypeScript that follows. In scope: `await read(path)`, a view as data with each action as `{ handle, args, inputs }` and each input as `{ type }`; `await call(path, handle, {name: value})`, which returns what the call changed and throws on a refusal; and `print(…)`.
+
+- A path before `-e` is the base for relative paths.
+- The answer is what the program printed, then one summary of its calls: the same change grouped once with its count, and each refusal with why.
+- A refusal ends the program unless it is caught; the calls before it stay done. A program that arrives split into words, or put after a handle, is refused with the reason.
+- `root.read`, `root.call`, `root.wait` and `root.page` still work.
+- Every call of one program carries the id `program:XXXXXXXX` in `/activity`, and the drawer folds them into one line: "Agent made 12 calls in one command, the 12th refused".
+- Baba's line about batches teaches the heredoc program. The client's `VERSION` is 19 and replaces itself.
+
+Measured against the door before it, on four batch tasks: the same pass rate, a fifth less cost and fewer tool calls, no refusal. Nothing in a project's surfaces needs to change.
+
 ## 0.72.0
 
 **Breaking: highlight replaces `attention`, `show` and `/activity/notices`.** A surface no longer says who is needed at `/`. Where it said `attention` because something waits on the person, mark the notice that tells what happened as a highlight: their tab gets a bubble and a dot until they open its drawer, and the agent hears it first among its notices.

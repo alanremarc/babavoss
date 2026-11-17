@@ -52,6 +52,26 @@ const ROWS: Row[] = [
 ]
 
 describe("a thread", () => {
+  it("folds one program's entries, those in a row that share its name, into one batch, whatever each is; a highlight stands as its own", () => {
+    const one = { id: "program:3f2a9c1b" }
+    const rows = [
+      row(20, { did: "note n=9" }),
+      row(19, { ...one, did: "note n=8", refused: "issue 8 is done" }),
+      row(18, { ...one, did: "note n=7", said: ["Issue 7 noted"] }),
+      ...[17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7].map((n) => row(n, { ...one, did: `note n=${n - 11}` })),
+      row(6, { id: "lab:act-1", did: "note n=1" }),
+    ]
+    const items = itemsOf(rows)
+
+    expect(items.map((i) => ("rows" in i ? [i.kind, i.rows.length] : [i.kind, 1]))).toEqual([
+      ["calls", 1],
+      ["batch", 13],
+      ["calls", 1],
+    ])
+    expect(batchLine(items[1] as Extract<(typeof items)[number], { kind: "batch" }>)).toBe("13 calls by the agent, one command, stopped at note n=8: issue 8 is done")
+    expect(itemsOf([row(3, { ...one }), row(2, { ...one, said: ["Look here"], highlight: true }), row(1, { ...one })]).map((i) => i.kind)).toEqual(["calls", "notice", "calls"])
+  })
+
   it("is a tab's entries and the shell's lines about it; home's is the shell's own", () => {
     expect(entriesIn(ROWS, "/queue").map((r) => r.n)).toEqual([12, 11, 10, 9, 8, 7, 6, 5, 2])
     expect(entriesIn(ROWS, "/tabs/3").map((r) => r.n)).toEqual([4, 3])
@@ -104,12 +124,12 @@ describe("a thread", () => {
     expect(glanceOf(ROWS[9]!, true)).toBe("Lab opened by the agent")
   })
 
-  it("folds the calls of one command, entries in a row that share their caller's name, into one line, saying where a refusal stopped it", () => {
+  it("folds the calls of one command into one line, saying where a refusal stopped it", () => {
     const batch = [
-      row(25, { did: "start n=4", refused: "lane 2 is busy", id: "c1" }),
-      row(24, { did: "note n=4", said: ["Issue 4 noted"], id: "c1" }),
-      row(23, { did: "done n=3", id: "c1" }),
-      row(22, { did: "add title=x", id: "c0" }),
+      row(25, { did: "start n=4", refused: "lane 2 is busy", id: "program:c1" }),
+      row(24, { did: "note n=4", said: ["Issue 4 noted"], id: "program:c1" }),
+      row(23, { did: "done n=3", id: "program:c1" }),
+      row(22, { did: "add title=x", id: "program:c0" }),
       row(21, { did: "add title=y" }),
     ]
     const items = itemsOf(batch)

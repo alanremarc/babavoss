@@ -79,11 +79,14 @@ export const entriesIn = (rows: readonly Row[], address: string): Row[] => rows.
 /** The shell's own entries, home's thread: those in no tab. */
 export const shellEntries = (rows: readonly Row[]): Row[] => rows.filter((r) => tabOfRow(r) === undefined)
 
+/** The name a program gives each of its calls, as its client sends it (bv.ts): its entries share it. */
+const PROGRAM = "program:"
+
 /**
- * The batch an entry is of: the name its caller gave its call, which the calls of one command share. Entries in a row
- * with the same are one batch.
+ * The batch an entry is of: the program its call was one of, by the name the program's calls share; none for a call made
+ * alone. Entries in a row of the same are one batch.
  */
-export const batchOf = (row: Row): string | undefined => row.id
+export const batchOf = (row: Row): string | undefined => (row.id?.startsWith(PROGRAM) ? row.id : undefined)
 
 /** The thread's parts, newest first as given: each highlight, and the ordinary entries between two folded into one. */
 export function partsOf(rows: readonly Row[]): Part[] {
@@ -109,10 +112,11 @@ export function itemsOf(rows: readonly Row[], batches = true): Item[] {
 
   for (let i = 0; i < rows.length; ) {
     const row = rows[i]!
-    const batch = batches ? batchOf(row) : undefined
+    // A highlight, which is the person's to see, stands as its own even in a batch.
+    const batch = batches && !row.highlight ? batchOf(row) : undefined
     let end = i + 1
 
-    while (batch !== undefined && end < rows.length && batchOf(rows[end]!) === batch) end++
+    while (batch !== undefined && end < rows.length && !rows[end]!.highlight && batchOf(rows[end]!) === batch) end++
     if (end - i > 1) {
       items.push({ kind: "batch", who: row.who, rows: rows.slice(i, end) })
       i = end

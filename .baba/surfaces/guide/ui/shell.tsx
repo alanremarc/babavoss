@@ -258,7 +258,7 @@ function Entries() {
   const queue = entriesIn(ROWS, "/queue")
   const highlight = queue.find((r) => r.n === 22)!
   const between = queue.filter((r) => r.n < 22 && r.n > 9)
-  const batch = itemsOf(queue.filter((r) => r.id === "c41")).find((i) => i.kind === "batch")!
+  const batch = itemsOf(queue.filter((r) => r.id === "program:c41")).find((i) => i.kind === "batch")!
   const refused = itemsOf(queue.filter((r) => r.n === 16))[0]!
   const world = itemsOf(queue.filter((r) => r.n === 15))[0]!
 
