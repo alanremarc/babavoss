@@ -1,0 +1,512 @@
+<!doctype html>
+<!-- The site's one page, babavoss.org, for a person who has an agent and has not heard of Baba Voss: what it is in a line,
+     a picture of it, built of markup, one window with the chat they ask in and the surface they see, and the line they copy to
+     their agent. It says what the README says, without the parts for someone who installs by hand. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Baba Voss</title>
+    <meta name="description" content="Baba is a work surface you share with your agent." />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #faf9f7;
+        --fg: #1b1a19;
+        --muted: #716c66;
+        --line: #e3dfd8;
+        --card: #ffffff;
+        --soft: #f1eee9;
+        --accent: #8a4a7d;
+        --accent-soft: #f3e6f0;
+        --good: #2f7d57;
+        --good-soft: #e2f2ea;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #151413;
+          --fg: #eceae6;
+          --muted: #9b958d;
+          --line: #2f2c29;
+          --card: #1d1c1a;
+          --soft: #252321;
+          --accent: #d39bc8;
+          --accent-soft: #3a2a37;
+          --good: #7fcfa5;
+          --good-soft: #1f3329;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 54rem;
+        margin: 0 auto;
+        padding: 4rem 1rem 3rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .lede {
+        margin: 0.5rem 0 0;
+        font-size: 1.25rem;
+        color: var(--muted);
+      }
+      h2 {
+        margin: 3.5rem 0 0.75rem;
+        font-size: 1.125rem;
+        font-weight: 650;
+      }
+      p {
+        margin: 0 0 1rem;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      a {
+        color: inherit;
+      }
+
+      /* The picture: one window of two columns, the chat the person asks in and the surface they see: a video being cut. */
+      .picture {
+        margin: 2.5rem 0 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -16px rgb(0 0 0 / 0.18);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .bar i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--line);
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+      }
+      .label {
+        margin: 0 0 0.75rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      /* The chat: what the person asks, what the agent says. */
+      .chat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1rem;
+        border-right: 1px solid var(--line);
+        font-size: 0.875rem;
+      }
+      .say {
+        max-width: 92%;
+        padding: 0.5rem 0.75rem;
+        border-radius: 12px;
+        background: var(--soft);
+      }
+      .say.you {
+        align-self: flex-end;
+        background: var(--accent-soft);
+      }
+      .ask {
+        margin-top: auto;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+
+      /* The surface: the video, its few controls, and its timeline: the beats of the music, and the clips with their cuts. */
+      .surface {
+        padding: 1rem;
+        min-width: 0;
+      }
+      .video {
+        position: relative;
+        aspect-ratio: 16 / 7;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #2b2440, #5a3b63 55%, #c9826b);
+        overflow: hidden;
+      }
+      .video::before {
+        content: "";
+        position: absolute;
+        inset: auto -10% -45% -10%;
+        height: 80%;
+        border-radius: 50%;
+        background: rgb(20 16 30 / 0.55);
+      }
+      .play {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: rgb(255 255 255 / 0.9);
+      }
+      .play::after {
+        content: "";
+        position: absolute;
+        left: 18px;
+        top: 13px;
+        border: 9px solid transparent;
+        border-left: 14px solid #2b2440;
+        border-right: 0;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0.625rem 0 0.75rem;
+        color: var(--muted);
+        font-size: 0.8125rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .controls b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .controls .push {
+        margin-left: auto;
+      }
+      .track {
+        display: grid;
+        grid-template-columns: 3.25rem minmax(0, 1fr);
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .track + .track {
+        margin-top: 0.375rem;
+      }
+      .lane {
+        position: relative;
+        height: 1.75rem;
+      }
+      /* Sixteen beats: a tick each, across the lane. */
+      .beats {
+        height: 0.875rem;
+        background: repeating-linear-gradient(to right, var(--muted) 0 1.5px, transparent 1.5px 6.25%);
+        opacity: 0.55;
+      }
+      .clip {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 6px;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent);
+      }
+      .clip.a {
+        left: 0;
+        width: calc(31.25% - 2px);
+      }
+      .clip.b {
+        left: 50%;
+        width: calc(18.75% - 2px);
+      }
+      .clip.c {
+        left: 68.75%;
+        width: calc(18.75% - 2px);
+      }
+      .clip.d {
+        left: 87.5%;
+        width: 12.5%;
+      }
+      /* What the person selected, now cut: its place stays, empty. */
+      .cut {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 31.25%;
+        width: calc(18.75% - 2px);
+        display: grid;
+        place-items: center;
+        border: 1.5px dashed var(--muted);
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 0.6875rem;
+      }
+      .note {
+        margin-top: 0.75rem;
+        padding: 0.375rem 0.625rem;
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+
+      /* The picture plays once as it is first seen: the ask, the answer, then the cut made and the clips moved onto the beats.
+         Still, in its last state, where motion is reduced. */
+      @media (prefers-reduced-motion: no-preference) {
+        .step {
+          opacity: 0;
+          transform: translateY(4px);
+          animation: arrive 0.4s ease-out forwards;
+        }
+        .step.s1 {
+          animation-delay: 0.6s;
+        }
+        .step.s2 {
+          animation-delay: 3.4s;
+        }
+        .step.s4 {
+          animation-delay: 3.8s;
+        }
+        @keyframes arrive {
+          to {
+            opacity: 1;
+            transform: none;
+          }
+        }
+        /* The cut: the selected part, whole at first, empties. */
+        .cut {
+          animation: empty 0.5s ease-out 1.8s both;
+        }
+        @keyframes empty {
+          from {
+            background: var(--accent);
+            border-style: solid;
+            border-color: var(--accent);
+            color: transparent;
+          }
+        }
+        /* The clips after it start a little off the beat, and move onto it. */
+        .clip.b {
+          animation: snap-b 0.45s ease-out 2.5s both;
+        }
+        .clip.c {
+          animation: snap-c 0.45s ease-out 2.7s both;
+        }
+        .clip.d {
+          animation: snap-d 0.45s ease-out 2.9s both;
+        }
+        @keyframes snap-b {
+          from {
+            transform: translateX(7px);
+          }
+        }
+        @keyframes snap-c {
+          from {
+            transform: translateX(-9px);
+          }
+        }
+        @keyframes snap-d {
+          from {
+            transform: translateX(6px);
+          }
+        }
+      }
+
+      /* The line to copy. */
+      .copy {
+        display: flex;
+        align-items: stretch;
+        gap: 0.5rem;
+        padding: 0.5rem 0.5rem 0.5rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--card);
+      }
+      .copy p {
+        flex: 1;
+        margin: 0;
+        padding: 0.375rem 0;
+        font-size: 0.9375rem;
+        overflow-wrap: anywhere;
+      }
+      .copy button {
+        flex: none;
+        align-self: center;
+        padding: 0.4375rem 0.875rem;
+        border: 0;
+        border-radius: 8px;
+        background: var(--fg);
+        color: var(--bg);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      /* What to ask for. */
+      .wishes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+      .wishes section {
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--card);
+      }
+      .wishes h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 650;
+      }
+      .wishes ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .wishes li + li {
+        margin-top: 0.5rem;
+      }
+
+      footer {
+        margin-top: 4rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+
+      @media (max-width: 40rem) {
+        main {
+          padding-top: 2.5rem;
+        }
+        .cols,
+        .wishes {
+          grid-template-columns: 1fr;
+        }
+        .chat {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .ask {
+          margin-top: 0.25rem;
+        }
+        .copy {
+          flex-direction: column;
+          padding: 0.75rem;
+        }
+        .copy button {
+          align-self: stretch;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Baba Voss</h1>
+      <p class="lede">Baba is a work surface you share with your agent.</p>
+
+      <div class="picture" role="img" aria-label="One window. On the left, the chat: you ask your agent to cut the part of the video you selected and line the cuts up with the beat of the music. On the right, the surface: the video, and its timeline, where the part is cut and the clips now start on the beats.">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="cols" aria-hidden="true">
+          <div class="chat">
+            <p class="label">Chat</p>
+            <div class="say you step s1">Cut the part I selected, and line the cuts up with the beat.</div>
+            <div class="say step s2">Done. I cut 0:10 to 0:16 and moved three cuts onto the beat.</div>
+            <div class="ask">Ask your agent…</div>
+          </div>
+          <div class="surface">
+            <p class="label">Surface</p>
+            <div class="video"><span class="play"></span></div>
+            <div class="controls"><b>▶</b><span>0:10 / 0:32</span><span class="push">120 beats a minute</span></div>
+            <div class="track">
+              <span>Beats</span>
+              <div class="lane beats"></div>
+            </div>
+            <div class="track">
+              <span>Clips</span>
+              <div class="lane">
+                <span class="clip a"></span><span class="cut">cut</span><span class="clip b"></span><span class="clip c"></span><span class="clip d"></span>
+              </div>
+            </div>
+            <div class="note step s4">3 cuts moved onto the beat.</div>
+          </div>
+        </div>
+      </div>
+
+      <h2>How it works</h2>
+      <p>You keep talking to your agent as you do now. Baba gives the work a place of its own: a page where you see what the agent sees, as it changes.</p>
+      <p class="muted">You can act on the page too. The agent is told what you did, and builds on it.</p>
+
+      <h2>Getting started</h2>
+      <p>You need a coding agent, such as Claude Code. Copy this to it, in the project you want Baba in:</p>
+      <div class="copy">
+        <p id="prompt">Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.</p>
+        <button type="button" id="copy">Copy</button>
+      </div>
+
+      <h2>Then say what you want</h2>
+      <p>In your own words. “I want a surface…”</p>
+      <div class="wishes">
+        <section>
+          <h3>Software development</h3>
+          <ul>
+            <li>…that tracks what still blocks the next release.</li>
+            <li>…that lists every failing test with the change that broke it.</li>
+            <li>…where I approve your database changes one by one.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Running a business</h3>
+          <ul>
+            <li>…that matches each month's payments to our invoices.</li>
+            <li>…that shows which subscriptions we pay for and when each renews.</li>
+            <li>…that keeps every open customer request with who answers it.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Research and writing</h3>
+          <ul>
+            <li>…that collects the papers we read, with your summary and my verdict.</li>
+            <li>…that compares five interviews answer by answer.</li>
+            <li>…that tracks each chapter's draft, its open questions and its sources.</li>
+          </ul>
+        </section>
+      </div>
+      <p class="muted" style="margin-top: 1rem">Your agent builds it and opens it on your page.</p>
+
+      <footer>
+        Early, and still changing. <a href="https://github.com/alanremarc/babavoss">Source</a> · <a href="https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md">Design</a> ·
+        <a href="/llms.txt">For agents</a> · Apache 2.0
+      </footer>
+    </main>
+    <script>
+      const button = document.getElementById("copy")
+
+      button.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(document.getElementById("prompt").textContent)
+          button.textContent = "Copied"
+        } catch {
+          button.textContent = "Select the line"
+        }
+        setTimeout(() => (button.textContent = "Copy"), 2000)
+      })
+    </script>
+  </body>
+</html>

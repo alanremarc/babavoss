@@ -1,22 +1,53 @@
-# babavoss
+# Baba Voss
 
-Surfaces your agent works on, each with a page for you. A surface is a tool the agent works with: what is true now and what can be done now, read and acted on through a command, and a tab where you watch and decide over the same thing. The agent learns a surface from the surface itself. baba is what makes an agent aware of them; babavoss is the framework they run on.
+Baba is a work surface you share with your agent.
+
+```text
+           agent ◄───── state ─────► surface
+             ▲                          │ ui
+   ┌─────────┴─────────┐      ┌─────────▼─────────┐
+   │ chat: the input   │      │ page: the face    │
+   └─────────▲─────────┘      └─────────┬─────────┘
+             │ ask                      │ see
+             └────────── you ───────────┘
+```
 
 ## Getting started
 
-You need [Bun](https://bun.sh). In your project's directory, or in your home directory for surfaces in every project:
+Copy this to your agent:
+
+```text
+Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.
+```
+
+Then say what you want. "I want a surface…"
+
+**Software development**
+- …that tracks what still blocks the next release.
+- …that lists every failing test with the commit that broke it.
+- …where I approve your database migrations one by one.
+
+**Running a business**
+- …that matches each month's payments to our invoices.
+- …that shows which subscriptions we pay for and when each renews.
+- …that keeps every open customer request with who answers it.
+
+**Research and writing**
+- …that collects the papers we read, with your summary and my verdict.
+- …that compares five interviews answer by answer.
+- …that tracks each chapter's draft, its open questions and its sources.
+
+The agent writes it in `.baba/surfaces/`, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up. When a later babavoss is out, the agent is told as it works, and updates `.baba/`.
+
+## Installing by hand
+
+You need [Bun](https://bun.sh) 1.4 or later. In your project's directory, or in your home directory for surfaces in every project:
 
 ```sh
 bunx github:alanremarc/babavoss init
 ```
 
-This makes `.baba/`, where the surfaces' code lives, and configures your agent's harness beside it. A new session begins with the surfaces in view, on one page. Ask for one:
-
-```text
-I want a surface that matches each month's payments to our invoices.
-```
-
-The agent writes it in `.baba/surfaces/`, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up. When a later babavoss is out, the agent is told as it works, and updates `.baba/`.
+This makes `.baba/`, where the surfaces' code lives, and sets up your agent's harness beside it. A new session begins with the surfaces in view, on one page.
 
 ## Status
 

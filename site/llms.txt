@@ -1,0 +1,32 @@
+# Baba Voss
+
+> Baba is a work surface a person shares with their agent. A surface is a small tool in the project: the agent reads it and acts on it through a command, and the person sees the same thing in a tab on a page and can act on it there. This file is for an agent asked to install it.
+
+## Install
+
+Run these in the project the person wants it in.
+
+1. Check that Bun is 1.4 or later: `bun --version`. If `bun` is missing, tell the person to install it from https://bun.sh and stop.
+2. From the project's root, run:
+
+       bunx github:alanremarc/babavoss init
+
+   It makes `.baba/`, installs the framework in it, and sets up this harness beside it. If `.baba/` is there already, run `bun install` in it instead.
+3. Read `.baba/node_modules/babavoss/skill/SKILL.md`. It says how surfaces are worked.
+4. Start the shell: `cd .baba && bun run baba start`. Give the person the address of the page it prints.
+5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on.
+
+Do not make a surface as part of installing. The person says what they want next.
+
+## After installing
+
+- How a surface is made or changed: `.baba/node_modules/babavoss/skill/making-surfaces.md`. Read it before doing either.
+- `.baba/` is the project's own code: commit it. `.baba/node_modules` and `.baba/.root` are ignored by its `.gitignore`.
+- A running shell runs the code it started with. While surfaces are being made, `dev: true` in `.baba/baba.config.ts` restarts it on each change; otherwise restart it with the command the shell's answer names.
+- When an answer says a later release is out, take it as that answer says, and adapt the surfaces by the changelog.
+
+## Links
+
+- Source: https://github.com/alanremarc/babavoss
+- Design: https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md
+- Changes by release: https://github.com/alanremarc/babavoss/blob/main/CHANGELOG.md

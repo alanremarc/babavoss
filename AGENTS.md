@@ -1,4 +1,4 @@
-# babavoss
+# Baba Voss
 
 A TypeScript framework for surfaces an agent works on. A surface is a tool the agent works with for a person: what is true now and what can be done now, read and acted on through a command, and a tab where the person watches and steers over the same thing. A project's surfaces are code in its `.baba/` directory, a Bun package that names this framework. `.baba/` has a root, one runtime and one page per session: the shell, a surface the framework provides, which lists the surfaces and holds each open one as a tab. An agent is made aware by one piece of content, baba's words and the root's present, delivered by hooks and, where there are none, by the skill baba. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
 
@@ -9,6 +9,13 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 - Before each commit run `bun check && bun test`. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
 - Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, kit, bin, skill. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
 - Every file and concept earns its keep.
+
+## The queue
+
+How this project's agent keeps its queue, `.baba/surfaces/queue`. The surface says only how it works; this is what to do with it.
+
+- Keep the queue true as the work moves: add an issue for what the person asks for; what you would suggest is a draft, theirs to approve; once they say go ahead with a draft, start it.
+- Start an issue in a free lane when a subagent takes it, note where it stands, and mark it done only once its work is merged into main. The backlog's top is next.
 
 ## Layout
 
@@ -35,6 +42,8 @@ spec/surfaces.spec.ts       runs .baba/'s surfaces' specs with the framework's, 
 spec/border.spec.ts         the border: the package exports only its entries, and what a project keeps imports nothing else; the
                             internals this repository's own surfaces may reach, and why
 docs/DESIGN.md              the design
+site/                       babavoss.org as it is served, no build: index.html, the page; llms.txt, what an agent asked to install follows;
+                            the Site workflow publishes it
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
 .baba/surfaces/lab/eval/    the eval: a campaign of tasks run by headless agents on variants, checkouts, of a fixture surface; tokens and
                             what the agent did, tabled; eval.ts is its command, --dry plays scripts through the fake harness for free
