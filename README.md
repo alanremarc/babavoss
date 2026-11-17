@@ -37,7 +37,7 @@ Then say what you want. "I want a surface…"
 - …that compares five interviews answer by answer.
 - …that tracks each chapter's draft, its open questions and its sources.
 
-The agent writes it in `.baba/surfaces/`, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up. When a later babavoss is out, the agent is told as it works, and updates `.baba/`.
+The agent writes it in `.baba/surfaces/`, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up. When a later babavoss is out, the agent is told as it works, and offers to update `.baba/`.
 
 ## Installing by hand
 
