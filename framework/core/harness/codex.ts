@@ -378,7 +378,7 @@ export const codex: Adapter<CodexOptions> = {
     if (written(join(project, SKILL_AT), readFileSync(SKILL, "utf8"))) paths.push(dirname(SKILL_AT))
     if (editJson(join(project, HOOKS), hooked, true)) {
       paths.push(HOOKS)
-      said.push("Codex asks you to review these hooks once: run /hooks in Codex and trust baba's")
+      said.push("If you use Codex: it asks you to review these hooks once: run /hooks in Codex and trust baba's")
     }
     if (options.network) {
       const file = join(project, CONFIG)

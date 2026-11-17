@@ -235,7 +235,7 @@ test("provision writes the framework's hook into Codex's project hooks for each 
   const provisioned = run(["provision"])
 
   expect(provisioned.out).toContain("provisioned .codex/hooks.json\n")
-  expect(provisioned.out).toContain("Codex asks you to review these hooks once")
+  expect(provisioned.out).toContain("If you use Codex: it asks you to review these hooks once")
   expect(run(["provision"]).out).not.toContain(".codex/hooks.json")
   expect(hooks().Stop).toEqual([theirs, expect.objectContaining({ hooks: [expect.objectContaining({ type: "command" })] })])
   expect(hooks().PreToolUse).toEqual([theirs])

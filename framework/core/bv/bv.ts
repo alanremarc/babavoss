@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 19
+export const VERSION = 20
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -650,6 +650,11 @@ export async function bv(argv: string[], selected?: string, command = "bv"): Pro
   }
 }
 if (import.meta.main) {
+  // A reader that closes early, as `| head` does, ends the command quietly: what it wanted, it has.
+  process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EPIPE") process.exit(0)
+    throw error
+  })
   const directory = dirname(resolve(process.argv[1]!))
 
   if (basename(directory) === "bin" && basename(dirname(directory)) === ".babavoss")
