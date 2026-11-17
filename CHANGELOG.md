@@ -2,6 +2,18 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.77.0
+
+**Making a surface is learned from the manual alone.** `skill/making-surfaces.md` is rewritten in the order a first surface is made, each statement checked against the code. It covers route params, `view(...)`, the rule that puts an action in a list's pattern, hearing the world by a session command named for what it hears, highlights, and stories that `await` the world's events and name a command by a test. It no longer teaches `useShell().toast`. The template's comments teach the same shape.
+
+- `baba init`, the shell's answer in a project with no surfaces of its own, and the note of a later release say what is there and how: they no longer urge a surface or an update. Whether a later release is taken is the person's.
+- The command ends quietly where its reader closed early, as with `| head`. The line about reviewing Codex's hooks says it is for those who use Codex. The client's `VERSION` is 20 and replaces itself.
+- The site, babavoss.org, is in this repository's `site/`: its page, and `llms.txt`, what an agent asked to install follows.
+
+Measured on a fresh project, against the release before: a first surface takes a median 6 tool calls where it took 14, and the agent reads nothing past the manual, where it read the framework's source about 7 times a run; every rule of a correct surface passed in both. An agent given only the README's line installed, started the shell and gave the page's address in 10 runs of 10.
+
+Nothing in a project's surfaces needs to change.
+
 ## 0.76.0
 
 **Baba's words are rewritten: the agent holds the state and carries the intent.** They say that the present is given whole once and every change after it as a change, so the agent does not read again to check; that a surface says what is true and what can be done, never what to do; that values from a surface are read by the program that uses them; that what is printed is the whole of the syntax; that a refusal is news about the state.
