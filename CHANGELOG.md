@@ -2,6 +2,29 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.75.0
+
+**Breaking: handles are printed once a view, descriptions follow one convention, and inputs declare what they mean.**
+
+An answer prints a view's handles as one block: `actions: COMMAND PATH ACTION <shared args> name=value…`, then a line a handle with its name, its own arguments and its description. A view's key is never printed for a handle; its name is.
+
+**Rewrite every handle's description** to one clause that adds what the name does not say: the effect, or when to use it. Never repeat the name, its subject or the command; lower case, no full stop; empty where the name says it all. A surface's own `description` stays a phrase and a "use when".
+
+- Before: ``description: ({ n }) => `Give issue ${n} to a lane, 1 to 5, when a subagent begins on it` ``
+- After: `description: "when a subagent begins on it"`
+
+**Declare what an input means** where its type alone does not say: `{ type, kind }`, `{ type, choices }` or `{ type, range }` in place of the bare type.
+
+- Before: `inputs: { lane: "number", about: "string", mode: "string" }`
+- After: `inputs: { lane: { type: "number", range: [1, 5] }, about: { type: "string", kind: "markdown" }, mode: { type: "string", choices: ["light", "dark"] } }`
+- `line`, `markdown` and `path` are text the form knows. Any other kind is the surface's own word, printed with its type, as `id(string)`.
+- Admission refuses a value outside the choices or the range and says what is allowed: drop your own checks for these. The refusal reads `HANDLE: INPUT must be …`: update a spec that expected your old wording.
+- The shell's form draws a picker for choices or a narrow range, and a box of several lines for markdown.
+
+**Menu entries** for one handle bound to several subjects are named by the `title` or `name` of the row the handle stands in, "Close Queue", no longer by its description: put such handles in rows that have one.
+
+Baba's line on reading an answer changed with the form. Measured against the form before it: the same pass rate, an issue's page about 30% smaller.
+
 ## 0.74.0
 
 **The drawer shows highlights; the rest is folded.** A tab's drawer shows its highlights, each with who raised it, when and where it goes. Every other entry, a surface's ordinary notice lines among them, sits in a fold between the highlights, one line saying how many and by whom ("14 actions: 9 by the agent, 3 by you, 2 heard"), opened in place. Only the newest ordinary entry shows unasked, as one faint line under the fold at the foot.
