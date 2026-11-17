@@ -119,7 +119,7 @@
       }
       /* The chat: what the person asks, what the agent says. */
       /* Each column has a head of one height: the chat's says the project it is in, the browser's its address. */
-      .head {
+      .pane-head {
         display: flex;
         flex: none;
         align-items: center;
@@ -131,7 +131,7 @@
         font: 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
         white-space: nowrap;
       }
-      .head > span:first-child {
+      .pane-head > span:first-child {
         overflow: hidden;
         text-overflow: ellipsis;
       }
@@ -231,7 +231,7 @@
         flex-direction: column;
         min-width: 0;
       }
-      .browser .head {
+      .browser .pane-head {
         font-size: 0.875rem;
       }
       .url {
@@ -800,7 +800,7 @@
         <div class="bar" aria-hidden="true"><i></i><i></i><i></i><b>Your harness</b><span>Claude Code, Codex, OpenCode…</span></div>
         <div class="cols" aria-hidden="true">
           <div class="chat">
-            <div class="head"><span>~/Projects/travel-videos</span></div>
+            <div class="pane-head"><span>~/Projects/travel-videos</span></div>
             <div class="talk">
             <div class="log" id="log">
               <div class="say you">I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”.</div>
@@ -823,7 +823,7 @@
             </div>
           </div>
           <div class="browser">
-            <div class="head"><span>‹</span><span>›</span><span>↻</span><span class="url" id="url">localhost:57171/slideshow</span></div>
+            <div class="pane-head"><span>‹</span><span>›</span><span>↻</span><span class="url" id="url">localhost:57171/slideshow</span></div>
             <div class="page">
               <div class="rail"><span class="mark"></span><span class="tab on" id="tab"></span></div>
               <div class="surface" id="surface" data-stage="2">
