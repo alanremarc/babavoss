@@ -1,7 +1,8 @@
-// The surface's page, shown in its tab: what the surface says, and the decision that is the person's, which they may take
-// here as well as in the conversation. Anything else the person wants changed, they tell the agent; there is no form here. `icon`, where exported, is the tab's. The shell gives its tab a menu
-// made from the surface: its actions, the places and a search; so the page is its content alone. `drawers`, where
-// exported, ask an action's inputs in the page's own way; without one the shell makes a form of them.
+// The surface's page, shown in its tab: what the surface says, live, and the same actions the agent is offered. The
+// shell gives the tab a drawer with its menu, every action with a form of its declared inputs, its places and its log,
+// so the page is its content alone; `icon` and `drawers`, where exported, are the tab's icon and a page's own form for
+// an action. It is drawn with the kit and the theme's tokens, so it follows the person's theme, mode, text size and
+// motion unasked; a page that moves by script or has a sidebar reads `useConventions()` for the rest.
 import { useState } from "react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button } from "babavoss/kit/index.ts"
@@ -24,7 +25,7 @@ export default function Greeting() {
       <h1 className="text-3xl font-medium">{view?.greeting}</h1>
       {view?.proposed !== undefined ? (
         <section className="flex flex-col gap-3 rounded-lg border p-4" aria-label="Proposed greeting">
-          <p className="text-muted-foreground">The agent proposes</p>
+          <p className="text-muted-foreground">Proposed</p>
           <p className="text-xl">{view.proposed}</p>
           <div className="flex gap-2">
             {view.accept && <Button onClick={() => void decide(view.accept!)}>Accept</Button>}
@@ -36,7 +37,7 @@ export default function Greeting() {
           </div>
         </section>
       ) : (
-        <p className="text-muted-foreground">Ask the agent for another greeting. What it proposes shows here, for you to accept or decline, here or in the conversation.</p>
+        <p className="text-muted-foreground">A greeting proposed shows here, to accept or decline, here or in the conversation.</p>
       )}
       {(refused || error) && (
         <p role="alert" className="text-destructive">

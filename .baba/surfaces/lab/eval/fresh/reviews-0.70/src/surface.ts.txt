@@ -1,0 +1,72 @@
+// Reviews: a note on a change is drafted by the agent, and the person approves or rejects it on the page.
+import { action, surface, view, type Update } from "babavoss/core/index.ts"
+
+type Review = { id: number; change: string; text: string; verdict: string; state: "draft" | "approved" | "rejected" }
+export type Model = { reviews: Review[]; next: number }
+type Event = { kind: "none" }
+
+const draft = action({
+  name: "draft",
+  description: "Draft a review of a change when the person asks for one; they approve or reject it on the page",
+  subject: {},
+  inputs: { change: "string", text: "string", verdict: "string" },
+  update: (m: Model, { change, text, verdict }): Update<Model, never> =>
+    !["ship", "fix", "drop"].includes(verdict)
+      ? { refused: "verdict is ship, fix or drop" }
+      : { model: { reviews: [...m.reviews, { id: m.next, change, text, verdict, state: "draft" }], next: m.next + 1 } },
+})
+const approve = action({
+  name: "approve",
+  description: ({ id }) => `Approve review ${id}`,
+  subject: { id: "number" },
+  inputs: {},
+  ask: true,
+  update: (m: Model, { id }): Update<Model, never> => ({
+    model: { ...m, reviews: m.reviews.map((r) => (r.id === id ? { ...r, state: "approved" } : r)) },
+    notices: [`Review ${id} approved`],
+  }),
+})
+const reject = action({
+  name: "reject",
+  description: ({ id }) => `Reject review ${id}`,
+  subject: { id: "number" },
+  inputs: {},
+  ask: true,
+  update: (m: Model, { id }): Update<Model, never> => ({
+    model: { ...m, reviews: m.reviews.map((r) => (r.id === id ? { ...r, state: "rejected" } : r)) },
+    notices: [`Review ${id} rejected`],
+  }),
+})
+
+const pages = view([draft, approve, reject], {
+  "/": (m) => {
+    const waiting = m.reviews.filter((r) => r.state === "draft")
+
+    return {
+      title: "Reviews",
+      how: "Draft a review whenever the person mentions a change. Always wait for the person to approve or reject it on the page before drafting another, and never approve one yourself.",
+      reviews: m.reviews.map((r) => ({ at: `/reviews/${r.id}`, id: r.id, change: r.change, verdict: r.verdict, state: r.state })),
+      ...(waiting.length && { attention: { who: "person", why: `${waiting.length} review(s) to approve or reject` } }),
+      draft: draft.bind({}),
+    }
+  },
+  "/reviews/:id": (m, { id }) => {
+    const r = m.reviews.find((x) => x.id === Number(id))
+
+    return (
+      r && {
+        ...r,
+        ...(r.state === "draft" && { approve: approve.bind({ id: r.id }), reject: reject.bind({ id: r.id }) }),
+      }
+    )
+  },
+})
+
+export default surface<Model, Event, never>({
+  description: "Draft reviews of changes for the person to approve. Use when the person wants a change reviewed.",
+  init: () => ({ reviews: [], next: 1 }),
+  update: (m, message) => (message.kind === "call" ? pages.update(m, message) : { model: m }),
+  view: pages.view,
+  run: async () => {},
+  failed: () => ({ kind: "none" }),
+})
