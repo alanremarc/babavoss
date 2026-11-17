@@ -126,6 +126,26 @@ A page follows the person's palette, light or dark mode, by the shell's theming 
   - frame: `h-menubar`, `h-bar` and `h-row`, the heights of a compact header, a bar, a row or icon button; `size-icon`, `size-rail-icon`, `size-glyph`, icons. Spacing is Tailwind's.
 - Never hard-code a colour, a font or a size where a token fits.
 
+The shell hands every page, home's included, its conventions: how the person wants pages to be, from their settings and the machine. A page interprets them by its own code. Following them is expected, and nothing checks it: a page that ignores one still works.
+
+- `motion`, `full` or `reduced`: where reduced, nothing moves. The kit stills every CSS animation and transition; a page that moves by script checks it.
+- `scale`, the text size, 1 by default: the kit sizes in rem, which the scale sizes, so a page drawn by the tokens follows unasked. Never size text in px.
+- `side`, `left` or `right`: where a page's own sidebar stands.
+- `rail`, `left`, `right`, `top` or `bottom`: where the shell's tabs stand, to keep clear of or to mirror.
+- `mode`, `light` or `dark`, as shown.
+
+A page reads them from `useConventions()` in `babavoss/shell/ui/index.tsx`, or by CSS alone: each stands on the page's root as `data-NAME`, a number as `--NAME` too, with the variants `motion-safe:`, `motion-reduce:`, `side-left:`, `side-right:`, `rail-left:`, `rail-right:`, `rail-top:`, `rail-bottom:` and `dark:`.
+
+```tsx
+<div className="flex side-left:flex-row-reverse">
+  <main className="flex-1">…</main>
+  <aside className="w-72 border-l side-left:border-l-0 side-left:border-r">…</aside>
+</div>
+
+const { motion } = useConventions()
+row.scrollIntoView({ behavior: motion === "reduced" ? "auto" : "smooth" })
+```
+
 Where a surface needs more, `ui/styles.css` beside its component is its own stylesheet. The shell takes it after its own, inside `@scope ([data-surface="NAME"])`, the element that holds each of its tabs: its rules reach its tabs and nothing else, and are not layered, so they win over a class. `:scope { … }` is the tab itself: set the surface's own tokens there as CSS variables, `--lane-idle: var(--border)`, and override a shell token there, `--primary: …`, for its tabs alone. `@apply` and `@source` work in it; `@theme`, `@import` and `:root` do not, and a dialog, popover or tooltip, drawn outside the tab, keeps the shell's tokens. Do not import it from `ui/index.tsx`.
 
 ## The harnesses
