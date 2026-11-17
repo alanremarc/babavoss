@@ -1,5 +1,5 @@
 // The shell's specimens: the rail in each of its four positions with tabs in every standing, a tab's drawer and home's,
-// the kinds of entry in a thread, a highlight's bubble, the desktop, the modal an action's inputs open in, the
+// home's closed tabs and a closed tab's log, the parts of a thread, its highlights, folds and batches, a highlight's bubble, the desktop, the modal an action's inputs open in, the
 // connection's states and a tab's own. Each is the shell's component, given sample data (samples.ts) where the live shell
 // gives it the runtime's; a drawer's menu reads sample views through a door of their own, so what it lists, orders and
 // dots is the shell's own working.
@@ -11,20 +11,21 @@ import { RefusedLine, useTabMenu } from "../../../../framework/shell/ui/actions.
 import { Said, type Bubble } from "../../../../framework/shell/ui/bubbles.tsx"
 import { controlsOf, highlightsIn, type Offered } from "../../../../framework/shell/ui/commands.ts"
 import { Overlay, PointedAlert, RefusedAlert, said } from "../../../../framework/shell/ui/connection.tsx"
-import { Drawer, Line } from "../../../../framework/shell/ui/drawer.tsx"
+import type { Archive } from "../../../../framework/shell/ui/closed.tsx"
+import { Drawer, Fold, Line, Notice, type Body } from "../../../../framework/shell/ui/drawer.tsx"
 import { Desktop, Foot } from "../../../../framework/shell/ui/home.tsx"
 import { homeMenu, type HomeProps } from "../../../../framework/shell/ui/home.ts"
 import { Inputs } from "../../../../framework/shell/ui/inputs.tsx"
 import { Logo } from "../../../../framework/shell/ui/mark.tsx"
 import { Rail, RailEntry, type RailItem } from "../../../../framework/shell/ui/rail.tsx"
-import { entriesIn, itemsOf, pinnedOf, shellEntries, waitingRows, withUnheard } from "../../../../framework/shell/ui/thread.ts"
+import { entriesIn, itemsOf, pinnedOf, placeIn, shellEntries, waitingRows, withUnheard, type Row } from "../../../../framework/shell/ui/thread.ts"
 import { TabBroken, TabFailed, TabNoPage } from "../../../../framework/shell/ui/tabs.tsx"
 import { standingOf } from "../../../../framework/shell/ui/turn.ts"
 import type { Rail as Placed } from "../../../../framework/shell/settings/src/settings.ts"
 import type { EntryOf } from "../src/catalogue.ts"
 import { State, States } from "./frame.tsx"
 import { Again, useHeld } from "./primitives.tsx"
-import { FRESH, ROWS, sampleDoor } from "./samples.ts"
+import { CLOSED_TABS, FRESH, ROWS, sampleArchive, sampleDoor } from "./samples.ts"
 
 const ICONS: Record<string, ReactNode> = {
   queue: <ListTodoIcon aria-hidden />,
@@ -130,7 +131,7 @@ const ROOT: View = {
 }
 
 /** A tab's drawer over a sample page, its menu read from the sample's views, as the shell opens it; closed, a button opens it again. */
-function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: string; empty?: boolean }) {
+function TabDrawer({ side, broken, rows = entriesIn(ROWS, "/queue") }: { side: "left" | "right"; broken?: string; rows?: Row[] }) {
   const menu = useTabMenu({ door, address: "/queue", route: "/issues/4", title: "Queue", name: "queue", start: () => {}, navigate: () => {}, highlights: UNOPENED, controls: controls() })
   const pinned = pinnedOf({ ...(broken && { broken }) })
 
@@ -139,10 +140,15 @@ function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: s
       label="Queue"
       side={side}
       menu={broken ? { items: controls() } : { items: menu.items, find: menu.find }}
-      rows={empty ? [] : entriesIn(ROWS, "/queue")}
+      rows={rows}
       loaded
       stay={new Set(FRESH)}
       {...(pinned && { pinned })}
+      where={(row) => {
+        const place = placeIn({ ...row, at: row.saidAt ?? row.at }, "/queue")
+
+        return place === "/" ? undefined : place
+      }}
       go={() => {}}
       reload={() => {}}
       close={() => {}}
@@ -150,11 +156,15 @@ function TabDrawer({ side, broken, empty }: { side: "left" | "right"; broken?: s
   )
 }
 
+/** The archive of closed tabs as home's drawer reads it, each with its surface's icon. */
+const ARCHIVE: Archive = { read: sampleArchive(), icon: (surface) => ICONS[surface] }
+
 /**
- * Home's drawer: the shell's menu from its view at /, the shell's own entries, and what of the person's waits for the agent;
- * with `unheard`, the session's hooks gone quiet 20 minutes ago, its highlight among the entries, saying what to do.
+ * Home's drawer: the shell's menu from its view at /, the shell's own entries folded, the closed tabs under them, and what
+ * of the person's waits for the agent; with `unheard`, the session's hooks gone quiet 20 minutes ago, its highlight among
+ * the entries, saying what to do; `opening` one of the archive's views.
  */
-function HomeDrawer({ unheard = false }: { unheard?: boolean }) {
+function HomeDrawer({ unheard = false, opening }: { unheard?: boolean; opening?: Body }) {
   const quiet = unheard ? { ever: true, since: Date.now() - 20 * 60_000 } : undefined
 
   return (
@@ -167,6 +177,8 @@ function HomeDrawer({ unheard = false }: { unheard?: boolean }) {
       loaded
       stay={new Set(quiet ? [-quiet.since] : [])}
       waiting={waitingRows(ROWS, unheard ? 0 : 2)}
+      archive={ARCHIVE}
+      {...(opening && { opening })}
       go={() => {}}
       reload={() => {}}
       close={() => {}}
@@ -190,17 +202,35 @@ function Under({ children }: { children: ReactNode }) {
   )
 }
 
+/** The queue's entries before its first highlight: a drawer with none yet. */
+const ORDINARY = entriesIn(ROWS, "/queue").filter((r) => r.n < 9)
+
 function DrawerSpecimen() {
   return (
     <States min={420}>
-      <State label="a tab's: its menu at rest over its thread, its highlights standing out, those not opened before dotted. Click the field to open the menu; type to search" bare>
+      <State label="a tab's: its highlights, those not opened before dotted, each saying where it goes; the rest folded between them, the newest glanced at the foot. Click a fold to open it; the field to open the menu" bare>
         <Under>
           <TabDrawer side="left" />
         </Under>
       </State>
-      <State label="home's: the shell's actions and the tabs as its places, the shell's own entries, what waits for the agent" bare>
+      <State label="no highlight yet: the fold alone, never an empty panel" bare>
+        <Under>
+          <TabDrawer side="right" rows={ORDINARY} />
+        </Under>
+      </State>
+      <State label="home's: the shell's own entries folded, what waits for the agent, and the closed tabs under them; click them" bare>
         <Under>
           <HomeDrawer />
+        </Under>
+      </State>
+      <State label="home's closed tabs: the latest first, read only, more as you scroll" bare>
+        <Under>
+          <HomeDrawer opening={{ kind: "closed" }} />
+        </Under>
+      </State>
+      <State label="a closed tab's log: the same thread, read only, with the way back" bare>
+        <Under>
+          <HomeDrawer opening={{ kind: "log", tab: CLOSED_TABS[0]! }} />
         </Under>
       </State>
       <State label="home's, the session's hooks gone quiet: its highlight in the thread, saying what to do" bare>
@@ -208,30 +238,51 @@ function DrawerSpecimen() {
           <HomeDrawer unheard />
         </Under>
       </State>
-      <State label="a broken tab's, at the right: nothing yet, Reload pinned" bare>
+      <State label="a broken tab's: nothing yet, Reload pinned" bare>
         <Under>
-          <TabDrawer side="right" broken="its saved state does not load: Unexpected token" empty />
+          <TabDrawer side="right" broken="its saved state does not load: Unexpected token" rows={[]} />
         </Under>
       </State>
     </States>
   )
 }
 
+/** A fold of sample entries as the thread draws it, `open` as it starts. */
+function Folded({ rows, open: initially = false, glance = false, home = false }: { rows: Row[]; open?: boolean; glance?: boolean; home?: boolean }) {
+  const [open, setOpen] = useState(initially)
+
+  return <Fold rows={rows} open={open} flip={setOpen} glance={glance} label={home ? "babavoss" : "Queue"} home={home} go={() => {}} />
+}
+
 function Entries() {
-  const items = itemsOf(entriesIn(ROWS, "/queue"))
-  const own = itemsOf(shellEntries(ROWS))
+  const queue = entriesIn(ROWS, "/queue")
+  const highlight = queue.find((r) => r.n === 22)!
+  const between = queue.filter((r) => r.n < 22 && r.n > 9)
+  const batch = itemsOf(queue.filter((r) => r.id === "c41")).find((i) => i.kind === "batch")!
+  const refused = itemsOf(queue.filter((r) => r.n === 16))[0]!
+  const world = itemsOf(queue.filter((r) => r.n === 15))[0]!
 
   return (
     <States min={360}>
-      <State label="notices, the agent's, the surface's and yours, the highlights standing out; calls in a row folded, click to open; the tab entry" className="flex-col items-stretch gap-2">
-        {[...items].reverse().map((item) => (
-          <Line key={item.kind === "calls" ? item.rows[0]!.n : item.row.n} item={item} label="Queue" home={false} fresh={item.kind === "notice" && FRESH.includes(item.row.n)} go={() => {}} />
-        ))}
+      <State label="a highlight: who raised it and when, the bubble, where it goes; dotted where it was not opened" className="flex-col items-stretch gap-2">
+        <Notice row={highlight} author="Agent" fresh where="/issues/7" go={() => {}} />
+      </State>
+      <State label="a fold: how many and by whom; at the foot, its newest entry glanced at" className="flex-col items-stretch gap-2">
+        <Folded rows={queue.filter((r) => r.n > 22)} glance />
+        <Folded rows={between} />
+      </State>
+      <State label="a fold opened: the entries as they are, notices as bubbles with the call under them" className="flex-col items-stretch gap-2">
+        <Folded rows={between} open />
+      </State>
+      <State label="a batch, one command's calls: stopped where a call was refused; click to open" className="flex-col items-stretch gap-2">
+        <Line item={batch} label="Queue" home={false} go={() => {}} />
+      </State>
+      <State label="a refusal, and the world's events, named by what heard them" className="flex-col items-stretch gap-2">
+        <Line item={refused} label="Queue" home={false} />
+        <Line item={world} label="Queue" home={false} />
       </State>
       <State label="on home, each naming its surface" className="flex-col items-stretch gap-2">
-        {[...own].reverse().map((item) => (
-          <Line key={item.kind === "calls" ? item.rows[0]!.n : item.row.n} item={item} label="babavoss" home fresh={false} go={() => {}} />
-        ))}
+        <Folded rows={shellEntries(ROWS)} open home />
       </State>
     </States>
   )

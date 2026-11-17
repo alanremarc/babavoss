@@ -23,6 +23,7 @@ import { call, changes, read, type Notice, type Turn, type Unheard } from "./cli
 import { Actions, useTabMenu } from "./actions.tsx"
 import { controlsOf, highlightsIn, named, type Offered } from "./commands.ts"
 import { added, Bubbles, gone, type Bubble } from "./bubbles.tsx"
+import type { Archive } from "./closed.tsx"
 import { Drawer } from "./drawer.tsx"
 import { ACTIVITY, HIGHLIGHTS, useFeed, type Feed, type Page as HighlightsPage } from "./feed.ts"
 import { Desktop, Foot } from "./home.tsx"
@@ -139,6 +140,8 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   const [stay, setStay] = useState<ReadonlySet<number>>(new Set())
   const all = useFeed(ACTIVITY, stream, drawer !== undefined)
   const [bubbles, setBubbles] = useState<Record<string, Bubble[]>>({})
+  // Home's drawer reads the archive of closed tabs by the door, each drawn with its surface's icon.
+  const archive = useMemo<Archive>(() => ({ read, icon: (surface) => icons[surface] }), [icons])
 
   useEffect(() => {
     const load = () => read<RootView>("/").then(setRoot, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -425,6 +428,18 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
         if (!document.querySelector('[role="dialog"][data-state="open"]')) document.getElementById(tabId(was))?.focus()
       })
   }
+  // A highlight that arrives in the drawer open is in front of the person: it is opened as it lands, its dot kept while the
+  // drawer stays, and the tab is not marked for it.
+  useEffect(() => {
+    if (drawer === undefined) return
+
+    const mine = unopenedOf(drawer === HOME ? shellEntries(told.rows) : entriesIn(told.rows, drawer), told.unopened).filter((n) => !stay.has(n))
+
+    if (!mine.length) return
+    setStay((was) => new Set([...was, ...mine]))
+    void call(HIGHLIGHTS, "opened", { n: Math.max(...mine) }).then(() => told.load(), () => undefined)
+  }, [drawer, told.rows, told.unopened])
+
   // The rail has shown the entry where a gesture asked for it already: this opens or closes its drawer.
   const toggle = (key: string) => (drawer === key ? closeDrawer() : openDrawer(key))
 
@@ -489,6 +504,16 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
   })
 
   const shownTab = tabs.find((t) => t.row.at === drawer)
+  // Where an entry of home's goes, said in a few words: the tab it is about and the place in it; none at the shell's /.
+  const homeWhere = (entry: Entry): string | undefined => {
+    const at = entry.saidAt ?? entry.at
+    const key = tabIn(at ?? undefined)
+    const tab = key && tabs.find((t) => t.row.at === key)
+
+    if (!at || at === "/") return undefined
+
+    return tab ? `${tab.label}${at.slice(tab.row.at.length)}` : at
+  }
   const homeTabs = tabs.map((t) => ({ at: t.row.at, surface: t.row.surface, label: t.label, icon: t.icon, ...(t.mark && { mark: t.mark }), go: () => go(t.row.at) }))
   const HomePage = OwnHome ?? Desktop
   // Home's highlights not opened: the shell's own, and that the hooks are not heard, until home's drawer is opened in that stretch.
@@ -606,6 +631,8 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
                   {...(all.earlier && { more: all.more })}
                   stay={stay}
                   waiting={waitingRows(all.rows, standingNow.waiting)}
+                  archive={archive}
+                  where={homeWhere}
                   go={(entry) => {
                     closeDrawer()
                     if (entry.at && entry.at !== "/") go(placeOf(entry.at).key, placeOf(entry.at).route)
@@ -699,6 +726,11 @@ function TabDrawer({
       {...(feed.earlier && { more: feed.more })}
       stay={stay}
       {...(pinned && { pinned })}
+      where={(entry) => {
+        const place = placeIn({ ...entry, at: entry.saidAt ?? entry.at }, row.at)
+
+        return place === "/" ? undefined : place
+      }}
       go={goTo}
       reload={() => {
         close()

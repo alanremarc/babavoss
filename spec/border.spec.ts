@@ -29,7 +29,7 @@ const INTERNALS: Record<string, { why: string; files: string[] }> = {
     files: [
       "core/surface/view.ts",
       "shell/settings/src/settings.ts",
-      ...["actions.tsx", "bubbles.tsx", "client.ts", "commands.ts", "connection.tsx", "drawer.tsx", "gaze.ts", "home.ts", "home.tsx", "inputs.tsx"].map((f) => `shell/ui/${f}`),
+      ...["actions.tsx", "bubbles.tsx", "client.ts", "closed.tsx", "commands.ts", "connection.tsx", "drawer.tsx", "gaze.ts", "home.ts", "home.tsx", "inputs.tsx"].map((f) => `shell/ui/${f}`),
       ...["live.ts", "mark.tsx", "rail.ts", "rail.tsx", "tab.tsx", "tabs.tsx", "thread.ts", "turn.ts"].map((f) => `shell/ui/${f}`),
     ],
   },
