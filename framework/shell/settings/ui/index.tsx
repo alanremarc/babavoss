@@ -1,4 +1,5 @@
-// The settings' page, shown in their tab: the appearance, where the tabs stand and the mark's motion among it, then the
+// The settings' page, shown in their tab: the appearance, where the tabs stand, the preferences every page follows by
+// convention, each a row of its choices, and the mark's motion among it, then the
 // shortcuts, each as it is with the control that changes it, every change a call of the surface. A theme is chosen from swatches, each painted in its own theme; Dynamic
 // shows the picker, which paints the page as it is dragged and keeps the numbers once let go. With one theme for both
 // modes there is one choice, else one for each. A shortcut is rebound by clicking its keys and pressing new ones; Escape
@@ -16,13 +17,25 @@ import { PRESETS, varsOf, type Theme } from "../../../kit/theme.ts"
 import { announce, paintTheme, useSystemDark } from "../../ui/appearance.ts"
 import { Logo } from "../../ui/mark.tsx"
 import { mac, RECORDING_MARK } from "../../ui/shortcuts.ts"
-import { useLive, useTab } from "../../ui/tab.tsx"
+import { useConventions, useLive, useTab } from "../../ui/tab.tsx"
 import { chordOf, COMMANDS, isCommand, shown, type CommandId } from "../src/keys.ts"
-import { choiceIn, nameOf, numbersOf, resolveMode, settingsFromView, type Choice, type Rail, type SettingsView } from "../src/settings.ts"
+import {
+  choiceIn,
+  nameOf,
+  numbersOf,
+  PREFERENCE_NAMES,
+  PREFERENCES,
+  resolveMode,
+  settingsFromView,
+  type Choice,
+  type Preference,
+  type Rail,
+  type SettingsView,
+} from "../src/settings.ts"
 
 export const icon = <SettingsIcon aria-hidden />
 
-type Root = SettingsView & {
+type Root = SettingsView & { [P in Preference]?: Handle } & {
   unsaved?: string
   mode?: Handle
   theme?: Handle
@@ -41,6 +54,7 @@ export default function Settings() {
   const shortcuts = useLive<Shortcuts>("/shortcuts").view
   const { call } = useTab()
   const systemDark = useSystemDark()
+  const { motion } = useConventions()
   const [refused, setRefused] = useState<{ at: string; reason: string }>()
   const run = async (at: string, handle: Handle | undefined, args: Record<string, string | number | boolean>, path = "/") => {
     if (!handle) return false
@@ -138,7 +152,24 @@ export default function Settings() {
               <Choose label="Where a drawer opens" value={placed.drawer} options={DRAWER_OPTIONS} set={(drawer) => place({ drawer })} />
             </Line>
           )}
-          <Line label="Animate while the agent works" note={root.logo.animate ? "the mark looks about" : "the mark stays still, tinted"}>
+          {PREFERENCE_NAMES.map((name) => {
+            const { label, does, choices, default: usual } = PREFERENCES[name]
+
+            return (
+              <Line key={name} label={label} note={does}>
+                <Choose
+                  label={label}
+                  value={String(root.preferences[name])}
+                  options={choices.map((value) => ({ value: String(value), label: choiceLabel(value) }))}
+                  set={(value) => void run(name, root[name], { [name]: typeof usual === "number" ? Number(value) : value })}
+                />
+              </Line>
+            )
+          })}
+          <Line
+            label="Animate while the agent works"
+            note={motion === "reduced" ? "still while motion is reduced, tinted" : root.logo.animate ? "the mark looks about" : "the mark stays still, tinted"}
+          >
             <span className="flex items-center gap-3">
               <span className="grid size-7 place-items-center rounded-full bg-foreground/3 text-muted-foreground" aria-label="The mark while the agent works" role="img">
                 <Logo standing={{ state: "working", waiting: 0, said: "" }} animate={root.logo.animate} />
@@ -157,7 +188,7 @@ export default function Settings() {
               </ToggleGroup>
             </span>
           </Line>
-          {refused && (refused.at === "mode" || refused.at === "rail" || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
+          {refused && (["mode", "rail", ...PREFERENCE_NAMES].includes(refused.at) || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
         </Section>
 
         <Section
@@ -201,6 +232,9 @@ const DRAWER_OPTIONS = [
   { value: "left", label: "Left" },
   { value: "right", label: "Right" },
 ] as const
+
+/** A preference's choice as its row says it: a word as it is, capitalised, a share as a percentage. */
+const choiceLabel = (value: string | number): string => (typeof value === "number" ? `${Math.round(value * 100)}%` : value.charAt(0).toUpperCase() + value.slice(1))
 
 /** One choice among a few, as a row of toggles: the one chosen pressed. */
 function Choose<T extends string>({ label, value, options, set }: { label: string; value: T; options: readonly { value: T; label: string }[]; set: (value: T) => void }) {

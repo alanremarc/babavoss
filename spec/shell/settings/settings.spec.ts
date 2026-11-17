@@ -1,12 +1,13 @@
 // The person's settings as values, read from what their file keeps, tolerant of whatever it holds.
 import { describe, expect, it } from "bun:test"
-import { appearanceOf, choiceIn, DEFAULTS, railOf, resolveMode, settingsFromView, settingsOf, viewOf, type Settings } from "../../../framework/shell/settings/src/settings.ts"
+import { appearanceOf, choiceIn, DEFAULTS, preferencesOf, railOf, resolveMode, settingsFromView, settingsOf, viewOf, type Settings } from "../../../framework/shell/settings/src/settings.ts"
 
 describe("the settings a file keeps", () => {
   it("are the defaults where it keeps nothing, or nothing that can be read", () => {
     for (const kept of [undefined, null, 3, "x", [], {}]) expect(settingsOf(kept)).toEqual(DEFAULTS)
     expect(DEFAULTS).toEqual({
       appearance: { mode: "system", same: true, themes: { light: "neutral", dark: "neutral" }, rail: { side: "left", from: "bottom", drawer: "left" } },
+      preferences: { motion: "system", scale: 1, side: "right" },
       keys: {},
       logo: { animate: true },
     })
@@ -14,9 +15,15 @@ describe("the settings a file keeps", () => {
 
   it("take what they can read, part by part, and leave the rest the default", () => {
     expect(
-      settingsOf({ appearance: { mode: "dark", themes: { dark: "clay", light: "sepia" }, rail: { side: "top" } }, keys: { drawer: "Cmd+H", next: "banana", gone: "mod+x" }, logo: { animate: false } })
+      settingsOf({
+        appearance: { mode: "dark", themes: { dark: "clay", light: "sepia" }, rail: { side: "top" } },
+        preferences: { motion: "reduced", scale: 3 },
+        keys: { drawer: "Cmd+H", next: "banana", gone: "mod+x" },
+        logo: { animate: false },
+      })
     ).toEqual({
       appearance: { mode: "dark", same: false, themes: { light: "neutral", dark: "clay" }, rail: { side: "top", from: "bottom", drawer: "left" } },
+      preferences: { motion: "reduced", scale: 1, side: "right" },
       keys: { drawer: "mod+h" },
       logo: { animate: false },
     })
@@ -54,6 +61,12 @@ describe("the settings a file keeps", () => {
     expect(settingsOf({ keys: { home: "mod+shift+h", drawer: "mod+shift+d" } }).keys).toEqual({ drawer: "mod+shift+d" })
   })
 
+  it("read each preference as one of its choices, the default where it is not one, and a file of before them as the defaults", () => {
+    expect(preferencesOf({ motion: "full", scale: 1.25, side: "left" })).toEqual({ motion: "full", scale: 1.25, side: "left" })
+    expect(preferencesOf({ motion: "slow", scale: "1.25", side: "top" })).toEqual(DEFAULTS.preferences)
+    expect(settingsOf({ appearance: { mode: "dark" } }).preferences).toEqual(DEFAULTS.preferences)
+  })
+
   it("read where the rail stands part by part, each part it cannot read the default, and a file of before the rail as the default rail", () => {
     expect(railOf({ side: "right", from: "top", drawer: "right" })).toEqual({ side: "right", from: "top", drawer: "right" })
     expect(railOf({ side: "middle", from: 3, drawer: "right" })).toEqual({ side: "left", from: "bottom", drawer: "right" })
@@ -63,6 +76,7 @@ describe("the settings a file keeps", () => {
   it("come back whole from what their view tells, every part of them, as the settings' page hands them to the shell", () => {
     const changed: Settings = {
       appearance: { mode: "dark", same: false, themes: { light: "moss", dark: { hue: 200, tint: 40, vivid: 60 } }, rail: { side: "top", from: "top", drawer: "right" } },
+      preferences: { motion: "reduced", scale: 1.5, side: "left" },
       keys: { drawer: "mod+shift+d", next: "alt+f2" },
       logo: { animate: false },
     }

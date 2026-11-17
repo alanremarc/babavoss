@@ -6,12 +6,15 @@
     <title>baba</title>
     <script>
       // The person's appearance before the first paint, from the settings the page is served with, which say what each
-      // mode is painted in, its theme's name and numbers, and the side the rail stands at; where their file has none yet,
-      // the mode from the cookie an older page kept, in Neutral. appearance.ts applies it by the same rules after.
+      // mode is painted in, its theme's name and numbers; where their file has none yet, the mode from the cookie an older
+      // page kept, in Neutral. And the conventions, as the runtime told them, each an attribute and a number a variable too,
+      // with the mode and a motion that follows the machine as the browser tells them. appearance.ts applies both after.
       ;(() => {
         let p = {}
         let paint = {}
         let system
+        let conventions = {}
+        let motion
         try {
           const given = JSON.parse(document.getElementById("babavoss-settings")?.textContent || "{}")
 
@@ -19,6 +22,8 @@
           system = given.system
           p = given.appearance
           paint = given.paint || {}
+          conventions = given.conventions || {}
+          motion = given.preferences && given.preferences.motion
           if (!p) {
             const m = document.cookie.match(/(?:^|; )babavoss\.appearance=([^;]*)/)
             p = JSON.parse(decodeURIComponent(m ? m[1] : "") || "{}")
@@ -32,7 +37,13 @@
         root.dataset.theme = t.theme || "neutral"
         root.style.colorScheme = mode
         for (const n of ["hue", "tint", "vivid"]) root.style.setProperty("--theme-" + n, String(Number(t[n]) || 0))
-        const side = p.rail && p.rail.side
+        conventions.mode = mode
+        if (!motion || motion === "system") conventions.motion = matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduced" : "full"
+        for (const [name, value] of Object.entries(conventions)) {
+          root.dataset[name] = String(value)
+          if (typeof value === "number") root.style.setProperty("--" + name, String(value))
+        }
+        const side = root.dataset.rail
         root.dataset.rail = side === "right" || side === "top" || side === "bottom" ? side : "left"
       })()
     </script>

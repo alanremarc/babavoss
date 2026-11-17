@@ -1,11 +1,12 @@
 // The babavoss mark, the two eyes of the brand, as home's tab, the rail's first; and the agent's standing in it: at rest,
-// looking about like a face that thinks while the agent works, a tint instead where motion is reduced or the person turned
-// the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the
+// looking about like a face that thinks while the agent works, a tint instead where motion is reduced, by the conventions,
+// or the person turned the mark's animation off in the settings; the person's changes that wait are said on hover, and counted in the
 // activity. The eyes are patches on a sphere seen by a close camera, gaze.ts; here they are moved, a frame at a time and
 // only while they turn.
 import { useEffect, useRef } from "react"
 import { cn } from "../../kit/cn.ts"
 import { between, eased, MOVES, next, outline, REST, SEARCH, settled, SIDES, within, type Gaze } from "./gaze.ts"
+import { useConventions } from "./tab.tsx"
 import type { Standing } from "./turn.ts"
 
 const place = (eyes: (SVGPathElement | null)[], gaze: Gaze) => eyes.forEach((el, i) => el?.setAttribute("d", outline(SIDES[i]!, gaze)))
@@ -19,12 +20,13 @@ const place = (eyes: (SVGPathElement | null)[], gaze: Gaze) => eyes.forEach((el,
  */
 function useGaze(eyes: { current: (SVGPathElement | null)[] }, looking: boolean, lost: boolean, only?: string) {
   const at = useRef<Gaze>(REST)
+  const still = useConventions().motion === "reduced"
 
   useEffect(() => {
     if (typeof window === "undefined") return
 
     // Where motion is reduced the eyes are put where they rest, with no turn.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (still) {
       at.current = REST
 
       return void place(eyes.current, REST)
@@ -88,7 +90,7 @@ function useGaze(eyes: { current: (SVGPathElement | null)[] }, looking: boolean,
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [eyes, looking, lost, only])
+  }, [eyes, looking, lost, only, still])
 }
 
 /**

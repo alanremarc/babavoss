@@ -10,6 +10,7 @@ import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { UiHosting } from "../../core/index.ts"
 import { appearanceOf, choiceIn, nameOf, numbersOf, type Appearance, type Mode } from "../settings/src/settings.ts"
+import { conventionsOf } from "./conventions.ts"
 import { machineMode } from "../settings/src/system/index.ts"
 import { kept, readSettings, settingsFile, writeSettings } from "../settings/src/store.ts"
 
@@ -78,13 +79,17 @@ export const SETTINGS_ID = "babavoss-settings"
  * The page with the person's settings in its head, as JSON no markup in it can close, with `paint`, what each mode is
  * painted in, its theme's name and numbers, so the page paints it before its first frame. Where the file has no appearance
  * yet, none is given, and the page paints by the cookie an older page kept until it is taken in. `machine` tells the
- * machine's mode, where it is known: what "system" means to the page, over what its browser says.
+ * machine's mode, where it is known: what "system" means to the page, over what its browser says. With them come the
+ * conventions as the runtime can tell them, which the page sets before its first frame, the mode and a motion that follows
+ * the machine told again by its browser.
  */
 export function withSettings(html: string, file = settingsFile(), machine: () => Mode | undefined = machineMode): string {
-  const { appearance, ...rest } = readSettings(file)
+  const settings = readSettings(file)
+  const { appearance, ...rest } = settings
   const system = machine()
   const paint = Object.fromEntries((["light", "dark"] as const).map((mode) => [mode, painted(appearance, mode)]))
-  const given = { ...(kept(file)?.appearance === undefined ? rest : { appearance, paint, ...rest }), ...(system && { system }) }
+  const conventions = conventionsOf(settings, { dark: system === "dark", reduced: false })
+  const given = { ...(kept(file)?.appearance === undefined ? rest : { appearance, paint, ...rest }), conventions, ...(system && { system }) }
 
   return html.replace(/<head>/i, `<head><script type="application/json" id="${SETTINGS_ID}">${JSON.stringify(given).replaceAll("<", "\\u003c")}</script>`)
 }

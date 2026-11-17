@@ -230,6 +230,13 @@ describe("the person's settings in the page", () => {
     expect(given(withSettings("<head></head>", file, () => undefined))).not.toHaveProperty("system")
   })
 
+  it("come with the conventions as the runtime can tell them, which the page sets before its first frame", () => {
+    const file = scratch()
+
+    writeSettings(file, { ...DEFAULTS, preferences: { motion: "reduced", scale: 1.25, side: "left" } })
+    expect(given(withSettings("<head></head>", file, () => "dark")).conventions).toEqual({ motion: "reduced", scale: 1.25, side: "left", rail: "left", mode: "dark" })
+  })
+
   it("give no appearance while the file has none, so the page paints by an older page's cookie, which is taken into the file once", () => {
     const file = scratch()
     const cookie = `other=1; babavoss.appearance=${encodeURIComponent(JSON.stringify({ mode: "light", themes: { light: "clay", dark: "neutral" } }))}`
