@@ -215,7 +215,7 @@ export const FRESH: Task[] = [
 
       if (missing.length) return no(`missing ${missing.join(", ")}`)
       if (look.check.code !== 0) return no(`bun check in .baba/ fails: ${look.check.out.split("\n").slice(-2).join(" ")}`)
-      if (!/^page: /m.test(look.present)) return no(`the shell does not answer: ${look.present.slice(0, 120)}`)
+      if (!/^title: /m.test(look.present)) return no(`the shell does not answer: ${look.present.slice(0, 120)}`)
       if (look.surfaces.length) return no(`made ${look.surfaces.join(", ")}`)
       if (!PAGE.test(answer)) return no("gave no page's address")
       if (!/\.baba|shell|installed|set up/i.test(answer)) return no("did not say what was set up")
@@ -236,7 +236,11 @@ export const FRESH: Task[] = [
       if (!look) return no("the project could not be looked at")
       if (look.surfaces.length) return no(`made ${look.surfaces.join(", ")}`)
       if (!PAGE.test(answer)) return no("gave no page's address")
-      if (!/\b(no|none|any|not yet|zero)\b[^.]{0,40}\bsurfaces?\b|\bsurfaces?\b[^.]{0,40}\b(none|yet|empty)\b/i.test(answer)) return no("did not say there are none yet")
+      // None of the project's own: said as such, or settings named as the only one, the shell's.
+      const none = /\b(no|none|any|not yet|zero)\b[^.]{0,40}\bsurfaces?\b|\bsurfaces?\b[^.]{0,40}\b(none|yet|empty)\b/i
+      const settingsOnly = /\bonly\b[^.]{0,60}\bsettings\b|\bsettings\b[^.]{0,80}\b(built.in|comes with|the shell's own|of the shell)\b/i
+
+      if (!none.test(answer) && !settingsOnly.test(answer)) return no("did not say the project has none of its own yet")
 
       return ok()
     },
