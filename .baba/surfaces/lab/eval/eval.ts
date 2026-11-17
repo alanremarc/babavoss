@@ -10,7 +10,8 @@
 //   --tasks     the tasks by name, all by default: done-one, add-one, note-one, start-oldest, move-drafts, lanes-read,
 //               open-count, note-backlog, note-parents, done-list, create-eight; and the probes open-release, retitle,
 //               busy-lane, about-26, highlight-13, second-turn, done-then-lanes, link-cycle, release-ready, compact-then-act,
-//               no-surface, done-sleep (tasks.ts)
+//               no-surface, done-sleep (tasks.ts); and on a fresh project, with no fixture (fresh.ts): install, first-contact,
+//               make-books, hear-books, rate-books, adapt-release, plain-edit, rename-var, screenshots-ask
 //   --model     the model Claude Code runs, claude-sonnet-5-5 by default; the one it reports is recorded beside it
 //   --runs      runs of each task on each variant, 3 by default
 //   --budget    optional: the most the campaign may spend in dollars as the harness counts them; refused before it starts
@@ -20,6 +21,8 @@
 //   --minutes   the most minutes a run may take, 10 by default
 //   --out       the campaigns' directory, .babavoss/eval in this checkout by default: each campaign a directory in it with
 //               results.jsonl, transcripts/ and table.txt, and tally.json counting the runs of every campaign
+//   --instruction  the install task's instruction, a file's text: fresh/install.md by default, the README's block when
+//               pointed at a file that holds it
 //   --dry       play each task's script through the fake harness instead of an agent: everything but the agent, for free
 //
 // A real run needs Claude Code signed in for the person; the agent's home reaches the login by a link, as the lab's does.
@@ -28,6 +31,7 @@ import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 import { claudeCode } from "babavoss/core/index.ts"
 import { campaign, dryHarness, MODEL, REPO, table, tally, variantOf, type Options } from "./rig.ts"
+import { INSTALL, withInstruction } from "./fresh.ts"
 import { scriptFor, tasksNamed } from "./tasks.ts"
 
 const { values } = parseArgs({
@@ -42,6 +46,7 @@ const { values } = parseArgs({
     minutes: { type: "string", default: "10" },
     out: { type: "string", default: join(REPO, ".babavoss/eval") },
     dry: { type: "boolean", default: false },
+    instruction: { type: "string", default: INSTALL },
   },
 })
 
@@ -57,7 +62,7 @@ try {
   const variants = (values.variant?.length ? values.variant : [REPO]).map((path, i) => variantOf(path, `v${i + 1}`))
   const options: Options = {
     variants,
-    tasks: tasksNamed(values.tasks),
+    tasks: withInstruction(tasksNamed(values.tasks), resolve(values.instruction)),
     model: values.model,
     runs: Math.floor(number("runs", values.runs)),
     ...(values.budget !== undefined && { budget: number("budget", values.budget) }),

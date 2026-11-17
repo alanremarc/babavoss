@@ -1,0 +1,37 @@
+// The reviews surface's page: each review, with the person's approve or reject where it waits on them.
+import type { Handle } from "babavoss/core/index.ts"
+import { Button } from "babavoss/kit/index.ts"
+import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+
+type Row = { at: string; id: number; change: string; verdict: string; state: string }
+type Review = Row & { text: string; approve?: Handle; reject?: Handle }
+
+function Item({ at }: { at: string }) {
+  const { view } = useLive<Review>(at)
+  const { call } = useTab()
+
+  if (!view) return null
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-3">
+      <p className="font-medium">
+        {view.change}: {view.verdict} ({view.state})
+      </p>
+      <p className="text-muted-foreground">{view.text}</p>
+      {[view.approve, view.reject].map(
+        (h) =>
+          h?.ask && (
+            <Button key={h.name} size="sm" onClick={() => void call(at, h.name, h.args)}>
+              {h.name}
+            </Button>
+          ),
+      )}
+    </div>
+  )
+}
+
+export default function Reviews() {
+  const { view } = useLive<{ reviews: Row[] }>("/")
+
+  return <div className="flex flex-col gap-3 p-6">{view?.reviews.map((r) => <Item key={r.id} at={r.at} />)}</div>
+}
