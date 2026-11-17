@@ -11,7 +11,8 @@
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
-//   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it
+//   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it;
+//                                   in text too, where a program names each of its calls by its one name (bv.ts)
 //   POST /_/restart text/plain      the runtime restarts, at once or once its work ended (runtime.ts): 200 at once, 202 draining
 //   POST /_/close text/plain        the runtime goes to sleep, its state kept: the agent's word `sleep`, or `close`
 // Each request is a signal of how long it keeps the runtime up (wake.ts), classified as it enters; a hook's word on the turn
@@ -452,7 +453,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
           const args = textArgs(before, call.handle, call.args ?? {})
 
           text.touch(path)
-          const answer = await running.call(path, call.handle, args, actorText)
+          const id = req.headers[CALL_ID_HEADER]
+          const answer = await running.call(path, call.handle, args, actorText, typeof id === "string" && id ? id : undefined)
           const heard = { path, handle: call.handle, args, actor: actorText, ...(answer.outcome === "refused" && { refused: answer.reason }) }
 
           for (const stream of streams) stream.write(`event: call\ndata: ${JSON.stringify(heard)}\n\n`)
