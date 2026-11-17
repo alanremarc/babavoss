@@ -358,6 +358,13 @@ export function shell(
       return tab && addressOf(tab)
     },
   })
+  /** A tab's close, naming what runs in it beside its number, so a menu of several tabs tells them apart: "close tab 3, Queue". */
+  const closing = (tab: ShellModel["tabs"][number]) => {
+    const title = attempt(tab, (s) => s.view(tab.model, "/")?.title)?.ok
+    const name = typeof title === "string" && title ? title : tab.surface
+
+    return { ...close.bind({ n: tab.n }), description: `close tab ${tab.n}, ${name}; its state is dropped` }
+  }
   const desktop = view([open, close, show, seen, looked], {
     "/": (model) => ({
       title,
@@ -366,7 +373,7 @@ export function shell(
         ...[...held].map(([name, s]) => ({ name, description: s.description, open: open.bind({ surface: name }) })),
         ...[...unloaded.keys()].map((name) => ({ name, broken: unloadable(name) })),
       ],
-      tabs: model.tabs.map((tab) => ({ at: addressOf(tab), n: tab.n, surface: tab.surface, close: close.bind({ n: tab.n }) })),
+      tabs: model.tabs.map((tab) => ({ at: addressOf(tab), n: tab.n, surface: tab.surface, close: closing(tab) })),
       ...(model.tabs.length > 0 && { show: show.bind({}) }),
       ...(model.pointed && { pointed: { ...model.pointed, at: stable(model, model.pointed.at) } }),
       activity: { at: "/activity" },

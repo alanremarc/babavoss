@@ -79,7 +79,7 @@ function view(m: Model): Json {
         at: "/tabs/3",
         n: 3,
         surface: "queue",
-        close: handle("close", "close tab 3; its state is dropped", { n: 3 }),
+        close: handle("close", "close tab 3, Queue; its state is dropped", { n: 3 }),
         title: "Queue",
         actions: ["add", "draft"],
         facts: {
