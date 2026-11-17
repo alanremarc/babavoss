@@ -126,7 +126,7 @@ const ROOT: View = {
     { name: "design", open: handle("open", "open a design tab", { surface: "design" }) },
     { name: "settings", open: handle("open", "open the settings tab, or show the one open", { surface: "settings" }) },
   ],
-  tabs: [{ at: "/queue", close: handle("close", "close tab 3, Queue; its state is dropped", { n: 3 }) }],
+  tabs: [{ at: "/queue", close: handle("close", "close tab 3, Queue; its state and log are kept read only in the archive of closed tabs, /activity/closed", { n: 3 }) }],
 }
 
 /** A tab's drawer over a sample page, its menu read from the sample's views, as the shell opens it; closed, a button opens it again. */

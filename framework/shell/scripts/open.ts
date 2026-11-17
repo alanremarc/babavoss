@@ -13,6 +13,7 @@ import { devMode, sourceDirs } from "../../core/runtime/runtime.ts"
 import { loadConfig, titleOf, type Config } from "../../core/config.ts"
 import { defineRoot } from "../../core/root.ts"
 import { findBaba, generateRoot, HOME_FILE, SURFACES_DIR } from "../../core/provision.ts"
+import { shellState } from "../src/archive.ts"
 import { bootPaths } from "../src/boot.ts"
 import { shellUi } from "../src/hosting.ts"
 import { loadSurfaces, type Loaders } from "../src/loading.ts"
@@ -90,13 +91,16 @@ if (baba) {
 const config: Config = baba ? await loadConfig(baba).catch(() => ({})) : {}
 const title = baba ? titleOf(config, baba) : undefined
 const dev = devMode(config.dev)
+const state = shellState()
 
 await main(
   defineRoot({
     name: "baba",
     ui: shellUi(generated ?? new URL("../ui/", import.meta.url), { follow: dev }),
-    surface: shell(surfaces, baba, broken, undefined, title),
+    surface: shell(surfaces, baba, broken, undefined, title, state.archive),
     boot: bootPaths,
+    keep: state.keep,
+    started: state.started,
   }),
   // The page is the shell's and the surfaces' own: a change there changes the page, and a surface that did not load is code
   // the runtime runs all the same.

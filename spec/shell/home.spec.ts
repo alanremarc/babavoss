@@ -65,8 +65,8 @@ describe("home", () => {
     expect(labels(items)).toEqual([
       "Open a counter tab",
       "Open the settings tab, or show the one open",
-      "Close tab 1, Counter; its state is dropped",
-      "Close tab 2, Counter; its state is dropped",
+      "Close tab 1, Counter; its state and log are kept read only in the archive of closed tabs, /activity/closed",
+      "Close tab 2, Counter; its state and log are kept read only in the archive of closed tabs, /activity/closed",
       "—",
       { Go: ["Counter 2", "Counter •"] },
     ])
