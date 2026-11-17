@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- The site's one page, babavoss.org: what Baba is, and the line a person copies to their agent. It says what the README says. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Baba Voss</title>
+    <meta name="description" content="Baba is a work surface you share with your agent." />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfaf8;
+        --fg: #1c1b1a;
+        --muted: #6f6b66;
+        --line: #e4e0da;
+        --box: #f3f0eb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161514;
+          --fg: #ecebe8;
+          --muted: #9a958e;
+          --line: #2e2c29;
+          --box: #1f1e1c;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 4rem 1rem 3rem;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.75rem;
+        font-weight: 600;
+      }
+      h2 {
+        margin: 2.5rem 0 0.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 1rem;
+      }
+      .lede {
+        font-size: 1.125rem;
+      }
+      pre {
+        margin: 0 0 1rem;
+        padding: 1rem;
+        overflow-x: auto;
+        background: var(--box);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      pre.wrap {
+        white-space: pre-wrap;
+      }
+      .copy {
+        position: relative;
+      }
+      .copy button {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        padding: 0.25rem 0.625rem;
+        background: var(--bg);
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font: inherit;
+        font-size: 0.8125rem;
+        cursor: pointer;
+      }
+      .copy pre {
+        padding-right: 4.5rem;
+      }
+      footer {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Baba Voss</h1>
+      <p class="lede">Baba is a work surface you share with your agent.</p>
+
+      <pre aria-label="You ask in the chat, the input. The agent works on the state directly. The surface draws its page, its face, which you see.">
+           agent ◄───── state ─────► surface
+             ▲                          │ ui
+   ┌─────────┴─────────┐      ┌─────────▼─────────┐
+   │ chat: the input   │      │ page: the face    │
+   └─────────▲─────────┘      └─────────┬─────────┘
+             │ ask                      │ see
+             └────────── you ───────────┘</pre>
+
+      <h2>Getting started</h2>
+      <p>Copy this to your agent:</p>
+      <div class="copy">
+        <pre class="wrap" id="prompt">Install babavoss in this project: read https://babavoss.org/llms.txt and follow it.</pre>
+        <button type="button" id="copy">Copy</button>
+      </div>
+
+      <p>Then ask for a surface:</p>
+      <pre class="wrap">I want a surface that matches each month's payments to our invoices.</pre>
+      <p>The agent writes it in <code>.baba/surfaces/</code>, tests it and opens it as a tab. You can open a surface on the page too, and the agent takes it up.</p>
+
+      <footer>
+        Early, and being reshaped. <a href="https://github.com/alanremarc/babavoss">Source</a> · <a href="https://github.com/alanremarc/babavoss/blob/main/docs/DESIGN.md">Design</a> ·
+        <a href="/llms.txt">llms.txt</a> · Apache 2.0
+      </footer>
+    </main>
+    <script>
+      const button = document.getElementById("copy")
+
+      button.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(document.getElementById("prompt").textContent)
+          button.textContent = "Copied"
+        } catch {
+          button.textContent = "Select and copy"
+        }
+        setTimeout(() => (button.textContent = "Copy"), 2000)
+      })
+    </script>
+  </body>
+</html>

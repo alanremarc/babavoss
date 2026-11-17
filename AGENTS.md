@@ -42,6 +42,8 @@ spec/surfaces.spec.ts       runs .baba/'s surfaces' specs with the framework's, 
 spec/border.spec.ts         the border: the package exports only its entries, and what a project keeps imports nothing else; the
                             internals this repository's own surfaces may reach, and why
 docs/DESIGN.md              the design
+site/                       babavoss.org as it is served, no build: index.html, the page; llms.txt, what an agent asked to install follows;
+                            the Site workflow publishes it
 .baba/                      this repository's own surfaces: its framework is the checkout, linked by its postinstall, not a release
 .baba/surfaces/lab/eval/    the eval: a campaign of tasks run by headless agents on variants, checkouts, of a fixture surface; tokens and
                             what the agent did, tabled; eval.ts is its command, --dry plays scripts through the fake harness for free
