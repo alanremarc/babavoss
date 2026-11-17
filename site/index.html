@@ -118,13 +118,36 @@
         grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
       }
       /* The chat: what the person asks, what the agent says. */
+      /* Each column has a head of one height: the chat's says the project it is in, the browser's its address. */
+      .head {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 0.5rem;
+        height: 2.25rem;
+        padding: 0 0.75rem;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font: 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: nowrap;
+      }
+      .head > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       .chat {
         display: flex;
         flex-direction: column;
         min-height: 0;
-        padding: 1rem;
         border-right: 1px solid var(--line);
         font-size: 0.875rem;
+      }
+      .talk {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        min-height: 0;
+        padding: 1rem;
       }
       /* What was said, the newest at the foot: as more is said the oldest leaves at the top, and the window keeps its height. */
       .log {
@@ -207,21 +230,9 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
-        margin: 0.75rem;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        overflow: hidden;
       }
-      .chrome {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.375rem 0.625rem;
-        border-bottom: 1px solid var(--line);
-        background: var(--soft);
-        color: var(--muted);
+      .browser .head {
         font-size: 0.875rem;
-        line-height: 1;
       }
       .url {
         flex: 1;
@@ -229,10 +240,9 @@
         overflow: hidden;
         padding: 0.25rem 0.625rem;
         border-radius: 999px;
-        background: var(--card);
+        background: var(--soft);
         font: 0.75rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
         text-overflow: ellipsis;
-        white-space: nowrap;
       }
       .page {
         display: flex;
@@ -790,6 +800,8 @@
         <div class="bar" aria-hidden="true"><i></i><i></i><i></i><b>Your harness</b><span>Claude Code, Codex, OpenCode…</span></div>
         <div class="cols" aria-hidden="true">
           <div class="chat">
+            <div class="head"><span>~/Projects/travel-videos</span></div>
+            <div class="talk">
             <div class="log" id="log">
               <div class="say you">I make slideshows with music, and I want the photos to change on the beat. Start with Pictures/Lisbon and “Sunday Drive”.</div>
               <div class="used">baba new slideshow</div>
@@ -808,9 +820,10 @@
               <div class="say">Done. A is a collage, B changes on every beat, and C zooms in.</div>
             </div>
             <div class="ask" id="ask"><span><span id="typed"></span><span class="hint">Ask your agent…</span></span></div>
+            </div>
           </div>
           <div class="browser">
-            <div class="chrome"><span>‹</span><span>›</span><span class="url" id="url">localhost:57171/slideshow</span></div>
+            <div class="head"><span>‹</span><span>›</span><span>↻</span><span class="url" id="url">localhost:57171/slideshow</span></div>
             <div class="page">
               <div class="rail"><span class="mark"></span><span class="tab on" id="tab"></span></div>
               <div class="surface" id="surface" data-stage="2">
