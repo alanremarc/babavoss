@@ -1,0 +1,61 @@
+// The expenses surface's rules, as stories: actors see views, call what those views offer and are told what changed.
+import { expect, test } from "bun:test"
+import { story } from "babavoss/core/index.ts"
+import expenses from "../src/surface.ts"
+
+test("an expense is logged, then submitted, and the person is needed to approve it", async () => {
+  const { agent, person } = story(expenses)
+
+  expect(await agent.call("/", "log", { what: "Train to Lyon", amount: 84.5, category: "travel" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees()).toMatchObject({ spent: 84.5, expenses: [{ id: 1, what: "Train to Lyon", state: "logged" }] })
+  expect(agent.offered("/expenses/1")).toEqual(["note", "submit"])
+  expect(await agent.call("/expenses/1", "submit", { id: 1 })).toMatchObject({ outcome: "written" })
+  expect(person.noticed()).toEqual(["Expense 1 submitted for approval"])
+  expect(agent.sees()).toMatchObject({ attention: { who: "person" } })
+  expect(agent.offered("/expenses/1")).toEqual(["note"])
+  expect(person.offered("/expenses/1")).toEqual(["note", "approve", "reject"])
+})
+
+test("only the person approves or rejects, and the agent is told what they decided", async () => {
+  const { agent, person } = story(expenses)
+
+  await agent.call("/", "log", { what: "Team lunch", amount: 120, category: "meals" })
+  await agent.call("/expenses/1", "submit", { id: 1 })
+  expect(await agent.call("/expenses/1", "approve", { id: 1 })).toMatchObject({ outcome: "refused" })
+  agent.told()
+  await person.call("/expenses/1", "approve", { id: 1 })
+  expect(agent.told()).toEqual(['/expenses/1: state "submitted" → "approved"', "- attention"])
+  expect(agent.noticed()).toEqual(["Expense 1 approved"])
+})
+
+test("a rejected expense says why and no longer counts against the budget", async () => {
+  const { agent, person } = story(expenses)
+
+  await agent.call("/", "log", { what: "Monitor", amount: 300, category: "office" })
+  await agent.call("/expenses/1", "submit", { id: 1 })
+  expect(await person.call("/expenses/1", "reject", { id: 1, why: " " })).toEqual({ outcome: "refused", reason: "Say why it is rejected" })
+  await person.call("/expenses/1", "reject", { id: 1, why: "bought twice" })
+  expect(agent.sees("/expenses/1")).toMatchObject({ state: "rejected", note: "bought twice" })
+  expect(agent.sees()).toMatchObject({ spent: 0 })
+  expect(agent.noticed()).toEqual(["Expense 1 rejected: bought twice"])
+})
+
+test("the month over budget says by how much", async () => {
+  const { agent, person } = story(expenses)
+
+  await person.call("/", "budget", { amount: 100 })
+  await agent.call("/", "log", { what: "Flight", amount: 160, category: "travel" })
+  expect(agent.sees()).toMatchObject({ budget: 100, spent: 160, over: 60 })
+})
+
+test("a log without a description, a positive amount or a known category is refused", async () => {
+  const { agent } = story(expenses)
+
+  expect(await agent.call("/", "log", { what: " ", amount: 5, category: "meals" })).toEqual({ outcome: "refused", reason: "An expense needs a description" })
+  expect(await agent.call("/", "log", { what: "Taxi", amount: 0, category: "travel" })).toEqual({ outcome: "refused", reason: "The amount must be more than 0" })
+  expect(await agent.call("/", "log", { what: "Taxi", amount: 30, category: "fun" })).toEqual({
+    outcome: "refused",
+    reason: "The category is one of travel, meals, office, software",
+  })
+  expect(agent.sees()).toMatchObject({ expenses: [] })
+})

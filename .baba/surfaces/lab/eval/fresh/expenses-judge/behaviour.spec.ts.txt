@@ -1,0 +1,61 @@
+// The judge of an adapted expenses surface: what it did before the release, said only through what both actors see,
+// are offered and are told, so any shape the release allows passes and a change of behaviour does not. The agent never
+// sees it; the rig writes it beside the surface's own spec once the agent's turn ends.
+import { expect, test } from "bun:test"
+import { story } from "babavoss/core/index.ts"
+import expenses from "../src/surface.ts"
+
+const told = (lines: string[], text: RegExp) => lines.some((line) => text.test(line))
+
+test("behaviour: an expense is logged, submitted, and then the person may approve or reject it", async () => {
+  const { agent, person } = story(expenses)
+
+  expect(await agent.call("/", "log", { what: "Train to Lyon", amount: 84.5, category: "travel" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees()).toMatchObject({ spent: 84.5, expenses: [{ id: 1, what: "Train to Lyon", amount: 84.5, category: "travel", state: "logged" }] })
+  expect(agent.offered("/expenses/1")).toContain("submit")
+  expect(agent.offered("/expenses/1")).not.toContain("approve")
+  expect(await agent.call("/expenses/1", "submit", { id: 1 })).toMatchObject({ outcome: "written" })
+  expect(told(person.noticed(), /expense 1\b.*submitted/i)).toBe(true)
+  expect(agent.sees("/expenses/1")).toMatchObject({ state: "submitted" })
+  expect(person.offered("/expenses/1")).toEqual(expect.arrayContaining(["approve", "reject"]))
+  expect(person.offered("/expenses/1")).not.toContain("submit")
+  expect(await person.call("/expenses/1", "approve", { id: 1 })).toMatchObject({ outcome: "written" })
+  expect(agent.sees("/expenses/1")).toMatchObject({ state: "approved" })
+  expect(told(agent.noticed(), /expense 1 approved/i)).toBe(true)
+})
+
+test("behaviour: a rejection needs a reason, keeps it as the note, and stops counting", async () => {
+  const { agent, person } = story(expenses)
+
+  await agent.call("/", "log", { what: "Monitor", amount: 300, category: "office" })
+  await agent.call("/expenses/1", "submit", { id: 1 })
+  expect(await person.call("/expenses/1", "reject", { id: 1, why: " " })).toMatchObject({ outcome: "refused" })
+  expect(await person.call("/expenses/1", "reject", { id: 1, why: "bought twice" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees("/expenses/1")).toMatchObject({ state: "rejected", note: "bought twice" })
+  expect(agent.sees()).toMatchObject({ spent: 0 })
+  expect(told(agent.noticed(), /expense 1 rejected: bought twice/i)).toBe(true)
+})
+
+test("behaviour: a note is kept, and the budget is set and measured against", async () => {
+  const { agent, person } = story(expenses)
+
+  await agent.call("/", "log", { what: "Flight", amount: 160, category: "travel" })
+  expect(await agent.call("/expenses/1", "note", { id: 1, text: "receipt in the shared drive" })).toMatchObject({ outcome: "written" })
+  expect(agent.sees("/expenses/1")).toMatchObject({ note: "receipt in the shared drive" })
+  expect(agent.sees()).toMatchObject({ budget: 2000, spent: 160 })
+  expect(agent.sees()).not.toHaveProperty("over")
+  expect(await person.call("/", "budget", { amount: 100 })).toMatchObject({ outcome: "written" })
+  expect(agent.sees()).toMatchObject({ budget: 100, spent: 160, over: 60 })
+  expect(await person.call("/", "budget", { amount: 0 })).toMatchObject({ outcome: "refused" })
+})
+
+test("behaviour: a log without a description, a positive amount or a known category is refused", async () => {
+  const { agent } = story(expenses)
+
+  expect(await agent.call("/", "log", { what: " ", amount: 5, category: "meals" })).toMatchObject({ outcome: "refused" })
+  expect(await agent.call("/", "log", { what: "Taxi", amount: 0, category: "travel" })).toMatchObject({ outcome: "refused" })
+  expect(await agent.call("/", "log", { what: "Taxi", amount: 30, category: "fun" })).toMatchObject({ outcome: "refused" })
+  for (const category of ["travel", "meals", "office", "software"])
+    expect(await agent.call("/", "log", { what: "Taxi", amount: 30, category })).toMatchObject({ outcome: "written" })
+  expect((agent.sees() as { expenses: unknown[] }).expenses).toHaveLength(4)
+})

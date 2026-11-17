@@ -10,6 +10,8 @@ import type { Json } from "babavoss/core/index.ts"
 import type { Issue, Work } from "./fixture/queue/src/surface.ts"
 import type { Checklist } from "./fixture/release/src/surface.ts"
 import { FRESH } from "./fresh.ts"
+import { ADAPTING } from "./adapting.ts"
+import { JUDGMENT } from "./judgment.ts"
 
 export type Kind = "single" | "find" | "read" | "batch" | "probe"
 export type Verdict = { pass: boolean; reason: string }
@@ -38,14 +40,17 @@ export type Look = {
   opened: Record<string, string>
   page: Ran
   heard: { by: string; did: string; surface: string }[]
+  /** The judge's specs run on their own, where the task gives any. */
+  judged?: Ran
 }
 /**
  * A project made by `baba init` alone, with no fixture: `files`, by their path in the project, written after it; `was`, the
  * release they were written for, committed as such before the variant is taken; `touch`, files the rig changes by hand
  * after the agent's turn, as the person would, each by a function of its text; `empty`, a repository where nothing was run,
- * for the agent to install babavoss in, the public install's command sent to the variant.
+ * for the agent to install babavoss in, the public install's command sent to the variant; `judge`, specs the rig writes
+ * once the agent's turn ends, by their path in the project, which settle whether what the agent left still behaves as before.
  */
-export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string>; empty?: true }
+export type Fresh = { files?: Record<string, string>; was?: string; touch?: Record<string, (text: string) => string>; empty?: true; judge?: Record<string, string> }
 /** `files`, the task's own files as the run left them, by their path in the project; `look`, a fresh project's. */
 export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[]; files?: Record<string, string>; look?: Look }
 /** What the dry run does in the agent's place: its command's arguments, one call each, files it writes in the project, and its last words. */
@@ -514,6 +519,8 @@ export const TASKS: Task[] = [
     dry: { calls: [["/queue/issues/27", "done", "n=27"], ["sleep"]] },
   },
   ...FRESH,
+  ...ADAPTING,
+  ...JUDGMENT,
 ]
 
 /** The dry script for a prompt, the first's or a second message's, of any of `tasks`. */

@@ -159,7 +159,10 @@ export function makePlace(variant: Variant, session: string, files: Record<strin
     sh(["bun", "run", "baba", "provision"], baba, env)
     // A repository with a first commit, as a project is: the harness's own tools, a worktree for a subagent, need one.
     writeFileSync(join(project, ".gitignore"), "node_modules\n.babavoss\n.root\n")
-    for (const [path, text] of Object.entries(files)) writeFileSync(join(project, path), text)
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(project, path, ".."), { recursive: true })
+      writeFileSync(join(project, path), text)
+    }
     sh(["git", "init", "-q"], project)
     sh(["git", "add", "-A"], project)
     sh(["git", "-c", "user.name=eval", "-c", "user.email=eval@lab.invalid", "commit", "-qm", "the project as the eval made it"], project)
@@ -314,8 +317,15 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
       (p) => [p, existsSync(join(place.project, p))],
     ),
   )
+  // The judge's specs, which the agent never saw, are written beside its own before anything is checked.
+  for (const [path, text] of Object.entries(fresh.judge ?? {})) {
+    mkdirSync(join(place.project, path, ".."), { recursive: true })
+    writeFileSync(join(place.project, path), text)
+  }
+
   const check = ran(["bun", "check"], baba, env)
   const test = ran(["bun", "test"], baba, env, 180_000)
+  const judged = fresh.judge ? ran(["bun", "test", ...Object.keys(fresh.judge).map((p) => join(place.project, p))], baba, env, 180_000) : undefined
   const restart = word("restart")
 
   if (/drains|restarts$/m.test(restart.out)) {
@@ -346,7 +356,19 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
   })
   const files = { ...filesUnder(join(baba, "surfaces"), place.project), ...Object.fromEntries(own) }
 
-  return { surfaces, files, stale, there, present, check, test, opened, page, heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })) }
+  return {
+    surfaces,
+    files,
+    stale,
+    there,
+    present,
+    check,
+    test,
+    opened,
+    page,
+    heard: heard.map((e) => ({ by: e.by ?? "", did: e.did ?? "", surface: e.surface ?? "" })),
+    ...(judged && { judged }),
+  }
 }
 
 type Entry = {

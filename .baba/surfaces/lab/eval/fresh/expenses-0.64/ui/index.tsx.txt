@@ -1,0 +1,76 @@
+// The expenses page: the month's budget and what is spent against it, every expense by its state, and the person's
+// decision on each one submitted. Anything else the person wants, they tell the agent.
+import { useState } from "react"
+import { ReceiptIcon } from "lucide-react"
+import type { Handle } from "babavoss/core/index.ts"
+import { Plain, WorkbenchList, WorkbenchMeter, WorkbenchNotice, WorkbenchPage, WorkbenchSection, type WorkbenchRow } from "babavoss/kit/index.ts"
+import { Button } from "babavoss/kit/components/button.tsx"
+import { Badge } from "babavoss/kit/components/badge.tsx"
+import { cn } from "babavoss/kit/cn.ts"
+import { muted } from "babavoss/kit/layouts/parts.tsx"
+import { useLive, useShell, useTab } from "babavoss/shell/ui/index.tsx"
+
+type Row = { at: string; id: number; what: string; amount: number; category: string; state: string }
+type Root = { budget: number; spent: number; over?: number; expenses: Row[]; attention?: { who: string; why: string } }
+type One = Row & { note?: string; approve?: Handle; reject?: Handle }
+
+export const icon = ReceiptIcon
+
+const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "EUR" })
+const STATES = ["submitted", "logged", "approved", "rejected"]
+
+function Decision({ at }: { at: string }) {
+  const { view } = useLive<One>(at)
+  const { call } = useTab()
+  const { toast } = useShell()
+  const [why, setWhy] = useState("")
+
+  if (!view?.approve?.ask) return null
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button size="sm" onClick={() => void call(at, "approve", { id: view.id }).then(() => toast(`Expense ${view.id} approved`))}>
+        Approve
+      </Button>
+      <input className="h-row rounded-md border px-2 text-body" placeholder="why" value={why} onChange={(e) => setWhy(e.target.value)} />
+      <Button size="sm" variant="outline" disabled={!why.trim()} onClick={() => void call(at, "reject", { id: view.id, why })}>
+        Reject
+      </Button>
+    </div>
+  )
+}
+
+export default function Expenses() {
+  const { view } = useLive<Root>("/")
+  const { route, navigate } = useTab()
+  const rows = (state: string): WorkbenchRow[] =>
+    (view?.expenses ?? [])
+      .filter((e) => e.state === state)
+      .map((e) => ({ id: e.at, label: e.what, detail: e.category, badge: money(e.amount) }))
+
+  return (
+    <Plain>
+      <WorkbenchPage
+        title="Expenses"
+        meta={
+          <WorkbenchMeter share={view ? view.spent / view.budget : 0} tone={view?.over ? "error" : undefined}>
+            {money(view?.spent ?? 0)} of {money(view?.budget ?? 0)}
+          </WorkbenchMeter>
+        }
+      >
+        {view?.over !== undefined && <WorkbenchNotice>Over budget by {money(view.over)}</WorkbenchNotice>}
+        {view?.attention && <WorkbenchNotice tone="note">{view.attention.why}</WorkbenchNotice>}
+        {STATES.map((state) => (
+          <WorkbenchSection key={state} label={state} aside={<Badge variant="outline">{rows(state).length}</Badge>}>
+            <WorkbenchList label={state} rows={rows(state)} active={route} open={navigate} empty={`Nothing ${state}`} />
+          </WorkbenchSection>
+        ))}
+        {route.startsWith("/expenses/") && (
+          <section className={cn("flex flex-col gap-2 rounded-md border p-3", muted)}>
+            <Decision at={route} />
+          </section>
+        )}
+      </WorkbenchPage>
+    </Plain>
+  )
+}
