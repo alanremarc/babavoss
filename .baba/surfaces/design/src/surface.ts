@@ -244,7 +244,7 @@ const pages = view<Model, Command>([replay, pin, unpin], {
   },
 })
 
-/** What a play changed from the one before, said once: which scenarios' texts are not what they were. */
+/** What a play changed from the one before, said once, a highlight: which scenarios' texts are not what they were. */
 function noticed(before: Play[], after: Play[]): Notice[] {
   if (!before.length) return []
 
@@ -252,7 +252,7 @@ function noticed(before: Play[], after: Play[]): Notice[] {
   // A scenario played for the first time has nothing to have changed from.
   const moved = after.filter((p) => before.some((b) => b.name === p.name) && texts(p) !== texts(before.find((b) => b.name === p.name)))
 
-  return moved.length ? [`Played again: what ${moved.map((p) => p.name).join(", ")} ${moved.length === 1 ? "tells" : "tell"} the agent changed`] : []
+  return moved.length ? [{ text: `Played again: what ${moved.map((p) => p.name).join(", ")} ${moved.length === 1 ? "tells" : "tell"} the agent changed`, highlight: true }] : []
 }
 
 function update(m: Model, event: Event): Result {

@@ -1,9 +1,9 @@
-// The build page as a function of its view at /: its status, why it failed, how many runs, and who is waited for. Its own
+// The build page as a function of its view at /: its status, why it failed, and how many runs. Its own
 // page draws it with the live view; the design document draws it with a view a play recorded.
 import { CircleCheckIcon, CircleDashedIcon, CircleXIcon, LoaderCircleIcon } from "lucide-react"
 
 type Status = "idle" | "running" | "passed" | "failed"
-export type BuildView = { title?: string; status?: Status; why?: string; runs?: number; attention?: { who: string; why: string } }
+export type BuildView = { title?: string; status?: Status; why?: string; runs?: number }
 
 const SAID: Record<Status, string> = { idle: "No run yet", running: "Running", passed: "Passed", failed: "Failed" }
 
@@ -32,11 +32,6 @@ export default function BuildPage({ view }: { view: BuildView }) {
       {view.why && (
         <p data-fact="why" className="text-destructive font-mono text-meta">
           {view.why}
-        </p>
-      )}
-      {view.attention && (
-        <p data-fact="attention" className="bg-warning/10 text-warning rounded-md px-2 py-1 text-meta">
-          Waiting for the {view.attention.who}: {view.attention.why}
         </p>
       )}
     </div>

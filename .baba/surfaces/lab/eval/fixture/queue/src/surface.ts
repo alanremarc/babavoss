@@ -70,7 +70,10 @@ function made(w: Work, args: { title: string; about: string; from?: string; narr
   const narrative = named || (from.length ? find(w, from[0]!)!.narrative : w.narratives[0]!.id)
   const issue: Issue = { n: w.next, title, about, status, order: w.clock, narrative, from }
 
-  return { model: { ...w, issues: [...w.issues, issue], next: w.next + 1, clock: w.clock + 1 } }
+  const model = { ...w, issues: [...w.issues, issue], next: w.next + 1, clock: w.clock + 1 }
+
+  // A draft is the person's to look at: a highlight, which marks the tab on their page until they look.
+  return { model, ...(status === "draft" && { notices: [{ ...said(model, issue.n, "is a draft for you to look at"), highlight: true as const }] }) }
 }
 
 const ABOUT = "a short imperative title, and about, brief markdown on what changes and why"
@@ -225,7 +228,7 @@ function whole(w: Work, issue: Issue) {
     from: issue.from.flatMap((p) => (find(w, p) ? [ref(find(w, p)!)] : [])),
     to: w.issues.filter((other) => other.from.includes(issue.n)).map(ref),
     menu,
-    ...(issue.status === "draft" && { attention: { who: "person", why: "to look at this draft" }, approve: approve.bind(subject) }),
+    ...(issue.status === "draft" && { approve: approve.bind(subject) }),
     describe: describe.bind(subject),
     note_: note.bind(subject),
     ...((issue.status === "backlog" || issue.status === "draft") && { start: start.bind(subject) }),
@@ -261,7 +264,6 @@ const pages = view(actions, {
         return named
       }),
       issues: [...[...lanes, ...backlog, ...drafts].map(row), ...finished.map((issue) => detail(row(issue)))],
-      ...(drafts.length && { attention: { who: "person", why: `to look at ${drafts.length} draft${drafts.length > 1 ? "s" : ""}` } }),
       add: add.bind({}),
       add_from: addFrom.bind({}),
       draft: draft.bind({}),

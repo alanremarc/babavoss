@@ -300,7 +300,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
   let seen = 0
   const look = async () => {
     const root = await page("/")
-    type Entry = { n: number; who: string; by?: string; surface: string; at: string | null; did?: string; times?: number; refused?: string; said?: string[] }
+    type Entry = { n: number; who: string; by?: string; surface: string; at: string | null; did?: string; times?: number; refused?: string; said?: string[]; highlight?: true }
     const activity = (await page("/activity")) as { entries?: Entry[] | string } | undefined
     const fresh = Array.isArray(activity?.entries) ? activity.entries.filter((e) => e.n > seen).reverse() : []
     const tabs = await Promise.all(tabsOf(root).map(async (t): Promise<Drawn> => ({ at: t.at, surface: t.surface, view: drawn(await page(t.at), t.at) })))
@@ -311,7 +311,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
       [
         `activity: ${e.who}${e.by ? ` ${e.by}` : ""} · ${e.surface} ${e.at ?? ""} · ${e.did ?? ""}${e.times ? ` ×${e.times}` : ""}`,
         ...(e.refused !== undefined ? [`refused: ${e.refused}`] : []),
-        ...(e.said ?? []).map((s) => `said: ${s}`),
+        ...(e.said ?? []).map((s) => `${e.highlight ? "highlight" : "said"}: ${s}`),
       ].join(" · ")
 
     return { root, tabs, activity: fresh.map(line) }
@@ -320,7 +320,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
   /**
    * Where the person's page stands, as the shell's page keeps it in its URL (shell.tsx): home until the person moves. The
    * person's call at a tab is made in it; opened from home, a tab is gone to; closed while in front, the page goes to the
-   * next older tab, or home. The agent's `show` is gone to, where its tab is open, as when the person is not busy, but
+   * next older tab, or home. The agent's highlight with `front` is gone to, where its tab is open, as when the person is not busy, but
    * not one made before the page first looked. A tab in front that closes otherwise leaves home in front, unless the URL's
    * number names a tab that now stands at its surface's name.
    */
@@ -423,16 +423,12 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
         return { who: "person", did: `on the page: ${step.what}${refused ? `, ${refused} refused` : ""}`, tellings: [] }
       }
       case "look": {
-        const notices = (await page("/activity/notices")) as { entries?: { n: number }[] | string } | undefined
-        const newest = Array.isArray(notices?.entries) ? Math.max(0, ...notices.entries.map((e) => e.n)) : 0
+        const highlights = (await page("/activity/highlights")) as { unopened?: number[] } | undefined
+        const newest = Math.max(0, ...(highlights?.unopened ?? []))
 
-        if (newest) await page("/activity/notices", { handle: step.mark, args: { n: newest } })
+        if (newest) await page("/activity/highlights", { handle: "opened", args: { n: newest } })
 
-        return {
-          who: "person",
-          did: step.mark === "seen" ? "marks every notice seen" : "opens the drawer of the newest notice's tab, which marks it seen",
-          tellings: [],
-        }
+        return { who: "person", did: "opens the drawer of the newest highlight's tab, which opens its highlights", tellings: [] }
       }
       case "go": {
         const root = await page("/")
@@ -440,7 +436,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
 
         if (point && tabsOf(root).some((r) => r.at === placeOf(point.at).key)) at = placeOf(point.at).key
 
-        return { who: "person", did: `goes where the agent pointed them${point ? `: ${point.at}` : ", but it pointed nowhere"}`, tellings: [] }
+        return { who: "person", did: `goes where the agent brought them${point ? `: ${point.at}` : ", but it brought them nowhere"}`, tellings: [] }
       }
       case "code": {
         const file = join(dir, ".baba/surfaces", step.surface, step.file)
