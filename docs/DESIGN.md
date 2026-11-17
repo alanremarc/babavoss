@@ -81,6 +81,8 @@ drawer     A tab's panel, home's too: its menu drawn from its views, over its ac
 kit        What pages are built with: primitives and theming tokens; it follows the conventions unasked.
 conventions  How the person wants pages to be, from their settings and the machine: motion, text scale, a sidebar's side,
            where the rail stands, the mode. Handed to every page, which follows them by its own code; expected, never enforced.
+border     What a project may import: the framework's entries, core/index.ts for a surface, kit/index.ts and
+           shell/ui/index.tsx for a page; nothing else resolves.
 present    The shell at /: every open tab's facts.
 ```
 

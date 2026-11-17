@@ -2,6 +2,24 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.69.0
+
+Breaking: the package exports only its entries. A surface's source and specs import `babavoss/core/index.ts`; a page `babavoss/kit/index.ts` and `babavoss/shell/ui/index.tsx`; `.baba/baba.config.ts` imports `babavoss/core/config.ts`; the generated root's stylesheet `babavoss/shell/ui/styles.css`. Any other path into the package no longer resolves. Search the surfaces for `babavoss/` and change each import:
+
+- `babavoss/kit/cn.ts` → `cn` from `babavoss/kit/index.ts`
+- `babavoss/kit/components/*.tsx` → `babavoss/kit/index.ts` (`Toggle` and `toggleVariants` are there too now)
+- `babavoss/kit/theme.ts` → `babavoss/kit/index.ts` (`PRESETS`, `presetOf`, `derive`, `varsOf`, `Theme`, `PresetId`)
+- `babavoss/kit/layouts/*` → `babavoss/kit/index.ts` (`MenuItem`, `WorkbenchToolbar`, `WorkbenchSpacer`, `WorkbenchSegments`, `WorkbenchPage`, `WorkbenchEmpty`, `useNarrow`); what is not exported there, copy into the surface's own folder
+- `babavoss/kit/styles.css` → nothing: the root's stylesheet already brings the kit's design language, and a surface's `ui/styles.css` is scoped under it
+- `babavoss/core/state/session-dir.ts` → `sessionDir` from `babavoss/core/index.ts`
+- `babavoss/core/harness/index.ts` → `babavoss/core/index.ts`: `claudeCode`, `fakeHarness`, `sessionEnv`, `NONE`, and the types `Harness`, `HarnessEvent`, `Tokens`, `FakeHarness` and `ClaudeOptions`; its `Session` type is `HarnessSession` there
+- `babavoss/core/surface/*`, `babavoss/core/runtime/*` → `babavoss/core/index.ts`, which exports what a surface uses from them
+- `babavoss/shell/ui/*` other than `index.tsx`, `babavoss/shell/src/*`, `babavoss/shell/settings/*`, `babavoss/core/hook.ts`, `babavoss/core/update.ts`, `babavoss/core/bv/*` → not for surfaces. Use `useTab`, `useLive`, `useShell`, `useConventions`, `read`, `call`, `changes` and their types from `babavoss/shell/ui/index.tsx`, and keep anything more in the surface's own folder.
+
+The kit and the shell keep to the type scale of four: `text-badge`, `text-meta`, `text-body`, `text-large`. The kit's titles (`EmptyTitle`, `DialogTitle`, `PopoverTitle`) are 13px where they were 14px, and `Input` and `Textarea` are 13px where they were 14px below 768px wide. For a surface the scale is advice: one that wants another size sets it by its own class.
+
+To adapt: run `bun check` in `.baba/`; each import it cannot find is in the list above.
+
 ## 0.68.0
 
 Breaking: the page is opened only by its link.
