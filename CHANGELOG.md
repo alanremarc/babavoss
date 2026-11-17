@@ -2,6 +2,13 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.64.1
+
+- A tab's close, offered at `/`, names what runs in the tab beside its number: "close tab 3, Queue; its state is dropped". Home's menu, drawn from it, tells several tabs apart. The command is unchanged: `close n=3`.
+- docs/DESIGN.md says the rail and a tab's drawer, as built in 0.61.0.
+
+Nothing to adapt in a project's surfaces.
+
 ## 0.64.0
 
 - Home tells the person when the session's hooks are not heard, never heard or heard and gone quiet: a bubble beside the mark, kept in home's thread, a dot on the mark, and a line pinned in home's drawer that says what to do. The dot and the line clear when a hook is heard again. It begins when the runtime tells the agent its one line of the silence, never from a timer of the page's.
