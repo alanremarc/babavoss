@@ -2,6 +2,15 @@
 
 Tools your agent works with, each with a page where you watch and steer.
 
+```text
+   you ────── talk ──────► agent
+    │                        │
+   page                   command
+    │                        │
+    └──────► surface ◄───────┘
+        one state, both change it
+```
+
 ## Getting started
 
 Copy this to your agent:
