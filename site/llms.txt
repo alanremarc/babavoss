@@ -22,7 +22,7 @@ Do not make a surface as part of installing. The person says what they want next
 
 - How a surface is made or changed: `.baba/node_modules/babavoss/skill/making-surfaces.md`. Read it before doing either.
 - `.baba/` is the project's own code: commit it. `.baba/node_modules` and `.baba/.root` are ignored by its `.gitignore`.
-- A running shell runs the code it started with. While surfaces are being made, `dev: true` in `.baba/baba.config.ts` restarts it on each change; otherwise restart it with the command the shell's answer names.
+- A running shell runs the code it started with. While surfaces are being made, `dev: true` in `.baba/baba.config.ts`, a file `init` does not make (`export default config({ dev: true })`, `config` from `babavoss/core/config.ts`), restarts it on each change; otherwise restart it with the command the shell's answer names.
 - When an answer says a later release is out, whether to take it is the person's; it is taken as that answer says, the surfaces adapted by the changelog.
 
 ## Links
