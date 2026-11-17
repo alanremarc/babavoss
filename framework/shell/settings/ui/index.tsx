@@ -84,7 +84,7 @@ export default function Settings() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex w-full max-w-xl flex-col gap-7 px-5 py-8 text-body">
         <header className="flex flex-col gap-0.5">
-          <h1 className="text-sm font-semibold">Settings</h1>
+          <h1 className="text-large font-semibold">Settings</h1>
           <p className="text-muted-foreground">Yours, the same in every session and project. The agent can change them too.</p>
           {root.unsaved && <p className="text-destructive">{root.unsaved}</p>}
         </header>

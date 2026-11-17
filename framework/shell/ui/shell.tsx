@@ -532,7 +532,7 @@ export function Shell({ surfaces: project, home: OwnHome }: { surfaces: Registry
     <ChangesContext.Provider value={stream}>
       <ServicesContext.Provider value={services}>
         <ConventionsContext.Provider value={conventions}>
-          <div className={cn("flex h-dvh min-h-64 overflow-hidden text-xs", SIDES[placed.side])}>
+          <div className={cn("flex h-dvh min-h-64 overflow-hidden text-body", SIDES[placed.side])}>
             <Rail placed={placed} mark={rail.mark} tabs={rail.tabs} active={active} {...(drawer !== undefined && { drawer })} select={(key) => go(key)} toggle={toggle} />
             <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
               {/* Over the content, never above it: nothing that comes or goes here moves the page. */}
