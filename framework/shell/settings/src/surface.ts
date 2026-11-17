@@ -280,7 +280,9 @@ const archived = (m: Model, place: string | undefined) => {
         tabs: measured.project.tabs,
         sessions: measured.project.sessions,
         size: sized(measured.project.bytes),
-        ...(measured.project.running && { running: `${measured.project.running} other sessions run now, and are left as they are` }),
+        ...(measured.project.running && {
+          running: measured.project.running === 1 ? "1 other session runs now, and is left as it is" : `${measured.project.running} other sessions run now, and are left as they are`,
+        }),
       },
     }),
     ...(m.clearing && { clearing: m.clearing }),
@@ -335,7 +337,7 @@ export function settings(file: () => string = () => settingsFile(), place: () =>
   const pages = pagesOf(place)
 
   return surface<Model, Event, Command>({
-    description: "The person's settings of the shell's page: appearance, where the tabs stand, motion, text size, the side of a page's sidebar, shortcuts, and whether the mark moves while the agent works. Use when the person asks to change one.",
+    description: "The person's settings of the shell's page: appearance, where the tabs stand, motion, text size, the side of a page's sidebar, shortcuts, whether the mark moves while the agent works, and how long closed tabs are kept, with clearing them. Use when the person asks to change one, or to clear closed tabs.",
     init: () => ({ settings: settingsOf(undefined), writing: 0 }),
     // What a tab kept is only a first look: the file is read again as it starts.
     restore: (saved) => ({ settings: settingsOf((saved as { settings?: unknown } | undefined)?.settings), writing: 0 }),

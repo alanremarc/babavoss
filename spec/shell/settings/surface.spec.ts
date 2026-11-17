@@ -268,7 +268,7 @@ describe("the archive of closed tabs in the settings", () => {
       project: "/work/app",
       window: { days: 30, megabytes: 200 },
       session: { tabs: 2, size: "12.0 KB" },
-      wholeProject: { tabs: 5, sessions: 1, size: "3.4 MB", running: "1 other sessions run now, and are left as they are" },
+      wholeProject: { tabs: 5, sessions: 1, size: "3.4 MB", running: "1 other session runs now, and is left as it is" },
     })
     expect(agent.offered("/archive")).toEqual(["keep", "measure", "clear", "clear"])
 
