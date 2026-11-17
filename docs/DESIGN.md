@@ -41,7 +41,8 @@ page       Shows the same surfaces to the person, at one address per session, op
    reads,     │    actions           actions    │      shows,
    calls      │    whose decision: said in the view, raised in the conversation
               │                                 │
-              │  update ──► notice ─────────────┼──► both, once
+              │  update ──► notice ─────────────┼──► the log; the agent, once
+              │              highlight ─────────┼──► the person: a bubble, a dot
               └─────────────────────────────────┘
 ```
 
@@ -50,7 +51,9 @@ surface    What is true now and what can be done now, as a program. Shared and l
 view       What a surface says at a path: facts, and the actions offered there.
 action     Something that can be done now, offered alike to the agent and the person.
 fact       What stands: true until the surface says otherwise.
-notice     What happened: one line an update gives, told once to each side, kept in no view.
+notice     What happened: one line an update gives, kept in its entry of the log and told once to the agent; in no view.
+highlight  A notice marked important to the person, by its surface or by the agent: a bubble, and a dot on its tab
+           until they open its drawer.
 ui         A surface's part of the page: its views, shown to the person.
 ```
 
@@ -62,14 +65,14 @@ ui         A surface's part of the page: its views, shown to the person.
    │  tab ── surface        ├─ each with its ui,         │
    │  tab ── surface        ┘  built with the kit        │
    │                                                     │
-   │  home · attention · notifications · turn · addresses│
-   │  activity · frame · theme · settings · health       │
+   │  home · highlights · turn · addresses · activity    │
+   │  frame · theme · settings · health                  │
    └───────▲──────────┬──────────────────────┬───────────┘
            │          │ present,             │ rail and drawers,
    a surface speaks   │ for the agent        │ for the person
    to the shell:
-     facts at /   title, attention, broken
-     notices      what happened
+     facts at /   title, broken
+     notices      what happened; a highlight what the person should see
 ```
 
 ```text
@@ -89,17 +92,17 @@ What the shell offers, it offers twice: on the page for the person, in the prese
 
 ```text
 home            the mark on the rail: a desktop of the surfaces, or the project's own home.tsx; its drawer the shell's own
-attention       a surface says who it needs, and why: a dot on its tab, the why pinned in its drawer; first in the present
-notifications   every notice: a bubble beside its tab for a moment, kept in the tab's thread; one line for the agent
+highlights      what the person should see, raised by a surface or by the agent: a bubble beside the tab for a moment, a
+                dot on it until its drawer is opened, standing out in its thread
 turn            whose move it is, said by the mark: its eyes look about while the agent works
-addresses       every place has a link, a tab by its surface's name, and the agent can point the person to it
+addresses       every place has a link, a tab by its surface's name, and the agent can highlight it and bring it to the front
 activity        a log of actions, for auditing and not replay: who, the person, the agent or the world; what was called,
-                with its inputs; done, or refused and why; the surface's lines about it. In each tab's drawer; read on
-                demand by the agent
+                with its inputs; done, or refused and why; the surface's lines about it. Kept with each tab in its own
+                log: in its drawer; read on demand by the agent; a closed tab's, read only, at /activity/closed
 frame           title, menus and a surface's actions, in the same place for every surface: a tab's drawer
 theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
 settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
-                follow by convention, shortcuts, the mark's motion
+                follow by convention, shortcuts, the mark's motion, how long closed tabs are kept; and clearing them
 health          what is broken, and why; a page that lost its runtime says so and finds it again
 ```
 
@@ -146,7 +149,7 @@ wake       Every request wakes the runtime with a strength: a session's start we
    │   │   └─ spec/               its rules
    │   └─ baba.config.ts          optional: the project's title, and how each harness is set up
    ├─ .claude/ · .codex/ …        the harnesses, set up from .baba/: the hooks, baba's words
-   └─ .babavoss/                  what sessions keep
+   └─ .babavoss/                  what sessions keep: each tab's state and log, closed tabs read only, cleared by a rolling window
 ```
 
 ```text

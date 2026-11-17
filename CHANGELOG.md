@@ -2,6 +2,38 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.72.0
+
+**Breaking: highlight replaces `attention`, `show` and `/activity/notices`.** A surface no longer says who is needed at `/`. Where it said `attention` because something waits on the person, mark the notice that tells what happened as a highlight: their tab gets a bubble and a dot until they open its drawer, and the agent hears it first among its notices.
+
+Before:
+
+```ts
+"/": (m) => ({ …, ...(m.proposed && { attention: { who: "person", why: "to accept or decline" } }) })
+update: … ({ model: { ...m, proposed: text } })
+```
+
+After:
+
+```ts
+"/": (m) => ({ … })
+update: … ({ model: { ...m, proposed: text }, notices: [{ text: `"${text}" is proposed, to accept or decline`, highlight: true }] })
+```
+
+- Remove every `attention` fact. One that was for the agent goes too, or becomes a plain fact or a highlighted notice. `/` no longer has `needs`.
+- A bubble appears only for a highlight; an ordinary notice is kept in its entry of the log and told to the agent once, as before.
+- The agent's `show at=…` is `highlight at=… why=… front=true`: a place marked for the person, with why, and brought to the front where asked.
+- `/activity/notices` is gone: the surfaces' lines are in `/activity`, the highlights in `/activity/highlights`. The person's `seen` and `looked` are gone; opening a tab's drawer is what clears its dot.
+- In stories, `noticed()` gives a highlight as `highlight: TEXT`, and `agent.told()` no longer has `- attention` or `need` lines.
+- A home page's `HomeProps.tabs[].mark` is `"broken" | "highlight"`, where it was `"broken" | "person" | "agent"`.
+
+**The shell's state is kept per tab, and closed tabs are archived.** A session's root no longer keeps one `model.json`: `shell.json` holds the shell's own part, and each open tab has `tabs/N/state.json` and `tabs/N/log.jsonl`. A session kept from before is migrated on its first start.
+
+- Closing a tab no longer drops its state: it is kept read only in `closed/N`, and the agent reads it at `/activity/closed` and `/activity/closed/N`. A closed tab is never reopened with its state.
+- The archive clears itself as a runtime starts, at most once a day: closed tabs and the folders of sessions that are over go after 30 days, and the oldest first past 200 MB a project. Both numbers are the person's settings, at `/settings/archive`, which also clears this session's closed tabs or the project's.
+- The log holds a tab's newest 200 entries in the model, per tab; the rest stay on disk.
+- Surfaces need no change. A tool that read `.babavoss/sessions/S/ROOT/model.json` reads `shell.json` and `tabs/N/state.json` instead.
+
 ## 0.71.0
 
 Three changes to the shape of a surface and its page.
