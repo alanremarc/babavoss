@@ -2,6 +2,18 @@
 
 What each version of babavoss changed, newest first. A release is the tag vX.Y.Z of this repository; a project's `.baba/` names one. Versions follow semantic versioning and are set by hand, in `package.json`, in the commit that makes the change. An agent reads this after taking a release, from the version its roles ran on up, to adapt them.
 
+## 0.66.0
+
+Conventions: the shell hands every page, home included, how the person wants pages to be.
+
+- `motion`: `full` or `reduced`. `scale`: the text size, 1 by default. `side`: `left` or `right`, where a page's own sidebar stands. `rail`: where the shell's tabs stand. `mode`: `light` or `dark`, as shown.
+- Read them with `useConventions()` from `babavoss/shell/ui/index.tsx`, or in CSS: each stands on the page's root as `data-NAME`, a number also as `--NAME`, with the variants `motion-safe:`, `motion-reduce:`, `side-left:`, `side-right:`, `rail-left:`, `rail-right:`, `rail-top:` and `rail-bottom:`.
+- The kit follows them unasked: nothing animates where motion is reduced, and everything sized in rem follows the scale. `motion-safe:` and `motion-reduce:` now follow the person's setting, and the browser's preference only where there is none.
+- The settings gain `preferences`: `motion` (system, full, reduced), `scale` (0.9, 1, 1.1, 1.25, 1.5) and `side`, each with an action of its name at `/settings`, and a row under Appearance.
+- A page follows them by its own code. It is expected and never enforced: a page that follows none works as before.
+
+To adapt a project's surfaces: stand a page's sidebar at `side`, for example `side-left:flex-row-reverse` on its row with the border swapped; check `motion` before animating or scrolling smoothly in script; size text in rem, never px.
+
 ## 0.65.0
 
 Breaking: the kit is shadcn's primitives with one layer of opinions, and nothing else. What it no longer holds, and what to use instead:
