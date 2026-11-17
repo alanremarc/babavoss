@@ -9,7 +9,8 @@
 //               PATH#WORDS runs it with the fixture queue's words from words/WORDS.ts, as dictating, in place of its own.
 //   --tasks     the tasks by name, all by default: done-one, add-one, note-one, start-oldest, move-drafts, lanes-read,
 //               open-count, note-backlog, note-parents, done-list, create-eight; and the probes open-release, retitle,
-//               busy-lane, about-26, highlight-13, second-turn, done-then-lanes, link-cycle, release-ready, done-sleep (tasks.ts)
+//               busy-lane, about-26, highlight-13, second-turn, done-then-lanes, link-cycle, release-ready, compact-then-act,
+//               no-surface, done-sleep (tasks.ts)
 //   --model     the model Claude Code runs, claude-sonnet-5-5 by default; the one it reports is recorded beside it
 //   --runs      runs of each task on each variant, 3 by default
 //   --budget    optional: the most the campaign may spend in dollars as the harness counts them; refused before it starts

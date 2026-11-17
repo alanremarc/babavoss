@@ -64,7 +64,7 @@ test("a dry campaign runs each task on each variant in a project of its own, che
 }, 120_000)
 
 test("the probes pass by their dry scripts: a surface opened, the person's acts before the agent and between two messages, a place highlighted, the root put to sleep", async () => {
-  const o = options("open-release,retitle,busy-lane,about-26,highlight-13,second-turn,done-then-lanes,link-cycle,release-ready,done-sleep", { variants: [v1] })
+  const o = options("open-release,retitle,busy-lane,about-26,highlight-13,second-turn,done-then-lanes,link-cycle,release-ready,compact-then-act,no-surface,done-sleep", { variants: [v1] })
   const done = await campaign(o, dryHarness(scriptFor(o.tasks)), new AbortController().signal)
 
   expect(done.runs.map((r) => `${r.task} ${r.pass} ${r.reason}`)).toEqual(o.tasks.map((t) => `${t.name} true as asked`))
@@ -75,6 +75,11 @@ test("the probes pass by their dry scripts: a surface opened, the person's acts 
   expect(second).toContain('"event":"UserPromptSubmit"')
   expect(second).toContain("(by the person)")
   expect(done.runs.find((r) => r.task === "busy-lane")!.refusals).toBe(1)
+  // Across a compaction, the hook gave the present whole again, the issues' actions as a pattern among it.
+  const compacted = readFileSync(join(done.dir, done.runs.find((r) => r.task === "compact-then-act")!.transcript), "utf8")
+
+  expect(compacted.match(/"event":"SessionStart"/g)).toHaveLength(2)
+  expect(compacted).toContain("/queue/issues/N ACTION n=N")
   expect(scratch()).toEqual(before)
 }, 120_000)
 

@@ -16,9 +16,10 @@ export type Verdict = { pass: boolean; reason: string }
 export type Call = { tool: string; input: string; turn?: number; result?: string }
 /** The shell as the run left it: the highlights the agent raised, each place and why, and each tab's surface and model. */
 export type Shell = { highlights: { at: string; text: string }[]; tabs: { surface: string; model: unknown }[] }
-export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[] }
-/** What the dry run does in the agent's place: its command's arguments, one call each, and its last words. */
-export type Dry = { calls: string[][]; answer?: string }
+/** `files`, the task's own files as the run left them, by their path in the project. */
+export type Checked = { seed: Work; final: Work; answer: string; shell?: Shell; calls?: Call[]; files?: Record<string, string> }
+/** What the dry run does in the agent's place: its command's arguments, one call each, files it writes in the project, and its last words. */
+export type Dry = { calls: string[][]; writes?: Record<string, string>; answer?: string }
 /** What the person does on the page: a handle called at a path of the root. */
 export type Act = { path: string; handle: string; args: Record<string, Json> }
 export type Task = {
@@ -27,11 +28,17 @@ export type Task = {
   prompt: string
   check: (run: Checked) => Verdict
   dry: Dry
+  /** Files the project holds beside .baba/, by their path in it, committed with it. */
+  files?: Record<string, string>
   /** What the person does before the agent starts, once the fixture's tab is open. */
   before?: Act[]
-  /** A second message in the same session, said once the first turn ends and the person has taken `acts`. */
-  then?: { acts: Act[]; prompt: string; dry: Dry }
+  /** Later messages in the same session, each said once the turn before ends and the person has taken its `acts`. */
+  then?: Later[]
 }
+/** A later message: what the person does first, what they say, and the dry run's script for it; COMPACT compacts the session. */
+export type Later = { acts?: Act[]; prompt: string; dry: Dry }
+/** The message that compacts the session, as the person would type it: Claude Code's own command. */
+export const COMPACT = "/compact"
 
 const ok = (reason = "as asked"): Verdict => ({ pass: true, reason })
 const no = (reason: string): Verdict => ({ pass: false, reason })
@@ -96,6 +103,8 @@ const LOOKS = /\.baba\/surfaces|\.babavoss\/sessions|model\.json|seed\.ts|src\/s
 const looksAround = (calls: Call[] = []) => calls.filter(({ tool, input }) => (tool === "Bash" ? !/\.babavoss\/bin\/baba|\bbv\b|bun run baba/.test(input) : true) && LOOKS.test(input))
 /** A subagent launched: what the dictating words asked for with every start, and no task does. */
 const subagents = (calls: Call[] = []) => calls.filter(({ tool }) => tool === "Task" || tool === "Agent")
+/** A run of the surfaces' command, however it is named. */
+const WORDED = /(\.babavoss\/bin\/(baba|bv)|\bbv\b|bun run baba)/
 /** The command's run that puts the root to sleep. */
 const sleeps = (calls: Call[] = []) => calls.some(({ tool, input }) => tool === "Bash" && /(\.babavoss\/bin\/baba|\bbv|bun run baba)\s+(--session\s+\S+\s+)?sleep\b/.test(input))
 const releaseOf = (shell?: Shell) => shell?.tabs.find((t) => t.surface === "release")?.model as Checklist | undefined
@@ -349,14 +358,16 @@ export const TASKS: Task[] = [
     name: "second-turn",
     kind: "probe",
     prompt: "In the queue, start issue 3 in lane 2.",
-    then: {
-      acts: [
-        { path: "/queue/issues/3", handle: "back", args: { n: 3 } },
-        { path: "/queue/issues/5", handle: "start", args: { n: 5, lane: 2 } },
-      ],
-      prompt: 'Put the note "started today" on the issue in lane 2.',
-      dry: { calls: [["/queue/issues/5", "note", "n=5", "text=started today"]] },
-    },
+    then: [
+      {
+        acts: [
+          { path: "/queue/issues/3", handle: "back", args: { n: 3 } },
+          { path: "/queue/issues/5", handle: "start", args: { n: 5, lane: 2 } },
+        ],
+        prompt: 'Put the note "started today" on the issue in lane 2.',
+        dry: { calls: [["/queue/issues/5", "note", "n=5", "text=started today"]] },
+      },
+    ],
     // Issue 3 may carry a note from the first turn, as the queue asks a lane's issue to; it stays where the person put it.
     check: ({ seed, final }) =>
       only([3, 5], seed, final, () => {
@@ -374,7 +385,7 @@ export const TASKS: Task[] = [
     name: "done-then-lanes",
     kind: "probe",
     prompt: "In the queue, mark issue 21 done: its work is merged.",
-    then: { acts: [], prompt: "Which lanes are free now? Answer by number.", dry: { calls: [], answer: "Lanes 1, 2 and 5 are free." } },
+    then: [{ prompt: "Which lanes are free now? Answer by number.", dry: { calls: [], answer: "Lanes 1, 2 and 5 are free." } }],
     check: ({ seed, final, answer }) => {
       const wrong = [1, 2, 5].filter((n) => !names(answer, n))
 
@@ -406,6 +417,8 @@ export const TASKS: Task[] = [
     name: "release-ready",
     kind: "probe",
     prompt: "Get the release checklist done: the changelog's section is written and the version is raised.",
+    // What the prompt says is true in the project, for an agent that checks before it ticks.
+    files: { "CHANGELOG.md": "# Changelog\n\n## 0.71.0\n\n- The release's changes.\n", "package.json": `${JSON.stringify({ name: "app", version: "0.71.0" }, null, 2)}\n` },
     check: ({ seed, final, answer, shell }) => {
       const release = releaseOf(shell)
 
@@ -425,6 +438,38 @@ export const TASKS: Task[] = [
     },
   },
   {
+    // Across a compaction: the hook gives the words and the present whole again, every action's command among it, so the
+    // next action needs no read beyond what it gave. The oldest in the backlog is issue 3.
+    name: "compact-then-act",
+    kind: "probe",
+    prompt: "Mark issue 24 in the queue done; it is merged.",
+    then: [
+      { prompt: COMPACT, dry: { calls: [] } },
+      { prompt: 'Put the note "next up" on the oldest issue in the backlog.', dry: { calls: [["/queue/issues/3", "note", "n=3", "text=next up"]] } },
+    ],
+    check: ({ seed, final }) =>
+      only([3, 24], seed, final, () => every(final, [24, 3], (i) => (i.n === 24 ? (i.status === "done" ? undefined : `is ${i.status}`) : same(i.note, "next up") ? undefined : `has note "${i.note ?? ""}"`))),
+    dry: { calls: [["/queue/issues/24", "done", "n=24"]] },
+  },
+  {
+    // A task with nothing to do with the surfaces: babavoss only offers itself, so the agent does the edit without touching
+    // or mentioning a surface.
+    name: "no-surface",
+    kind: "probe",
+    prompt: "In README.md, change the status from draft to ready.",
+    files: { "README.md": "# App\n\nA small app.\n\nStatus: draft\n" },
+    check: ({ seed, final, answer, calls = [], files = {} }) => {
+      const used = calls.filter((c) => c.tool === "Bash" && WORDED.test(c.input))
+
+      if (!/Status: ready/.test(files["README.md"] ?? "")) return no(`README.md reads "${(files["README.md"] ?? "").trim().split("\n").at(-1)}"`)
+      if (used.length) return no(`ran the surfaces' command: ${used[0]!.input.slice(0, 100)}`)
+      if (/\b(surface|queue|baba|shell)\b/i.test(answer)) return no(`mentioned the surfaces: "${answer.trim().slice(0, 100)}"`)
+
+      return only([], seed, final, ok)
+    },
+    dry: { calls: [], writes: { "README.md": "# App\n\nA small app.\n\nStatus: ready\n" }, answer: "README.md now says Status: ready." },
+  },
+  {
     // The end of the work with the surfaces, said: the agent puts the root to sleep.
     name: "done-sleep",
     kind: "probe",
@@ -442,7 +487,7 @@ export const TASKS: Task[] = [
 export const scriptFor =
   (tasks: Task[]) =>
   (prompt: string): Dry =>
-    tasks.find((t) => t.prompt === prompt)?.dry ?? tasks.find((t) => t.then?.prompt === prompt)!.then!.dry
+    prompt === COMPACT ? { calls: [] } : (tasks.find((t) => t.prompt === prompt)?.dry ?? tasks.flatMap((t) => t.then ?? []).find((later) => later.prompt === prompt)!.dry)
 
 /** The tasks a comma list names, all where it is empty; a name that is none throws. */
 export function tasksNamed(list: string): Task[] {

@@ -13,7 +13,7 @@ import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { fakeHarness, sessionEnv, serviceClient, NONE, type Harness, type HarnessEvent, type HarnessSession, type Tokens } from "babavoss/core/index.ts"
 import type { Work } from "./fixture/queue/src/surface.ts"
-import type { Act, Call, Dry, Kind, Shell, Task } from "./tasks.ts"
+import { COMPACT, type Act, type Call, type Dry, type Kind, type Shell, type Task } from "./tasks.ts"
 
 /** The checkout running the rig: the default variant, and where campaigns are written. */
 export const REPO = realpathSync(fileURLToPath(new URL("../../../../", import.meta.url)))
@@ -129,7 +129,7 @@ const envOf = (project: string, home: string): Record<string, string> => ({
 })
 
 /** Makes a scratch project on `variant`, with the fixture as its surface, provisioned for Claude Code alone, and its root started. */
-export function makePlace(variant: Variant, session: string): Place {
+export function makePlace(variant: Variant, session: string, files: Record<string, string> = {}): Place {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "babavoss-eval-")))
   const project = join(dir, "project")
   const home = join(dir, "home")
@@ -156,6 +156,7 @@ export function makePlace(variant: Variant, session: string): Place {
     sh(["bun", "run", "baba", "provision"], baba, env)
     // A repository with a first commit, as a project is: the harness's own tools, a worktree for a subagent, need one.
     writeFileSync(join(project, ".gitignore"), "node_modules\n.babavoss\n.root\n")
+    for (const [path, text] of Object.entries(files)) writeFileSync(join(project, path), text)
     sh(["git", "init", "-q"], project)
     sh(["git", "add", "-A"], project)
     sh(["git", "-c", "user.name=eval", "-c", "user.email=eval@lab.invalid", "commit", "-qm", "the project as the eval made it"], project)
@@ -445,6 +446,12 @@ export function dryHarness(script: (prompt: string) => Dry): Harness {
             { kind: "started", session: options.session, loaded: { model: "dry", cwd: options.project, tools: ["Bash"], skills: [], plugins: [], mcp: [], commands: [] } },
             { kind: "injected", event: "SessionStart", text: hook("SessionStart", { source: "startup" }) },
           )
+        } else if (prompt === COMPACT) {
+          // A compaction, as Claude Code plays it: the session starts again with what the hook gives, and the turn ends.
+          fake.emit({ kind: "injected", event: "SessionStart", text: hook("SessionStart", { source: "compact" }) })
+          fake.emit({ kind: "turn", ok: true, text: "", tokens: { ...NONE }, total: 0, ms: 0, calls: 0 })
+
+          return
         } else {
           const told = hook("UserPromptSubmit", { prompt })
 
@@ -452,7 +459,9 @@ export function dryHarness(script: (prompt: string) => Dry): Harness {
         }
         fake.emit({ kind: "message", text: prompt })
 
-        const { calls, answer } = script(prompt)
+        const { calls, writes, answer } = script(prompt)
+
+        for (const [path, text] of Object.entries(writes ?? {})) writeFileSync(join(options.project, path), text)
 
         for (const [i, args] of calls.entries()) {
           const done = Bun.spawnSync([".babavoss/bin/baba", "--session", options.session, ...args], { cwd: options.project, env, stdout: "pipe", stderr: "pipe" })
@@ -520,11 +529,13 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   const session = crypto.randomUUID()
   const name = `${task.name}.${variant.label}.${n}.jsonl`
   const transcript = join(dir, "transcripts", name)
-  const place = makePlace(variant, session)
+  const place = makePlace(variant, session, task.files)
   let ending: Ending = { events: [] }
   let seed: Work | undefined
   let final: Work | undefined
   let activity: Saved = {}
+  // The task's files as the run left them.
+  const files: Record<string, string> = {}
 
   try {
     seed = await openFixture(place, task.before)
@@ -536,9 +547,10 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
     try {
       ending.ended = await converse(agent, task.prompt, options, stop, transcript, ending.events, timeout)
       // A second message in the same session, after the person acted on the root between the two.
-      if (task.then && !ending.ended) {
-        await actAsPerson(place, task.then.acts)
-        ending.ended = await converse(agent, task.then.prompt, options, stop, transcript, ending.events, timeout)
+      for (const later of task.then ?? []) {
+        if (ending.ended) break
+        await actAsPerson(place, later.acts ?? [])
+        ending.ended = await converse(agent, later.prompt, options, stop, transcript, ending.events, timeout)
       }
     } finally {
       await agent.end()
@@ -549,12 +561,16 @@ export async function runOnce(harness: Harness, variant: Variant, task: Task, n:
   } finally {
     await closeRoot(place).catch(() => {})
     activity = saved(place)
+    for (const path of Object.keys(task.files ?? {}))
+      try {
+        files[path] = readFileSync(join(place.project, path), "utf8")
+      } catch {}
     final = workOf(activity)
     clear(place, harness)
   }
 
   const m = measure(ending.events)
-  const verdict = seed && final ? task.check({ seed, final, answer: m.answer, shell: shellOf(activity), calls: m.calls }) : { pass: false, reason: "the fixture's work could not be read" }
+  const verdict = seed && final ? task.check({ seed, final, answer: m.answer, shell: shellOf(activity), calls: m.calls, files }) : { pass: false, reason: "the fixture's work could not be read" }
   const { answer, calls: _calls, ...measured } = m
 
   return {
