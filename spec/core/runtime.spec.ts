@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { afterEach, describe, expect, it } from "bun:test"
 import { defineRoot } from "../../framework/core/root.ts"
 import { reach } from "../../framework/core/runtime/reach.ts"
-import { devMode, startRuntime, rootVersion, LOOK_MS, RELOAD_MS, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
+import { devMode, startRuntime, rootVersion, type RuntimeOptions } from "../../framework/core/runtime/runtime.ts"
 import { admitted, foreign } from "../../framework/core/runtime/door.ts"
 import { BOOT_ID, island } from "../../framework/core/runtime/boot.ts"
 import { ACTOR_HEADER, SERVICE_HEADER, STALE_HEADER, endpointFile, findService, type Endpoint } from "../../framework/core/runtime/service.ts"
@@ -72,6 +72,9 @@ const started = async (dir: string, more: Partial<RuntimeOptions> = {}, boot?: (
     env: { BABAVOSS_HOME: dir },
     entry: join(dir, "scripts/open.ts"),
     strengths: { weak: 60_000 },
+    // It looks, and takes changed code, at once: a spec waits on what happens, not on the runtime's own pace.
+    lookMs: 10,
+    reloadMs: 20,
     log: () => {},
     watch: [],
     ...more,
@@ -383,7 +386,7 @@ const listen = async (base: string, token: string) => {
 
   return { heard, stop: () => ctrl.abort() }
 }
-const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), strengths: { weak: 60_000 }, log: () => {}, watch: [] })
+const options = (dir: string) => ({ env: { BABAVOSS_HOME: dir }, entry: join(dir, "scripts/open.ts"), strengths: { weak: 60_000 }, lookMs: 10, reloadMs: 20, log: () => {}, watch: [] })
 
 describe("the two modes", () => {
   type Held = { n: number }
@@ -508,7 +511,7 @@ describe("the two modes", () => {
       expect(await restart()).toEqual(draining)
       expect(await call("hold")).toEqual({ status: 409, text: `refused: ${draining.text}` })
       expect(await read("/")).toContain("n: 0")
-      await sleep(LOOK_MS * 2)
+      await sleep(60)
       expect(ended).toEqual([])
       releases.splice(0).forEach((release) => release())
       await poll(() => ended.length).toBe(1)
@@ -576,7 +579,7 @@ describe("the two modes", () => {
 
       await poll(() => page.heard).toEqual(["change", "turn"])
       writeFileSync(join(src, "root.ts"), "// edited")
-      await sleep(RELOAD_MS + 400)
+      await sleep(150)
       expect(page.heard).not.toContain("page")
       writeFileSync(join(dir, "ui", "root.js"), "// a new page")
       await poll(() => page.heard, { timeout: 5000 }).toContain("page")
@@ -691,43 +694,60 @@ describe("the turn", () => {
 })
 
 describe("waking and sleeping", () => {
-  // Strengths short enough to watch: a weak signal keeps it 300ms, a strong one a minute, the session's end 100ms.
-  const short = { weak: 300, strong: 60_000, end: 100 }
-  const asleep = async (dir: string) => {
-    let slept = false
-    const up = await started(dir, { strengths: short, exit: () => (slept = true) })
+  // The time is the spec's own, moved on in place of waiting: a weak signal keeps it five minutes, a strong one half an hour, the session's end one.
+  const MIN = 60_000
+  const clock = () => {
+    let at = 1_000_000
 
-    return { ...up, slept: () => slept }
+    return { now: () => at, pass: (ms: number) => (at += ms) }
+  }
+  const asleep = async (dir: string, time = clock()) => {
+    let slept = false
+    const up = await started(dir, { strengths: { weak: 5 * MIN, strong: 30 * MIN, end: MIN }, now: time.now, exit: () => (slept = true) })
+
+    return { ...up, ...time, slept: () => slept }
+  }
+  /** Whether it is still up once it has looked a few times. */
+  const stays = async (slept: () => boolean) => {
+    await sleep(60)
+
+    return !slept()
   }
   const plain = (base: string, token: string, path: string, init: RequestInit = {}) =>
     fetch(base + path, { ...init, headers: { accept: "text/plain", [SERVICE_HEADER]: token, ...init.headers } }).then((r) => r.text())
 
   it("sleeps once a weak wake is spent, telling the page that watches it, whose reads and stream keep it no longer", async () => {
-    const { base, endpoint, get, slept } = await asleep(scratch())
+    const { base, endpoint, get, slept, pass } = await asleep(scratch())
     const page = await listen(base, endpoint.token)
 
     await plain(base, endpoint.token, "/?open")
     for (let i = 0; i < 4; i++) {
+      pass(MIN)
       await get("/")
-      await sleep(100)
+      expect(await stays(slept)).toBe(true)
     }
+    // The page read all along, and its stream is open: the open alone kept it, five minutes.
+    pass(MIN + 1)
     await poll(() => slept(), { timeout: 2000 })
     await poll(() => page.heard.includes("asleep"), { timeout: 2000 })
     page.stop()
   })
   it("stays up for the person's message, the agent's command and the person's action, and the session's end cuts it short", async () => {
     for (const strong of ["message", "command", "action"] as const) {
-      const { base, endpoint, post, slept } = await asleep(scratch())
+      const { base, endpoint, post, slept, pass } = await asleep(scratch())
 
       if (strong === "message") await plain(base, endpoint.token, "/_/turn", { method: "POST", body: "started" })
       if (strong === "command") await plain(base, endpoint.token, "/")
       if (strong === "action") await post("/", { handle: "bump", args: { by: 1 } })
-      await sleep(700)
-      expect([strong, slept()]).toEqual([strong, false])
+      // Past a weak wake by far, and short of a strong one.
+      pass(29 * MIN)
+      expect([strong, await stays(slept)]).toEqual([strong, true])
       if (strong === "message") {
         await plain(base, endpoint.token, "/_/turn", { method: "POST", body: "gone" })
-        await poll(() => slept(), { timeout: 2000 })
-      }
+        expect(await stays(slept)).toBe(true)
+        pass(MIN + 1)
+      } else pass(MIN + 1)
+      await poll(() => slept(), { timeout: 2000 })
     }
   })
   it("sleeps when asked, at once, and the next runtime has the state", async () => {
@@ -738,21 +758,25 @@ describe("waking and sleeping", () => {
     expect(await plain(base, endpoint.token, "/_/close", { method: "POST" })).toBe("p asleep; any call wakes it, its state kept")
     await poll(() => slept(), { timeout: 2000 })
 
-    const woken = await started(dir, { strengths: short, exit: () => {} })
+    const woken = await started(dir, { exit: () => {} })
 
     expect(await (await woken.get("/")).json()).toMatchObject({ n: 2 })
   })
   it("carries its deadline over a restart, so the one in its place stays up as long", async () => {
     const dir = scratch()
-    const first = await started(dir, { strengths: short, exit: () => {}, successor: () => {} })
+    const time = clock()
+    const first = await started(dir, { strengths: { weak: MIN, strong: 30 * MIN }, now: time.now, exit: () => {}, successor: () => {} })
 
     await first.post("/", { handle: "bump", args: { by: 1 } })
     await plain(first.base, first.endpoint.token, "/_/restart", { method: "POST" })
     await first.runtime.close()
 
-    const { slept } = await asleep(dir)
+    // The one in its place began with a weak wake of its own, five minutes; what it carried is the action's half hour.
+    const { slept, pass } = await asleep(dir, time)
 
-    await sleep(700)
-    expect(slept()).toBe(false)
+    pass(29 * MIN)
+    expect(await stays(slept)).toBe(true)
+    pass(MIN + 1)
+    await poll(() => slept(), { timeout: 2000 })
   })
 })

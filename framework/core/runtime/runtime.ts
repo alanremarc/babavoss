@@ -38,6 +38,12 @@ export type RuntimeOptions = {
   code?: string[]
   /** Dev mode: changed code restarts the runtime at once, cutting what runs. Default: normal mode, unless BABAVOSS_DEV says. */
   dev?: boolean
+  /** The time, where not the machine's; for specs, which move it on in place of waiting. */
+  now?: () => number
+  /** How often it looks at its deadline and its code, where not every LOOK_MS; for specs. */
+  lookMs?: number
+  /** How long changed code stands before a dev runtime restarts, or a page loads again, where not RELOAD_MS; for specs. */
+  reloadMs?: number
   /** How the process ends, with its exit code; for specs. */
   exit?: (code?: number) => void
   /** Wakes a fresh process in this one's place, as it was woken; called once this one let go of the session, as it restarts. */
@@ -175,7 +181,10 @@ export async function startRuntime(
   const running = run(root.surface, { ...(root.keep ?? modelPorts)(dir), log })
   const code = loaded(entry)
   const watchers: FSWatcher[] = []
-  const wake = wakeful({ ...strengthsOf(options.env), ...options.strengths }, Date.now())
+  const now = options.now ?? Date.now
+  const lookMs = options.lookMs ?? LOOK_MS
+  const reloadMs = options.reloadMs ?? RELOAD_MS
+  const wake = wakeful({ ...strengthsOf(options.env), ...options.strengths }, now())
   let looking: ReturnType<typeof setInterval> | undefined
   let closing: Promise<void> | undefined
   // The lock is let go within CLOSE_MS of the decision, whatever refuses to close: it must not outlive the service. The
@@ -256,7 +265,7 @@ export async function startRuntime(
 
       return end()
     }
-    if (Date.now() >= wake.until && running.active() === 0) return end()
+    if (now() >= wake.until && running.active() === 0) return end()
     if (stale) return
     loaded(entry, code)
 
@@ -265,7 +274,7 @@ export async function startRuntime(
     if (!file) return void (due = undefined)
     if (!dev) return changed(file)
     if (!existsSync(entry)) return
-    due ??= Date.now() + RELOAD_MS
+    due ??= Date.now() + reloadMs
     if (Date.now() >= due) restart(`its code changed (${file}) and it restarted`)
   }
   // While it drains, it refuses new calls, and starts again once nothing is under way.
@@ -285,7 +294,7 @@ export async function startRuntime(
     log(draining)
     entrance.note(draining, false)
     clearInterval(looking)
-    looking = setInterval(drain, LOOK_MS)
+    looking = setInterval(drain, lookMs)
     looking.unref()
 
     return { status: 202, text: draining }
@@ -323,7 +332,7 @@ export async function startRuntime(
     identity: owner.identity,
     ui: root.ui,
     ...(root.boot && { boot: root.boot }),
-    woken: (signal) => wake.signal(signal, Date.now()),
+    woken: (signal) => wake.signal(signal, now()),
     end,
     about,
     command,
@@ -375,7 +384,7 @@ export async function startRuntime(
     if (isSpec(file)) return
     if (!dev) return changed(file)
     clearTimeout(reload)
-    reload = setTimeout(() => void entrance.refresh(file), RELOAD_MS)
+    reload = setTimeout(() => void entrance.refresh(file), reloadMs)
     reload.unref()
   }
 
@@ -403,7 +412,7 @@ export async function startRuntime(
       log(`not watching ${where}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
-  looking = setInterval(look, LOOK_MS)
+  looking = setInterval(look, lookMs)
   looking.unref()
 
   // What the runtime before it said as it restarted: the agent is told only of what was cut, which it may have to do again.

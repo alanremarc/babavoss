@@ -1,6 +1,6 @@
 {
   "name": "babavoss",
-  "version": "0.78.0",
+  "version": "0.78.1",
   "description": "A TypeScript framework for surfaces an agent works on: what is true now and what can be done now, read and acted on through a command, and a page where the person watches and acts on the same thing. Carries baba, the skill that makes an agent aware of them.",
   "license": "Apache-2.0",
   "repository": {
@@ -11,6 +11,10 @@
   "type": "module",
   "engines": {
     "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "spec": "bun test --parallel --timeout=30000",
+    "spec:whole": "bun test --parallel --timeout=30000 --path-ignore-patterns='template/**' --path-ignore-patterns='**/eval/fresh/**' --path-ignore-patterns='spec/surfaces.spec.ts' . ./.baba/surfaces"
   },
   "bin": {
     "baba": "./bin/baba.ts",

@@ -1,5 +1,6 @@
 [test]
-timeout = 30000
 preload = ["./spec/support/offline.ts"]
-# The template's own spec runs in a surface made from it; here spec/bin/baba.spec.ts runs it.
-pathIgnorePatterns = ["template/**"]
+# `bun test` runs the fast specs: the ones in process, that start no runtime, run no command of the package's and install nothing. A spec that needs any
+# of those is NAME.whole.spec.ts, and `bun run spec:whole` runs every spec. The template's own spec runs in a surface
+# made from it; spec/bin/baba.whole.spec.ts runs it. A test's time limit is the scripts' --timeout: none set here is read.
+pathIgnorePatterns = ["template/**", "**/*.whole.spec.ts"]
