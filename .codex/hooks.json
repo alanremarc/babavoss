@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true"
           }
         ]
       }
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook codex 2>/dev/null || true",
             "timeout": 3
           }
         ]

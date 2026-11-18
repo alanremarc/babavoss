@@ -1,22 +1,20 @@
-// Claude Code's adapter. Set up: a project-level plugin, the package's plugin/claude/, which is the skill baba and the
-// framework's hook for each event; the project gets one link to it, .claude/skills/baba, which Claude Code loads in place
-// in a trusted folder, and older provisioning's hooks are taken out of .claude/settings.json; an organisation's managed
-// settings that keep the plugin or its hook from running are read, where they can be, and said. Hooks: Claude Code's input
-// and output, whose names the framework's moments are. Run: one long-lived headless process per session, spoken to and
-// read as JSON lines, in a home of its own, so its transcripts, settings and caches land there and the person's own are
-// neither read nor written. A plugin in .claude/skills loads only in a folder trusted in that home, which `-p` does not
-// count; so the run loads the project's plugin by --plugin-dir, for that session only, whatever the trust says, and the
-// project is trusted in the home besides, so its own settings apply as in the person's session. Its login is the person's:
+// Claude Code's adapter. Set up: the one method (setup.ts), the skill baba in .claude/skills/baba and the framework's
+// hook for each event among the person's own in .claude/settings.json, which Claude Code reads in a trusted folder; what
+// an older release left, a link to a plugin in the package, is replaced; an organisation's managed settings that keep the
+// project's hooks from running are read, where they can be, and said. Hooks: Claude Code's input and output, whose names
+// the framework's moments are. Run: one long-lived headless process per session, spoken to and read as JSON lines, in a
+// home of its own, so its transcripts, settings and caches land there and the person's own are neither read nor written;
+// the project is trusted in that home, so its own settings, baba's hooks among them, apply as in the person's session,
+// and only the project's and local layers of settings are read. Its login is the person's:
 // on macOS the login keychain, linked into the home; elsewhere the credentials file, linked; or a token or key the
 // environment already carries. `claudeEvents` reads one line of its stream, a pure function, and hands on nothing of the
 // account's: no account, organisation or user id, and no address, whatever field or text carries one.
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { basename, dirname, join, relative } from "node:path"
-import { fileURLToPath } from "node:url"
+import { basename, dirname, join } from "node:path"
 import type { Json } from "../surface/view.ts"
 import { sourceOf, type Adapter, type Harness, type HarnessEvent, type HookEvent, type Loaded, type Moment, type Request, type Session, type SetUp, type Start, type Tokens } from "./harness.ts"
-import { editJson, pruned, withHooks, without, type Hooks } from "./setup.ts"
+import { install, uninstall, type Method } from "./setup.ts"
 
 /** A Bash command that is the root's word: the command a project's root names for itself, or `bun run baba`. */
 export const WORD = /(^|[\s;&|(/])(\.babavoss\/bin\/(baba|bv)|bv)(\s|$)|\bbun run baba\b/
@@ -250,17 +248,15 @@ export function trust(home: string, project: string) {
 }
 
 /**
- * What a session is started with. Its hooks run however the project is trusted: the project's plugin, its link at
- * .claude/skills/baba, is loaded for the session only with --plugin-dir, which goes before a plugin of the same name in
- * .claude/skills; the stream carries each hook's run. The home is the session's own, and the person's user layer of
- * settings and MCP servers is kept out even where it is not.
+ * What a session is started with. The project's own layers of settings are the only ones read, so its hooks, baba's among
+ * them, run, the project being trusted in the session's home; the stream carries each hook's run. The home is the
+ * session's own, and the person's user layer of settings and MCP servers is kept out even where it is not.
  */
-export const claudeArgs = ({ project, session, model, budget = 0.5 }: Start): string[] => [
+export const claudeArgs = ({ session, model, budget = 0.5 }: Start): string[] => [
   "claude",
   "-p",
   ...["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--replay-user-messages"],
   ...["--session-id", session, "--model", model, "--permission-mode", "bypassPermissions", "--max-budget-usd", String(budget)],
-  ...["--plugin-dir", join(project, PLUGIN_LINK)],
   ...["--setting-sources", "project,local", "--strict-mcp-config"],
 ]
 
@@ -295,30 +291,15 @@ function spawnClaude(options: Start): Session {
 export const CLAUDE_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "StopFailure", "SessionEnd"] as const
 export type ClaudeOptions = { events: (typeof CLAUDE_EVENTS)[number][] }
 
-/** The plugin the package carries, and where a project links it. */
-export const PLUGIN = fileURLToPath(new URL("../../../plugin/claude", import.meta.url))
-export const PLUGIN_LINK = ".claude/skills/baba"
-/** Claude Code's settings beside .baba/: the person's, where older provisioning wrote the framework's hooks. */
-const SETTINGS = ".claude/settings.json"
-/** The plugin's files; reminder.md, which an earlier plugin carried, still marks a copied folder as baba's. */
-const PLUGIN_FILES = ["SKILL.md", "reminder.md", ".claude-plugin", "hooks"]
-
-/** Whether the skill folder at `link` is baba's: a link to a babavoss plugin, or a folder of baba's files alone whose skill is baba. */
-function ours(link: string): boolean {
-  const stat = lstatSync(link, { throwIfNoEntry: false })
-
-  if (!stat) return false
-  if (stat.isSymbolicLink()) return /babavoss[/\\]plugin[/\\]claude$/.test(readlinkSync(link))
-  if (!stat.isDirectory() || readdirSync(link).some((entry) => !PLUGIN_FILES.includes(entry))) return false
-  try {
-    return /^---\n[\s\S]*?^name: baba$/m.test(readFileSync(join(link, "SKILL.md"), "utf8"))
-  } catch {
-    return false
-  }
+/** How Claude Code is set up in a project; an older release's link to the package's plugin, and a copy of it, are replaced. */
+const METHOD: Method = {
+  name: "claude",
+  skill: ".claude/skills/baba/SKILL.md",
+  hooks: ".claude/settings.json",
+  events: CLAUDE_EVENTS,
+  legacy: /babavoss[/\\]plugin[/\\]claude$/,
+  stale: [".claude-plugin", "hooks", "reminder.md"],
 }
-
-/** The plugin's id in Claude Code: its manifest's name, loaded from a skills folder. */
-export const PLUGIN_ID = "baba@skills-dir"
 
 /**
  * Where Claude Code reads an organisation's managed settings on this machine, as its documents say, highest first: the
@@ -404,32 +385,19 @@ export function managedPolicy(at = managedAt()): { from: string; policy: O } | u
   return { from: sources.map((s) => s.from).join(" and "), policy: sources.reduce<O>((all, s) => merged(all, s.policy), {}) }
 }
 
-const SURFACES = ["skills", "agents", "hooks", "mcp"]
-const skillsDir = (sources: Json | undefined) => list(sources).some((source) => obj(source).source === "skills-dir")
-
 /**
- * Why a managed policy keeps the plugin's hook from running, as Claude Code's documents say, with what can be done; undefined
- * where nothing in it does. A skills folder's plugin is skipped whole where customisation is locked to plugins, where the
- * marketplaces allowed leave out skills folders or those blocked name them, or where the plugin is turned off; its hooks
- * alone stop where only managed hooks run, unless the policy turns the plugin on, or where hooks are disabled.
+ * Why a managed policy keeps the project's hooks from running, as Claude Code's documents say, with what can be done;
+ * undefined where nothing in it does: customisation locked to plugins, for skills or hooks; every hook disabled; or only
+ * the organisation's own hooks run.
  */
 export function blockOf(policy: O): string | undefined {
-  const enabled = obj(policy.enabledPlugins)[PLUGIN_ID]
   const locked = policy.strictPluginOnlyCustomization
-  const allowed = policy.strictKnownMarketplaces ?? policy.allowedMarketplaces
-  const skipped = (why: string) => `${why}, so Claude Code skips the plugin ${PLUGIN_LINK}, and its hook`
   const offer = "ask whoever manages Claude Code here to allow it"
-  const flag = policy.disableSideloadFlags === true ? "" : `, or start claude with --plugin-dir ${PLUGIN_LINK}`
 
-  if (enabled === false) return `${skipped(`turn ${PLUGIN_ID} off`)}; ${offer}`
-  if (locked === true || (Array.isArray(locked) ? locked.some((s) => SURFACES.includes(str(s))) : locked !== undefined && locked !== false))
-    return `${skipped("lock customisation to plugins (strictPluginOnlyCustomization)")}; ${offer}${flag}`
-  if (allowed !== undefined && !skillsDir(allowed))
-    return `${skipped('allow no skills folder among the marketplaces (strictKnownMarketplaces)')}; ${offer}: { "source": "skills-dir" } among them${flag}`
-  if (skillsDir(policy.blockedMarketplaces)) return `${skipped("block skills folders (blockedMarketplaces)")}; ${offer}${flag}`
+  if (locked === true || (Array.isArray(locked) ? locked.some((s) => ["skills", "hooks"].includes(str(s))) : locked !== undefined && locked !== false))
+    return `lock customisation to plugins (strictPluginOnlyCustomization), so Claude Code skips this project's skills and hooks, baba's among them; ${offer}`
   if (policy.disableAllHooks === true) return `disable every hook (disableAllHooks), baba's among them; ${offer}`
-  if (policy.allowManagedHooksOnly === true && enabled !== true)
-    return `run only the organisation's hooks (allowManagedHooksOnly), not baba's; ${offer}: "${PLUGIN_ID}": true in its enabledPlugins`
+  if (policy.allowManagedHooksOnly === true) return `run only the organisation's hooks (allowManagedHooksOnly), not baba's; ${offer}`
 
   return undefined
 }
@@ -442,60 +410,19 @@ export function blocked(at = managedAt()): string | undefined {
   return why && `baba: Claude Code's managed settings (${managed.from}) ${why}. Until then no session here is told of the surfaces.`
 }
 
-/** The settings' hooks without the framework's, which the plugin now carries: run from both, each would run twice. */
-const stripped = (project: string) => editJson(join(project, SETTINGS), (value) => withHooks(value, without((value.hooks ?? {}) as Hooks)), false)
-
 export const claude: Adapter<ClaudeOptions> = {
   name: "claude",
   title: "Claude Code",
   defaults: { events: [...CLAUDE_EVENTS] },
   events: CLAUDE_EVENTS,
   provision(project): SetUp {
-    const link = join(project, PLUGIN_LINK)
-    // The plugin of the package this .baba/ installed, so the project runs the version it names; else this one's.
-    const installed = join(project, ".baba/node_modules/babavoss/plugin/claude")
-    const plugin = existsSync(installed) ? installed : PLUGIN
-    const target = relative(dirname(link), plugin)
-    const stat = lstatSync(link, { throwIfNoEntry: false })
-    const paths: string[] = []
+    const set = install(project, METHOD)
+    const said = [set.said, blocked()].filter(Boolean).join("\n")
 
-    if (!stat?.isSymbolicLink() || readlinkSync(link) !== target) {
-      if (stat && !ours(link)) throw new Error(`${link} is not baba's: move it, and provision again`)
-      rmSync(link, { recursive: true, force: true })
-      mkdirSync(dirname(link), { recursive: true })
-      try {
-        symlinkSync(target, link, "dir")
-      } catch {
-        // Where no link can be made, a copy, whose hook finds the package from the project, or the home, instead of through the link.
-        cpSync(plugin, link, { recursive: true, dereference: true })
-
-        const dir = project === realpathSync(homedir()) ? "$HOME" : "${CLAUDE_PROJECT_DIR}"
-        const file = join(link, "hooks/hooks.json")
-
-        writeFileSync(file, readFileSync(file, "utf8").replaceAll('$(cd -P \\"${CLAUDE_PLUGIN_ROOT}/../..\\" && pwd)/bin/baba.ts', `${dir}/.baba/node_modules/babavoss/bin/baba.ts`))
-      }
-      paths.push(PLUGIN_LINK)
-    }
-    if (stripped(project)) paths.push(SETTINGS)
-
-    const said = blocked()
-
-    return { paths, ...(said && { said }) }
+    return { paths: set.paths, ...(said && { said }) }
   },
   blocked: () => blocked(),
-  withdraw(project): SetUp {
-    const link = join(project, PLUGIN_LINK)
-    const paths: string[] = []
-
-    if (ours(link)) {
-      rmSync(link, { recursive: true, force: true })
-      pruned(dirname(link), project)
-      paths.push(PLUGIN_LINK)
-    }
-    if (stripped(project)) paths.push(SETTINGS)
-
-    return { paths }
-  },
+  withdraw: (project): SetUp => uninstall(project, METHOD),
   hookEvent(input): HookEvent | undefined {
     const i = obj(input as Json)
     const event = str(i.hook_event_name)

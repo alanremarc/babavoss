@@ -4,7 +4,7 @@ import { codex } from "./codex.ts"
 import type { Adapter } from "./harness.ts"
 
 export { NONE, type Adapter, type Harness, type HarnessEvent, type HookEvent, type Loaded, type Moment, type Request, type Session, type SetUp, type Start, type Tokens } from "./harness.ts"
-export { blocked, claude, claudeArgs, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, managedAt, managedPolicy, PLUGIN, PLUGIN_ID, PLUGIN_LINK, redact, sessionEnv, trust, WORD, type ClaudeOptions } from "./claude.ts"
+export { blocked, claude, claudeArgs, CLAUDE_EVENTS, claudeCode, claudeEvents, cleanEnv, managedAt, managedPolicy, redact, sessionEnv, trust, WORD, type ClaudeOptions } from "./claude.ts"
 export { codex, codexArgs, codexCli, codexEvents, codexInjected, codexTurn, CODEX_EVENTS, type CodexOptions } from "./codex.ts"
 export { fakeHarness, type FakeHarness } from "./fake.ts"
 

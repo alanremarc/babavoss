@@ -3,5 +3,67 @@
     "commit": "",
     "pr": "",
     "sessionUrl": false
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; until [ -f \"$d/.baba/node_modules/babavoss/bin/baba.ts\" ] || [ \"$d\" = / ]; do d=\"$(dirname \"$d\")\"; done; bun \"$d/.baba/node_modules/babavoss/bin/baba.ts\" hook claude 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -12,7 +12,7 @@ Run these in the project the person wants it in.
        bunx github:alanremarc/babavoss init claude
        bunx github:alanremarc/babavoss init codex
 
-   Name both, `init claude codex`, only if the person says they use both here. With no harness named it makes nothing and says which there are. It makes `.baba/`, installs the framework in it, and sets up the harness named beside it. If `.baba/` is there already, run `bun install` in it instead.
+   Name both, `init claude codex`, only if the person says they use both here. With no harness named it makes nothing and says which there are. It makes `.baba/`, installs the framework in it, and sets up the harness named beside it: baba's skill, and its hooks in the harness's own project file (`.claude/settings.json` or `.codex/hooks.json`), where anything already there is kept and the file as it was is copied to `.babavoss/backups/`. In Codex, the person then trusts the hooks once in `/hooks`. If `.baba/` is there already, run `bun install` in it instead.
 3. Read `.baba/node_modules/babavoss/skill/SKILL.md`. It says how surfaces are worked.
 4. Start the shell: `cd .baba && bun run baba start`. It returns at once with the page's address, and the shell runs on by itself: run it in the foreground, and give the person the address.
 5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on. This session began before that was set up: it is told nothing, so read before acting on a surface.

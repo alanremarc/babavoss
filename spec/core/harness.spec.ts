@@ -1,9 +1,9 @@
 // The harness layer: Claude Code's stream lines, as recorded from a real session and trimmed, read as the framework's
 // events; a session's home given the person's login by a link, and the link taken back, and the project trusted there;
-// the plugin the package carries for Claude Code; each adapter's hook face; the fake that stories drive.
+// each adapter's hook face; the fake that stories drive.
 import { expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -11,7 +11,6 @@ import {
   blocked,
   claude,
   claudeArgs,
-  CLAUDE_EVENTS,
   claudeCode,
   claudeEvents,
   cleanEnv,
@@ -23,12 +22,9 @@ import {
   codexTurn,
   fakeHarness,
   managedAt,
-  PLUGIN,
-  PLUGIN_ID,
   trust,
   type HarnessEvent,
 } from "../../framework/core/harness/index.ts"
-import { VERSION } from "../../framework/core/update.ts"
 import type { Json } from "../../framework/core/index.ts"
 
 const SESSION = "11111111-2222-4333-8444-555555555555"
@@ -255,32 +251,6 @@ test("the fake harness is driven by the story: its stream is what is emitted, an
   ])
 })
 
-test("the plugin the package carries is of its version, has the skill baba's own words, and the framework's hook for each of Claude Code's events", () => {
-  const read = (path: string) => readFileSync(join(PLUGIN, path), "utf8")
-  const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as { name: string; version: string; skills: string[] }
-  const hooks = (JSON.parse(read("hooks/hooks.json")) as { hooks: Record<string, { hooks: { type: string; command: string }[] }[]> }).hooks
-  const command = 'bun "$(cd -P "${CLAUDE_PLUGIN_ROOT}/../.." && pwd)/bin/baba.ts" hook claude 2>/dev/null || true'
-
-  // A release raises the version in package.json by hand; this is raised with it.
-  expect(manifest).toMatchObject({ name: "baba", version: VERSION })
-  // Its SKILL.md is the skill folder's, loaded as a skill of its own: loaded as a plugin by --plugin-dir, it is not a second skill.
-  expect(manifest.skills).toEqual([])
-  expect(read("SKILL.md")).toBe(readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8"))
-  expect(Object.keys(hooks)).toEqual([...CLAUDE_EVENTS])
-  for (const groups of Object.values(hooks)) expect(groups).toEqual([{ hooks: [{ type: "command", command }] }])
-
-  // Claude Code names the plugin by the link it found it through: the package is found through the link, not beside it.
-  const project = temp()
-
-  mkdirSync(join(project, ".claude/skills"), { recursive: true })
-  symlinkSync(PLUGIN, join(project, ".claude/skills/baba"))
-
-  const found = spawnSync("sh", ["-c", 'cd -P "${CLAUDE_PLUGIN_ROOT}/../.." && pwd'], { encoding: "utf8", env: { ...process.env, CLAUDE_PLUGIN_ROOT: join(project, ".claude/skills/baba") } })
-
-  expect(found.stdout.trim()).toBe(realpathSync(new URL("../..", import.meta.url).pathname))
-  rmSync(project, { recursive: true, force: true })
-})
-
 test("each adapter reads its harness's hook input as the framework's moment, and names what it tells as its harness takes it", () => {
   const input = (event: string, more: Record<string, unknown> = {}) => ({ session_id: "s1", hook_event_name: event, cwd: "/p", ...more })
 
@@ -305,20 +275,19 @@ test("each adapter reads its harness's hook input as the framework's moment, and
   expect(codex.run).toBeDefined()
 })
 
-test("a run of Claude Code loads the project's plugin for the session, so its hooks run however the folder is trusted", () => {
+test("a run of Claude Code reads the project's own settings, where baba's hooks are, and no plugin", () => {
   const args = claudeArgs({ project: "/runs/r1/project", home: "/runs/r1/home", session: SESSION, model: "haiku", budget: 0.25 })
   const flag = (name: string) => args[args.indexOf(name) + 1]
 
   expect(args.slice(0, 2)).toEqual(["claude", "-p"])
-  // A plugin in .claude/skills runs its hooks only in a folder trusted in the home, which -p does not count; --plugin-dir is not asked that.
-  expect(flag("--plugin-dir")).toBe("/runs/r1/project/.claude/skills/baba")
+  expect(args).not.toContain("--plugin-dir")
   // Each hook's run is in the stream, so a run whose hooks never ran says so.
   expect(args).toContain("--include-hook-events")
   expect([flag("--session-id"), flag("--model"), flag("--max-budget-usd"), flag("--setting-sources")]).toEqual([SESSION, "haiku", "0.25", "project,local"])
   expect(args).not.toContain("--bare")
 })
 
-test("a session's project is trusted in its own home, so the project's plugin loads, and whatever else the home's state holds is kept", () => {
+test("a session's project is trusted in its own home, so the project's settings apply, and whatever else the home's state holds is kept", () => {
   const home = temp()
   const project = temp()
 
@@ -332,7 +301,7 @@ test("a session's project is trusted in its own home, so the project's plugin lo
   rmSync(project, { recursive: true, force: true })
 })
 
-test("an organisation's managed settings that skip the plugin or stop its hook are read where Claude Code reads them, and said in one line with what to do", () => {
+test("an organisation's managed settings that stop the project's hooks are read where Claude Code reads them, and said in one line with what to do", () => {
   const dir = mkdtempSync(join(tmpdir(), "managed-"))
   const file = join(dir, "managed-settings.json")
   const at = { profiles: [], dir }
@@ -349,29 +318,23 @@ test("an organisation's managed settings that skip the plugin or stop its hook a
     expect(managedAt("darwin", { BABAVOSS_MANAGED: dir })).toEqual(at)
     expect(blocked(at)).toBeUndefined()
 
-    // A policy that touches none of it says nothing; nor one that allows skills folders, or turns the plugin on beside managed hooks only.
-    policy({ permissions: { deny: ["Read(./.env)"] }, strictKnownMarketplaces: [{ source: "skills-dir" }], strictPluginOnlyCustomization: ["nothing-known"] })
-    expect(blocked(at)).toBeUndefined()
-    policy({ allowManagedHooksOnly: true, enabledPlugins: { [PLUGIN_ID]: true } })
+    // A policy that touches none of it says nothing; nor one about plugins and their marketplaces, which baba is not.
+    policy({ permissions: { deny: ["Read(./.env)"] }, strictKnownMarketplaces: [], blockedMarketplaces: [{ source: "skills-dir" }], strictPluginOnlyCustomization: ["mcp"] })
     expect(blocked(at)).toBeUndefined()
 
     const said = (value: object) => (policy(value), blocked(at))
 
-    expect(said({ strictPluginOnlyCustomization: ["mcp"] })).toBe(
-      `baba: Claude Code's managed settings (${file}) lock customisation to plugins (strictPluginOnlyCustomization), so Claude Code skips the plugin .claude/skills/baba, and its hook; ask whoever manages Claude Code here to allow it, or start claude with --plugin-dir .claude/skills/baba. Until then no session here is told of the surfaces.`
+    expect(said({ strictPluginOnlyCustomization: ["hooks"] })).toBe(
+      `baba: Claude Code's managed settings (${file}) lock customisation to plugins (strictPluginOnlyCustomization), so Claude Code skips this project's skills and hooks, baba's among them; ask whoever manages Claude Code here to allow it. Until then no session here is told of the surfaces.`
     )
-    expect(said({ strictPluginOnlyCustomization: true, disableSideloadFlags: true })).not.toContain("--plugin-dir")
-    expect(said({ strictKnownMarketplaces: [{ source: "github", repo: "acme/plugins" }] })).toContain('allow no skills folder among the marketplaces (strictKnownMarketplaces), so Claude Code skips')
-    expect(said({ allowedMarketplaces: [] })).toContain('{ "source": "skills-dir" } among them')
-    expect(said({ blockedMarketplaces: [{ source: "skills-dir" }] })).toContain("block skills folders (blockedMarketplaces)")
-    expect(said({ enabledPlugins: { [PLUGIN_ID]: false } })).toContain(`turn ${PLUGIN_ID} off`)
+    expect(said({ strictPluginOnlyCustomization: true })).toContain("lock customisation to plugins")
     expect(said({ disableAllHooks: true })).toContain("disable every hook (disableAllHooks), baba's among them")
-    expect(said({ allowManagedHooksOnly: true })).toContain(`run only the organisation's hooks (allowManagedHooksOnly), not baba's; ask whoever manages Claude Code here to allow it: "${PLUGIN_ID}": true in its enabledPlugins`)
+    expect(said({ allowManagedHooksOnly: true })).toContain("run only the organisation's hooks (allowManagedHooksOnly), not baba's; ask whoever manages Claude Code here to allow it")
 
-    // The drop-ins merge after the file, lists joined: one that allows skills folders among another's marketplaces lifts the block.
-    policy({ strictKnownMarketplaces: [{ source: "github", repo: "acme/plugins" }] })
+    // The drop-ins merge after the file: one that disables hooks blocks, whatever the file says.
+    policy({ permissions: { deny: ["Read(./.env)"] } })
     mkdirSync(join(dir, "managed-settings.d"))
-    writeFileSync(join(dir, "managed-settings.d/20-skills.json"), JSON.stringify({ strictKnownMarketplaces: [{ source: "skills-dir" }] }))
+    writeFileSync(join(dir, "managed-settings.d/20-other.json"), JSON.stringify({ strictKnownMarketplaces: [] }))
     expect(blocked(at)).toBeUndefined()
     writeFileSync(join(dir, "managed-settings.d/30-hooks.json"), JSON.stringify({ disableAllHooks: true }))
     expect(blocked(at)).toContain(`managed settings (${dir}) disable every hook`)
@@ -399,8 +362,8 @@ test.if(process.platform === "darwin")("on macOS the MDM profile comes first: a 
     expect(blocked(at)).toBeUndefined()
     write({ permissions: { deny: ["Read(./.env)"] }, managedSourcesBehavior: "merge" })
     expect(blocked(at)).toContain(`managed settings (${profile} and ${join(at.dir, "managed-settings.json")}) disable every hook`)
-    write({ blockedMarketplaces: [{ source: "skills-dir" }] })
-    expect(blocked(at)).toContain(`managed settings (${profile}) block skills folders`)
+    write({ allowManagedHooksOnly: true })
+    expect(blocked(at)).toContain(`managed settings (${profile}) run only the organisation's hooks`)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
