@@ -301,6 +301,12 @@ describe("the door", () => {
 
       return { event: /^event: (.*)$/m.exec(block)![1]!, data: JSON.parse(/^data: (.*)$/m.exec(block)![1]!) }
     }
+    // The next call answered, past the changes the command's own commit streams meanwhile, which may come first.
+    const nextCall = async (): Promise<{ event: string; data: unknown }> => {
+      const event = await next()
+
+      return event.event === "change" ? nextCall() : event
+    }
 
     expect(await next()).toEqual({ event: "change", data: { version: 0, jobs: [] } })
     expect(await next()).toEqual({ event: "turn", data: { agent: "unknown", since: expect.any(Number), waiting: 0, drivable: false } })
@@ -308,7 +314,7 @@ describe("the door", () => {
     expect(await next()).toEqual({ event: "change", data: { version: 1, jobs: ["agent:s"] } })
     expect(await next()).toEqual({ event: "call", data: { path: "/", handle: "later", args: {}, actor: "agent:s" } })
     await post("/", { handle: "nope", args: {} })
-    expect(await next()).toMatchObject({ event: "call", data: { path: "/", handle: "nope", actor: "person", refused: expect.stringContaining("not offered") } })
+    expect(await nextCall()).toMatchObject({ event: "call", data: { path: "/", handle: "nope", actor: "person", refused: expect.stringContaining("not offered") } })
     await poll(
       async () => ((await (await fetch(base + "/n", { headers: { accept: "application/json", [SERVICE_HEADER]: endpoint.token } })).json()) as Model).n
     ).toBe(1)
