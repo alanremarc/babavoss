@@ -11,7 +11,7 @@ import { readJsonFile, writeJsonFile } from "./json-file.ts"
 export type Env = Readonly<Record<string, string | undefined>>
 
 /** Everything kept on this machine lives under one home. */
-export const baseDir = (_app: { name: string }, env: Env = process.env): string => env.BABAVOSS_HOME ?? join(homedir(), ".babavoss")
+export const baseDir = (_app: { name: string }, env: Env = process.env): string => env.BABAVOSS_HOME ?? join(homedir(), ".baba", ".state")
 
 /** A root owns its state directory within the session. */
 export const stateDir = (root: { name: string }, session: { id: string }, env: Env = process.env): string =>

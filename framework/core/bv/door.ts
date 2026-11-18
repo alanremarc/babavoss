@@ -7,7 +7,7 @@ import type { RootDefinition } from "../root.ts"
 import { startRuntime, type RuntimeOptions } from "../runtime/runtime.ts"
 import { checkConfig, loadConfig } from "../config.ts"
 import { ADAPTERS } from "../harness/index.ts"
-import { findBaba, stateOf } from "../provision.ts"
+import { adoptHome, findBaba, STATE_DIR, stateOf } from "../provision.ts"
 import { latestRelease, updateNote } from "../update.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenRoot } from "./bv.ts"
@@ -23,8 +23,10 @@ export async function main(root: RootDefinition, serve: Pick<RuntimeOptions, "de
   const beside = baba ? dirname(baba) : process.cwd()
   const project = beside === realpathSync(homedir()) ? undefined : beside
 
-  // In the .baba/ itself, .baba/.state; where there is none, beside the directory the door was run in.
-  process.env.BABAVOSS_HOME ??= baba ? stateOf(baba) : join(project ?? homedir(), ".babavoss")
+  // In the .baba/ itself, .baba/.state; where there is none, the same place under the directory the door was run in.
+  process.env.BABAVOSS_HOME ??= baba ? stateOf(baba) : join(project ?? homedir(), ".baba", STATE_DIR)
+  // The person's settings, where an older release kept them; not where another file is named, as the specs name theirs.
+  if (process.env.BABAVOSS_SETTINGS === undefined) adoptHome()
 
   if (args[0] === "--serve") {
     // A runtime that restarts wakes its successor as it was woken itself, logging where it logs.

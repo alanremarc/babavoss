@@ -127,7 +127,7 @@ type Place = { dir: string; project: string; home: string; session: string; stat
 const envOf = (project: string, home: string): Record<string, string> => ({
   ...sessionEnv(home),
   BABAVOSS_HOME: join(project, ".baba/.state"),
-  BABAVOSS_SETTINGS: join(home, ".babavoss/settings.json"),
+  BABAVOSS_SETTINGS: join(home, ".baba/settings.json"),
   BABAVOSS_LATEST: "",
 })
 
@@ -141,7 +141,7 @@ export function makePlace(variant: Variant, session: string, files: Record<strin
 
   try {
     mkdirSync(join(baba, "node_modules"), { recursive: true })
-    mkdirSync(join(home, ".babavoss"), { recursive: true })
+    mkdirSync(join(home, ".baba"), { recursive: true })
     symlinkSync(variant.path, join(baba, "node_modules/babavoss"))
     writeFileSync(
       join(baba, "package.json"),
@@ -195,7 +195,7 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
 
   try {
     mkdirSync(project, { recursive: true })
-    mkdirSync(join(home, ".babavoss"), { recursive: true })
+    mkdirSync(join(home, ".baba"), { recursive: true })
     writeFileSync(join(project, "README.md"), "# App\n\nA small app.\n")
     sh(["git", "init", "-q"], project)
     commit(project, "the project")
@@ -429,7 +429,7 @@ const address = (place: Place) => {
   }
 }
 /** What in the agent's home Claude Code keeps, the login's link, the shell's settings, and the package caches: none of it the agent's doing. */
-const HOME_OWN = /^(\.claude|Library|\.babavoss|\.bun\/install\/cache|\.cache)(\/|\.|$)/
+const HOME_OWN = /^(\.claude|Library|\.baba|\.bun\/install\/cache|\.cache)(\/|\.|$)/
 /** What the run changed outside its project: files in the agent's home but those, and anything in the run's directory beside its parts. */
 function outside(place: Place): string[] {
   const parts = new Set(["project", "home", "bin", OPENED])
@@ -455,7 +455,7 @@ const strays = (place: Place) =>
   ran(["git", "status", "--porcelain", "--untracked-files=normal"], place.project, place.env)
     .out.split("\n")
     .map((l) => l.slice(3))
-    .filter((p) => p && !/^(\.baba|\.claude|\.agents|\.codex|\.babavoss)\//.test(p))
+    .filter((p) => p && !/^(\.baba|\.claude|\.agents|\.codex)\//.test(p))
 /** What the agent opened with the eval's `open`, a line each. */
 const browsed = (place: Place) => {
   try {

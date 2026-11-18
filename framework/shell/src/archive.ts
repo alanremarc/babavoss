@@ -309,8 +309,8 @@ export function clear(own: string, scope: "session" | "project", window: Window,
 /** The project's state folder, `.baba/.state/`, of a session's folder: two above it. */
 export const projectHome = (session: string) => dirname(dirname(session))
 
-/** The project a state folder is of: the directory its .baba/ is in; or, of a root with no .baba/, the one it is beside. */
-export const projectOf = (home: string) => (basename(home) === ".state" ? dirname(dirname(home)) : dirname(home))
+/** The project a state folder is of: the directory its .baba/ is in. */
+export const projectOf = (home: string) => dirname(dirname(home))
 
 /** A size as the person reads it: bytes, KB, MB or GB, to one decimal. */
 export function sized(bytes: number): string {

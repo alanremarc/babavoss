@@ -774,8 +774,8 @@ function installation(location = "project", configured = false) {
 
   const run = (file: string, args: string[] = []) => spawnSync(file, args, { cwd: project, env, encoding: "utf8", timeout: 15000 })
   const open = () => run(process.execPath, [join(directory, "scripts/open.ts")])
-  // In the .baba/ the root is of, .baba/.state; a root run from source, of no .baba/, keeps it beside the directory it was run in.
-  const state = () => env.BABAVOSS_HOME ?? (location === "source" ? join(project, ".babavoss") : join(location === "personal" ? home : project, ".baba/.state"))
+  // In the .baba/ the root is of, .baba/.state; a root run from source, of no .baba/, keeps it the same way under the directory it was run in.
+  const state = () => env.BABAVOSS_HOME ?? join(location === "personal" ? home : project, ".baba/.state")
   const word = () => join(env.BABAVOSS_BIN ?? join(state(), "bin"), "demo")
   const close = () => run(word(), ["close"])
 
@@ -901,8 +901,8 @@ it("a root run from source uses the door's working directory", () => {
 
   try {
     expect(s.open().status).toBe(0)
-    expect(existsSync(join(s.project, ".babavoss/sessions/S/open.json"))).toBe(true)
-    expect(existsSync(join(s.directory, ".babavoss"))).toBe(false)
+    expect(existsSync(join(s.project, ".baba/.state/sessions/S/open.json"))).toBe(true)
+    expect(existsSync(join(s.directory, ".baba"))).toBe(false)
   } finally {
     s.close()
   }

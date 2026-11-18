@@ -1,18 +1,18 @@
 // Where the person's settings are kept: one JSON file of theirs, beside every session, project and browser, in the
-// person's babavoss home, ~/.babavoss/settings.json. BABAVOSS_HOME is not it, since a project's root keeps its sessions in
+// person's home, ~/.baba/settings.json. BABAVOSS_HOME is not it, since a project's root keeps its sessions in
 // the project; BABAVOSS_SETTINGS names another file, as the specs do so the person's is never touched. The file is read
 // tolerantly: none, or one that is not JSON, is the defaults, and what it holds that the settings do not know is kept as it
 // was when they are written, whole or not at all.
 import { readFileSync, watch, type FSWatcher } from "node:fs"
-import { homedir } from "node:os"
-import { basename, dirname, join } from "node:path"
+import { basename, dirname } from "node:path"
+import { settingsAt } from "../../../core/provision.ts"
 import { writeJsonFile } from "../../../core/state/json-file.ts"
 import { settingsOf, type Settings } from "./settings.ts"
 
 export type Env = Readonly<Record<string, string | undefined>>
 
 /** The person's settings file. */
-export const settingsFile = (env: Env = process.env): string => env.BABAVOSS_SETTINGS || join(homedir(), ".babavoss", "settings.json")
+export const settingsFile = (env: Env = process.env): string => env.BABAVOSS_SETTINGS || settingsAt()
 
 /** What the file holds as it is, or nothing where there is no file or it is not a JSON object. */
 export function kept(file: string): Record<string, unknown> | undefined {

@@ -1,8 +1,9 @@
 // Where the person's settings are kept: one file, read tolerantly, written whole with what else it holds, and followed.
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
+import { adoptHome } from "../../../framework/core/provision.ts"
 import { DEFAULTS } from "../../../framework/shell/settings/src/settings.ts"
 import { readSettings, settingsFile, watchSettings, writeSettings } from "../../../framework/shell/settings/src/store.ts"
 import { poll } from "../../support/poll.ts"
@@ -21,10 +22,35 @@ afterEach(() => {
 })
 
 describe("the settings file", () => {
-  it("is the person's, in their babavoss home, whatever a project's root keeps its sessions in, unless BABAVOSS_SETTINGS names another", () => {
-    expect(settingsFile({ BABAVOSS_HOME: "/project/.babavoss" })).toBe(join(homedir(), ".babavoss", "settings.json"))
+  it("is the person's, in their home's .baba/, whatever a project's root keeps its sessions in, unless BABAVOSS_SETTINGS names another", () => {
+    expect(settingsFile({ BABAVOSS_HOME: "/project/.baba/.state" })).toBe(join(homedir(), ".baba", "settings.json"))
     expect(settingsFile({ BABAVOSS_SETTINGS: "/elsewhere/s.json" })).toBe("/elsewhere/s.json")
-    expect(process.env.BABAVOSS_SETTINGS).not.toBe(join(homedir(), ".babavoss", "settings.json"))
+    expect(process.env.BABAVOSS_SETTINGS).not.toBe(join(homedir(), ".baba", "settings.json"))
+  })
+
+  it("is taken from where an older release kept it, once: never over settings already there, and the old folder goes only when empty", () => {
+    const home = mkdtempSync(join(tmpdir(), "home-"))
+    const older = join(home, ".babavoss")
+    const now = join(home, ".baba/settings.json")
+
+    dirs.push(home)
+    adoptHome(home)
+    expect(existsSync(join(home, ".baba"))).toBe(false)
+    mkdirSync(older)
+    writeFileSync(join(older, "settings.json"), '{"mode":"dark"}')
+    writeFileSync(join(older, "other.json"), "{}")
+    adoptHome(home)
+    expect(readFileSync(now, "utf8")).toBe('{"mode":"dark"}')
+    // What else is there is not baba's to remove.
+    expect(readdirSync(older)).toEqual(["other.json"])
+    writeFileSync(join(older, "settings.json"), '{"mode":"light"}')
+    adoptHome(home)
+    expect(readFileSync(now, "utf8")).toBe('{"mode":"dark"}')
+    expect(existsSync(join(older, "settings.json"))).toBe(true)
+    rmSync(join(older, "settings.json"))
+    rmSync(join(older, "other.json"))
+    adoptHome(home)
+    expect(existsSync(older)).toBe(false)
   })
 
   it("is the defaults where it is missing or broken", () => {
