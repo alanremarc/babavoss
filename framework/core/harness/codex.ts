@@ -369,6 +369,7 @@ function spawnCodex(options: Start): Session {
 
 export const codex: Adapter<CodexOptions> = {
   name: "codex",
+  title: "Codex",
   defaults: { events: [...CODEX_EVENTS], network: false },
   events: CODEX_EVENTS,
   provision(project, options): SetUp {

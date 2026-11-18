@@ -447,6 +447,7 @@ const stripped = (project: string) => editJson(join(project, SETTINGS), (value) 
 
 export const claude: Adapter<ClaudeOptions> = {
   name: "claude",
+  title: "Claude Code",
   defaults: { events: [...CLAUDE_EVENTS] },
   events: CLAUDE_EVENTS,
   provision(project): SetUp {

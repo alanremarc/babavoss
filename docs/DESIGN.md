@@ -154,7 +154,7 @@ wake       Every request wakes the runtime with a strength: a session's start we
    │   │   ├─ src/surface.ts      the surface
    │   │   ├─ ui/index.tsx        its ui
    │   │   └─ spec/               its rules
-   │   └─ baba.config.ts          optional: the project's title, and how each harness is set up
+   │   └─ baba.config.ts          which harnesses are set up, named when it is made, and how; the project's title
    ├─ .claude/ · .codex/ …        the harnesses, set up from .baba/: the hooks, baba's words
    └─ .babavoss/                  what sessions keep: each tab's state and log, closed tabs read only, cleared by a rolling window
 ```

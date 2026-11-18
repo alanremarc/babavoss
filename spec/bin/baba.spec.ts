@@ -24,7 +24,14 @@ const skill = (folder: string, name: string) => join(project, folder, name, "SKI
 
 // The framework is this checkout, as files: a release is named the same way, by its tag.
 beforeAll(() => {
-  const made = run(["init", "--from", `file:${checkout}`], project)
+  // Without a harness named, or with one that is none, it says which there are and makes nothing.
+  for (const args of [["init"], ["init", "--from", `file:${checkout}`], ["init", "cursor"]]) {
+    expect(run(args, project)).toMatchObject({ status: 2, err: expect.stringContaining("baba init claude codex") })
+    expect(existsSync(baba)).toBe(false)
+  }
+  expect(run(["init", "cursor"], project).err).toContain("there is no harness cursor")
+
+  const made = run(["init", "claude", "codex", "--from", `file:${checkout}`], project)
 
   expect(made.status, made.err).toBe(0)
 }, 120_000)
@@ -38,12 +45,30 @@ test("init makes .baba/ as a package that names the framework and provisions whe
   expect(pack.scripts.postinstall).toBe("baba provision")
   expect(existsSync(join(baba, "node_modules/babavoss/package.json"))).toBe(true)
   for (const folder of FOLDERS) expect(readFileSync(skill(folder, "baba"), "utf8")).toBe(readFileSync(join(checkout, "skill/SKILL.md"), "utf8"))
-  // Claude Code's is the package's plugin, linked; nothing is written into the person's settings, and no configuration.
+  // Claude Code's is the package's plugin, linked; nothing is written into the person's settings.
   expect(readlinkSync(join(project, ".claude/skills/baba"))).toBe(LINK)
   expect(existsSync(join(project, ".claude/settings.json"))).toBe(false)
-  expect(existsSync(join(baba, "baba.config.ts"))).toBe(false)
-  expect(run(["init"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
+  // The harnesses named are the configuration's, so installing a clone sets up the same.
+  expect(readFileSync(join(baba, "baba.config.ts"), "utf8")).toContain("claude: { enable: true },\n    codex: { enable: true },")
+  expect(run(["init", "claude"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 })
+
+test("init sets up only the harness named: the other is not enabled in the configuration, and nothing of it is written", () => {
+  const one = realpathSync(mkdtempSync(join(tmpdir(), "baba-one-")))
+
+  try {
+    const made = run(["init", "--from", `file:${checkout}`, "codex"], one)
+
+    expect(made.status, made.err).toBe(0)
+    expect(made.out).toContain("set up for Codex.")
+    expect(readFileSync(join(one, ".baba/baba.config.ts"), "utf8")).toContain("claude: { enable: false },\n    codex: { enable: true },")
+    expect(existsSync(join(one, ".codex/hooks.json"))).toBe(true)
+    expect(existsSync(join(one, ".agents/skills/baba/SKILL.md"))).toBe(true)
+    expect(existsSync(join(one, ".claude"))).toBe(false)
+  } finally {
+    rmSync(one, { recursive: true, force: true })
+  }
+}, 120_000)
 
 test("init leaves .baba/ ready for shadcn's CLI: components.json puts components in components/ui, imported by @/, and names a css file the page never builds", () => {
   const components = JSON.parse(readFileSync(join(baba, "components.json"), "utf8")) as { style: string; tailwind: { css: string; config: string }; aliases: Record<string, string> }

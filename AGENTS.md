@@ -21,7 +21,7 @@ How this project's agent keeps its queue, `.baba/surfaces/queue`. The surface sa
 
 ```text
 package.json                the package babavoss, at the repository's root, where a git dependency finds it
-bin/baba.ts                 the package's command: init, new, start, provision, hook
+bin/baba.ts                 the package's command: init, which is given the harnesses to set up, new, start, provision, hook
 framework/core/             the framework's layers; bv/ holds bv and the door; harness/ the adapters, one per harness, each the only code that
                             knows it: set up (provision, withdraw), hooks (its input and output), run; provision.ts, config.ts, hook.ts, update.ts
 framework/shell/            the shell, the root of a .baba/, laid out as a surface: src/surface.ts its surface, a function of the project's
@@ -58,7 +58,7 @@ A project that uses it:
 ```text
 .baba/                      the surfaces' package: package.json names the framework, installing provisions
   surfaces/NAME/            a surface: src/surface.ts, ui/index.tsx, spec/
-  baba.config.ts            optional: which harnesses are made aware, each by its adapter's name, with enable and the adapter's options
+  baba.config.ts            which harnesses are made aware, each by its adapter's name, with enable and the adapter's options; `baba init` writes it from the harnesses it is given
   .root/                    generated from the surfaces: one module that names each, loaded on its own, and the shell's page with each one's component
 .claude/skills/baba         a link to the installed package's plugin/claude: baba's skill and the framework's hook, loaded in a trusted folder
 .agents/skills/baba/        generated: baba's SKILL.md, for Codex and the rest

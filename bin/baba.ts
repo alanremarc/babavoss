@@ -4,13 +4,15 @@
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join, basename } from "node:path"
 import { fileURLToPath } from "node:url"
-import { loadConfig, sectionOf } from "../framework/core/config.ts"
+import { CONFIG_FILE, loadConfig, sectionOf } from "../framework/core/config.ts"
 import { ADAPTERS } from "../framework/core/harness/index.ts"
 import { hookContext } from "../framework/core/hook.ts"
 import { findBaba, NAME, provision, RESERVED, scaffold, SURFACES_DIR, ROOT_DIR, type Provisioned } from "../framework/core/provision.ts"
 import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
-const USAGE = `baba init [--from SPEC]   make .baba/ in this directory, install the framework and provision; SPEC names the framework, a release by default
+const NAMES = ADAPTERS.map((adapter) => adapter.name)
+const USAGE = `baba init HARNESS… [--from SPEC]
+                          make .baba/ in this directory, install the framework and set up each harness named, ${NAMES.join(" or ")}; SPEC names the framework, a release by default
 baba new NAME             make the surface NAME from the template in .baba/surfaces/NAME, and provision
 baba start [--session ID] start the shell of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the surfaces and the open tabs
 baba provision            make each harness .baba/baba.config.ts enables aware of the surfaces, withdraw from the others, and generate the root from the surfaces
@@ -37,12 +39,30 @@ const BY_HAND = "by-hand"
 const report = ({ written, withdrawn, said }: Provisioned) =>
   console.log([...written.map((path) => `provisioned ${path}`), ...withdrawn.map((path) => `withdrew ${path}`), ...said].join("\n"))
 
+/** What `init` says where no harness is named, or one that is none: it sets up only what it is told to. */
+const harnessesNeeded = (wrong: string[]) =>
+  `${wrong.length ? `there is no harness ${wrong.join(" or ")}. ` : ""}baba init needs each harness to set up, by its name, and nothing was made:\n` +
+  [...ADAPTERS.map((adapter) => [`baba init ${adapter.name}`, adapter.title] as const), [`baba init ${NAMES.join(" ")}`, "all of them"] as const]
+    .map(([command, what]) => `  ${command.padEnd(24)}${what}`)
+    .join("\n") +
+  `\nAn agent names the harness it runs in. More can be set up later, in .baba/${CONFIG_FILE}.`
+
+/** The configuration `init` writes: each harness named enabled, each other not, so installing a clone sets up the same. */
+const configOf = (names: string[]) =>
+  `// This .baba/'s configuration: which harnesses are made aware of its surfaces. After a change, run \`bun run baba provision\` here.\n` +
+  `import { config } from "babavoss/core/config.ts"\n\nexport default config({\n  harnesses: {\n` +
+  ADAPTERS.map((adapter) => `    ${adapter.name}: { enable: ${names.includes(adapter.name)} },\n`).join("") +
+  `  },\n})\n`
+
 function init(args: string[]) {
   const baba = join(process.cwd(), ".baba")
-  const from = args[0] === "--from" ? args[1] : undefined
+  const at = args.indexOf("--from")
+  const from = at < 0 ? undefined : (args[at + 1] ?? refuse(USAGE))
+  const names = [...new Set(at < 0 ? args : [...args.slice(0, at), ...args.slice(at + 2)])]
+  const wrong = names.filter((name) => !NAMES.includes(name))
 
-  if (args.length && !from) throw new Refusal(USAGE)
-  if (existsSync(join(baba, "package.json"))) throw new Refusal(`${baba} is there already: provision it with \`baba provision\``)
+  if (existsSync(join(baba, "package.json"))) throw new Refusal(`${baba} is there already: its harnesses are in its ${CONFIG_FILE}, and \`baba provision\` sets them up`)
+  if (!names.length || wrong.length) throw new Refusal(harnessesNeeded(wrong))
   mkdirSync(join(baba, SURFACES_DIR), { recursive: true })
   // The framework these surfaces run on is named here and nowhere else. Installing provisions, so a clone is ready.
   writeFileSync(
@@ -57,13 +77,15 @@ function init(args: string[]) {
     })
   )
   scaffold(baba)
+  writeFileSync(join(baba, CONFIG_FILE), configOf(names))
   writeFileSync(join(baba, ".gitignore"), `node_modules\n${ROOT_DIR}\n`)
 
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })
+  const titles = ADAPTERS.filter((adapter) => names.includes(adapter.name)).map((adapter) => adapter.title)
 
   if (install.exitCode !== 0) throw new Refusal(`cannot install the framework; allow bun to reach github.com and the package registry, then run: cd '${baba}' && bun install`)
   console.log(
-    `${baba} is made, with no surfaces yet. A new session of the harness starts its shell; outside one, \`bun run baba start\` there does. ` +
+    `${baba} is made, with no surfaces yet, and set up for ${titles.join(" and ")}. A new session there starts its shell; outside one, \`bun run baba start\` in .baba/ does. ` +
       "How a surface is made: node_modules/babavoss/skill/making-surfaces.md, there.",
   )
 }

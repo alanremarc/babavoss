@@ -204,7 +204,7 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
       return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
     }
     // The person's own package cache, read and filled by the install, so a run does not download the framework's dependencies.
-    sh(["bun", join(variant.path, "bin/baba.ts"), "init", "--from", `file:${variant.path}`], project, { ...env, BUN_INSTALL_CACHE_DIR: join(homedir(), ".bun/install/cache") })
+    sh(["bun", join(variant.path, "bin/baba.ts"), "init", "claude", "codex", "--from", `file:${variant.path}`], project, { ...env, BUN_INSTALL_CACHE_DIR: join(homedir(), ".bun/install/cache") })
     // A release is a copy of the package, its dependencies beside it in .baba/node_modules; installed from a checkout, its
     // files link back into it, where the checkout's own dependencies would be a second copy of every type. So it is copied.
     rmSync(join(baba, "node_modules/babavoss"), { recursive: true, force: true })

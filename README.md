@@ -41,13 +41,14 @@ The agent writes it in `.baba/surfaces/`, tests it and opens it as a tab. You ca
 
 ## Installing by hand
 
-You need [Bun](https://bun.sh) 1.4 or later. In your project's directory, or in your home directory for surfaces in every project:
+You need [Bun](https://bun.sh) 1.4 or later. In your project's directory, or in your home directory for surfaces in every project, name your agent's harness:
 
 ```sh
-bunx github:alanremarc/babavoss init
+bunx github:alanremarc/babavoss init claude   # Claude Code
+bunx github:alanremarc/babavoss init codex    # Codex
 ```
 
-This makes `.baba/`, where the surfaces' code lives, and sets up your agent's harness beside it. A new session begins with the surfaces in view, on one page.
+Name both for both. This makes `.baba/`, where the surfaces' code lives, and sets up that harness beside it. A new session begins with the surfaces in view, on one page.
 
 ## Status
 

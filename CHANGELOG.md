@@ -11,6 +11,15 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.78.0
+
+**Breaking: `baba init` is given the harnesses to set up.** `baba init claude` sets up Claude Code, `baba init codex` Codex, `baba init claude codex` both. With none named, or a name that is no harness, it makes nothing and says which there are. It writes `.baba/baba.config.ts` with each harness named enabled and each other not, so installing a clone sets up the same; before, it wrote no configuration and set up both.
+
+- `site/llms.txt` has the installing agent name the harness it runs in; the README names both commands.
+- An adapter has a `title`, what the person calls its harness.
+
+Nothing in a project's surfaces needs to change. A `.baba/` made before has no `harnesses` in its configuration, or no configuration, and keeps both set up; to withdraw one, give it `enable: false` in `.baba/baba.config.ts` and run `bun run baba provision` there.
+
 ## 0.77.0
 
 **Making a surface is learned from the manual alone.** `skill/making-surfaces.md` is rewritten in the order a first surface is made, each statement checked against the code. It covers route params, `view(...)`, the rule that puts an action in a list's pattern, hearing the world by a session command named for what it hears, highlights, and stories that `await` the world's events and name a command by a test. It no longer teaches `useShell().toast`. The template's comments teach the same shape.
