@@ -8,7 +8,7 @@ import { join } from "node:path"
 import { afterEach, expect, it, setSystemTime } from "bun:test"
 import { action, defineRoot, detail, surface, view, type Update } from "../../framework/core/index.ts"
 import { startRuntime } from "../../framework/core/runtime/runtime.ts"
-import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, endpointFile, SERVICE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
+import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, endpointFile, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Endpoint } from "../../framework/core/runtime/service.ts"
 import { HARNESS_HEADER, HUSH_MS, NO_HOOKS_LINE, QUIET_LINE, type Unheard } from "../../framework/core/runtime/turn.ts"
 import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
@@ -118,11 +118,17 @@ const boardPages = view([add, finish, review, reset, mark], {
     return i && { ...i, ...(!i.done && { finish: finish.bind({ n: i.n }) }), ...(i.done && !i.reviewed && { review: review.bind({ n: i.n }) }) }
   },
 })
+/** How many times the board was asked for a view: a client's probe asks for none. */
+let boardReads = 0
 const board = surface<Board, { kind: "none" }, never>({
   description: "a board",
   init: () => ({ items: [], tokens: 0, marked: [] }),
   update: (m, msg) => (msg.kind === "call" ? boardPages.update(m, msg) : { model: m }),
-  view: boardPages.view,
+  view: (m, path) => {
+    boardReads += 1
+
+    return boardPages.view(m, path)
+  },
   run: async () => {},
   failed: () => ({ kind: "none" }),
 })
@@ -614,4 +620,27 @@ it("shows the page the hooks' silence the agent was told of, never heard or gone
   expect(await unheardIn(again)).toEqual(kept!)
   await again.turn("started")
   expect(await unheardIn(again)).toBeUndefined()
+})
+
+it("answers a client's probe with the service's token and nothing else, building no view; without the token it is a read like any other", async () => {
+  const { runtime, endpoint, request } = await started()
+  const probe = (headers: Record<string, string>) => fetch(`http://127.0.0.1:${runtime.port}/`, { headers: { accept: "application/json", [PROBE_HEADER]: "1", ...headers } })
+
+  await request("/?open")
+  await request("/", { handle: "open", args: { surface: "board" } })
+  boardReads = 0
+
+  const up = await probe({ [SERVICE_HEADER]: endpoint.token })
+
+  expect([up.status, await up.text(), up.headers.get(SERVICE_HEADER), up.headers.has(STALE_HEADER)]).toEqual([204, "", endpoint.token, false])
+  expect(boardReads).toBe(0)
+
+  // No token, or another's: no proof that this is the service asked for, and the person's read of /, as a page's is.
+  for (const headers of [{}, { [SERVICE_HEADER]: "another" }] as Record<string, string>[]) {
+    const other = await probe(headers)
+
+    expect([other.status, other.headers.has(SERVICE_HEADER)]).toEqual([200, false])
+    expect(await other.json()).toMatchObject({ tabs: [{ at: "/board", title: "Board" }] })
+  }
+  expect(boardReads).toBeGreaterThan(0)
 })

@@ -337,6 +337,12 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
     }
 
     if (!(request.plain && request.method === "POST" && path === "/_/turn")) wake(request)
+    // A client's probe asks only whether this service is up: the token it was answered with above says so, and no view is built.
+    if (program && request.probe && request.method === "GET" && path === "/") {
+      res.writeHead(204)
+
+      return res.end()
+    }
     const why = req.headers[PROBE_HEADER] === undefined && (!path.startsWith("/_/") || path === "/_/wait") ? await options.current?.() : undefined
 
     if (why !== undefined) {
