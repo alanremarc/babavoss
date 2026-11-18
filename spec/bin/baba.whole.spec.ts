@@ -70,9 +70,11 @@ test("init sets up only the harness named: the other is not enabled in the confi
     expect(existsSync(join(one, ".codex/hooks.json"))).toBe(true)
     expect(existsSync(join(one, ".agents/skills/baba/SKILL.md"))).toBe(true)
     expect(existsSync(join(one, ".claude"))).toBe(false)
-    // The other way round, Codex's files are not there.
-    rmSync(join(one, ".baba"), { recursive: true })
-    expect(run(["init", "claude", "--from", `file:${checkout}`], one).status).toBe(0)
+    // The other way round, by the configuration it wrote, with nothing installed again: Codex's files go, Claude Code's come.
+    const file = join(one, ".baba/baba.config.ts")
+
+    writeFileSync(file, readFileSync(file, "utf8").replace("claude: { enable: false }", "claude: { enable: true }").replace("codex: { enable: true }", "codex: { enable: false }"))
+    expect(run(["provision"], join(one, ".baba")).status).toBe(0)
     expect(existsSync(join(one, ".claude/settings.json"))).toBe(true)
     expect(existsSync(join(one, ".codex"))).toBe(false)
     expect(existsSync(join(one, ".agents"))).toBe(false)

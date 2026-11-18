@@ -11,6 +11,10 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.78.1
+
+**Nothing a project's surfaces use changes.** The framework's own specs are in two tiers, and three things they waited on can be given by a spec: a runtime's options take `now`, `lookMs` and `reloadMs`; `shellKeep` takes the log's size bound; and `BABAVOSS_HUSH_MS` sets how long the hooks' silence is before it is said. In use each is as it was.
+
 ## 0.78.0
 
 **Breaking: every harness is set up the same way, and `baba init` is given the harnesses to set up.** `baba init claude` sets up Claude Code, `baba init codex` Codex, `baba init claude codex` both. With none named, or a name that is no harness, it makes nothing and says which there are. It writes `.baba/baba.config.ts` with each harness named enabled and each other not, so installing a clone sets up the same; before, it wrote no configuration and set up both.

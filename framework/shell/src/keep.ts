@@ -95,12 +95,12 @@ function mend(file: string): void {
   }
 }
 
-/** Appends lines to the log in `dir`, moving it aside first where it has grown past LOG_BYTES. */
-function append(dir: string, lines: string): void {
+/** Appends lines to the log in `dir`, moving it aside first where it has grown past `bound`. */
+function append(dir: string, lines: string, bound: number): void {
   const file = join(dir, LOG)
 
   mkdirSync(dir, { recursive: true, mode: 0o700 })
-  if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) >= LOG_BYTES) renameSync(file, join(dir, OLDER))
+  if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) >= bound) renameSync(file, join(dir, OLDER))
   appendFileSync(file, lines, { mode: 0o600 })
 }
 
@@ -188,7 +188,7 @@ export function migrate(dir: string): void {
  * The ports that keep the shell's model in `dir` in this layout. `now` stamps a tab closed with no time of its own, as one
  * the shell let go of as it loaded.
  */
-export function shellKeep(dir: string, now: () => number = Date.now): Pick<Ports<ShellModel>, "load" | "save"> {
+export function shellKeep(dir: string, now: () => number = Date.now, logBytes: number = LOG_BYTES): Pick<Ports<ShellModel>, "load" | "save"> {
   /** Each open tab's model as last written, by reference, and a hash of its text, which tells a model restored apart from one changed. */
   const states = new Map<number, unknown>()
   const hashes = new Map<number, bigint | number>()
@@ -275,7 +275,7 @@ export function shellKeep(dir: string, now: () => number = Date.now): Pick<Ports
 
         lines.set(tab, `${lines.get(tab) ?? ""}${line}\n`)
       }
-      for (const [tab, text] of lines) append(tab === undefined ? dir : tabDir(dir, tab), text)
+      for (const [tab, text] of lines) append(tab === undefined ? dir : tabDir(dir, tab), text, logBytes)
 
       // A tab no longer open goes to the archive, with how it closed.
       const open = new Set(model.tabs.map((t) => t.n))

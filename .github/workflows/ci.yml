@@ -16,7 +16,11 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      # The Bun the specs are written against, so a release of Bun does not change what passes between a commit and its check.
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
       - run: bun install --frozen-lockfile
       - run: bun check
-      - run: bun test
+      # Every spec, the ones that start processes too, each file in a worker of its own.
+      - run: bun run spec:whole

@@ -157,20 +157,24 @@ describe("the shell's state on disk", () => {
 
   it("moves a log past its bound aside, keeping the one before it", async () => {
     const dir = temp()
-    const r = start(dir)
+    // A bound a few entries reach, where a megabyte would take thousands: the rule is the same at any size.
+    const bound = 2000
+    const r = run(shell({ counter }, "/project/.baba"), shellKeep(dir, Date.now, bound))
     const long = "x".repeat(150)
 
     await r.call("/", "open", { surface: "counter" }, "agent")
     let calls = 0
 
-    while (!existsSync(join(dir, "tabs/1/log.1.jsonl")) && calls < 20_000) await r.call("/tabs/1", "write", { note: `${calls++}${long}` }, "agent")
+    while (!existsSync(join(dir, "tabs/1/log.1.jsonl")) && calls < 200) await r.call("/tabs/1", "write", { note: `${calls++}${long}` }, "agent")
     for (let i = 0; i < 10; i++) await r.call("/tabs/1", "write", { note: `${calls++}${long}` }, "agent")
 
-    expect(statSync(join(dir, "tabs/1/log.1.jsonl")).size).toBeGreaterThanOrEqual(LOG_BYTES)
+    expect(calls).toBeLessThan(40)
+    expect(statSync(join(dir, "tabs/1/log.1.jsonl")).size).toBeGreaterThanOrEqual(bound)
     expect(lines(join(dir, "tabs/1/log.jsonl"))).toHaveLength(11)
     expect(readLog(join(dir, "tabs/1"))).toHaveLength(calls)
-    // Hundreds of calls, each written to disk: on a slow machine more than a test is given by default.
-  }, 120_000)
+    // In use the bound is a megabyte.
+    expect(LOG_BYTES).toBe(1_000_000)
+  })
 
   it("writes a session kept in one model.json out in this layout, once, losing nothing, and removes that file", async () => {
     const dir = temp()

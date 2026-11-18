@@ -21,12 +21,19 @@ export interface Store {
   apply(change: (work: Work) => Work | undefined): void
 }
 
-/** The work kept in the file `where` names, or in memory where it names none; read again each time it is asked, so a story can move it. */
-export function store(where: () => string | undefined = () => undefined): Store {
+/** How often the file is read again while a tab follows it, whatever its watcher heard. */
+export const LOOK_MS = 2000
+
+/**
+ * The work kept in the file `where` names, or in memory where it names none; read again each time it is asked, so a story can
+ * move it. A system's watcher may miss a change, under load or just after it began: so the file is also read every `lookMs`.
+ */
+export function store(where: () => string | undefined = () => undefined, lookMs: number = LOOK_MS): Store {
   let held: { file?: string; work: Work; text?: string } | undefined
   const following = new Set<(work: Work) => void>()
   let watcher: FSWatcher | undefined
   let again: ReturnType<typeof setTimeout> | undefined
+  let looking: ReturnType<typeof setInterval> | undefined
 
   const tell = () => following.forEach((heard) => heard(held!.work))
   /** The work as it is now: held, or read from its file, or none yet. */
@@ -75,6 +82,8 @@ export function store(where: () => string | undefined = () => undefined): Store 
   }
   const follow = (file: string | undefined) => {
     if (watcher || !file) return
+    looking ??= setInterval(reread, lookMs)
+    looking.unref()
     try {
       watcher = watch(dirname(file), (_, name) => {
         if (name !== null && name !== basename(file)) return
@@ -113,6 +122,8 @@ export function store(where: () => string | undefined = () => undefined): Store 
       if (!following.size) {
         watcher?.close()
         watcher = undefined
+        clearInterval(looking)
+        looking = undefined
       }
     },
     apply(change) {

@@ -6,7 +6,7 @@ A TypeScript framework for surfaces an agent works on. A surface is a tool the a
 
 - Read docs/DESIGN.md before a change. Design leads code: use its vocabulary and name any divergence.
 - A change to docs/DESIGN.md needs proposed wording and a reason, then the person's approval, before it is written.
-- Before each commit run `bun check && bun test`. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
+- Before each commit run `bun check && bun run spec`: the types, and the fast specs, a second or two. Before a pull request, and whenever a change touches what starts a process, the command or an install, run `bun run spec:whole`, every spec; CI runs it, and a pull request is merged only once its check is green. There is no other tool: no linter, no formatter. `bun install` is for dependencies only.
 - Commit messages follow Conventional Commits: `type(scope): summary`, the summary in the imperative, lower case, with no full stop. Types are feat, fix, docs, refactor, test and chore; a breaking change takes `!` before the colon. The scope is optional and names the part changed: core, shell, kit, bin, skill. A commit or pull request carries no line crediting an agent or a tool: no Co-Authored-By, no "generated with".
 - Every file and concept earns its keep.
 
@@ -37,8 +37,9 @@ skill/making-surfaces.md    how a surface is made and changed; read from the pac
 template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
 spec/{core,shell,kit,bin}/  the specs, mirroring the code
-spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network
-spec/surfaces.spec.ts       runs .baba/'s surfaces' specs with the framework's, as bun check checks their types with it
+spec/support/               the notes fixture the framework's specs use; offline.ts keeps specs off the network; word.ts, a root set up for
+                            the specs of the client and the door
+spec/surfaces.spec.ts       runs .baba/'s surfaces' fast specs with the framework's, as bun check checks their types with it
 spec/border.spec.ts         the border: the package exports only its entries, and what a project keeps imports nothing else; the
                             internals this repository's own surfaces may reach, and why
 docs/DESIGN.md              the design
@@ -88,6 +89,8 @@ Style, which no tool enforces:
 ## Specs
 
 - Specs mirror the code: spec/core/ one per layer, spec/shell/, spec/kit/, spec/bin/.
+- Two tiers, told by a file's name. NAME.spec.ts is fast: in process, starting no runtime of its own process, running none of the package's commands and installing nothing, so the whole tier runs in a second or two; where it must see that nothing happens, it waits a moment, tens of milliseconds. NAME.whole.spec.ts starts a runtime's process, runs the command or installs. `bun test` and `bun run spec` run the fast ones; `bun run spec:whole` runs all, each file in a worker of its own.
+- A spec never waits out real time or fills a real bound: what takes time or size in use takes a clock, a duration or a bound the spec gives, as the runtime's `now` and `lookMs` and the log's bound. A wait for something to happen is on that, by `poll`, never a fixed sleep.
 - A surface's rules are stories, with `story()` from the framework: actors see, call and are told; the test settles the world's effects; the model is never read.
 
 ## Skills

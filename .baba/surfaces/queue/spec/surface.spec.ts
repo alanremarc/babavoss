@@ -340,14 +340,14 @@ test("a new tab says it is reading until it hears the session's work, so its pag
 test("removing the session's file begins its work again, in every tab that is open", async () => {
   const dir = mkdtempSync(join(tmpdir(), "queue-"))
   const file = join(dir, FILE)
-  const work = store(() => file)
+  // Read again every 50ms here: the system's watcher tells of a removal at no set time, and under load may not at all.
+  const work = store(() => file, 50)
   const first = await tab(work)
   const second = await tab(work)
 
   try {
     await first.agent.call("/", "add", { title: "One", about: "Why" })
     rmSync(file)
-    // Each tab's watcher hears it removed when the system tells it, which is no set time, and later under load.
     for (let waited = 0; (rows(first.person.sees()).length || rows(second.person.sees()).length) && waited < 10_000; waited += 20)
       await new Promise((done) => setTimeout(done, 20))
     await first.world.idle()

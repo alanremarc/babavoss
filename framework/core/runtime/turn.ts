@@ -48,6 +48,12 @@ export function reading(turn: Turn, now: number, busy = false): Turn {
  */
 export type Hooks = { ever: boolean; told: boolean; since?: number; last?: { call: string; at: number }; harness?: string }
 export const HUSH_MS = 10_000
+/** How long a silence is before it is said: HUSH_MS, or what BABAVOSS_HUSH_MS says, for a spec that starts a runtime and would wait it out. */
+export const hushMs = (env: NodeJS.ProcessEnv = process.env): number => {
+  const ms = Number(env.BABAVOSS_HUSH_MS)
+
+  return env.BABAVOSS_HUSH_MS && Number.isFinite(ms) && ms >= 0 ? ms : HUSH_MS
+}
 export const QUIET_LINE = "baba: this session's hooks are not being heard; what changes is told only when you read it. Start a new session to get them back."
 export const NO_HOOKS_LINE = "baba: no hook of this session's harness is heard; what changes is told only when you read it."
 
@@ -63,7 +69,7 @@ export const answered = (hooks: Hooks, call: string, now: number): Hooks => ({ .
 
 /** What a run of the word asking at `now` is told of the hooks' silence: a line once a stretch, where they are quiet. */
 export function hushed(hooks: Hooks, call: string, now: number): { hooks: Hooks; line?: string } {
-  const quiet = hooks.last !== undefined && hooks.last.call !== call && now - hooks.last.at > HUSH_MS
+  const quiet = hooks.last !== undefined && hooks.last.call !== call && now - hooks.last.at > hushMs()
 
   if (hooks.told || !quiet) return { hooks }
 
