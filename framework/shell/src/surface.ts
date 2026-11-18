@@ -540,10 +540,11 @@ export function shell(
 
     const { title, ...rest } = seen.ok ?? {}
     const address = addressOf(tab)
+    // The tab's view at / is read once, here: a row's actions are read at its own path alone, never through / again.
     const at = (path: string) => {
-      const there = shown(tab, path)
+      const there = path === "/" ? seen : attempt(tab, (s) => s.view(tab.model, path))
 
-      return "ok" in there ? offers(there.ok) : []
+      return there ? offers(there.ok) : []
     }
     const own = offers(rest)
     const rows = placed(revealed(rest)).flatMap((list) => {

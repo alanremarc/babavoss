@@ -338,6 +338,49 @@ describe("the shell surface", () => {
     expect(await agent.call("/tabs/1", "bump", { by: 2 })).toMatchObject({ outcome: "written", view: { n: 2 } })
   })
 
+  it("reads a tab's view at / once for the desktop, however many rows it has, and still says the rows' actions as one pattern", async () => {
+    type Rows = { rows: number[]; bad?: number }
+
+    const read: string[] = []
+    const drop = action({ name: "drop", description: "drop row N", subject: { n: "number" }, inputs: {}, update: (m: Rows, { n }): Update<Rows, never> => ({ model: { ...m, rows: m.rows.filter((r) => r !== n) } }) })
+    const fail = action({ name: "fail", description: "fail at a row", subject: {}, inputs: { n: "number" }, update: (m: Rows, { n }): Update<Rows, never> => ({ model: { ...m, bad: n } }) })
+    const listed = view([drop, fail], {
+      "/": (m) => ({ title: "Rows", fail: fail.bind({}), rows: m.rows.map((n) => ({ at: `/rows/${n}`, n })) }),
+      "/rows/:n": (m, { n }) => {
+        if (Number(n) === m.bad) throw new Error("a bad row")
+
+        return { n: Number(n), drop: drop.bind({ n: Number(n) }) }
+      },
+    })
+    const rows = surface<Rows, { kind: "none" }, never>({
+      description: "rows",
+      init: () => ({ rows: Array.from({ length: 40 }, (_, i) => i + 1) }),
+      update: (m, msg) => (msg.kind === "call" ? listed.update(m, msg) : { model: m }),
+      view: (m, path) => {
+        read.push(path)
+
+        return listed.view(m, path)
+      },
+      run: async () => {},
+      failed: () => ({ kind: "none" }),
+    })
+    const { agent } = story(shell({ rows, counter: { ...counter, start: undefined } }, BABA))
+
+    await agent.call("/", "open", { surface: "rows" })
+    await agent.call("/", "open", { surface: "counter" })
+    read.length = 0
+
+    const pattern = { at: "/rows/rows/N", offers: [{ name: "drop", fixed: { n: "N" }, open: {}, description: "drop row N" }] }
+
+    expect(agent.sees("/")!.tabs).toMatchObject([{ at: "/rows", title: "Rows", actions: [{ at: "/rows", offers: [{ name: "fail" }] }, pattern] }, { at: "/counter" }])
+    expect(read.filter((path) => path === "/")).toHaveLength(1)
+    expect(read.filter((path) => path !== "/")).toHaveLength(40)
+    // A row its surface cannot show gives no action, and is that row's fault alone: the tab is not broken, and the rest are said.
+    await agent.call("/rows", "fail", { n: 7 })
+    expect(agent.sees("/")!.tabs).toMatchObject([{ at: "/rows", title: "Rows", actions: [{ at: "/rows" }, pattern] }, { at: "/counter" }])
+    expect(agent.sees("/")!.tabs).not.toMatchObject([{ broken: expect.anything() }, {}])
+  })
+
   it("refuses to open a tab whose surface fails as it opens, and makes none", async () => {
     const failing = (part: "init" | "start" | "view"): typeof counter => ({
       ...counter,

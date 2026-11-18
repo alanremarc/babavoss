@@ -11,6 +11,12 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.81.0
+
+**A desktop read no longer slows with the rows a tab lists, and a client's probe builds no view.** Reading `/` asked each tab's surface for its view at `/` once for every row it lists, to find the rows' actions: a tab of 300 rows was asked 301 times, on every read of `/` and after every change. It is asked once; the rows' actions and a broken tab are said as before. The command's probe for whether its runtime is up is answered `204` with the service's token and no body, where it was answered the whole of `/`: a runtime busy with large tabs is no longer taken for one that is down.
+
+Nothing in a project's surfaces needs to change. A surface's view at a row's own path is still read once for each row on every read of `/`: keep it cheap.
+
 ## 0.80.0
 
 **The session-start hook teaches the agent how to work with surfaces.** It gives the operating guidance and the whole present together, including when a session resumes, compacts or forks. The skill baba covers authoring and maintaining `.baba/`, in a single `SKILL.md`.
