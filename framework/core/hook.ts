@@ -10,9 +10,11 @@
 // a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
 // from stopping. Nothing here knows a harness: its adapter reads the hook's input as the framework's moment, and prints what
 // is told as the harness takes it (harness/).
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { ADAPTERS } from "./harness/index.ts"
 import { stateOf } from "./provision.ts"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, save, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
@@ -44,6 +46,25 @@ const boundaryFile = (session: string) => join(dirname(registryFile(session)), "
 
 const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
 const WORDS = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
+
+/** How the words name the skill's other documents: beside themselves, which a harness that loads the skill can follow. */
+export const BESIDE = "`making-surfaces.md`, beside these words in the skill baba's folder"
+
+/**
+ * Baba's words as a hook gives them: the skill's text without its head. Given so, they come with no file to be beside; so
+ * where the harness is known, what they name beside them is named by its path in that harness's skill folder, from the
+ * project's directory, or from the person's home where .baba/ is there.
+ */
+export function wordsFor(baba: string, harness?: string): string {
+  const words = readFileSync(WORDS, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
+  const skill = ADAPTERS.find((adapter) => adapter.name === harness)?.skill
+
+  if (!skill) return words
+
+  const home = dirname(baba) === realpathSync(homedir())
+
+  return words.replace(BESIDE, `\`${home ? "~/" : ""}${skill}/making-surfaces.md\`${home ? "" : ", from the project's directory"}`)
+}
 
 /** Where the roots of a .baba/ keep what their sessions write: in it, .baba/.state. */
 export const homeOf = (baba: string) => stateOf(baba)
@@ -124,7 +145,7 @@ export async function hookContext(input: HookEvent, baba: string, harness?: stri
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
-    lines.push(readFileSync(WORDS, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim())
+    lines.push(wordsFor(baba, harness))
     if (root.exitCode === 0 && answer) lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
     await tell()
   } else if (turn === "gone") await tell()

@@ -294,7 +294,7 @@ export type ClaudeOptions = { events: (typeof CLAUDE_EVENTS)[number][] }
 /** How Claude Code is set up in a project; an older release's link to the package's plugin, and a copy of it, are replaced. */
 const METHOD: Method = {
   name: "claude",
-  skill: ".claude/skills/baba/SKILL.md",
+  skill: ".claude/skills/baba",
   hooks: ".claude/settings.json",
   events: CLAUDE_EVENTS,
   legacy: /babavoss[/\\]plugin[/\\]claude$/,
@@ -413,6 +413,7 @@ export function blocked(at = managedAt()): string | undefined {
 export const claude: Adapter<ClaudeOptions> = {
   name: "claude",
   title: "Claude Code",
+  skill: METHOD.skill,
   defaults: { events: [...CLAUDE_EVENTS] },
   events: CLAUDE_EVENTS,
   provision(project): SetUp {

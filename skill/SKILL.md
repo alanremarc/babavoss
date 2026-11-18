@@ -36,4 +36,4 @@ Its answer names the page's address, the command to use, the surfaces and the op
 
 The shell lists every surface with what it does, and offers to open each; opening one answers with its tab whole, and the same surface may be open in several tabs. Whether a surface serves the work is yours to judge, with the person and the project's own instructions; a task that needs none is done without one. The person may open one too, on the page, and you hear that they did.
 
-How a surface is made or changed is in `.baba/node_modules/babavoss/skill/making-surfaces.md`: read it before doing either. When an answer says a later babavoss is out, that file says how it is taken.
+How a surface is made or changed is in `making-surfaces.md`, beside these words in the skill baba's folder: read it before doing either. When an answer says a later babavoss is out, that file says how it is taken.

@@ -13,7 +13,7 @@ Run these in the project the person wants it in.
        bunx github:alanremarc/babavoss init codex
 
    Name both, `init claude codex`, only if the person says they use both here. With no harness named it makes nothing and says which there are. It makes `.baba/`, installs the framework in it, and sets up the harness named beside it: baba's skill, and its hooks in the harness's own project file (`.claude/settings.json` or `.codex/hooks.json`), where anything already there is kept and the file as it was is copied to `.baba/.state/backups/`. In Codex, the person then trusts the hooks once in `/hooks`. If `.baba/` is there already, run `bun install` in it instead.
-3. Read `.baba/node_modules/babavoss/skill/SKILL.md`. It says how surfaces are worked.
+3. Read the skill baba that was set up: `.claude/skills/baba/SKILL.md` in Claude Code, `.agents/skills/baba/SKILL.md` in Codex. It says how surfaces are worked.
 4. Start the shell: `cd .baba && bun run baba start`. It returns at once with the page's address, and the shell runs on by itself: run it in the foreground, and give the person the address.
 5. Tell the person what was set up. A new session of the harness begins with the surfaces in view, and is told what changes on them as the work goes on. This session began before that was set up: it is told nothing, so read before acting on a surface.
 
@@ -21,7 +21,7 @@ Do not make a surface as part of installing. The person says what they want next
 
 ## After installing
 
-- How a surface is made or changed: `.baba/node_modules/babavoss/skill/making-surfaces.md`. Read it before doing either.
+- How a surface is made or changed: `making-surfaces.md`, beside `SKILL.md` in that skill's folder. Read it before doing either.
 - Which harnesses are set up is in `.baba/baba.config.ts`: to add one, set its `enable` to true and run `bun run baba provision` in `.baba/`.
 - `.baba/` is the project's own code: commit it. `.baba/node_modules` and `.baba/.root` are ignored by its `.gitignore`.
 - A running shell runs the code it started with. While surfaces are being made, `dev: true` in `.baba/baba.config.ts`, beside `harnesses` there, restarts it on each change; otherwise restart it with the command the shell's answer names.

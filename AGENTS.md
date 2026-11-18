@@ -33,7 +33,7 @@ framework/shell/            the shell, the root of a .baba/, laid out as a surfa
 framework/kit/              the kit: shadcn's primitives with one layer of opinions, the parts of a content, and the design language every
                             page is built with; it imports no shell
 skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
-skill/making-surfaces.md    how a surface is made and changed; read from the package when needed
+skill/making-surfaces.md    how a surface is made and changed; set up beside SKILL.md in each harness's skill folder, and read when needed
 template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
 spec/{core,shell,kit,bin}/  the specs, mirroring the code
@@ -63,9 +63,9 @@ A project that uses it:
   .root/                    generated from the surfaces: one module that names each, loaded on its own, and the shell's page with each one's component
   .state/                   what the root's sessions write, ignored by git: each tab's state and log, the command, and backups/, each of the
                             person's files below as it was before baba changed it
-.claude/skills/baba/        generated: baba's SKILL.md, for Claude Code
+.claude/skills/baba/        generated: the skill baba whole, SKILL.md and making-surfaces.md, for Claude Code
 .claude/settings.json       the person's, with the framework's hook for each of Claude Code's events among theirs
-.agents/skills/baba/        generated: baba's SKILL.md, for Codex and the rest
+.agents/skills/baba/        generated: the same skill, for Codex and the rest
 .codex/hooks.json           the person's, with the framework's hook for each of Codex's events among theirs; Codex asks the person to review it
 ```
 

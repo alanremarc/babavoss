@@ -8,6 +8,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { hookCommand } from "../../framework/core/harness/setup.ts"
+import { wordsFor } from "../../framework/core/hook.ts"
 import { VERSION } from "../../framework/core/update.ts"
 import { poll } from "../support/poll.ts"
 
@@ -237,7 +238,9 @@ test("provision sets Claude Code up as Codex: what an older release left, a link
 
   expect(provisioned.out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\n")
   expect(provisioned.out).toMatch(/\.claude\/settings\.json as it was is kept at \.baba\/\.state\/backups\/\.claude__settings\.json\.\d{8}T\d{6}Z/)
-  expect(readdirSync(dir)).toEqual(["SKILL.md"])
+  // The skill whole: its words, and the manual they name beside them.
+  expect(readdirSync(dir).sort()).toEqual(["SKILL.md", "making-surfaces.md"])
+  expect(readFileSync(join(dir, "making-surfaces.md"), "utf8")).toBe(readFileSync(join(checkout, "skill/making-surfaces.md"), "utf8"))
   expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe(words)
 
   const now = JSON.parse(readFileSync(file, "utf8")) as { hooks: Record<string, unknown[]> }
@@ -410,7 +413,10 @@ test("a session's start gives what the skill baba gives and starts the root; a s
       env,
       input: JSON.stringify({ session_id: "hooked", hook_event_name: event, ...more }),
     })
-  const body = readFileSync(join(checkout, "skill/SKILL.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
+  // The skill's words as Claude Code's hook gives them: the manual named where that harness's skill folder has it.
+  const body = wordsFor(baba, "claude")
+
+  expect(body).toContain("`.claude/skills/baba/making-surfaces.md`, from the project's directory")
   const started = hook("SessionStart", { source: "startup" })
 
   try {

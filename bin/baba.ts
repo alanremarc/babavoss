@@ -86,7 +86,7 @@ function init(args: string[]) {
   if (install.exitCode !== 0) throw new Refusal(`cannot install the framework; allow bun to reach github.com and the package registry, then run: cd '${baba}' && bun install`)
   console.log(
     `${baba} is made, with no surfaces yet, and set up for ${titles.join(" and ")}. A new session there starts its shell; outside one, \`bun run baba start\` in .baba/ does. ` +
-      "How a surface is made: node_modules/babavoss/skill/making-surfaces.md, there.",
+      "How a surface is made: making-surfaces.md, in the skill baba that was set up.",
   )
 }
 

@@ -6,6 +6,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, 
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { ADAPTERS, claude, codex } from "../../framework/core/harness/index.ts"
+import { BESIDE, wordsFor } from "../../framework/core/hook.ts"
 import { BACKUPS, backup, editHooks, hookCommand, replace, Unsafe, without, type Group, type Hooks } from "../../framework/core/harness/setup.ts"
 
 let project: string
@@ -329,6 +330,14 @@ describe("the adapters set a harness up the same way", () => {
       expect(set.paths).toEqual([at.skill, at.hooks])
       expect(set.said).toContain(`${at.hooks} as it was is kept at ${BACKUPS}/`)
       expect(readFileSync(join(project, at.skill, "SKILL.md"), "utf8")).toBe(words)
+      // The skill is set up whole: every document of the package's skill folder, and nothing else.
+      expect(readdirSync(join(project, at.skill)).sort()).toEqual(readdirSync(new URL("../../skill", import.meta.url)).sort())
+      expect(words).toContain(BESIDE)
+      expect(existsSync(join(project, at.skill, "making-surfaces.md"))).toBe(true)
+      // Given by a hook, the words come with no file to be beside: they name the document's path in this harness's folder.
+      expect(wordsFor(join(project, ".baba"), adapter.name)).toContain(`\`${at.skill}/making-surfaces.md\`, from the project's directory: read it`)
+      expect(wordsFor(join(project, ".baba"), adapter.name)).not.toContain(BESIDE)
+      expect(wordsFor(join(project, ".baba"))).toContain(BESIDE)
       expect(Object.keys(read())).toEqual(["Stop", ...adapter.events.filter((event) => event !== "Stop")])
       for (const event of adapter.events) expect(read()[event]!.at(-1)!.hooks![0]).toMatchObject({ type: "command", command: hookCommand(adapter.name) })
       expect(read().Stop![0]).toEqual(mine)
