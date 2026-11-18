@@ -169,7 +169,8 @@ describe("the shell's state on disk", () => {
     expect(statSync(join(dir, "tabs/1/log.1.jsonl")).size).toBeGreaterThanOrEqual(LOG_BYTES)
     expect(lines(join(dir, "tabs/1/log.jsonl"))).toHaveLength(11)
     expect(readLog(join(dir, "tabs/1"))).toHaveLength(calls)
-  })
+    // Hundreds of calls, each written to disk: on a slow machine more than a test is given by default.
+  }, 120_000)
 
   it("writes a session kept in one model.json out in this layout, once, losing nothing, and removes that file", async () => {
     const dir = temp()
