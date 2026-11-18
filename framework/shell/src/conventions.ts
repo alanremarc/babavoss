@@ -3,7 +3,7 @@
 // the page's root, where each is an attribute, data-NAME, and a number a variable too, --NAME, so CSS, Tailwind's variants
 // and the kit follow them with no code in the page. They are a protocol, not a constraint: a page is expected to follow
 // them, and nothing checks that it does. Another is one field here, one preference in settings.ts, one line in
-// skill/making-surfaces.md.
+// skill/SKILL.md.
 import { resolveMode, type Mode, type Rail, type Settings } from "../settings/src/settings.ts"
 
 export type Conventions = {

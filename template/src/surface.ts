@@ -1,6 +1,6 @@
 // The surface: what is true and what can be done, read by the agent through the command and by the person on the page.
 // Here a greeting is proposed, then accepted or declined. Replace the greeting with the surface's own work and keep the
-// shape, which making-surfaces.md in the skill baba explains:
+// shape, which the skill baba explains:
 // - Its words are mechanics only. `description` is how the shell lists it: a phrase and a "Use when …". `how`, a fact at
 //   /, says what the things are and what the actions do; never when to act or who decides.
 // - Both sides are offered the same actions. Whether the proposal is taken is the person's decision: the agent raises it

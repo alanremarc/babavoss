@@ -56,7 +56,7 @@ describe("the border", () => {
   test("the package exports its entries and nothing else", () => {
     expect(
       Object.keys(exported).sort(),
-      "package.json's exports are the package's entries. Put what a surface needs into one of them, babavoss/core/index.ts for its source, babavoss/kit/index.ts or babavoss/shell/ui/index.tsx for a page, rather than exporting a file; a new entry is the person's decision, written in AGENTS.md and skill/making-surfaces.md, and in ENTRIES here",
+      "package.json's exports are the package's entries. Put what a surface needs into one of them, babavoss/core/index.ts for its source, babavoss/kit/index.ts or babavoss/shell/ui/index.tsx for a page, rather than exporting a file; a new entry is the person's decision, written in AGENTS.md and skill/SKILL.md, and in ENTRIES here",
     ).toEqual([...Object.keys(ENTRIES), "./package.json"].sort())
     for (const [entry, target] of Object.entries(exported)) {
       expect(target, `${entry} is exported as itself under framework/`).toBe(entry === "./package.json" ? "./package.json" : `./framework/${entry.slice(2)}`)

@@ -1,6 +1,6 @@
 # Baba Voss
 
-A TypeScript framework for surfaces an agent works on. A surface is a tool the agent works with for a person: what is true now and what can be done now, read and acted on through a command, and a tab where the person watches and steers over the same thing. A project's surfaces are code in its `.baba/` directory, a Bun package that names this framework. `.baba/` has a root, one runtime and one page per session: the shell, a surface the framework provides, which lists the surfaces and holds each open one as a tab. An agent is made aware by one piece of content, baba's words and the root's present, delivered by hooks and, where there are none, by the skill baba. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
+A TypeScript framework for surfaces an agent works on. A surface is a tool the agent works with for a person: what is true now and what can be done now, read and acted on through a command, and a tab where the person watches and steers over the same thing. A project's surfaces are code in its `.baba/` directory, a Bun package that names this framework. `.baba/` has a root, one runtime and one page per session: the shell, a surface the framework provides, which lists the surfaces and holds each open one as a tab. The session-start hook gives the agent baba's operating guidance and the root's present. The repository is being reshaped: much was cut so the design can change fast, and git history on main holds what was cut.
 
 ## Rules
 
@@ -32,8 +32,8 @@ framework/shell/            the shell, the root of a .baba/, laid out as a surfa
                             settings/ the settings, a surface of its own that comes with it, kept in the person's ~/.baba/settings.json
 framework/kit/              the kit: shadcn's primitives with one layer of opinions, the parts of a content, and the design language every
                             page is built with; it imports no shell
-skill/SKILL.md              baba: the words that make an agent aware of the surfaces; provisioned as a skill, and given by the hook
-skill/making-surfaces.md    how a surface is made and changed; set up beside SKILL.md in each harness's skill folder, and read when needed
+framework/core/session-start.md  baba's operating guidance, given by the session-start hook with the whole present
+skill/SKILL.md              baba: the skill for authoring and maintaining .baba/, provisioned in the harness's skill folder
 template/                   the surface a new one starts from: the surface, its component and a spec; `baba new` copies it
 CHANGELOG.md                what each release changed; an agent reads it after taking one
 spec/{core,shell,kit,bin}/  the specs, mirroring the code
@@ -63,7 +63,7 @@ A project that uses it:
   .root/                    generated from the surfaces: one module that names each, loaded on its own, and the shell's page with each one's component
   .state/                   what the root's sessions write, ignored by git: each tab's state and log, the command, and backups/, each of the
                             person's files below as it was before baba changed it
-.claude/skills/baba/        generated: the skill baba whole, SKILL.md and making-surfaces.md, for Claude Code
+.claude/skills/baba/        generated: the skill baba, SKILL.md, for Claude Code
 .claude/settings.json       the person's, with the framework's hook for each of Claude Code's events among theirs
 .agents/skills/baba/        generated: the same skill, for Codex and the rest
 .codex/hooks.json           the person's, with the framework's hook for each of Codex's events among theirs; Codex asks the person to review it
@@ -95,5 +95,5 @@ Style, which no tool enforces:
 
 ## Skills
 
-- skill/SKILL.md is given to every session of a project, so every line of it earns its place; what is needed only to make a surface is in skill/making-surfaces.md.
+- framework/core/session-start.md is given to every session of a project, so every line earns its place. skill/SKILL.md covers authoring and maintenance.
 - A surface's description says what it does and when to use it: a phrase and a "use when". How it is worked is said by its views; no file of instructions stands beside a surface.

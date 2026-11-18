@@ -111,7 +111,7 @@ export const JUDGMENT: Task[] = [
     prompt: "Would a surface help me review these 40 screenshots one by one? Don't build anything yet.",
     files: SHOTS,
     check: ({ seed, final, answer, calls }) => {
-      const tags = { used: usedSurfaces(calls).map((c) => `${c.tool} ${c.input.slice(0, 60)}`), manual: calls?.some((c) => /making-surfaces/.test(c.input)) ?? false }
+      const tags = { used: usedSurfaces(calls).map((c) => `${c.tool} ${c.input.slice(0, 60)}`), manual: calls?.some((c) => /(?:skills\/baba\/SKILL\.md|making-surfaces\.md)/.test(c.input)) ?? false }
 
       if (madeSurface(calls).length) return no(`built a surface: ${madeSurface(calls)[0]!.input.slice(0, 100)}`)
       if (calls?.some((c) => c.tool === "Write" || c.tool === "Edit")) return no(`wrote a file; ${tagged(tags)}`)

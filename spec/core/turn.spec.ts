@@ -80,12 +80,16 @@ test("a boundary is told once: a start that follows another with nothing heard b
   const home = mkdtempSync(join(tmpdir(), "boundary-"))
   const was = { home: process.env.BABAVOSS_HOME, cwd: process.cwd() }
   const at = (moment: HookEvent["moment"], source?: HookEvent["source"]): HookEvent => ({ session: "B", event: moment, moment, ...(source && { source }) })
-  const whole = readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
+  const whole = readFileSync(new URL("../../framework/core/session-start.md", import.meta.url), "utf8").trim()
   // The words a start is given, before the shell's answer; or nothing.
   const told = async (event: HookEvent) => {
     const context = await hookContext(event, join(home, ".baba"))
 
-    return context && [whole].find((words) => context.startsWith(words))
+    if (context === undefined) return undefined
+
+    expect(context.startsWith(whole)).toBe(true)
+
+    return whole
   }
 
   process.env.BABAVOSS_HOME = home

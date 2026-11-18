@@ -9,7 +9,7 @@ export type Strength = "weak" | "strong" | "none" | "end"
 
 /** What each request is, and its strength. A new signal is one line here, and one where the door classifies it. */
 export const SIGNALS = {
-  /** The shell opened in the session, as a session's start, resume or compaction does, by its hook or by the skill. */
+  /** The shell opened in the session, as the hook does at a session's start, resume or compaction. */
   opened: "weak",
   /** The hook of a session that starts or resumes, or of the agent's turn ending. */
   ended: "weak",

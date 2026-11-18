@@ -1,5 +1,5 @@
-// What the framework tells the agent unasked, through the harness's hooks: at a session's start, what invoking the skill
-// baba would, its text and the shell's answer, the shell started, with the present whole; the same again where the session
+// What the framework tells the agent unasked, through the harness's hooks: at a session's start, baba's
+// operating guidance and the shell's answer, with the present whole; the same again where the session
 // had them before and lost them, after a compaction, a resume or a fork (returning), once a boundary: a start that follows
 // another with nothing heard between, as a compaction at once after a resume, is given nothing again; after each tool call, what was heard in an open root since
 // the agent was last told, one line each: notices, and where the person acted; with each message of the person, that and
@@ -10,11 +10,9 @@
 // a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
 // from stopping. Nothing here knows a harness: its adapter reads the hook's input as the framework's moment, and prints what
 // is told as the harness takes it (harness/).
-import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { ADAPTERS } from "./harness/index.ts"
 import { stateOf } from "./provision.ts"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, save, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
@@ -45,26 +43,7 @@ export const returning = (source: Source | undefined): boolean => source === "co
 const boundaryFile = (session: string) => join(dirname(registryFile(session)), "boundary.json")
 
 const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
-const WORDS = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
-
-/** How the words name the skill's other documents: beside themselves, which a harness that loads the skill can follow. */
-export const BESIDE = "`making-surfaces.md`, beside these words in the skill baba's folder"
-
-/**
- * Baba's words as a hook gives them: the skill's text without its head. Given so, they come with no file to be beside; so
- * where the harness is known, what they name beside them is named by its path in that harness's skill folder, from the
- * project's directory, or from the person's home where .baba/ is there.
- */
-export function wordsFor(baba: string, harness?: string): string {
-  const words = readFileSync(WORDS, "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
-  const skill = ADAPTERS.find((adapter) => adapter.name === harness)?.skill
-
-  if (!skill) return words
-
-  const home = dirname(baba) === realpathSync(homedir())
-
-  return words.replace(BESIDE, `\`${home ? "~/" : ""}${skill}/making-surfaces.md\`${home ? "" : ", from the project's directory"}`)
-}
+const WORDS = new URL("./session-start.md", import.meta.url)
 
 /** Where the roots of a .baba/ keep what their sessions write: in it, .baba/.state. */
 export const homeOf = (baba: string) => stateOf(baba)
@@ -140,12 +119,10 @@ export async function hookContext(input: HookEvent, baba: string, harness?: stri
       return undefined
     }
     save(boundaryFile(session), { source: input.source ?? null })
-    // What invoking the skill baba gives, given unasked: its text, and the shell started, which the skill would have the
-    // agent do. The shell's answer is its version, its page's address, the surfaces and the tabs open in this session.
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
-    lines.push(wordsFor(baba, harness))
+    lines.push(readFileSync(WORDS, "utf8").trim())
     if (root.exitCode === 0 && answer) lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
     await tell()
   } else if (turn === "gone") await tell()

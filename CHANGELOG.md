@@ -11,6 +11,12 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.80.0
+
+**The session-start hook teaches the agent how to work with surfaces.** It gives the operating guidance and the whole present together, including when a session resumes, compacts or forks. The skill baba covers authoring and maintaining `.baba/`, in a single `SKILL.md`.
+
+Nothing in a project's surfaces needs to change. Installing in `.baba/` refreshes the skill and removes the previous `making-surfaces.md` where it matches the text moved into the skill. Harnesses need the session-start hook to get the operating guidance automatically.
+
 ## 0.79.0
 
 **The skill baba is set up whole: `making-surfaces.md` is beside `SKILL.md`** in `.claude/skills/baba/` and `.agents/skills/baba/`, where before a project had only `SKILL.md` and the manual was read from `.baba/node_modules/babavoss/skill/`. Baba's words name it as beside them; given by a hook, where they come with no file, they name its path in that harness's skill folder. `baba init`, the shell's answer with no surfaces, the template and `site/llms.txt` name it there too.
