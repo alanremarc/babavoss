@@ -126,7 +126,7 @@ type Place = { dir: string; project: string; home: string; session: string; stat
 /** The environment of the root and the commands the rig runs in a run's project: the agent's, with the scratch settings. */
 const envOf = (project: string, home: string): Record<string, string> => ({
   ...sessionEnv(home),
-  BABAVOSS_HOME: join(project, ".babavoss"),
+  BABAVOSS_HOME: join(project, ".baba/.state"),
   BABAVOSS_SETTINGS: join(home, ".babavoss/settings.json"),
   BABAVOSS_LATEST: "",
 })
@@ -154,11 +154,11 @@ export function makePlace(variant: Variant, session: string, files: Record<strin
     for (const name of readdirSync(FIXTURES)) cpSync(join(FIXTURES, name), join(baba, "surfaces", name), { recursive: true })
     if (variant.words) cpSync(join(WORDS, `${variant.words}.ts`), join(baba, "surfaces", SURFACE, "src/words.ts"))
     // The release the variant runs is the latest heard: no lookup, and no word of an update in what the agent is told.
-    mkdirSync(join(project, ".babavoss"), { recursive: true })
-    writeFileSync(join(project, ".babavoss/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
+    mkdirSync(join(project, ".baba/.state"), { recursive: true })
+    writeFileSync(join(project, ".baba/.state/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
     sh(["bun", "run", "baba", "provision"], baba, env)
     // A repository with a first commit, as a project is: the harness's own tools, a worktree for a subagent, need one.
-    writeFileSync(join(project, ".gitignore"), "node_modules\n.babavoss\n.root\n")
+    writeFileSync(join(project, ".gitignore"), "node_modules\n.state\n.root\n")
     for (const [path, text] of Object.entries(files)) {
       mkdirSync(join(project, path, ".."), { recursive: true })
       writeFileSync(join(project, path), text)
@@ -172,7 +172,7 @@ export function makePlace(variant: Variant, session: string, files: Record<strin
     throw error
   }
 
-  return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
+  return { dir, project, home, session, state: join(project, ".baba/.state/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
 /** Commits everything in `project` as one commit with `message`. */
@@ -201,16 +201,16 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
     commit(project, "the project")
     shim(dir, variant)
     if (fresh.empty) {
-      return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
+      return { dir, project, home, session, state: join(project, ".baba/.state/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
     }
     // The person's own package cache, read and filled by the install, so a run does not download the framework's dependencies.
     sh(["bun", join(variant.path, "bin/baba.ts"), "init", "claude", "codex", "--from", `file:${variant.path}`], project, { ...env, BUN_INSTALL_CACHE_DIR: join(homedir(), ".bun/install/cache") })
     // A release is a copy of the package, its dependencies beside it in .baba/node_modules; installed from a checkout, its
     // files link back into it, where the checkout's own dependencies would be a second copy of every type. So it is copied.
     rmSync(join(baba, "node_modules/babavoss"), { recursive: true, force: true })
-    sh(["rsync", "-a", "--exclude", "node_modules", "--exclude", ".git", "--exclude", ".babavoss", `${variant.path}/`, join(baba, "node_modules/babavoss/")], project)
-    mkdirSync(join(project, ".babavoss"), { recursive: true })
-    writeFileSync(join(project, ".babavoss/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
+    sh(["rsync", "-a", "--exclude", "node_modules", "--exclude", ".git", "--exclude", ".state", `${variant.path}/`, join(baba, "node_modules/babavoss/")], project)
+    mkdirSync(join(project, ".baba/.state"), { recursive: true })
+    writeFileSync(join(project, ".baba/.state/latest.json"), JSON.stringify({ asked: Date.now(), version: variant.version }))
     for (const [path, text] of Object.entries({ ...files, ...fresh.files })) {
       mkdirSync(join(project, path, ".."), { recursive: true })
       writeFileSync(join(project, path), text)
@@ -232,7 +232,7 @@ export function makeFresh(variant: Variant, session: string, fresh: Fresh, files
     throw error
   }
 
-  return { dir, project, home, session, state: join(project, ".babavoss/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
+  return { dir, project, home, session, state: join(project, ".baba/.state/sessions", session, "baba"), env, entry: join(baba, "node_modules/babavoss/framework/shell/scripts/open.ts") }
 }
 
 /** The variant's site/ on a free loopback port, as it is published: index.html at /, every other file at its path; each path asked for is kept. */
@@ -271,7 +271,7 @@ export const PUBLIC = "github:alanremarc/babavoss"
 function shim(dir: string, variant: Variant) {
   const bin = join(dir, "bin")
   const bunx = Bun.which("bunx") ?? "bunx"
-  const copy = `rm -rf .baba/node_modules/babavoss && rsync -a --exclude node_modules --exclude .git --exclude .babavoss '${variant.path}/' .baba/node_modules/babavoss/`
+  const copy = `rm -rf .baba/node_modules/babavoss && rsync -a --exclude node_modules --exclude .git --exclude .state '${variant.path}/' .baba/node_modules/babavoss/`
 
   const lines = [
     "#!/bin/sh",
@@ -332,7 +332,7 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
   const baba = join(place.project, ".baba")
   const left = { up: up(place), address: address(place), outside: outside(place), strays: strays(place), browsed: browsed(place) }
   const env = { ...place.env, TMPDIR: mkdtempSync(join(place.dir, "tmp-")) }
-  const word = (...args: string[]) => ran([".babavoss/bin/baba", "--session", place.session, ...args], place.project, place.env)
+  const word = (...args: string[]) => ran([".baba/.state/bin/baba", "--session", place.session, ...args], place.project, place.env)
   const surfaces = (() => {
     try {
       return readdirSync(join(baba, "surfaces"), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
@@ -343,7 +343,7 @@ async function lookAt(place: Place, fresh: Fresh, task: Task): Promise<Look> {
   const present = word("/").out
   const stale = /changed on disk/.test(present)
   const there = Object.fromEntries(
-    [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".codex/hooks.json", ".babavoss/bin/baba"].map(
+    [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".codex/hooks.json", ".baba/.state/bin/baba"].map(
       (p) => [p, existsSync(join(place.project, p))],
     ),
   )
@@ -596,7 +596,7 @@ function clear(place: Place, harness: Harness) {
 }
 
 /** An invocation of the root's command in a shell line: the project's own, a bv, or the package's script. */
-const WORD = /(?:^|[\s;&|(`"'])(?:\S*\.babavoss\/bin\/(?:baba|bv)|bv|bun run baba)(?=\s|$)/g
+const WORD = /(?:^|[\s;&|(`"'])(?:\S*\.baba\/\.state\/bin\/(?:baba|bv)|bv|bun run baba)(?=\s|$)/g
 const OPERATOR = /^(\||\|\||&&|;|>|>>|2>&1|<|&)$/
 const SCRIPT = /\.(ts|js|mjs|cjs|sh|py)$/
 /** A path read whole, with its tables: the root's, or a tab's own, by its name or its number. */
@@ -657,7 +657,7 @@ export function programs(calls: { tool: string; input: string }[]): string[] {
 }
 
 /** A path into a surface's code or what the root keeps on disk: what the words say never to look in or change. */
-const BEHIND = /\.baba\/(?!node_modules\/babavoss\/skill\/)(surfaces|\.root)\b|\.babavoss\/sessions|model\.json|seed\.ts|surface\.ts/
+const BEHIND = /\.baba\/(?!node_modules\/babavoss\/skill\/)(surfaces|\.root)\b|\.baba\/\.state\/sessions|model\.json|seed\.ts|surface\.ts/
 
 /** Whether a tool call went around the surfaces, to their code or the root's state on disk, rather than through the command. */
 export const goesAround = ({ tool, input }: Call): boolean =>
@@ -764,11 +764,11 @@ export function dryHarness(script: (prompt: string) => Dry): Harness {
         for (const [path, text] of Object.entries(writes ?? {})) writeFileSync(join(options.project, path), text)
 
         for (const [i, args] of calls.entries()) {
-          const done = Bun.spawnSync([".babavoss/bin/baba", "--session", options.session, ...args], { cwd: options.project, env, stdout: "pipe", stderr: "pipe" })
+          const done = Bun.spawnSync([".baba/.state/bin/baba", "--session", options.session, ...args], { cwd: options.project, env, stdout: "pipe", stderr: "pipe" })
           const quoted = args.map((a) => (/^[\w/.=-]+$/.test(a) ? a : `'${a.replaceAll("'", "'\\''")}'`)).join(" ")
 
           fake.emit(
-            { kind: "call", id: `dry-${said}-${i}`, tool: "Bash", input: `.babavoss/bin/baba ${quoted}`, word: true },
+            { kind: "call", id: `dry-${said}-${i}`, tool: "Bash", input: `.baba/.state/bin/baba ${quoted}`, word: true },
             { kind: "result", id: `dry-${said}-${i}`, text: (done.stdout.toString() + done.stderr.toString()).trim(), ...(done.exitCode !== 0 && { error: true }) },
           )
         }

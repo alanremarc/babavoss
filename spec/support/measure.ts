@@ -27,7 +27,7 @@ import { readJsonFile } from "../../framework/core/state/json-file.ts"
 import { shell } from "../../framework/shell/src/surface.ts"
 import { TELLS } from "../../framework/core/hook.ts"
 
-const COMMAND = ".babavoss/bin/baba"
+const COMMAND = ".baba/.state/bin/baba"
 const HOW =
   "Keep this true as the work moves: add an issue the person asks for, draft one you would suggest and leave it until they approve it on the page, " +
   "start an issue when a subagent takes it in a lane, note where it stands, and mark it done only once it is merged into main. An issue's path has " +

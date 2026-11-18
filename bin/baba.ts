@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 import { CONFIG_FILE, loadConfig, sectionOf } from "../framework/core/config.ts"
 import { ADAPTERS } from "../framework/core/harness/index.ts"
 import { hookContext } from "../framework/core/hook.ts"
-import { findBaba, NAME, provision, RESERVED, scaffold, SURFACES_DIR, ROOT_DIR, type Provisioned } from "../framework/core/provision.ts"
+import { findBaba, NAME, provision, RESERVED, scaffold, SURFACES_DIR, ROOT_DIR, STATE_DIR, type Provisioned } from "../framework/core/provision.ts"
 import { REPOSITORY, VERSION } from "../framework/core/update.ts"
 
 const NAMES = ADAPTERS.map((adapter) => adapter.name)
@@ -78,7 +78,7 @@ function init(args: string[]) {
   )
   scaffold(baba)
   writeFileSync(join(baba, CONFIG_FILE), configOf(names))
-  writeFileSync(join(baba, ".gitignore"), `node_modules\n${ROOT_DIR}\n`)
+  writeFileSync(join(baba, ".gitignore"), `node_modules\n${ROOT_DIR}\n${STATE_DIR}\n`)
 
   const install = Bun.spawnSync([process.execPath, "install"], { cwd: baba, stdio: ["ignore", "inherit", "inherit"] })
   const titles = ADAPTERS.filter((adapter) => names.includes(adapter.name)).map((adapter) => adapter.title)

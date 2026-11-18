@@ -20,13 +20,13 @@ const LEAD = /^(Heard in|In|The shell of) .+:$/
 const SIGNED = /^([+-])( )(.*)$/
 /** A value's tokens, in order of what wins: a quoted string, a who, a command, an arrow, a path, a number, a keyword. */
 const TOKEN =
-  /("(?:[^"\\]|\\.)*")|( \(by the (?:person|surface|agent)\))|((?:\.babavoss\/bin\/|\bbaba )\S[^\t]*?(?=   |\t|$))|(→)|((?<![\w/.])\/[\w./:\-*]*)|((?<![\w.-])-?\d+(?:[.,]\d+)?(?![\w.]))|(\b(?:true|false|null)\b)/g
+  /("(?:[^"\\]|\\.)*")|( \(by the (?:person|surface|agent)\))|((?:\.baba\/\.state\/bin\/|\bbaba )\S[^\t]*?(?=   |\t|$))|(→)|((?<![\w/.])\/[\w./:\-*]*)|((?<![\w.-])-?\d+(?:[.,]\d+)?(?![\w.]))|(\b(?:true|false|null)\b)/g
 
 /** Whether a line reads as markdown prose: a heading, or a sentence. */
 function prose(line: string): boolean {
   if (/^#{1,6} /.test(line) || /^```/.test(line)) return true
   if (/^(- |\* |\d+\. )/.test(line)) return line.length > 60 && /[.:;]$|\. /.test(line) && !FACT.test(line.slice(2))
-  if (/^(\.babavoss\/|baba |bv )/.test(line) || LEAD.test(line) || /\t/.test(line) || HEADING.test(line) || /\(by the (person|surface|agent)\)$/.test(line) || /^[a-z][\w-]* \/\S*: /.test(line)) return false
+  if (/^(\.baba\/\.state\/|baba |bv )/.test(line) || LEAD.test(line) || /\t/.test(line) || HEADING.test(line) || /\(by the (person|surface|agent)\)$/.test(line) || /^[a-z][\w-]* \/\S*: /.test(line)) return false
   if (FACT.test(line) && !/ /.test(line.split(":")[0]!)) return false
 
   return line.length >= 40 && /[.!?`)]$/.test(line) && / \w+ \w+ /.test(line)

@@ -7,7 +7,7 @@ import { baseDir, type Env } from "./state.ts"
 /** The file a session's directory holds once its harness said the session ended; anything heard after takes it back (hook.ts). */
 export const ENDED = "ended"
 
-/** The session's directory, ~/.babavoss/sessions/ID or a project's .babavoss/sessions/ID; undefined where no runtime is served. */
+/** The session's directory, a project's .baba/.state/sessions/ID; undefined where no runtime is served. */
 export function sessionDir(argv: readonly string[] = process.argv, env: Env = process.env): string | undefined {
   const at = argv.indexOf("--serve")
   const session = at === -1 ? undefined : argv[at + 1]

@@ -144,7 +144,7 @@ const judged = (r: Rules, look: Look, more = ""): Verdict => ({
 })
 
 /** A run of the surfaces' command or of `baba`, however it is named. */
-const WORDED = /(\.babavoss\/bin\/(baba|bv)|\bbv\b|bun run baba|\bbaba (new|start|provision)\b)/
+const WORDED = /(\.baba\/\.state\/bin\/(baba|bv)|\bbv\b|bun run baba|\bbaba (new|start|provision)\b)/
 const usedSurfaces = (calls: Call[] = []) => calls.filter((c) => c.tool === "Bash" && WORDED.test(c.input))
 /** Whether the agent read the changelog, by a tool or the shell. */
 const readChangelog = (calls: Call[] = []) => calls.some((c) => /CHANGELOG\.md/.test(c.input) && (c.tool === "Read" || c.tool === "Grep" || c.tool === "Bash"))
@@ -199,7 +199,7 @@ export const README_LINE = /Copy this to your agent:\s*```text\n([\s\S]*?)\n```/
 export const withInstruction = (tasks: Task[], path: string): Task[] =>
   tasks.map((t) => (t.name === "install" ? { ...t, prompt: readFileSync(path, "utf8").trim() } : t))
 /** What a set-up project has: .baba/ with its framework, the harnesses' files, the root's command. */
-const SET_UP = [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".babavoss/bin/baba"]
+const SET_UP = [".baba/package.json", ".baba/node_modules/babavoss/package.json", ".claude/skills/baba", ".agents/skills/baba/SKILL.md", ".baba/.state/bin/baba"]
 /**
  * Why a run on a just-installed project did more than it was asked, or did not give the page's address the root says:
  * a surface made, a file of the project's changed, anything outside it changed, or another address given.

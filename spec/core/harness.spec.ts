@@ -64,7 +64,7 @@ const RECORDED: Json[] = [
   { type: "system", subtype: "thinking_tokens", estimated_tokens: 50, session_id: SESSION },
   { type: "user", message: { role: "user", content: "What surfaces are there?" }, parent_tool_use_id: null, session_id: SESSION, isReplay: true },
   assistant([{ type: "thinking", thinking: "", signature: "CAQS" }]),
-  assistant([{ type: "tool_use", id: "toolu_1", name: "Bash", input: { command: ".babavoss/bin/baba /", description: "Read the root" } }]),
+  assistant([{ type: "tool_use", id: "toolu_1", name: "Bash", input: { command: ".baba/.state/bin/baba /", description: "Read the root" } }]),
   { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: 'title: "baba"' }] }, parent_tool_use_id: null },
   {
     type: "system",
@@ -111,7 +111,7 @@ test("Claude Code's stream reads as the framework's events: hooks' injections an
       },
     },
     { kind: "message", text: "What surfaces are there?" },
-    { kind: "call", id: "toolu_1", tool: "Bash", input: ".babavoss/bin/baba /", word: true, request },
+    { kind: "call", id: "toolu_1", tool: "Bash", input: ".baba/.state/bin/baba /", word: true, request },
     { kind: "result", id: "toolu_1", text: 'title: "baba"' },
     { kind: "injected", event: "PostToolUse", text: "What changed: tabs.1" },
     { kind: "reply", text: "Two surfaces: lab and queue.", request },
@@ -168,8 +168,8 @@ test("nothing of the account's is handed on: no account, organisation or user id
 test("a call is the word when it runs the root's command, and only then", () => {
   const word = (command: string) => (claudeEvents(assistant([{ type: "tool_use", id: "t", name: "Bash", input: { command } }]))[0] as { word: boolean }).word
 
-  expect([".babavoss/bin/baba /tabs/1", "cd .baba && bun run baba start", "bv wait 60"].map(word)).toEqual([true, true, true])
-  expect(["ls .babavoss/bin", "cat baba.md", "bvx"].map(word)).toEqual([false, false, false])
+  expect([".baba/.state/bin/baba /tabs/1", "cd .baba && bun run baba start", "bv wait 60"].map(word)).toEqual([true, true, true])
+  expect(["ls .baba/.state/bin", "cat baba.md", "bvx"].map(word)).toEqual([false, false, false])
 })
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "harness-spec-")))
@@ -386,14 +386,14 @@ test("Codex's stream reads as the framework's events, and what its hooks added i
   const stream: Json[] = [
     { type: "thread.started", thread_id: "01a1e475" },
     { type: "item.completed", item: { id: "item_0", type: "error", message: "`--dangerously-bypass-hook-trust` is enabled." } },
-    { type: "item.started", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc '.babavoss/bin/baba /'", status: "in_progress" } },
+    { type: "item.started", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc '.baba/.state/bin/baba /'", status: "in_progress" } },
     { type: "item.completed", item: { id: "item_2", type: "command_execution", command: "/bin/zsh -lc true", aggregated_output: "no", exit_code: 1 } },
     { type: "item.completed", item: { id: "item_3", type: "agent_message", text: "done" } },
   ]
 
   expect(codexEvents({ type: "item.started", item: { id: "i", type: "command_execution", command: "/bin/zsh -lc true" } })).toMatchObject([{ input: "true" }])
   expect(stream.flatMap(codexEvents)).toEqual<HarnessEvent[]>([
-    { kind: "call", id: "item_2", tool: "shell", input: ".babavoss/bin/baba /", word: true },
+    { kind: "call", id: "item_2", tool: "shell", input: ".baba/.state/bin/baba /", word: true },
     { kind: "result", id: "item_2", text: "no", error: true },
     { kind: "reply", text: "done" },
   ])

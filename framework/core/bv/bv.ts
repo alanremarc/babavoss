@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 20
+export const VERSION = 21
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -657,8 +657,13 @@ if (import.meta.main) {
   })
   const directory = dirname(resolve(process.argv[1]!))
 
-  if (basename(directory) === "bin" && basename(dirname(directory)) === ".babavoss")
-    process.env.BABAVOSS_HOME ??= dirname(directory)
+  // The command a project is given is in its state folder, PROJECT/.baba/.state/bin: that folder is the home, and the
+  // command is named from the project.
+  // A root with no .baba/ keeps it beside the directory it was run in, as .babavoss.
+  const state = basename(directory) === "bin" && [".state", ".babavoss"].includes(basename(dirname(directory))) ? dirname(directory) : undefined
+  const project = state && dirname(basename(state) === ".state" ? dirname(state) : state)
+
+  if (state) process.env.BABAVOSS_HOME ??= state
 
   const args = process.argv.slice(2)
   const word = args[0] === "--word" ? (args.splice(0, 2)[1]!) : basename(process.argv[1]!)
@@ -666,6 +671,6 @@ if (import.meta.main) {
   process.exitCode = await bv(
     args,
     word === "bv" || word === "bv.ts" ? undefined : word,
-    basename(dirname(directory)) === ".babavoss" ? relative(dirname(dirname(directory)), process.argv[1]!) : "bv",
+    project ? relative(project, process.argv[1]!) : "bv",
   )
 }

@@ -4,7 +4,7 @@
 // event of its stream joins the timeline: what entered the agent's context, chunk by chunk, with sizes, tokens and cost,
 // and what was done on its page as the person, by the developing agent or by the person's own clicks, which the lab
 // follows in the root under test's activity. A turn that ends, and a run that cannot go on, are noticed. A run's record
-// is kept under .babavoss/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
+// is kept under .baba/.state/lab/runs, so it outlives its tab; a closed run keeps only that, the last KEEP of them, and a run
 // left behind by a lab that is gone is cleared when the lab starts, its record saying so.
 import { randomBytes, randomUUID } from "node:crypto"
 import {

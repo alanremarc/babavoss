@@ -156,20 +156,20 @@ const EIGHT: [string, number, string][] = [
 const eightList = EIGHT.map(([title, from, about]) => `- "${title}", out of issue ${from}: ${about}`).join("\n")
 const backlogOf = (w: Work) => w.issues.filter((i) => i.status === "backlog").map((i) => i.n)
 /** A call that writes a surface's code or what the root keeps on disk, rather than acting through the command. */
-const WRITES = /\.baba\/surfaces|\.babavoss\/sessions|model\.json/
+const WRITES = /\.baba\/surfaces|\.baba\/\.state\/sessions|model\.json/
 const writesAround = (calls: Call[] = []) =>
   calls.filter(
     ({ tool, input }) => ((tool === "Write" || tool === "Edit") && WRITES.test(input)) || (tool === "Bash" && WRITES.test(input) && /(sed -i|>|\btee\b|\bmv\b|\bcp\b|writeFile)/.test(input)),
   )
 /** A call that reads or writes a surface's code or what the root keeps on disk. */
-const LOOKS = /\.baba\/surfaces|\.babavoss\/sessions|model\.json|seed\.ts|src\/surface\.ts/
-const looksAround = (calls: Call[] = []) => calls.filter(({ tool, input }) => (tool === "Bash" ? !/\.babavoss\/bin\/baba|\bbv\b|bun run baba/.test(input) : true) && LOOKS.test(input))
+const LOOKS = /\.baba\/surfaces|\.baba\/\.state\/sessions|model\.json|seed\.ts|src\/surface\.ts/
+const looksAround = (calls: Call[] = []) => calls.filter(({ tool, input }) => (tool === "Bash" ? !/\.baba\/\.state\/bin\/baba|\bbv\b|bun run baba/.test(input) : true) && LOOKS.test(input))
 /** A subagent launched: what the dictating words asked for with every start, and no task does. */
 const subagents = (calls: Call[] = []) => calls.filter(({ tool }) => tool === "Task" || tool === "Agent")
 /** A run of the surfaces' command, however it is named. */
-const WORDED = /(\.babavoss\/bin\/(baba|bv)|\bbv\b|bun run baba)/
+const WORDED = /(\.baba\/\.state\/bin\/(baba|bv)|\bbv\b|bun run baba)/
 /** The command's run that puts the root to sleep. */
-const sleeps = (calls: Call[] = []) => calls.some(({ tool, input }) => tool === "Bash" && /(\.babavoss\/bin\/baba|\bbv|bun run baba)\s+(--session\s+\S+\s+)?sleep\b/.test(input))
+const sleeps = (calls: Call[] = []) => calls.some(({ tool, input }) => tool === "Bash" && /(\.baba\/\.state\/bin\/baba|\bbv|bun run baba)\s+(--session\s+\S+\s+)?sleep\b/.test(input))
 const releaseOf = (shell?: Shell) => shell?.tabs.find((t) => t.surface === "release")?.model as Checklist | undefined
 const NEW_ABOUT = "A run's header shows its dollars, its tokens in and out, and the minutes it took."
 const RETITLE = "Rotate the runtime's log at two megabytes"

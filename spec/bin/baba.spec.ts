@@ -52,7 +52,7 @@ test("init makes .baba/ as a package that names the framework and provisions whe
     for (const groups of Object.values(hooks)) expect(groups.map((group) => group.hooks[0]!.command)).toEqual([hookCommand(name!)])
   }
   // Nothing of the person's was there to keep a copy of.
-  expect(existsSync(join(project, ".babavoss/backups"))).toBe(false)
+  expect(existsSync(join(project, ".baba/.state/backups"))).toBe(false)
   // The harnesses named are the configuration's, so installing a clone sets up the same.
   expect(readFileSync(join(baba, "baba.config.ts"), "utf8")).toContain("claude: { enable: true },\n    codex: { enable: true },")
   expect(run(["init", "claude"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
@@ -234,7 +234,7 @@ test("provision sets Claude Code up as Codex: what an older release left, a link
   const provisioned = run(["provision"])
 
   expect(provisioned.out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\n")
-  expect(provisioned.out).toMatch(/\.claude\/settings\.json as it was is kept at \.babavoss\/backups\/\.claude__settings\.json\.\d{8}T\d{6}Z/)
+  expect(provisioned.out).toMatch(/\.claude\/settings\.json as it was is kept at \.baba\/\.state\/backups\/\.claude__settings\.json\.\d{8}T\d{6}Z/)
   expect(readdirSync(dir)).toEqual(["SKILL.md"])
   expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe(words)
 
@@ -246,7 +246,7 @@ test("provision sets Claude Code up as Codex: what an older release left, a link
   expect(now.hooks.SessionStart).toEqual([ours])
   // Provisioned again, nothing is written and no copy is made.
   expect(run(["provision"]).out).not.toContain(".claude/")
-  expect(readdirSync(join(project, ".babavoss/backups"))).toHaveLength(1)
+  expect(readdirSync(join(project, ".baba/.state/backups"))).toHaveLength(1)
 
   // Settings that are not valid are not written over: it stops, says why, and the file is as it was.
   writeFileSync(file, "{ not json")
@@ -416,7 +416,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(started.status).toBe(0)
     expect(started.stdout).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
-    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.babavoss\/bin\/baba, from the project's directory; /)
+    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.baba\/\.state\/bin\/baba, from the project's directory; /)
     // Where the command was put is no part of it: the answer names the command.
     expect(started.stdout).not.toContain("is now a command")
 
@@ -424,18 +424,18 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const address = /http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0]
 
     expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
-    expect(existsSync(join(baba, ".babavoss"))).toBe(false)
+    expect(existsSync(join(project, ".babavoss"))).toBe(false)
 
     // The shell lists the surface at / with what it says it is for, and offers to open it, to the agent and to the person.
-    const word = join(project, ".babavoss/bin/baba")
+    const word = join(project, ".baba/.state/bin/baba")
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
     expect(started.stdout).toContain('"desk"\t"The greeting in use, and one proposed in its place. Use when the greeting is read or changed."')
     // Two surfaces, one open action: its argument is the table's name column.
-    expect(started.stdout).toContain("actions: .babavoss/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
+    expect(started.stdout).toContain("actions: .baba/.state/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
 
     // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
-    const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
+    const endpoint = JSON.parse(readFileSync(join(project, ".baba/.state/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
     const person = (path: string, handle: string, args: Record<string, string>) =>
       fetch(`http://127.0.0.1:${endpoint.port}${path}`, {
         method: "POST",
@@ -478,7 +478,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call(tab).stdout).toContain('greeting: "hello"')
 
     // The tab's own path offers its actions, the command once and a line each, an input as what it means.
-    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   stands beside the greeting in use until accepted or declined`)
+    expect(call(tab).stdout).toContain(`actions: .baba/.state/bin/baba ${tab} ACTION name=value…\n  propose text=line   stands beside the greeting in use until accepted or declined`)
 
     // The page holds the surface's component in its tab.
     // At its bare address: no link, no key, no cookie.
@@ -517,7 +517,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
       expect(again).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
       expect(again).toContain(`${tab} "Greeting" (tab `)
-      expect(again).toContain(`actions: .babavoss/bin/baba ${tab} ACTION`)
+      expect(again).toContain(`actions: .baba/.state/bin/baba ${tab} ACTION`)
       expect(hook("SessionStart", { source: "compact" })).toMatchObject({ status: 0, stdout: "" })
       hook("UserPromptSubmit")
       // The same present a start gives at the same moment.
@@ -566,7 +566,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
 test("in dev mode the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
   const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "", BABAVOSS_DEV: "1" }
-  const word = join(project, ".babavoss/bin/baba")
+  const word = join(project, ".baba/.state/bin/baba")
   const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
   const code = join(baba, "surfaces/by-hand/src/surface.ts")
   const missing = join(baba, "surfaces/by-hand/src/later.ts")

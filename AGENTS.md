@@ -50,7 +50,7 @@ site/                       babavoss.org as it is served, no build: index.html, 
 .claude/  .agents/  .codex/ provisioned from .baba/, each harness the same way: baba's skill in .claude/skills/baba and .agents/skills/baba,
                             and the framework's hook among this repository's own in .claude/settings.json and .codex/hooks.json
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
-.babavoss/                  what sessions here write; ignored by git
+.baba/.state/               what sessions here write; ignored by git
 ```
 
 A project that uses it:
@@ -60,11 +60,12 @@ A project that uses it:
   surfaces/NAME/            a surface: src/surface.ts, ui/index.tsx, spec/
   baba.config.ts            which harnesses are made aware, each by its adapter's name, with enable and the adapter's options; `baba init` writes it from the harnesses it is given
   .root/                    generated from the surfaces: one module that names each, loaded on its own, and the shell's page with each one's component
+  .state/                   what the root's sessions write, ignored by git: each tab's state and log, the command, and backups/, each of the
+                            person's files below as it was before baba changed it
 .claude/skills/baba/        generated: baba's SKILL.md, for Claude Code
 .claude/settings.json       the person's, with the framework's hook for each of Claude Code's events among theirs
 .agents/skills/baba/        generated: baba's SKILL.md, for Codex and the rest
 .codex/hooks.json           the person's, with the framework's hook for each of Codex's events among theirs; Codex asks the person to review it
-.babavoss/                  what the root's sessions write; backups/, each of the person's files above as it was before baba changed it
 ```
 
 ## Code

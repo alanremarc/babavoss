@@ -22,6 +22,8 @@ A harness is set up by one method: baba's skill as a file, `.claude/skills/baba/
 - The hook's command is one for both harnesses but for the name: it finds the nearest `.baba/` up from the session's project.
 - `site/llms.txt` has the installing agent name the harness it runs in; the README names both commands. An adapter has a `title`, what the person calls its harness.
 
+- **Breaking: what sessions write is in `.baba/.state/`,** not `.babavoss/` beside `.baba/`: each tab's state and log, the archive of closed tabs, the backups, and the command, now `.baba/.state/bin/baba`, run from the project's directory as before. The folder ignores itself, so a project's `.gitignore` needs no line for it. An existing `.babavoss/` is moved there once, by the first provision or session's start after the update; remove `.babavoss` from the project's `.gitignore`. A root run with no `.baba/` still keeps its state in `.babavoss/` beside it, and the person's settings stay in `~/.babavoss/settings.json`. The client's `VERSION` is 21 and replaces itself.
+
 Nothing in a project's surfaces needs to change. After taking this release, `bun install` in `.baba/` provisions: `.claude/skills/baba` becomes a folder with the skill, baba's hooks are added to `.claude/settings.json`, and both are committed with the project. A `.baba/` made before has no `harnesses` in its configuration, or no configuration, and keeps both set up; to withdraw one, give it `enable: false` in `.baba/baba.config.ts` and run `bun run baba provision` there. A Claude Code session started before the update keeps the hooks it loaded: start a new one.
 
 ## 0.77.0

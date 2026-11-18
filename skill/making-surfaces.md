@@ -1,13 +1,13 @@
 # Making surfaces
 
-How a surface is made and changed. Read it whole before the first. Run `bun` commands from `.baba/`, and the shell's command, `.babavoss/bin/baba`, from the project's directory.
+How a surface is made and changed. Read it whole before the first. Run `bun` commands from `.baba/`, and the shell's command, `.baba/.state/bin/baba`, from the project's directory.
 
 ## The loop
 
 1. `bun run baba new NAME` makes `surfaces/NAME/` from the template: a small surface that runs as it is, its page and its spec. NAME is lowercase kebab-case. Agree with the person what it is for and what they see in its tab; what they want of the agent that works it is theirs to say, never the surface's.
 2. Change it into the surface wanted. `bun test surfaces/NAME` runs its specs; `bun check` checks its types.
-3. Make the shell run it. The shell runs the code it started with; `/` says `code: changed on disk…` until it restarts. `.babavoss/bin/baba restart` restarts it, at the same address with every tab's state kept; with work under way it drains, then answers with an instance that `follow ID` waits for. Or set `dev: true` in `.baba/baba.config.ts` (below) while surfaces are being made: then any change restarts it at once, cutting what runs.
-4. Open it, `.babavoss/bin/baba / open surface=NAME`, and give the person the page's address if they do not have it. Build it a step at a time, each ending in something they can see in its tab.
+3. Make the shell run it. The shell runs the code it started with; `/` says `code: changed on disk…` until it restarts. `.baba/.state/bin/baba restart` restarts it, at the same address with every tab's state kept; with work under way it drains, then answers with an instance that `follow ID` waits for. Or set `dev: true` in `.baba/baba.config.ts` (below) while surfaces are being made: then any change restarts it at once, cutting what runs.
+4. Open it, `.baba/.state/bin/baba / open surface=NAME`, and give the person the page's address if they do not have it. Build it a step at a time, each ending in something they can see in its tab.
 
 ```text
 surfaces/NAME/
@@ -201,7 +201,7 @@ What a surface needs beyond them it keeps in its own folder.
 
 ## How the agent works it
 
-The agent reads views and calls actions one at a time, or many in one program: `.babavoss/bin/baba -e - <<'EOF'` with `await read(path)`, a view as data, each action in it as `{ handle, args, inputs }`; `await call(path, handle, { name: value })`, which throws on a refusal; and `print(…)`. So give rows the values a program filters by, as `status`, and their `at`, and a batch needs no reading of each row.
+The agent reads views and calls actions one at a time, or many in one program: `.baba/.state/bin/baba -e - <<'EOF'` with `await read(path)`, a view as data, each action in it as `{ handle, args, inputs }`; `await call(path, handle, { name: value })`, which throws on a refusal; and `print(…)`. So give rows the values a program filters by, as `status`, and their `at`, and a batch needs no reading of each row.
 
 ## Configuration
 
@@ -215,7 +215,7 @@ export default config({
 })
 ```
 
-`title` names the root on the page and at `/`; the project's directory by default. `dev: true` restarts the shell at once whenever its code changes; absent or false, it runs the code it started with until restarted; `BABAVOSS_DEV=1` or `0` overrides it. Each harness has a section: `enable: false` takes back what was written for it at the next `bun run baba provision`; `events` lists the hook's events that tell anything, all by default; Codex's `network: true` opens its sandbox's network so the command reaches the shell. Each harness is set up the same way: baba's skill, in `.claude/skills/baba` or `.agents/skills/baba`, and its hooks among yours in the harness's own project file, `.claude/settings.json` or `.codex/hooks.json`; that file as it was is copied to `.babavoss/backups/` before a change, and Codex asks the person to trust the hooks once in `/hooks`. Installing provisions; `bun run baba provision` does it again.
+`title` names the root on the page and at `/`; the project's directory by default. `dev: true` restarts the shell at once whenever its code changes; absent or false, it runs the code it started with until restarted; `BABAVOSS_DEV=1` or `0` overrides it. Each harness has a section: `enable: false` takes back what was written for it at the next `bun run baba provision`; `events` lists the hook's events that tell anything, all by default; Codex's `network: true` opens its sandbox's network so the command reaches the shell. Each harness is set up the same way: baba's skill, in `.claude/skills/baba` or `.agents/skills/baba`, and its hooks among yours in the harness's own project file, `.claude/settings.json` or `.codex/hooks.json`; that file as it was is copied to `.baba/.state/backups/` before a change, and Codex asks the person to trust the hooks once in `/hooks`. Installing provisions; `bun run baba provision` does it again.
 
 ## Updating
 

@@ -240,7 +240,7 @@ describe("every change is preceded by a copy", () => {
     const before = text()
     const done = editHooks(project, file, OURS, at(5))
 
-    expect(done).toEqual({ changed: true, backup: ".babavoss/backups/.claude__settings.json.20261118T120005Z" })
+    expect(done).toEqual({ changed: true, backup: ".baba/.state/backups/.claude__settings.json.20261118T120005Z" })
     expect(readFileSync(join(project, done.backup!), "utf8")).toBe(before)
     expect(statSync(join(project, done.backup!)).mode & 0o777).toBe(0o600)
     // The file keeps its own mode too.
@@ -269,8 +269,8 @@ describe("every change is preceded by a copy", () => {
 
     const others = backup(project, other, at(0))
 
-    expect(backup(project, file, at(1))).toBe(".babavoss/backups/.claude__settings.json.20261118T120001Z")
-    expect(backup(project, file, at(1))).toBe(".babavoss/backups/.claude__settings.json.20261118T120001Z.1")
+    expect(backup(project, file, at(1))).toBe(".baba/.state/backups/.claude__settings.json.20261118T120001Z")
+    expect(backup(project, file, at(1))).toBe(".baba/.state/backups/.claude__settings.json.20261118T120001Z.1")
     for (let second = 2; second < 20; second++) backup(project, file, at(second))
 
     const kept = backups().filter((name) => name.startsWith(".claude__"))

@@ -17,7 +17,7 @@ import { sourceOf, type Adapter, type Harness, type HarnessEvent, type HookEvent
 import { install, uninstall, type Method } from "./setup.ts"
 
 /** A Bash command that is the root's word: the command a project's root names for itself, or `bun run baba`. */
-export const WORD = /(^|[\s;&|(/])(\.babavoss\/bin\/(baba|bv)|bv)(\s|$)|\bbun run baba\b/
+export const WORD = /(^|[\s;&|(/])(\.baba\/\.state\/bin\/(baba|bv)|bv)(\s|$)|\bbun run baba\b/
 
 type O = { [key: string]: Json | undefined }
 const obj = (value: Json | undefined): O => (value && typeof value === "object" && !Array.isArray(value) ? value : {})

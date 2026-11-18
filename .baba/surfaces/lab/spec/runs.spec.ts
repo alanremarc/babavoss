@@ -54,7 +54,7 @@ function checkout() {
   rmSync(join(dir, "gone.ts"))
   put(dir, "new/added.ts", "untracked\n")
   put(dir, "node_modules/dep/index.js", "ignored\n")
-  put(dir, ".babavoss/sessions/s/baba/model.json", "{}\n")
+  put(dir, ".baba/.state/sessions/s/baba/model.json", "{}\n")
   put(dir, ".baba/surfaces/lab/src/new.ts", "the lab's, uncommitted\n")
   mkdirSync(join(dir, "nested"))
   git(join(dir, "nested"), "init", "-q")
@@ -78,7 +78,7 @@ test("the copy is the checkout as it is now: its commit, and each path that diff
   ])
   expect(existsSync(join(project, "gone.ts"))).toBe(false)
   expect(read(".baba/surfaces/queue/src/surface.ts")).toBe("// the queue\n")
-  expect(["node_modules", ".babavoss", "nested", ".baba/surfaces/lab"].filter((path) => existsSync(join(project, path)))).toEqual([])
+  expect(["node_modules", ".baba/.state", "nested", ".baba/surfaces/lab"].filter((path) => existsSync(join(project, path)))).toEqual([])
   // The lab is left out without the copy's git calling it deleted.
   expect(git(project, "status", "--short").split("\n").sort()).toEqual([" D gone.ts", " M changed.ts", " M staged.ts", "?? new/"])
 })

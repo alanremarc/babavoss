@@ -10,10 +10,10 @@
 // a stop ends it, the session's end leaves it unknown; a stop and a session's end add no context and never keep the agent
 // from stopping. Nothing here knows a harness: its adapter reads the hook's input as the framework's moment, and prints what
 // is told as the harness takes it (harness/).
-import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { stateOf } from "./provision.ts"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, save, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
 import { HARNESS_HEADER, type TurnEvent } from "./runtime/turn.ts"
@@ -45,8 +45,8 @@ const boundaryFile = (session: string) => join(dirname(registryFile(session)), "
 const ROOT = fileURLToPath(new URL("../shell/scripts/open.ts", import.meta.url))
 const WORDS = fileURLToPath(new URL("../../skill/SKILL.md", import.meta.url))
 
-/** Where the roots of a .baba/ keep what their sessions write: beside it, or in the person's home's own place. */
-export const homeOf = (baba: string) => join(dirname(baba) === realpathSync(homedir()) ? homedir() : dirname(baba), ".babavoss")
+/** Where the roots of a .baba/ keep what their sessions write: in it, .baba/.state. */
+export const homeOf = (baba: string) => stateOf(baba)
 
 /** The endpoint of an open root's runtime; undefined where it is asleep. */
 const endpointOf = (root: OpenRoot) => {

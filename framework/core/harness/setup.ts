@@ -1,7 +1,7 @@
 // How a harness is set up in a project, the one method there is: a skill file of baba's own, and baba's hooks among the
 // person's in the harness's own project file. An adapter declares where and which (`Method`), and `install` and `uninstall`
 // do it the same way for each. The person's files are theirs, so every write to one goes through `replace`: the file as it
-// was is copied to .babavoss/backups first, the new text is checked before it stands in the old one's place, and it is
+// was is copied to .baba/.state/backups first, the new text is checked before it stands in the old one's place, and it is
 // swapped in whole, so the file is never half-written. `editHooks` changes nothing but baba's own hook groups, told from
 // the person's by the command they run, and proves it before writing: what is left with baba's taken out is what was there.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -16,7 +16,7 @@ const BIN = "/.baba/node_modules/babavoss/bin/baba.ts"
 /** How baba's hooks are told from the person's: by the command they run. */
 export const HOOK = `${BIN}" hook`
 /** Where the person's files are copied before baba changes them, in the project; each file's newest few are kept. */
-export const BACKUPS = ".babavoss/backups"
+export const BACKUPS = ".baba/.state/backups"
 const KEPT = 10
 
 /**

@@ -10,12 +10,12 @@ const ok = (reason = "as asked"): Verdict => ({ pass: true, reason })
 const no = (reason: string): Verdict => ({ pass: false, reason })
 
 /** A run of the surfaces' command, however it is named, or of `baba`. */
-const WORDED = /(\.babavoss\/bin\/(baba|bv)|\bbv\b|bun run baba|\bbaba (new|start|provision)\b)/
+const WORDED = /(\.baba\/\.state\/bin\/(baba|bv)|\bbv\b|bun run baba|\bbaba (new|start|provision)\b)/
 /** The calls that used the surfaces: their command, their skill, or a read of their code or the root's state. */
 const usedSurfaces = (calls: Call[] = []) =>
   calls.filter(
     ({ tool, input }) =>
-      (tool === "Bash" && WORDED.test(input)) || (tool === "Skill" && /\bbaba\b/.test(input)) || (tool !== "Bash" && /\.baba\/|\.babavoss\//.test(input)) || (tool === "Bash" && /\.baba\//.test(input)),
+      (tool === "Bash" && WORDED.test(input)) || (tool === "Skill" && /\bbaba\b/.test(input)) || (tool !== "Bash" && /\.baba\/|\.baba\/\.state\//.test(input)) || (tool === "Bash" && /\.baba\//.test(input)),
   )
 /** The calls that made or changed a surface. */
 const madeSurface = (calls: Call[] = []) =>

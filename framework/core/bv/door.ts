@@ -1,5 +1,5 @@
 // A root's one entry: serve a session, or register it and pass its request to the standalone client.
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
@@ -7,7 +7,7 @@ import type { RootDefinition } from "../root.ts"
 import { startRuntime, type RuntimeOptions } from "../runtime/runtime.ts"
 import { checkConfig, loadConfig } from "../config.ts"
 import { ADAPTERS } from "../harness/index.ts"
-import { findBaba } from "../provision.ts"
+import { findBaba, stateOf } from "../provision.ts"
 import { latestRelease, updateNote } from "../update.ts"
 import { recordSessionCwd, sessionCwd, stateDir } from "../state/state.ts"
 import { bv, VERSION, load, save, sessionArgs, registryFile, type OpenRoot } from "./bv.ts"
@@ -19,10 +19,12 @@ export async function main(root: RootDefinition, serve: Pick<RuntimeOptions, "de
   // A root is of a .baba/ directory and keeps what it writes beside it: in the person's home, or in a project. One run
   // from elsewhere keeps it beside the .baba/ of the directory the door was run in, or in that directory where there is none.
   const at = directory.lastIndexOf("/.baba/")
-  const beside = at < 0 ? dirname(findBaba(process.cwd()) ?? join(process.cwd(), ".baba")) : directory.slice(0, at)
+  const baba = at < 0 ? findBaba(process.cwd()) : directory.slice(0, at + "/.baba".length)
+  const beside = baba ? dirname(baba) : process.cwd()
   const project = beside === realpathSync(homedir()) ? undefined : beside
 
-  process.env.BABAVOSS_HOME ??= join(project ?? homedir(), ".babavoss")
+  // In the .baba/ itself, .baba/.state; where there is none, beside the directory the door was run in.
+  process.env.BABAVOSS_HOME ??= baba ? stateOf(baba) : join(project ?? homedir(), ".babavoss")
 
   if (args[0] === "--serve") {
     // A runtime that restarts wakes its successor as it was woken itself, logging where it logs.
@@ -58,7 +60,7 @@ export async function main(root: RootDefinition, serve: Pick<RuntimeOptions, "de
       roots[root.name] = { ...roots[root.name], directory: sessionCwd(state)!, entry: resolve(process.argv[1]!), state }
       save(file, roots)
     } catch {
-      throw new Error("cannot register the root under ~/.babavoss; allow writing the registry (under a sandbox, in the harness settings)")
+      throw new Error("cannot register the root in its state folder; allow writing the registry (under a sandbox, in the harness settings)")
     }
 
     const bin = process.env.BABAVOSS_BIN ?? (project ? join(process.env.BABAVOSS_HOME, "bin") : dirname(process.execPath))
@@ -97,7 +99,12 @@ export async function main(root: RootDefinition, serve: Pick<RuntimeOptions, "de
 
       if (command === `${client} ${root.name}` && (!existing || ours(existing))) {
         // Said by the answer that follows, which names the command; where it was put is not the agent's to know.
-        if (!ours(word)) symlinkSync(target, word)
+        if (!ours(word)) {
+          // In the state folder every name is baba's: a link that no longer leads to the client, as one made before the
+          // folder was moved, is replaced. There it names the client beside it, so it holds wherever the folder is.
+          if (local && lstatSync(word, { throwIfNoEntry: false })?.isSymbolicLink()) rmSync(word)
+          symlinkSync(local ? "bv" : target, word)
+        }
         command = called
       }
     } catch {}
