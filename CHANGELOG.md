@@ -11,6 +11,12 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.82.0
+
+**Every surface gives an icon.** The skill says a surface's page exports `icon`, its mark on the rail, its tabs and home, a `lucide-react` icon chosen for what the surface is, where it named the export as optional; the template a new surface starts from exports one, a placeholder to change. A surface without one is still drawn with a dot.
+
+A surface whose `ui/index.tsx` exports no `icon`: add one, `export const icon = <BookOpenIcon aria-hidden />`, imported from `lucide-react`.
+
 ## 0.81.0
 
 **A desktop read no longer slows with the rows a tab lists, and a client's probe builds no view.** Reading `/` asked each tab's surface for its view at `/` once for every row it lists, to find the rows' actions: a tab of 300 rows was asked 301 times, on every read of `/` and after every change. It is asked once; the rows' actions and a broken tab are said as before. The command's probe for whether its runtime is up is answered `204` with the service's token and no body, where it was answered the whole of `/`: a runtime busy with large tabs is no longer taken for one that is down.

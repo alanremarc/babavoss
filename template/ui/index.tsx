@@ -1,12 +1,16 @@
 // The surface's page, shown in its tab: what the surface says, live, and the same actions the agent is offered. The
 // shell gives the tab a drawer with its menu, every action with a form of its declared inputs, its places and its log,
-// so the page is its content alone; `icon` and `drawers`, where exported, are the tab's icon and a page's own form for
-// an action. It is drawn with the kit and the theme's tokens, so it follows the person's theme, mode, text size and
-// motion unasked; a page that moves by script or has a sidebar reads `useConventions()` for the rest.
+// so the page is its content alone. `icon` is the surface's mark on the rail, its tabs and home: change it to one for
+// what the surface is. `drawers`, where exported, is a page's own form for an action. It is drawn with the kit and the
+// theme's tokens, so it follows the person's theme, mode, text size and motion unasked; a page that moves by script or
+// has a sidebar reads `useConventions()` for the rest.
 import { useState } from "react"
+import { HandIcon } from "lucide-react"
 import type { Handle } from "babavoss/core/index.ts"
 import { Button } from "babavoss/kit/index.ts"
 import { useLive, useTab } from "babavoss/shell/ui/index.tsx"
+
+export const icon = <HandIcon aria-hidden />
 
 type Root = { greeting: string; proposed?: string; accept?: Handle; decline?: Handle }
 

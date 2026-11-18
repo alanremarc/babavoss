@@ -18,7 +18,7 @@ How a surface is made and changed. Read it whole before the first. Run `bun` com
 ```text
 surfaces/NAME/
   src/surface.ts   the surface, its default export
-  ui/index.tsx     its page, the default export a component shown in its tab; `icon` and `drawers` may be exported too
+  ui/index.tsx     its page, the default export a component shown in its tab, and `icon`, its mark; `drawers` may be exported too
   spec/            its rules, as stories
 ```
 
@@ -172,7 +172,8 @@ export default function Books() {
 - A view changed by anyone replaces the one shown, in place. The tab is shown once its first reads answer, so a page draws no loading state of its own.
 - `call(path, handle, args)` answers `{ outcome: "written", view }` or `{ outcome: "refused", reason }`; show the reason.
 - Keep what is selected in the tab's route, never in component state: `route` is the path within the tab and `navigate(route)` moves it. A route the surface does not know falls back to something sensible, never an error.
-- The shell gives every tab a drawer with its menu: the surface's actions, its places, a search, and its activity. A page does not repeat it. An action with inputs opens a form made from the declared inputs; `export const drawers = { add: AddBook }` replaces it for that action, a component given `{ handle, path, view, submit, close }`. `export const icon = <BookIcon />` is the tab's icon.
+- The shell gives every tab a drawer with its menu: the surface's actions, its places, a search, and its activity. A page does not repeat it. An action with inputs opens a form made from the declared inputs; `export const drawers = { add: AddBook }` replaces it for that action, a component given `{ handle, path, view, submit, close }`.
+- Every surface exports `icon`, its mark on the rail, its tabs and home: `export const icon = <BookOpenIcon aria-hidden />`, from `lucide-react`, which comes with the framework, chosen for what the surface is. The template's is a placeholder to change; without one the shell draws a dot.
 - Whose move it is is the shell's: a page draws no busy indicator or end-of-move button.
 
 **Looks.** Build with the kit, `babavoss/kit/index.ts`, shadcn's primitives with one layer of opinions, then the project's own shadcn components (`bunx shadcn@latest add NAME` in `.baba/`, imported as `@/components/ui/NAME`). Never hard-code a colour, a font or a size where a token fits: the tokens follow the person's theme and mode.
