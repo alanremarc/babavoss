@@ -83,6 +83,8 @@ export interface Adapter<O extends { events: string[] } = { events: string[] }> 
   name: string
   /** What the person calls it, as Claude Code. */
   title: string
+  /** Where its skill baba is in a project, a folder from the project's directory. */
+  skill: string
   /** The options it is set up with where the configuration does not say: every event among them. */
   defaults: O
   /** The harness's hook events the framework is told at; an option `events` names some of them. */

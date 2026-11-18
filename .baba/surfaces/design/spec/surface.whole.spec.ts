@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { beforeAll, expect, test } from "bun:test"
 import { story, whole, type Json } from "babavoss/core/index.ts"
-import { TELLS } from "../../../../framework/core/hook.ts"
+import { BESIDE, TELLS } from "../../../../framework/core/hook.ts"
 import { QUIET_LINE } from "../../../../framework/core/runtime/turn.ts"
 import design, { type Model } from "../src/surface.ts"
 import { play, PLAYS, SESSION, swept, WORD, type Page, type Play } from "../src/play.ts"
@@ -62,7 +62,8 @@ test("/ lists the scenarios with what each is about, their sizes and an at each,
 
   // The SessionStart hook gives baba's words, then the shell's answer to its opening, which names the framework's version.
   const framework = new URL("./", import.meta.resolve("babavoss/package.json"))
-  const skill = readFileSync(new URL("skill/SKILL.md", framework), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim()
+  // Up to the manual, which the hook names by its place in the harness's skill folder.
+  const skill = readFileSync(new URL("skill/SKILL.md", framework), "utf8").replace(/^---\n[\s\S]*?\n---\n+/, "").trim().split(BESIDE)[0]!
   const { version } = JSON.parse(readFileSync(new URL("package.json", framework), "utf8")) as { version: string }
   const start = (agent.sees("/scenarios/start/1") as { tellings: Telling[] }).tellings[0]!
 

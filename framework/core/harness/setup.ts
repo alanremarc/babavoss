@@ -9,8 +9,12 @@ import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { SetUp } from "./harness.ts"
 
-/** The package's own skill baba, the words every harness is given. */
-export const SKILL = fileURLToPath(new URL("../../../skill/SKILL.md", import.meta.url))
+/** The package's own skill baba: the folder a harness is given whole, SKILL.md and what it refers to beside it. */
+export const SKILL_DIR = fileURLToPath(new URL("../../../skill", import.meta.url))
+/** Its words, the ones every session is given. */
+export const SKILL = join(SKILL_DIR, "SKILL.md")
+/** The files of the skill, SKILL.md last: what it refers to is there before it is, and gone after. */
+export const skillFiles = (): string[] => [...readdirSync(SKILL_DIR).filter((name) => name.endsWith(".md") && name !== "SKILL.md").sort(), "SKILL.md"]
 /** The package's command, from a project's directory. */
 const BIN = "/.baba/node_modules/babavoss/bin/baba.ts"
 /** How baba's hooks are told from the person's: by the command they run. */
@@ -244,11 +248,11 @@ export function editHooks(project: string, file: string, ours: Record<string, Gr
   return replace(project, file, !ours && !Object.keys(next).length ? undefined : write(form, next), check, now)
 }
 
-/** How a harness is set up in a project: its skill file, and the file its hooks are in, each from the project. */
+/** How a harness is set up in a project: its skill's folder, and the file its hooks are in, each from the project. */
 export type Method = {
   /** The harness's name, as `baba hook NAME` takes it. */
   name: string
-  /** Baba's skill, a file of baba's own: SKILL.md in a folder named baba. */
+  /** Baba's skill, a folder of baba's own named baba: SKILL.md, and the documents it refers to beside it. */
   skill: string
   /** The person's file the harness reads a project's hooks from. */
   hooks: string
@@ -291,15 +295,15 @@ function cleared(dir: string, method: Method): boolean {
 
 const backedUp = (file: string, done: Replaced): string[] => (done.backup ? [`${file} as it was is kept at ${done.backup}`] : [])
 
-/** Sets a harness up in `project` by `method`: baba's skill written where it differs, and baba's hooks set in the person's file. */
+/** Sets a harness up in `project` by `method`: baba's skill written whole where it differs, and baba's hooks set in the person's file. */
 export function install(project: string, method: Method): SetUp {
-  const dir = join(project, dirname(method.skill))
+  const dir = join(project, method.skill)
   const paths: string[] = []
   const push = (path: string) => paths.includes(path) || paths.push(path)
 
   if (!skillIsOurs(dir, method.legacy)) throw new Unsafe(`${dir} is not baba's: move it, and provision again`)
-  if (cleared(dir, method)) push(dirname(method.skill))
-  if (written(join(project, method.skill), readFileSync(SKILL, "utf8"))) push(dirname(method.skill))
+  if (cleared(dir, method)) push(method.skill)
+  for (const name of skillFiles()) if (written(join(dir, name), readFileSync(join(SKILL_DIR, name), "utf8"))) push(method.skill)
 
   const command = hookCommand(method.name)
   const ours = Object.fromEntries(
@@ -314,16 +318,17 @@ export function install(project: string, method: Method): SetUp {
   return { paths, ...(said.length && { said: said.join("\n") }) }
 }
 
-/** Takes out of `project` what `install` put there by `method`, and nothing else: the skill where it is baba's, and baba's hooks. */
+/** Takes out of `project` what `install` put there by `method`, and nothing else: the skill's files where it is baba's, and baba's hooks. */
 export function uninstall(project: string, method: Method): SetUp {
-  const dir = join(project, dirname(method.skill))
+  const dir = join(project, method.skill)
   const paths: string[] = []
 
   if (lstatSync(dir, { throwIfNoEntry: false }) && skillIsOurs(dir, method.legacy)) {
     const stale = cleared(dir, method)
+    // The skill's own files, and its folder where that leaves it empty: what else the person keeps there is theirs.
+    const gone = skillFiles().filter((name) => removed(join(dir, name), project))
 
-    // The skill alone, and its folder where that leaves it empty: what else the person keeps there is theirs.
-    if (removed(join(project, method.skill), project) || stale) paths.push(dirname(method.skill))
+    if (gone.length || stale) paths.push(method.skill)
   }
 
   const done = editHooks(project, join(project, method.hooks), undefined)

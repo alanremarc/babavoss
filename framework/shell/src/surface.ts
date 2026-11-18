@@ -55,7 +55,7 @@ export type ShellEvent = { kind: "tab"; n: number; event: { kind: string }; t?: 
 export type ShellCommand = { n: number; surface: string; command: unknown; actor?: string; heard?: string }
 
 /** What the desktop says when there is no surface to open: how one is made. */
-export const EMPTY = "this project has no surfaces of its own yet, only the shell's settings; one is made with `bun run baba new NAME` in .baba/, as node_modules/babavoss/skill/making-surfaces.md there says"
+export const EMPTY = "this project has no surfaces of its own yet, only the shell's settings; one is made with `bun run baba new NAME` in .baba/, as making-surfaces.md in the skill baba says"
 /** What the desktop says where there is no .baba/. */
 export const MISSING = "there is no .baba/ in this directory or above: make one with `baba init`"
 /** The name a tab of state kept from before gives the picker, which the shell no longer has: its desktop lists the surfaces. */

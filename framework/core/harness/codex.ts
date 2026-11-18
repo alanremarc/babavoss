@@ -20,7 +20,7 @@ export type CodexOptions = { events: (typeof CODEX_EVENTS)[number][]; network: b
 
 const CONFIG = ".codex/config.toml"
 /** How Codex is set up in a project. A session's end has a second by default, three at most; the hook tells the shell the turn is unknown. */
-const METHOD: Method = { name: "codex", skill: ".agents/skills/baba/SKILL.md", hooks: ".codex/hooks.json", events: CODEX_EVENTS, timeouts: { SessionEnd: 3 } }
+const METHOD: Method = { name: "codex", skill: ".agents/skills/baba", hooks: ".codex/hooks.json", events: CODEX_EVENTS, timeouts: { SessionEnd: 3 } }
 /** The lines baba writes into the person's config.toml end with this, so it can take them out again and nothing else. */
 const MARK = "# babavoss: the shell's command reaches its runtime over loopback"
 const TABLE = /^\[sandbox_workspace_write\]\s*(#.*)?$/
@@ -353,6 +353,7 @@ function spawnCodex(options: Start): Session {
 export const codex: Adapter<CodexOptions> = {
   name: "codex",
   title: "Codex",
+  skill: METHOD.skill,
   defaults: { events: [...CODEX_EVENTS], network: false },
   events: CODEX_EVENTS,
   provision(project, options): SetUp {
