@@ -5,7 +5,7 @@ import { fakeHarness, story, type HarnessEvent, type Json } from "babavoss/core/
 import type { Heard, Made, Runs } from "../src/runs.ts"
 import { END_MOVE, lab, type Model } from "../src/surface.ts"
 
-const DIR = "/repo/.babavoss/lab/runs/r1"
+const DIR = "/repo/.baba/.state/lab/runs/r1"
 const MADE: Omit<Made, "dir"> = {
   project: `${DIR}/project`,
   home: `${DIR}/home`,
@@ -170,7 +170,7 @@ test("while a turn runs the root stands still, so a wait ends with the turn; the
   harness.emit(
     { kind: "injected", event: "SessionStart", text: present },
     replay("What surfaces are there?"),
-    { kind: "call", id: "t1", tool: "Bash", input: ".babavoss/bin/baba /", word: true, request: request("m1") },
+    { kind: "call", id: "t1", tool: "Bash", input: ".baba/.state/bin/baba /", word: true, request: request("m1") },
     { kind: "result", id: "t1", text: answer },
     { kind: "injected", event: "PostToolUse", text: "What changed: tabs.1.title" }
   )
@@ -195,7 +195,7 @@ test("while a turn runs the root stands still, so a wait ends with the turn; the
   ])
   expect(agent.sees(rows[0]!.at)).toMatchObject({ kind: "hook", title: "SessionStart", text: present, size: present.length })
   expect(agent.sees(rows[1]!.at)).toMatchObject({ kind: "message", title: "the developing agent", text: "What surfaces are there?" })
-  expect(agent.sees(rows[2]!.at)).toMatchObject({ kind: "word", call: ".babavoss/bin/baba /", text: answer, pending: false, context: 10_010, growth: 10_010 })
+  expect(agent.sees(rows[2]!.at)).toMatchObject({ kind: "word", call: ".baba/.state/bin/baba /", text: answer, pending: false, context: 10_010, growth: 10_010 })
   expect(agent.sees(rows[4]!.at)).toMatchObject({ kind: "reply", context: 10_510, growth: 500 })
   expect(agent.sees(rows[5]!.at)).toMatchObject({
     kind: "turn",
@@ -334,9 +334,9 @@ const KEPT = {
   from: "",
   since: 0,
   session: "s",
-  dir: "/repo/.babavoss/lab/runs/2026-11-15T10-00-00-ab12",
-  project: "/repo/.babavoss/lab/runs/2026-11-15T10-00-00-ab12/project",
-  home: "/repo/.babavoss/lab/runs/2026-11-15T10-00-00-ab12/home",
+  dir: "/repo/.baba/.state/lab/runs/2026-11-15T10-00-00-ab12",
+  project: "/repo/.baba/.state/lab/runs/2026-11-15T10-00-00-ab12/project",
+  home: "/repo/.baba/.state/lab/runs/2026-11-15T10-00-00-ab12/home",
   checkout: { from: "/repo", commit: "fedcba9876543210", dirty: [] },
   entries: [{ i: 1, t: 50, kind: "message", title: "the developing agent", text: "hi" }],
   senders: [],

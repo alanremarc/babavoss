@@ -2,11 +2,12 @@
 // provision makes each harness the configuration enables aware, withdraws from the others and generates the root, and the
 // hook makes a session aware.
 import { spawnSync } from "node:child_process"
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, expect, test } from "bun:test"
+import { hookCommand } from "../../framework/core/harness/setup.ts"
 import { VERSION } from "../../framework/core/update.ts"
 import { poll } from "../support/poll.ts"
 
@@ -14,7 +15,6 @@ const checkout = fileURLToPath(new URL("../..", import.meta.url))
 const project = realpathSync(mkdtempSync(join(tmpdir(), "baba-")))
 const baba = join(project, ".baba")
 const FOLDERS = [".claude/skills", ".agents/skills"]
-const LINK = "../../.baba/node_modules/babavoss/plugin/claude"
 const run = (args: string[], cwd = baba) => {
   const result = spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd, encoding: "utf8" })
 
@@ -24,7 +24,14 @@ const skill = (folder: string, name: string) => join(project, folder, name, "SKI
 
 // The framework is this checkout, as files: a release is named the same way, by its tag.
 beforeAll(() => {
-  const made = run(["init", "--from", `file:${checkout}`], project)
+  // Without a harness named, or with one that is none, it says which there are and makes nothing.
+  for (const args of [["init"], ["init", "--from", `file:${checkout}`], ["init", "cursor"]]) {
+    expect(run(args, project)).toMatchObject({ status: 2, err: expect.stringContaining("baba init claude codex") })
+    expect(existsSync(baba)).toBe(false)
+  }
+  expect(run(["init", "cursor"], project).err).toContain("there is no harness cursor")
+
+  const made = run(["init", "claude", "codex", "--from", `file:${checkout}`], project)
 
   expect(made.status, made.err).toBe(0)
 }, 120_000)
@@ -38,12 +45,41 @@ test("init makes .baba/ as a package that names the framework and provisions whe
   expect(pack.scripts.postinstall).toBe("baba provision")
   expect(existsSync(join(baba, "node_modules/babavoss/package.json"))).toBe(true)
   for (const folder of FOLDERS) expect(readFileSync(skill(folder, "baba"), "utf8")).toBe(readFileSync(join(checkout, "skill/SKILL.md"), "utf8"))
-  // Claude Code's is the package's plugin, linked; nothing is written into the person's settings, and no configuration.
-  expect(readlinkSync(join(project, ".claude/skills/baba"))).toBe(LINK)
-  expect(existsSync(join(project, ".claude/settings.json"))).toBe(false)
-  expect(existsSync(join(baba, "baba.config.ts"))).toBe(false)
-  expect(run(["init"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
+  // Each harness is set up the same way: the skill, and baba's hook for each of its events in the harness's own project file.
+  for (const [file, name] of [[".claude/settings.json", "claude"], [".codex/hooks.json", "codex"]]) {
+    const hooks = (JSON.parse(readFileSync(join(project, file!), "utf8")) as { hooks: Record<string, { hooks: { command: string }[] }[]> }).hooks
+
+    for (const groups of Object.values(hooks)) expect(groups.map((group) => group.hooks[0]!.command)).toEqual([hookCommand(name!)])
+  }
+  // Nothing of the person's was there to keep a copy of.
+  expect(existsSync(join(project, ".baba/.state/backups"))).toBe(false)
+  // The harnesses named are the configuration's, so installing a clone sets up the same.
+  expect(readFileSync(join(baba, "baba.config.ts"), "utf8")).toContain("claude: { enable: true },\n    codex: { enable: true },")
+  expect(run(["init", "claude"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 })
+
+test("init sets up only the harness named: the other is not enabled in the configuration, and nothing of it is written", () => {
+  const one = realpathSync(mkdtempSync(join(tmpdir(), "baba-one-")))
+
+  try {
+    const made = run(["init", "--from", `file:${checkout}`, "codex"], one)
+
+    expect(made.status, made.err).toBe(0)
+    expect(made.out).toContain("set up for Codex.")
+    expect(readFileSync(join(one, ".baba/baba.config.ts"), "utf8")).toContain("claude: { enable: false },\n    codex: { enable: true },")
+    expect(existsSync(join(one, ".codex/hooks.json"))).toBe(true)
+    expect(existsSync(join(one, ".agents/skills/baba/SKILL.md"))).toBe(true)
+    expect(existsSync(join(one, ".claude"))).toBe(false)
+    // The other way round, Codex's files are not there.
+    rmSync(join(one, ".baba"), { recursive: true })
+    expect(run(["init", "claude", "--from", `file:${checkout}`], one).status).toBe(0)
+    expect(existsSync(join(one, ".claude/settings.json"))).toBe(true)
+    expect(existsSync(join(one, ".codex"))).toBe(false)
+    expect(existsSync(join(one, ".agents"))).toBe(false)
+  } finally {
+    rmSync(one, { recursive: true, force: true })
+  }
+}, 120_000)
 
 test("init leaves .baba/ ready for shadcn's CLI: components.json puts components in components/ui, imported by @/, and names a css file the page never builds", () => {
   const components = JSON.parse(readFileSync(join(baba, "components.json"), "utf8")) as { style: string; tailwind: { css: string; config: string }; aliases: Record<string, string> }
@@ -170,52 +206,62 @@ test("outside any .baba/, the command says to make one", () => {
   expect(run([])).toMatchObject({ status: 2, err: expect.stringContaining("baba new NAME") })
 })
 
-const OURS = 'bun "${CLAUDE_PROJECT_DIR}/.baba/node_modules/babavoss/bin/baba.ts" hook 2>/dev/null || true'
 const config = (text: string) => writeFileSync(join(baba, "baba.config.ts"), `import { config } from "babavoss/core/config.ts"\n\nexport default config(${text})\n`)
 
-test("provision replaces an older skill folder with the link, and takes the framework's hooks out of Claude Code's settings, the person's left as they are", () => {
-  const link = join(project, ".claude/skills/baba")
+test("provision sets Claude Code up as Codex: what an older release left, a link to the package's plugin or a copy of it, is replaced, and the person's settings are kept", () => {
   const file = join(project, ".claude/settings.json")
-  const ours = { hooks: [{ type: "command", command: OURS }] }
+  const dir = join(project, ".claude/skills/baba")
+  const older = { hooks: [{ type: "command", command: 'bun "${CLAUDE_PROJECT_DIR}/.baba/node_modules/babavoss/bin/baba.ts" hook 2>/dev/null || true' }] }
+  const ours = { hooks: [{ type: "command", command: hookCommand("claude") }] }
   const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
-  const both = { hooks: [{ type: "command", command: "echo also" }, { type: "command", command: OURS }] }
+  const words = readFileSync(join(checkout, "skill/SKILL.md"), "utf8")
 
-  // As an older release left a project: the skill as a folder, the hooks in the settings among the person's.
-  rmSync(link)
-  mkdirSync(link)
-  writeFileSync(join(link, "SKILL.md"), "---\nname: baba\ndescription: older words\n---\n\nOlder.\n")
-  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs, ours], Stop: [both], SessionEnd: [ours] }, model: "haiku" }))
-  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\n")
-  expect(readlinkSync(link)).toBe(LINK)
-  expect(readFileSync(file, "utf8")).toBe(
-    `${JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs], Stop: [{ hooks: [{ type: "command", command: "echo also" }] }] }, model: "haiku" }, null, 2)}\n`
-  )
+  // As the release before left it: a link into the package's plugin.
+  rmSync(dir, { recursive: true })
+  symlinkSync("../../.baba/node_modules/babavoss/plugin/claude", dir)
+  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\n")
+  expect(lstatSync(dir).isDirectory()).toBe(true)
+  expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe(words)
 
-  // Once there is nothing of baba's in it, the file is not written again, however it is laid out; an emptied hooks key goes.
-  const kept = '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}'
+  // As a copy of that plugin, where no link could be made: its manifest and hooks go, which Claude Code would still load.
+  mkdirSync(join(dir, ".claude-plugin"))
+  mkdirSync(join(dir, "hooks"))
+  writeFileSync(join(dir, "hooks/hooks.json"), "{}")
+  writeFileSync(join(dir, "SKILL.md"), "---\nname: baba\ndescription: older words\n---\n\nOlder.\n")
+  // And an older release's hook in the settings, among the person's: replaced by today's, theirs as they were.
+  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { PostToolUse: [theirs, older], Notification: [theirs] }, model: "haiku" }, null, 2))
 
-  writeFileSync(file, kept)
+  const provisioned = run(["provision"])
+
+  expect(provisioned.out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\n")
+  expect(provisioned.out).toMatch(/\.claude\/settings\.json as it was is kept at \.baba\/\.state\/backups\/\.claude__settings\.json\.\d{8}T\d{6}Z/)
+  expect(readdirSync(dir)).toEqual(["SKILL.md"])
+  expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe(words)
+
+  const now = JSON.parse(readFileSync(file, "utf8")) as { hooks: Record<string, unknown[]> }
+
+  expect(Object.keys(now)).toEqual(["attribution", "hooks", "model"])
+  expect(now.hooks.PostToolUse).toEqual([theirs, ours])
+  expect(now.hooks.Notification).toEqual([theirs])
+  expect(now.hooks.SessionStart).toEqual([ours])
+  // Provisioned again, nothing is written and no copy is made.
   expect(run(["provision"]).out).not.toContain(".claude/")
-  expect(readFileSync(file, "utf8")).toBe(kept)
-  writeFileSync(file, JSON.stringify({ attribution: { commit: "" }, hooks: { Stop: [ours] } }))
-  expect(run(["provision"]).status).toBe(0)
-  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ attribution: { commit: "" } })
+  expect(readdirSync(join(project, ".baba/.state/backups"))).toHaveLength(1)
 
-  // Not JSON: left alone where baba has nothing in it, and an error where it has.
+  // Settings that are not valid are not written over: it stops, says why, and the file is as it was.
   writeFileSync(file, "{ not json")
-  expect(run(["provision"]).status).toBe(0)
-  writeFileSync(file, `{ not json ${OURS}`)
-  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not JSON") })
+  expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining(".claude/settings.json is not JSON") })
+  expect(readFileSync(file, "utf8")).toBe("{ not json")
   rmSync(file)
 
   // A skill of the person's under the name is not taken.
-  rmSync(link)
-  mkdirSync(link)
-  writeFileSync(join(link, "notes.md"), "mine\n")
+  rmSync(dir, { recursive: true })
+  mkdirSync(dir)
+  writeFileSync(join(dir, "notes.md"), "mine\n")
   expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining("is not baba's") })
-  rmSync(link, { recursive: true })
+  rmSync(dir, { recursive: true })
   expect(run(["provision"]).status).toBe(0)
-  expect(lstatSync(link).isSymbolicLink()).toBe(true)
+  expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe(words)
 })
 
 test("provision writes the framework's hook into Codex's project hooks for each of its events, once, among the person's, and opens the network only where asked", () => {
@@ -235,7 +281,7 @@ test("provision writes the framework's hook into Codex's project hooks for each 
   const provisioned = run(["provision"])
 
   expect(provisioned.out).toContain("provisioned .codex/hooks.json\n")
-  expect(provisioned.out).toContain("If you use Codex: it asks you to review these hooks once")
+  expect(provisioned.out).toContain("Codex asks you to review these hooks once")
   expect(run(["provision"]).out).not.toContain(".codex/hooks.json")
   expect(hooks().Stop).toEqual([theirs, expect.objectContaining({ hooks: [expect.objectContaining({ type: "command" })] })])
   expect(hooks().PreToolUse).toEqual([theirs])
@@ -267,9 +313,9 @@ test("a harness the configuration does not enable is withdrawn, exactly what bab
   const settings = join(project, ".claude/settings.json")
   const hooks = join(project, ".codex/hooks.json")
   const theirs = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }
-  const before = () => ({ link: readlinkSync(join(project, ".claude/skills/baba")), codex: readFileSync(hooks, "utf8"), skill: existsSync(skill(".agents/skills", "baba")) })
+  const before = () => ({ claude: readFileSync(settings, "utf8"), codex: readFileSync(hooks, "utf8"), skills: FOLDERS.map((folder) => existsSync(skill(folder, "baba"))) })
 
-  writeFileSync(settings, '{ "model": "haiku" }\n')
+  writeFileSync(settings, '{\n    "model": "haiku"\n}\n')
   writeFileSync(hooks, JSON.stringify({ hooks: { Stop: [theirs] } }))
   expect(run(["provision"]).status).toBe(0)
 
@@ -287,16 +333,17 @@ test("a harness the configuration does not enable is withdrawn, exactly what bab
 
   const withdrawn = run(["provision"])
 
-  expect(withdrawn.out).toContain("withdrew .claude/skills/baba\nwithdrew .agents/skills/baba\nwithdrew .codex/hooks.json\n")
+  expect(withdrawn.out).toContain("withdrew .claude/skills/baba\nwithdrew .claude/settings.json\nwithdrew .agents/skills/baba\nwithdrew .codex/hooks.json\n")
   expect(existsSync(join(project, ".claude/skills"))).toBe(false)
   expect(existsSync(join(project, ".agents"))).toBe(false)
-  expect(readFileSync(settings, "utf8")).toBe('{ "model": "haiku" }\n')
+  // What is left is the person's alone, laid out as they had it.
+  expect(readFileSync(settings, "utf8")).toBe('{\n    "model": "haiku"\n}\n')
   expect(JSON.parse(readFileSync(hooks, "utf8"))).toEqual({ hooks: { Stop: [theirs] } })
   expect(run(["provision"]).out).toBe("provisioned .baba/.root\n")
   rmSync(join(baba, "baba.config.ts"))
   rmSync(settings)
   rmSync(hooks)
-  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\nprovisioned .agents/skills/baba\nprovisioned .codex/hooks.json\n")
+  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\nprovisioned .agents/skills/baba\nprovisioned .codex/hooks.json\n")
 })
 
 test("the hook reads the configuration as it runs: an event not listed tells nothing, nor a harness not enabled, nor a configuration that does not load, which the shell's answer says", () => {
@@ -369,7 +416,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(started.status).toBe(0)
     expect(started.stdout).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\n`)
     expect(started.stdout).toContain(`baba ${VERSION}\n`)
-    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.babavoss\/bin\/baba, from the project's directory; /)
+    expect(started.stdout).toMatch(/answered:\npage: http:\/\/127\.0\.0\.1:\d+  a new address\ncommand: \.baba\/\.state\/bin\/baba, from the project's directory; /)
     // Where the command was put is no part of it: the answer names the command.
     expect(started.stdout).not.toContain("is now a command")
 
@@ -377,18 +424,18 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     const address = /http:\/\/127\.0\.0\.1:\d+/.exec(started.stdout)![0]
 
     expect(spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start"], { cwd: baba, encoding: "utf8", env }).stdout).toContain(`page: ${address}\n`)
-    expect(existsSync(join(baba, ".babavoss"))).toBe(false)
+    expect(existsSync(join(project, ".babavoss"))).toBe(false)
 
     // The shell lists the surface at / with what it says it is for, and offers to open it, to the agent and to the person.
-    const word = join(project, ".babavoss/bin/baba")
+    const word = join(project, ".baba/.state/bin/baba")
     const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
 
     expect(started.stdout).toContain('"desk"\t"The greeting in use, and one proposed in its place. Use when the greeting is read or changed."')
     // Two surfaces, one open action: its argument is the table's name column.
-    expect(started.stdout).toContain("actions: .babavoss/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
+    expect(started.stdout).toContain("actions: .baba/.state/bin/baba / ACTION name=value…\n  open surface=NAME   in a new tab, unless its surface keeps one")
 
     // The person opens it on the page: the agent is told with their next message, and how the surface is worked with it.
-    const endpoint = JSON.parse(readFileSync(join(project, ".babavoss/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
+    const endpoint = JSON.parse(readFileSync(join(project, ".baba/.state/sessions/hooked/baba/service.json"), "utf8")) as { port: number; token: string }
     const person = (path: string, handle: string, args: Record<string, string>) =>
       fetch(`http://127.0.0.1:${endpoint.port}${path}`, {
         method: "POST",
@@ -431,7 +478,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
     expect(call(tab).stdout).toContain('greeting: "hello"')
 
     // The tab's own path offers its actions, the command once and a line each, an input as what it means.
-    expect(call(tab).stdout).toContain(`actions: .babavoss/bin/baba ${tab} ACTION name=value…\n  propose text=line   stands beside the greeting in use until accepted or declined`)
+    expect(call(tab).stdout).toContain(`actions: .baba/.state/bin/baba ${tab} ACTION name=value…\n  propose text=line   stands beside the greeting in use until accepted or declined`)
 
     // The page holds the surface's component in its tab.
     // At its bare address: no link, no key, no cookie.
@@ -470,7 +517,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
       expect(again).toStartWith(`${body}\n\nThe shell of .baba/ was started for this session, and answered:\npage: `)
       expect(again).toContain(`${tab} "Greeting" (tab `)
-      expect(again).toContain(`actions: .babavoss/bin/baba ${tab} ACTION`)
+      expect(again).toContain(`actions: .baba/.state/bin/baba ${tab} ACTION`)
       expect(hook("SessionStart", { source: "compact" })).toMatchObject({ status: 0, stdout: "" })
       hook("UserPromptSubmit")
       // The same present a start gives at the same moment.
@@ -519,7 +566,7 @@ test("a session's start gives what the skill baba gives and starts the root; a s
 
 test("in dev mode the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
   const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "", BABAVOSS_DEV: "1" }
-  const word = join(project, ".babavoss/bin/baba")
+  const word = join(project, ".baba/.state/bin/baba")
   const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
   const code = join(baba, "surfaces/by-hand/src/surface.ts")
   const missing = join(baba, "surfaces/by-hand/src/later.ts")

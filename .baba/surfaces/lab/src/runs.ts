@@ -1,4 +1,4 @@
-// Where a run lives, and what is done there besides the harness: one directory under this repository's .babavoss/lab/runs,
+// Where a run lives, and what is done there besides the harness: one directory under this repository's .baba/.state/lab/runs,
 // holding the project under test, a copy of a checkout as it is now, uncommitted changes included, with its own git and
 // dependencies, provisioned and its root started; the agent under test's home; and the run's record, written as it goes.
 // A closed run keeps only its record: its project and home are deleted, and nothing outside its directory ever is.
@@ -54,7 +54,7 @@ export interface Runs {
 
 /** This repository: the checkout the lab runs in. */
 export const REPO = realpathSync(fileURLToPath(new URL("../../../../", import.meta.url)))
-export const RUNS = join(REPO, ".babavoss/lab/runs")
+export const RUNS = join(REPO, ".baba/.state/lab/runs")
 const RECORD = "run.json"
 /** What a run's directory holds besides its record, deleted when it closes. */
 const HELD = ["project", "home"]
@@ -108,9 +108,9 @@ export function copyCheckout(from: string, project: string): Checkout {
   for (const path of LEFT_OUT) rmSync(join(project, path), { recursive: true, force: true })
 
   const changed = paths(sh(["git", "diff", "--name-only", "--no-renames", "-z", "HEAD"], from))
-  // An untracked directory listed whole is a repository of its own; .babavoss/ is what sessions write, and holds the runs.
+  // An untracked directory listed whole is a repository of its own; .baba/.state/ is what sessions write, and holds the runs.
   const untracked = paths(sh(["git", "ls-files", "-z", "--others", "--exclude-standard"], from))
-  const added = untracked.filter((path) => !path.endsWith("/") && !path.startsWith(".babavoss/"))
+  const added = untracked.filter((path) => !path.endsWith("/") && !path.startsWith(".baba/.state/"))
   const dirty = [...new Set([...changed, ...added])].filter((path) => !left(path)).sort()
 
   for (const path of dirty) {
@@ -141,8 +141,8 @@ export function install(project: string) {
 }
 
 /** Where the root under test keeps a session's state, and the environment it runs in: the agent under test's. */
-const stateOf = (project: string, session: string) => join(project, ".babavoss/sessions", session, "baba")
-const envOf = (project: string, home: string) => ({ ...sessionEnv(home), BABAVOSS_HOME: join(project, ".babavoss") })
+const stateOf = (project: string, session: string) => join(project, ".baba/.state/sessions", session, "baba")
+const envOf = (project: string, home: string) => ({ ...sessionEnv(home), BABAVOSS_HOME: join(project, ".baba/.state") })
 const pageOf = async (project: string, session: string) => {
   const found = await findService(stateOf(project, session))
 
@@ -169,7 +169,7 @@ function remove(path: string) {
   rmSync(path, { recursive: true, force: true })
 }
 
-/** Where runs live under `root`: this repository's .babavoss/lab/runs, or a directory of a spec's. */
+/** Where runs live under `root`: this repository's .baba/.state/lab/runs, or a directory of a spec's. */
 export function runsAt(root: string = RUNS): Runs {
   const within = (dir: string) => runDir(basename(dir), root) === resolve(dir)
   const read = (dir: string): Json | undefined => {
@@ -192,9 +192,9 @@ export function runsAt(root: string = RUNS): Runs {
       const home = join(dir, "home")
 
       // What sessions write is git's to ignore, here as the root's door has it.
-      if (!existsSync(join(REPO, ".babavoss/.gitignore"))) {
-        mkdirSync(join(REPO, ".babavoss"), { recursive: true })
-        writeFileSync(join(REPO, ".babavoss/.gitignore"), "*\n")
+      if (!existsSync(join(REPO, ".baba/.state/.gitignore"))) {
+        mkdirSync(join(REPO, ".baba/.state"), { recursive: true })
+        writeFileSync(join(REPO, ".baba/.state/.gitignore"), "*\n")
       }
       mkdirSync(home, { recursive: true })
       try {
@@ -249,7 +249,7 @@ export function runsAt(root: string = RUNS): Runs {
     async close(project) {
       if (!within(dirname(project)) || basename(project) !== "project" || !existsSync(project)) return ""
 
-      const sessions = join(project, ".babavoss/sessions")
+      const sessions = join(project, ".baba/.state/sessions")
 
       for (const session of existsSync(sessions) ? readdirSync(sessions) : []) {
         const found = await findService(join(sessions, session, "baba")).catch(() => undefined)

@@ -95,8 +95,8 @@ test("the tasks of judgment pass by their dry scripts, and a surface of 0.64.0 a
 
 test("knows a call that goes around the surfaces, to their code or the root's state on disk", () => {
   expect(goesAround({ tool: "Read", input: JSON.stringify({ file_path: "/p/.baba/surfaces/queue/src/seed.ts" }) })).toBe(true)
-  expect(goesAround({ tool: "Bash", input: "cat .babavoss/sessions/s/baba/model.json" })).toBe(true)
-  expect(goesAround({ tool: "Bash", input: ".babavoss/bin/baba /queue/issues/26" })).toBe(false)
+  expect(goesAround({ tool: "Bash", input: "cat .baba/.state/sessions/s/baba/model.json" })).toBe(true)
+  expect(goesAround({ tool: "Bash", input: ".baba/.state/bin/baba /queue/issues/26" })).toBe(false)
   expect(goesAround({ tool: "Read", input: JSON.stringify({ file_path: "/p/.baba/node_modules/babavoss/skill/SKILL.md" }) })).toBe(false)
 })
 
@@ -155,32 +155,32 @@ test("every task passes on the fixture by its own dry script, and fails on the f
 })
 
 test("counts the root's command in a shell line by what follows it: a read, an action, a program", () => {
-  expect(babaIn(".babavoss/bin/baba /queue")).toEqual({ reads: 1, full: 1, actions: 0, programs: 0, other: 0 })
-  expect(babaIn(".babavoss/bin/baba /queue/issues/3 done n=3 && .babavoss/bin/baba /queue | head")).toEqual({ reads: 1, full: 1, actions: 1, programs: 0, other: 0 })
-  expect(babaIn(".babavoss/bin/baba --session x /queue/issues/3 note n=3 text='a b'")).toEqual({ reads: 0, full: 0, actions: 1, programs: 0, other: 0 })
-  expect(babaIn(`.babavoss/bin/baba -e 'await root.read("/")'`)).toEqual({ reads: 0, full: 0, actions: 0, programs: 1, other: 0 })
-  expect(babaIn(`.babavoss/bin/baba / -e 'await root.read("/")'`)).toEqual({ reads: 0, full: 0, actions: 0, programs: 1, other: 0 })
-  expect(babaIn(".babavoss/bin/baba sleep; ls")).toEqual({ reads: 0, full: 0, actions: 0, programs: 0, other: 1 })
+  expect(babaIn(".baba/.state/bin/baba /queue")).toEqual({ reads: 1, full: 1, actions: 0, programs: 0, other: 0 })
+  expect(babaIn(".baba/.state/bin/baba /queue/issues/3 done n=3 && .baba/.state/bin/baba /queue | head")).toEqual({ reads: 1, full: 1, actions: 1, programs: 0, other: 0 })
+  expect(babaIn(".baba/.state/bin/baba --session x /queue/issues/3 note n=3 text='a b'")).toEqual({ reads: 0, full: 0, actions: 1, programs: 0, other: 0 })
+  expect(babaIn(`.baba/.state/bin/baba -e 'await root.read("/")'`)).toEqual({ reads: 0, full: 0, actions: 0, programs: 1, other: 0 })
+  expect(babaIn(`.baba/.state/bin/baba / -e 'await root.read("/")'`)).toEqual({ reads: 0, full: 0, actions: 0, programs: 1, other: 0 })
+  expect(babaIn(".baba/.state/bin/baba sleep; ls")).toEqual({ reads: 0, full: 0, actions: 0, programs: 0, other: 1 })
   // A row's own path is a read, but not of a whole view.
-  expect(babaIn(".babavoss/bin/baba /queue/issues/3")).toEqual({ reads: 1, full: 0, actions: 0, programs: 0, other: 0 })
-  expect(babaIn(".babavoss/bin/baba /tabs/2")).toEqual({ reads: 1, full: 1, actions: 0, programs: 0, other: 0 })
-  expect(babaIn("ls .babavoss")).toEqual({ reads: 0, full: 0, actions: 0, programs: 0, other: 0 })
+  expect(babaIn(".baba/.state/bin/baba /queue/issues/3")).toEqual({ reads: 1, full: 0, actions: 0, programs: 0, other: 0 })
+  expect(babaIn(".baba/.state/bin/baba /tabs/2")).toEqual({ reads: 1, full: 1, actions: 0, programs: 0, other: 0 })
+  expect(babaIn("ls .baba/.state")).toEqual({ reads: 0, full: 0, actions: 0, programs: 0, other: 0 })
 })
 
 test("knows a program when the agent runs one: a loop, a pipeline, a script file", () => {
   const bash = (input: string) => ({ tool: "Bash", input })
 
-  expect(programs([bash("for n in 3 5; do .babavoss/bin/baba /queue/issues/$n done n=$n; done")])).toEqual(["shell loop"])
-  expect(programs([bash("echo 3 5 | xargs -n1 -I{} .babavoss/bin/baba /queue/issues/{} done n={}")])).toEqual(["pipeline"])
+  expect(programs([bash("for n in 3 5; do .baba/.state/bin/baba /queue/issues/$n done n=$n; done")])).toEqual(["shell loop"])
+  expect(programs([bash("echo 3 5 | xargs -n1 -I{} .baba/.state/bin/baba /queue/issues/{} done n={}")])).toEqual(["pipeline"])
   expect(programs([{ tool: "Write", input: JSON.stringify({ file_path: "/p/mark.sh" }) }, bash("sh mark.sh")])).toEqual(["script file"])
-  expect(programs([bash(".babavoss/bin/baba /queue")])).toEqual([])
+  expect(programs([bash(".baba/.state/bin/baba /queue")])).toEqual([])
 })
 
 test("measures a stream: the harness's tokens and cost, calls and refusals, what baba told, and the last words", () => {
   const m = measure([
     { kind: "started", session: "s", loaded: { model: "claude-sonnet-5-5", cwd: "", tools: [], skills: [], plugins: [], mcp: [], commands: [] } },
     { kind: "injected", event: "SessionStart", text: "12345" },
-    { kind: "call", id: "a", tool: "Bash", input: ".babavoss/bin/baba /queue/issues/3 done n=3", word: true },
+    { kind: "call", id: "a", tool: "Bash", input: ".baba/.state/bin/baba /queue/issues/3 done n=3", word: true },
     { kind: "result", id: "a", text: "refused: no", error: true },
     { kind: "call", id: "b", tool: "Read", input: "{}", word: false },
     { kind: "result", id: "b", text: "missing", error: true },
@@ -188,7 +188,7 @@ test("measures a stream: the harness's tokens and cost, calls and refusals, what
     { kind: "turn", ok: true, text: "", tokens: { input: 10, cache_write: 20, cache_read: 30, output: 5 }, total: 0.25, ms: 1, calls: 3 },
     // A second message, its hook and one read in its turn.
     { kind: "injected", event: "UserPromptSubmit", text: "123" },
-    { kind: "call", id: "c", tool: "Bash", input: ".babavoss/bin/baba /queue", word: true },
+    { kind: "call", id: "c", tool: "Bash", input: ".baba/.state/bin/baba /queue", word: true },
     { kind: "result", id: "c", text: "1234" },
     { kind: "reply", text: "Lane 3." },
     { kind: "turn", ok: true, text: "", tokens: { input: 1, cache_write: 0, cache_read: 0, output: 1 }, total: 0.3, ms: 1, calls: 1 },

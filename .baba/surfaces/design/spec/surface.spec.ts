@@ -350,7 +350,7 @@ test("a play leaves nothing behind; what a play whose process was killed left, i
 await play({ name: "killed", group: "noise", title: "", about: "", steps: [{ kind: "start", source: "startup" }, { kind: "wait", seconds: 30 }, { kind: "waited" }] })`
   const killed = Bun.spawn([process.execPath, "-e", script], { stdout: "ignore", stderr: "ignore" })
   const left = join(PLAYS, `${killed.pid}-`)
-  const service = () => readdirSync(PLAYS).map((name) => join(PLAYS, name, ".babavoss/sessions", SESSION, "baba/service.json")).find((file) => file.startsWith(left) && existsSync(file))
+  const service = () => readdirSync(PLAYS).map((name) => join(PLAYS, name, ".baba/.state/sessions", SESSION, "baba/service.json")).find((file) => file.startsWith(left) && existsSync(file))
   let file: string | undefined
 
   for (let i = 0; i < 200 && !(file = service()); i++) await Bun.sleep(50)

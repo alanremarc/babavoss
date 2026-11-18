@@ -11,6 +11,21 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.78.0
+
+**Breaking: every harness is set up the same way, and `baba init` is given the harnesses to set up.** `baba init claude` sets up Claude Code, `baba init codex` Codex, `baba init claude codex` both. With none named, or a name that is no harness, it makes nothing and says which there are. It writes `.baba/baba.config.ts` with each harness named enabled and each other not, so installing a clone sets up the same; before, it wrote no configuration and set up both.
+
+A harness is set up by one method: baba's skill as a file, `.claude/skills/baba/SKILL.md` or `.agents/skills/baba/SKILL.md`, and baba's hook for each event among the person's own in the harness's project file, `.claude/settings.json` or `.codex/hooks.json`. Claude Code no longer gets a link to a plugin in the package: `plugin/claude/` is gone.
+
+- **The person's files are changed safely.** Only baba's own hook groups change; every other key, event, group and handler stays as it was, in its order, and that is checked before anything is written. The file as it was is copied to `.babavoss/backups/` first, the ten newest of each file kept. The new text is written beside the file, read back and checked, then moved into place in one step. The file keeps its indent and line ends. `.codex/config.toml` is written the same way.
+- **A file that is not valid is not written.** Provisioning stops and says why where a hooks file is not a JSON object, where its `hooks` are not lists by event, or where it holds what could not be written back exactly: a number as `1.0` or a very large one, a key given twice, an escaped character. JSON with comments is not JSON.
+- The hook's command is one for both harnesses but for the name: it finds the nearest `.baba/` up from the session's project.
+- `site/llms.txt` has the installing agent name the harness it runs in; the README names both commands. An adapter has a `title`, what the person calls its harness.
+
+- **Breaking: what sessions write is in `.baba/.state/`,** not `.babavoss/` beside `.baba/`: each tab's state and log, the archive of closed tabs, the backups, and the command, now `.baba/.state/bin/baba`, run from the project's directory as before. The folder ignores itself, so a project's `.gitignore` needs no line for it. An existing `.babavoss/` is moved there once, by the first provision or session's start after the update; remove `.babavoss` from the project's `.gitignore`. The person's own settings are in `~/.baba/settings.json`, moved there once from `~/.babavoss/settings.json`; a `.baba/` in the person's home has its older state moved the same way. Nothing is named `.babavoss` any more. The client's `VERSION` is 21 and replaces itself.
+
+Nothing in a project's surfaces needs to change. After taking this release, `bun install` in `.baba/` provisions: `.claude/skills/baba` becomes a folder with the skill, baba's hooks are added to `.claude/settings.json`, and both are committed with the project. A `.baba/` made before has no `harnesses` in its configuration, or no configuration, and keeps both set up; to withdraw one, give it `enable: false` in `.baba/baba.config.ts` and run `bun run baba provision` there. A Claude Code session started before the update keeps the hooks it loaded: start a new one.
+
 ## 0.77.0
 
 **Making a surface is learned from the manual alone.** `skill/making-surfaces.md` is rewritten in the order a first surface is made, each statement checked against the code. It covers route params, `view(...)`, the rule that puts an action in a list's pattern, hearing the world by a session command named for what it hears, highlights, and stories that `await` the world's events and name a command by a test. It no longer teaches `useShell().toast`. The template's comments teach the same shape.

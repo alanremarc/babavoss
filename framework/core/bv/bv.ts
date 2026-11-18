@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 20
+export const VERSION = 21
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -19,7 +19,7 @@ export const ENDPOINT_FILE = "service.json"
 /** How long a live runtime may refuse connections before it is taken for deaf: longer than one takes to close its door. */
 export const DEAF_MS = 10_000
 export type OpenRoot = { directory: string; entry: string; state: string; command?: string; page?: string }
-export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".babavoss"), "sessions", session, "open.json")
+export const registryFile = (session: string) => join(process.env.BABAVOSS_HOME ?? join(homedir(), ".baba", ".state"), "sessions", session, "open.json")
 export const load = <T>(file: string): T | undefined => {
   try {
     return JSON.parse(readFileSync(file, "utf8")) as T
@@ -657,8 +657,12 @@ if (import.meta.main) {
   })
   const directory = dirname(resolve(process.argv[1]!))
 
-  if (basename(directory) === "bin" && basename(dirname(directory)) === ".babavoss")
-    process.env.BABAVOSS_HOME ??= dirname(directory)
+  // The command a project is given is in its state folder, PROJECT/.baba/.state/bin: that folder is the home, and the
+  // command is named from the project.
+  const state = basename(directory) === "bin" && basename(dirname(directory)) === ".state" ? dirname(directory) : undefined
+  const project = state && dirname(dirname(state))
+
+  if (state) process.env.BABAVOSS_HOME ??= state
 
   const args = process.argv.slice(2)
   const word = args[0] === "--word" ? (args.splice(0, 2)[1]!) : basename(process.argv[1]!)
@@ -666,6 +670,6 @@ if (import.meta.main) {
   process.exitCode = await bv(
     args,
     word === "bv" || word === "bv.ts" ? undefined : word,
-    basename(dirname(directory)) === ".babavoss" ? relative(dirname(dirname(directory)), process.argv[1]!) : "bv",
+    project ? relative(project, process.argv[1]!) : "bv",
   )
 }

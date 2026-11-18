@@ -259,7 +259,7 @@ describe("the archive of closed tabs in the settings", () => {
   const measured = { session: { tabs: 2, sessions: 0, bytes: 12_000 }, project: { tabs: 5, sessions: 1, bytes: 3_400_000, running: 1 } }
 
   it("says at /archive its window, the person's in every project, what each clear would free, and the project it acts on", async () => {
-    const { agent, world } = story(settings(() => "unused", () => "/work/app/.babavoss/sessions/S"))
+    const { agent, world } = story(settings(() => "unused", () => "/work/app/.baba/.state/sessions/S"))
 
     expect(world.commands()).toContainEqual({ kind: "measure" })
     await world.settle((c: Command) => c.kind === "measure", { kind: "measured", measure: measured })
@@ -279,7 +279,7 @@ describe("the archive of closed tabs in the settings", () => {
   })
 
   it("clears when called, offering no second clear meanwhile, and says what it freed", async () => {
-    const { agent, world } = story(settings(() => "unused", () => "/work/app/.babavoss/sessions/S"))
+    const { agent, world } = story(settings(() => "unused", () => "/work/app/.baba/.state/sessions/S"))
 
     await world.settle((c: Command) => c.kind === "measure", { kind: "measured", measure: measured })
     expect(await agent.call("/archive", "clear", { scope: "session" })).toMatchObject({ outcome: "written" })

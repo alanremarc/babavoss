@@ -537,7 +537,7 @@ function RunsPanel({
       <div className="flex h-bar shrink-0 items-center gap-2 border-b px-3">
         <HistoryIcon className="size-3.5 text-muted-foreground" aria-hidden />
         <span className="font-medium">Runs kept</span>
-        <span className="text-meta text-muted-foreground">the last 20, under .babavoss/lab/runs</span>
+        <span className="text-meta text-muted-foreground">the last 20, under .baba/.state/lab/runs</span>
         <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" onClick={back}>
           Back to the run
         </Button>

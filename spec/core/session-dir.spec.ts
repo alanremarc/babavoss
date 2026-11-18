@@ -4,10 +4,10 @@ import { stateDir } from "../../framework/core/index.ts"
 import { sessionDir } from "../../framework/core/state/session-dir.ts"
 
 test("a runtime's session directory holds its roots' state, and a process that serves none has none", () => {
-  const env = { BABAVOSS_HOME: "/p/.babavoss" }
+  const env = { BABAVOSS_HOME: "/p/.baba/.state" }
   const dir = sessionDir(["bun", "/p/.baba/.root/open.ts", "--serve", "s/1", "baba"], env)
 
-  expect(dir).toBe("/p/.babavoss/sessions/s-1")
+  expect(dir).toBe("/p/.baba/.state/sessions/s-1")
   expect(stateDir({ name: "baba" }, { id: "s/1" }, env)).toBe(`${dir}/baba`)
   expect(sessionDir(["bun", "test"], env)).toBeUndefined()
   expect(sessionDir(["bun", "open.ts", "--serve", "s"], {})).toBeUndefined()

@@ -1,7 +1,7 @@
 // The player: one scenario played on the demo project through the framework's own code, with no agent and no harness. The
 // demo is made in a directory of its own, a project with a .baba/ whose surfaces are this surface's demo/surfaces. Every
 // text the agent would be given comes from the process that gives it in a session: the framework's hook, run as the
-// harness runs it, `baba hook` with the event on standard input; and the word, .babavoss/bin/baba, run as the agent's
+// harness runs it, `baba hook` with the event on standard input; and the word, .baba/.state/bin/baba, run as the agent's
 // shell runs it, its output what a tool call shows. The root's runtime is woken by them as in a session, in its own
 // process. The person acts as their page does, by the door, and the build moves as its file is written. Where a scenario
 // changes the demo's code, its surfaces are a copy of the demo's, changed there. Each hook is given the input Claude Code
@@ -22,7 +22,7 @@ import type { Scenario, Scripted, Step } from "./scenarios.ts"
 /** The session the demo runs in, as the harness names it. */
 export const SESSION = "demo"
 /** The word in the demo project, as the root names it to the agent. */
-export const WORD = ".babavoss/bin/baba"
+export const WORD = ".baba/.state/bin/baba"
 /** What stands for the demo's own directory in what is recorded: it differs on every play and means nothing. */
 export const PROJECT = "<project>"
 
@@ -84,7 +84,7 @@ const alive = (pid: number) => {
 /** Removes a play's directory, after ending the demo's runtime it woke, where one still runs: by its pid, only if it is that runtime. */
 async function removed(dir: string) {
   try {
-    const at = JSON.parse(readFileSync(join(dir, ".babavoss/sessions", SESSION, "baba/service.json"), "utf8")) as Endpoint
+    const at = JSON.parse(readFileSync(join(dir, ".baba/.state/sessions", SESSION, "baba/service.json"), "utf8")) as Endpoint
 
     for (const entry of ENTRIES(dir)) if (alive(at.pid) && (await endDeaf(at, entry, SESSION))) break
   } catch {}
@@ -206,7 +206,7 @@ export async function play(scenario: Scenario, signal?: AbortSignal): Promise<Pl
 }
 
 async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Promise<Play> {
-  const home = join(dir, ".babavoss")
+  const home = join(dir, ".baba/.state")
   // The person's settings are the demo's own, so a scenario that changes one leaves theirs as they are. Every process of the
   // demo reads the time by its clock; bun's options take no quoting, so it is preloaded from the demo's directory.
   const env: Record<string, string> = {

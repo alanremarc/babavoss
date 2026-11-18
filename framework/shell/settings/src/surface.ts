@@ -33,9 +33,8 @@ import {
   type Settings,
 } from "./settings.ts"
 import { readSettings, settingsFile, watchSettings, writeSettings } from "./store.ts"
-import { dirname } from "node:path"
 import { sessionDir } from "../../../core/state/session-dir.ts"
-import { clear, measure, projectHome, sized, type Freed, type Measure } from "../../src/archive.ts"
+import { clear, measure, projectHome, projectOf, sized, type Freed, type Measure } from "../../src/archive.ts"
 
 /** Which closed tabs a clear takes: this session's, or the whole project's. */
 export type Scope = "session" | "project"
@@ -243,7 +242,7 @@ const freeing = (f: Freed) =>
 
 /** The archive's view: its window, what each clear would free, and the clears where there is something to free. */
 const archived = (m: Model, place: string | undefined) => {
-  const project = place && dirname(projectHome(place))
+  const project = place && projectOf(projectHome(place))
   const measured = m.measured
   const offer = (scope: Scope, f: Freed | undefined) =>
     f && (f.tabs || f.sessions) && !m.clearing

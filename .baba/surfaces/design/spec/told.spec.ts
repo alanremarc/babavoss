@@ -29,12 +29,12 @@ const START = [
   "",
   "The shell of .baba/ was started for this session, and answered:",
   "page: http://127.0.0.1:4000",
-  ".babavoss/bin/baba PATH — read",
+  ".baba/.state/bin/baba PATH — read",
   "baba 0.43.8",
   'title: "baba"',
   "surfaces: name\tdescription",
   '"tasks"\t"Track the project\'s tasks. Use when work is asked for."',
-  "open: .babavoss/bin/baba / open surface=NAME   open a NAME tab",
+  "open: .baba/.state/bin/baba / open surface=NAME   open a NAME tab",
   "",
   '/tabs/1 tasks "Tasks"',
   "actions: add   each one's command is at /tabs/1",
@@ -111,13 +111,13 @@ test("what changed: a lead, sections, a heading per tab, additions, removals and
 })
 
 test("a table is its head, then its rows by tab, until a line with none", () => {
-  const lines = readLines(["tasks: at\tn\ttitle\tstatus", '"/tabs/1/tasks/1"\t1\t"Write the notes"\t"todo"', '"/tabs/1/tasks/2"\t2\t"Tag it"\t"done"', "add: .babavoss/bin/baba /tabs/1 add title=string   Add a task"])
+  const lines = readLines(["tasks: at\tn\ttitle\tstatus", '"/tabs/1/tasks/1"\t1\t"Write the notes"\t"todo"', '"/tabs/1/tasks/2"\t2\t"Tag it"\t"done"', "add: .baba/.state/bin/baba /tabs/1 add title=string   Add a task"])
 
   expect(lines.map((l) => l.kind)).toEqual(["head", "row", "row", "fact"])
   expect(kinds(lines[3]!.spans)).toEqual([
     ["key", "add"],
     ["plain", ": "],
-    ["command", ".babavoss/bin/baba /tabs/1 add title=string"],
+    ["command", ".baba/.state/bin/baba /tabs/1 add title=string"],
     ["description", "Add a task"],
   ])
 })

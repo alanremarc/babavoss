@@ -4,7 +4,8 @@
 // generated from the surfaces. What .baba/ is made with, its tsconfig.json and shadcn's components.json, is written where
 // it is missing, so a .baba/ made by an older release gains it too. A surface has no skill and no instructions beside it:
 // what it is for is its own description, and how it is worked is what its views say.
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { CONFIG_FILE, checkConfig, loadConfig, sectionOf } from "./config.ts"
 import { ADAPTERS } from "./harness/index.ts"
@@ -95,6 +96,58 @@ export function scaffold(baba: string): string[] {
   }
 
   return done
+}
+
+/** Where a .baba/ keeps what its sessions write, in it: each tab's state and log, the command, the copies of the person's files. */
+export const STATE_DIR = ".state"
+
+/** Where the person's own settings are kept, for every project: in their home's .baba/, whether or not surfaces are there too. */
+export const settingsAt = (home: string = homedir()) => join(home, ".baba", "settings.json")
+
+/**
+ * What an older release kept in the person's home, ~/.babavoss: their settings are moved to ~/.baba/settings.json, where
+ * there are none yet, and the folder is removed where that leaves it empty.
+ */
+export function adoptHome(home: string = homedir()) {
+  const older = join(home, ".babavoss")
+  const to = settingsAt(home)
+
+  try {
+    if (existsSync(join(older, "settings.json")) && !existsSync(to)) {
+      mkdirSync(dirname(to), { recursive: true })
+      renameSync(join(older, "settings.json"), to)
+    }
+    if (existsSync(older) && !readdirSync(older).length) rmdirSync(older)
+  } catch {}
+}
+
+/**
+ * The state folder of `baba`, .baba/.state. An older release kept it beside .baba/, as .babavoss/: where that is there
+ * and this is not, it is moved here, once; in the person's home, their settings are taken out of it first.
+ */
+export function stateOf(baba: string): string {
+  const state = join(baba, STATE_DIR)
+  const older = join(dirname(baba), ".babavoss")
+
+  try {
+    if (!existsSync(state) && existsSync(older)) {
+      if (dirname(baba) === realpathSync(homedir())) adoptHome(dirname(baba))
+      if (existsSync(older)) renameSync(older, state)
+    }
+  } catch {}
+
+  return state
+}
+
+/** The state folder of `baba`, made, and ignored by git whatever the project's own .gitignore says. */
+export function stateMade(baba: string): string {
+  const state = stateOf(baba)
+  const ignore = join(state, ".gitignore")
+
+  mkdirSync(state, { recursive: true })
+  if (!existsSync(ignore)) writeFileSync(ignore, "*\n")
+
+  return state
 }
 
 /** A .baba/'s own home, drawn in the desktop's place where it is there. */
@@ -198,6 +251,8 @@ export async function provision(baba: string): Promise<Provisioned> {
   const done: Provisioned = { written: [], withdrawn: [], said: [] }
 
   checkConfig(config, ADAPTERS)
+  // Before an adapter keeps a copy of a file there: the folder is where it should be, and git leaves it alone.
+  stateMade(baba)
   done.written.push(...scaffold(baba).map((path) => relative(root, path)))
   for (const adapter of ADAPTERS) {
     const { enable, ...options } = sectionOf(config, adapter)

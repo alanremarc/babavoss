@@ -2,7 +2,7 @@
 import { notesRoot } from "../support/notes.ts"
 import { poll } from "../support/poll.ts"
 import { spawnSync } from "node:child_process"
-import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync } from "node:fs"
+import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync, statSync, existsSync, readdirSync, readlinkSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
@@ -656,7 +656,7 @@ it("refused registry names what the harness must allow", () => {
   const answer = s.open()
 
   expect(answer.status).toBe(1)
-  expect(answer.err.trim()).toBe("cannot register the root under ~/.babavoss; allow writing the registry (under a sandbox, in the harness settings)")
+  expect(answer.err.trim()).toBe("cannot register the root in its state folder; allow writing the registry (under a sandbox, in the harness settings)")
 })
 it("refused runtime names what the harness must allow", () => {
   const s = setup()
@@ -774,7 +774,8 @@ function installation(location = "project", configured = false) {
 
   const run = (file: string, args: string[] = []) => spawnSync(file, args, { cwd: project, env, encoding: "utf8", timeout: 15000 })
   const open = () => run(process.execPath, [join(directory, "scripts/open.ts")])
-  const state = () => env.BABAVOSS_HOME ?? join(location === "personal" ? home : project, ".babavoss")
+  // In the .baba/ the root is of, .baba/.state; a root run from source, of no .baba/, keeps it the same way under the directory it was run in.
+  const state = () => env.BABAVOSS_HOME ?? join(location === "personal" ? home : project, ".baba/.state")
   const word = () => join(env.BABAVOSS_BIN ?? join(state(), "bin"), "demo")
   const close = () => run(word(), ["close"])
 
@@ -786,7 +787,7 @@ it("a person's agents install uses their home and configured bin", () => {
 
   try {
     expect(s.open().status).toBe(0)
-    expect(existsSync(join(s.home, ".babavoss/sessions/S/open.json"))).toBe(true)
+    expect(existsSync(join(s.home, ".baba/.state/sessions/S/open.json"))).toBe(true)
     expect(s.run(s.word(), ["/"]).status).toBe(0)
     expect(existsSync(join(s.bin, "bv"))).toBe(true)
   } finally {
@@ -846,6 +847,7 @@ it("a project root writes neither the person's home nor beside Bun", () => {
     expect(s.run(bun, [join(s.directory, "scripts/open.ts")]).status).toBe(0)
     expect(s.run(s.word(), ["/"]).status).toBe(0)
     expect(existsSync(join(s.home, ".babavoss"))).toBe(false)
+    expect(existsSync(join(s.project, ".babavoss"))).toBe(false)
     expect(readdirSync(s.bin)).toEqual(["bun"])
   } finally {
     s.close()
@@ -858,7 +860,7 @@ it("a project handle runs exactly as printed from the project root", () => {
     const answer = s.open()
 
     expect(answer.status).toBe(0)
-    expect(answer.stdout).toContain("command: .babavoss/bin/demo, from the project's directory;")
+    expect(answer.stdout).toContain("command: .baba/.state/bin/demo, from the project's directory;")
 
     const command = printed(answer.stdout, "add").replace("text=line", "text=Printed").split(" ")
     const called = s.run(command[0]!, command.slice(1))
@@ -869,13 +871,38 @@ it("a project handle runs exactly as printed from the project root", () => {
     s.close()
   }
 })
+it("what an older release kept beside .baba/, as .babavoss/, is moved into it once, and its command's link, which led there, is made again", () => {
+  const s = installation()
+  const older = join(s.project, ".babavoss")
+
+  mkdirSync(join(older, "bin"), { recursive: true })
+  mkdirSync(join(older, "sessions/earlier"), { recursive: true })
+  writeFileSync(join(older, "sessions/earlier/kept.json"), "{}\n")
+  symlinkSync(join(older, "bin/bv"), join(older, "bin/demo"))
+  try {
+    const answer = s.open()
+
+    expect(answer.status, answer.stderr).toBe(0)
+    expect(answer.stdout).toContain("command: .baba/.state/bin/demo, from the project's directory;")
+    expect(existsSync(older)).toBe(false)
+    expect(readFileSync(join(s.state(), "sessions/earlier/kept.json"), "utf8")).toBe("{}\n")
+    expect(readlinkSync(join(s.state(), "bin/demo"))).toBe("bv")
+    expect(s.run(s.word(), ["/"]).status).toBe(0)
+    // Both there, as a session of the older release may have left: neither is touched.
+    mkdirSync(older)
+    expect(s.run(s.word(), ["/"]).status).toBe(0)
+    expect(readdirSync(older)).toEqual([])
+  } finally {
+    s.close()
+  }
+})
 it("a root run from source uses the door's working directory", () => {
   const s = installation("source")
 
   try {
     expect(s.open().status).toBe(0)
-    expect(existsSync(join(s.project, ".babavoss/sessions/S/open.json"))).toBe(true)
-    expect(existsSync(join(s.directory, ".babavoss"))).toBe(false)
+    expect(existsSync(join(s.project, ".baba/.state/sessions/S/open.json"))).toBe(true)
+    expect(existsSync(join(s.directory, ".baba"))).toBe(false)
   } finally {
     s.close()
   }
@@ -889,8 +916,7 @@ for (const location of ["personal", "project"])
       expect(s.open().status).toBe(0)
       expect(s.run(s.word(), ["/"]).status).toBe(0)
       expect(existsSync(join(s.state(), "sessions/S/open.json"))).toBe(true)
-      expect(existsSync(join(s.project, ".babavoss"))).toBe(false)
-      expect(existsSync(join(s.home, ".babavoss"))).toBe(false)
+      for (const at of [s.project, s.home]) for (const name of [".babavoss", ".baba/.state"]) expect(existsSync(join(at, name))).toBe(false)
     } finally {
       s.close()
     }

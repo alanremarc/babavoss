@@ -79,8 +79,10 @@ export const sourceOf = (event: string, source: unknown): { source: Source } | {
 export type SetUp = { paths: string[]; said?: string }
 
 export interface Adapter<O extends { events: string[] } = { events: string[] }> {
-  /** The harness's name: its section of .baba/baba.config.ts. */
+  /** The harness's name: its section of .baba/baba.config.ts, and what `baba init` is given to set it up. */
   name: string
+  /** What the person calls it, as Claude Code. */
+  title: string
   /** The options it is set up with where the configuration does not say: every event among them. */
   defaults: O
   /** The harness's hook events the framework is told at; an option `events` names some of them. */
