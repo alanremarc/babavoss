@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-export const VERSION = 21
+export const VERSION = 22
 export const SERVICE_HEADER = "babavoss-service"
 export const ACTOR_HEADER = "babavoss-actor"
 export const PROBE_HEADER = "babavoss-probe"
@@ -42,11 +42,16 @@ export function sessionArgs(args: string[]) {
 
   if (at >= 0 && !explicit) throw new SyntaxError("--session requires ID")
 
-  const { CLAUDE_CODE_SESSION_ID: claude, CODEX_THREAD_ID: codex } = process.env
+  const { CLAUDE_CODE_SESSION_ID: claude, CODEX_THREAD_ID: codex, ANTIGRAVITY_CONVERSATION_ID: antigravity } = process.env
+  const present = [
+    ...(claude ? [["CLAUDE_CODE_SESSION_ID", claude] as const] : []),
+    ...(codex ? [["CODEX_THREAD_ID", codex] as const] : []),
+    ...(antigravity ? [["ANTIGRAVITY_CONVERSATION_ID", antigravity] as const] : []),
+  ]
 
-  if (!explicit && claude && codex) throw new SyntaxError("CLAUDE_CODE_SESSION_ID and CODEX_THREAD_ID require --session ID")
+  if (!explicit && present.length > 1) throw new SyntaxError(`${present.map(([name]) => name).join(" and ")} require --session ID`)
 
-  const session = explicit ?? (claude || codex)
+  const session = explicit ?? present[0]?.[1]
 
   if (!session) throw new SyntaxError("run this from an agent's shell or pass --session ID")
   if (!/^[A-Za-z0-9._-]+$/.test(session) || session === "." || session === "..") throw new SyntaxError("invalid session ID")
@@ -55,7 +60,8 @@ export function sessionArgs(args: string[]) {
 }
 
 /** Whether a run in `session`'s name is its agent's own: run from that session of its harness, as its environment says. */
-export const ownRun = (session: string, env: NodeJS.ProcessEnv = process.env) => env.CLAUDE_CODE_SESSION_ID === session || env.CODEX_THREAD_ID === session
+export const ownRun = (session: string, env: NodeJS.ProcessEnv = process.env) =>
+  env.CLAUDE_CODE_SESSION_ID === session || env.CODEX_THREAD_ID === session || env.ANTIGRAVITY_CONVERSATION_ID === session
 
 /** A call's value that names a file: @ and a path, absolute, relative or from home. Text that begins so is given with @-. */
 const FILE_ARG = /^@(\/|\.\.?\/|~\/)/

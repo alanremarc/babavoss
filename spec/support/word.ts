@@ -35,6 +35,7 @@ export function setup(dev = false) {
     HOME: root,
     CLAUDE_CODE_SESSION_ID: "S",
     CODEX_THREAD_ID: "",
+    ANTIGRAVITY_CONVERSATION_ID: "",
     BABAVOSS_HOME: root,
     BABAVOSS_BIN: bin,
     BABAVOSS_DEV: dev ? "1" : "0",

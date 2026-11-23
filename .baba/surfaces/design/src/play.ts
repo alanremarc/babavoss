@@ -220,7 +220,7 @@ async function played(scenario: Scenario, dir: string, signal?: AbortSignal): Pr
   }
   let ahead = 0
 
-  for (const key of ["CODEX_THREAD_ID", "BABAVOSS_BIN"]) delete env[key]
+  for (const key of ["CODEX_THREAD_ID", "ANTIGRAVITY_CONVERSATION_ID", "BABAVOSS_BIN"]) delete env[key]
   // A scenario that changes the code plays the root in dev mode, where it takes the change at once; any other, in normal mode.
   env.BABAVOSS_DEV = scenario.steps.some((s) => s.kind === "code") ? "1" : "0"
   mkdirSync(join(dir, ".baba"), { recursive: true })

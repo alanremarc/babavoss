@@ -8,6 +8,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   ADAPTERS,
+  antigravity,
+  antigravityArgs,
+  antigravityCli,
+  antigravityEvents,
   blocked,
   claude,
   claudeArgs,
@@ -22,6 +26,7 @@ import {
   codexTurn,
   fakeHarness,
   managedAt,
+  streamState,
   trust,
   type HarnessEvent,
 } from "../../framework/core/harness/index.ts"
@@ -226,10 +231,18 @@ test("elsewhere the credentials file is linked; where there is no login the home
 })
 
 test("a session's environment carries none of the caller's harness identity, but a token set up for it", () => {
-  const own = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s", CLAUDE_CONFIG_DIR: "/x", BABAVOSS_HOME: "/y" }
-  const env = cleanEnv({ PATH: "/bin", ...own, CLAUDE_CODE_OAUTH_TOKEN: "t" })
+  const own = {
+    CLAUDECODE: "1",
+    CLAUDE_CODE_SESSION_ID: "s",
+    CLAUDE_CONFIG_DIR: "/x",
+    CODEX_THREAD_ID: "c",
+    ANTIGRAVITY_CONVERSATION_ID: "a",
+    AGY_CLI_DISABLE_AUTO_UPDATE: "1",
+    BABAVOSS_HOME: "/y",
+  }
+  const env = cleanEnv({ PATH: "/bin", ...own, CLAUDE_CODE_OAUTH_TOKEN: "t", AGY_ADC_AUTH: "true" })
 
-  expect(env).toEqual({ PATH: "/bin", CLAUDE_CODE_OAUTH_TOKEN: "t" })
+  expect(env).toEqual({ PATH: "/bin", CLAUDE_CODE_OAUTH_TOKEN: "t", AGY_ADC_AUTH: "true" })
 })
 
 test("the fake harness is driven by the story: its stream is what is emitted, and what it was told is kept", async () => {
@@ -265,14 +278,51 @@ test("each adapter reads its harness's hook input as the framework's moment, and
   expect(codex.hookEvent(input("Interrupt"))).toEqual({ session: "s1", event: "Interrupt", moment: "Stop" })
   expect(codex.hookEvent(input("UserPromptSubmit", { prompt: "hi" }))).toEqual({ session: "s1", event: "UserPromptSubmit", moment: "UserPromptSubmit" })
   expect(codex.hookEvent(input("PreModelRequest"))).toBeUndefined()
-  for (const adapter of ADAPTERS) {
+  for (const adapter of [claude, codex]) {
     const tool = adapter.hookEvent(input("PostToolUse"))!
 
     expect(adapter.hookOutput(adapter.hookEvent(input("UserPromptSubmit"))!, "told")).toBe("told")
     expect(JSON.parse(adapter.hookOutput(tool, "told"))).toEqual({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: "told" } })
-    expect(adapter.defaults.events).toEqual([...adapter.events])
   }
-  expect(codex.run).toBeDefined()
+  // Antigravity uses camelCase payloads, infers the event where hookEventName is absent, and injects via injectSteps.systemMessage.
+  expect(antigravity.hookEvent({ conversationId: "a1", hookEventName: "SessionStart", cwd: "/p" })).toEqual({
+    session: "a1",
+    event: "SessionStart",
+    moment: "SessionStart",
+    cwd: "/p",
+  })
+  expect(antigravity.hookEvent({ conversationId: "a1", workspacePaths: ["/w"] })).toEqual({
+    session: "a1",
+    event: "SessionStart",
+    moment: "SessionStart",
+    cwd: "/w",
+  })
+  expect(antigravity.hookEvent({ conversationId: "a1", hookEventName: "PreInvocation", invocationNum: 0, cwd: "/p" })).toEqual({
+    session: "a1",
+    event: "PreInvocation",
+    moment: "UserPromptSubmit",
+    cwd: "/p",
+  })
+  expect(antigravity.hookEvent({ conversationId: "a1", invocationNum: 2, cwd: "/p" })).toEqual({
+    session: "a1",
+    event: "PreInvocation",
+    moment: "PostToolUse",
+    cwd: "/p",
+  })
+  expect(antigravity.hookEvent({ conversationId: "a1", hookEventName: "Stop", executionNum: 1, terminationReason: "NO_TOOL_CALL" })).toEqual({
+    session: "a1",
+    event: "Stop",
+    moment: "Stop",
+  })
+  expect(antigravity.hookEvent({ conversationId: "a1", hookEventName: "PostToolUse", toolCall: { name: "run_command" } })).toBeUndefined()
+  expect(JSON.parse(antigravity.hookOutput(antigravity.hookEvent({ conversationId: "a1", hookEventName: "SessionStart" })!, "told"))).toEqual({
+    injectSteps: [{ systemMessage: { systemMessage: "told" } }],
+  })
+  expect(antigravity.hookEmpty).toBe("{}")
+  for (const adapter of ADAPTERS) {
+    expect(adapter.defaults.events).toEqual([...adapter.events])
+    expect(adapter.run).toBeDefined()
+  }
 })
 
 test("a run of Claude Code reads the project's own settings, where baba's hooks are, and no plugin", () => {
@@ -448,4 +498,150 @@ test("a Codex session's home reaches the person's login file by a link, never a 
   expect(existsSync(join(home, ".codex/sessions"))).toBe(true)
   rmSync(own, { recursive: true, force: true })
   rmSync(home, { recursive: true, force: true })
+})
+
+test("a run of Antigravity streams NDJSON in one persistent process, bypassing permissions and trusting the workspace", () => {
+  const args = antigravityArgs({ project: "/runs/r1/project", model: "gemini-3.8-flash-medium" })
+
+  expect(args.slice(0, 5)).toEqual(["agy", "--input-format", "stream-json", "--output-format", "stream-json"])
+  expect(args).not.toContain("-p")
+  expect(args).toContain("--dangerously-skip-permissions")
+  expect(args[args.indexOf("--model") + 1]).toBe("gemini-3.8-flash-medium")
+  expect(JSON.parse(args[args.indexOf("--settings") + 1]!)).toEqual({
+    trustedWorkspaces: ["/runs/r1/project"],
+    enableTerminalSandbox: false,
+    toolPermission: "always-proceed",
+  })
+})
+
+test("Antigravity's stream reads as the framework's events: deltas joined per reply, tools with word detection, cumulative usage diffed per turn, account redacted", () => {
+  const state = streamState("gemini-3.8-flash-medium")
+  const stream: Json[] = [
+    {
+      event: "init",
+      conversation_id: SESSION,
+      init: { cwd: "/runs/r1/project", tools: ["run_command", "view_file"], permission_mode: "always-proceed", account: { email: "someone@example.invalid" } },
+    },
+    { event: "step_update", step_update: { conversation_id: SESSION, step_index: 0, state: "DONE", step_type: "user_input" } },
+    {
+      event: "step_update",
+      step_update: {
+        conversation_id: SESSION,
+        step_index: 1,
+        state: "ACTIVE",
+        step_type: "tool",
+        tool_name: "run_command",
+        tool_info: { name: "run_command", parameters: { CommandLine: ".baba/.state/bin/baba /" } },
+      },
+    },
+    {
+      event: "step_update",
+      step_update: {
+        conversation_id: SESSION,
+        step_index: 1,
+        state: "DONE",
+        step_type: "tool",
+        tool_name: "run_command",
+        tool_info: { name: "run_command", parameters: { CommandLine: ".baba/.state/bin/baba /" }, output: 'title: "baba" someone@example.invalid' },
+      },
+    },
+    { event: "step_update", step_update: { conversation_id: SESSION, step_index: 2, state: "ACTIVE", step_type: "agent_response", text_delta: "One " } },
+    { event: "step_update", step_update: { conversation_id: SESSION, step_index: 2, state: "DONE", step_type: "agent_response", text_delta: "surface." } },
+    {
+      event: "result",
+      result: {
+        conversation_id: SESSION,
+        status: "SUCCESS",
+        response: "One surface.",
+        duration_seconds: 1.5,
+        num_turns: 1,
+        usage: { input_tokens: 1000, output_tokens: 40, cache_read_tokens: 500, total_tokens: 1040 },
+      },
+    },
+    {
+      event: "step_update",
+      step_update: {
+        conversation_id: SESSION,
+        step_index: 4,
+        state: "DONE",
+        step_type: "tool",
+        tool_name: "view_file",
+        tool_info: { name: "view_file", parameters: { AbsolutePath: "/missing" }, error: { type: "NOT_FOUND", message: "missing" } },
+      },
+    },
+    {
+      event: "result",
+      result: {
+        conversation_id: SESSION,
+        status: "ERROR",
+        response: "",
+        error: "rate limit for someone@example.invalid",
+        duration_seconds: 2.25,
+        num_turns: 2,
+        usage: { input_tokens: 1250, output_tokens: 50, cache_read_tokens: 1400, total_tokens: 1300 },
+      },
+    },
+  ]
+
+  expect(stream.flatMap((line) => antigravityEvents(line, state))).toEqual<HarnessEvent[]>([
+    {
+      kind: "started",
+      session: SESSION,
+      loaded: { model: "gemini-3.8-flash-medium", cwd: "/runs/r1/project", tools: ["run_command", "view_file"], skills: [], plugins: [], mcp: [], commands: [] },
+    },
+    { kind: "call", id: "step-1", tool: "run_command", input: ".baba/.state/bin/baba /", word: true },
+    { kind: "result", id: "step-1", text: 'title: "baba" <redacted>' },
+    { kind: "reply", text: "One surface." },
+    { kind: "turn", ok: true, text: "", tokens: { input: 1000, cache_write: 0, cache_read: 500, output: 40 }, total: 0, ms: 1500, calls: 1 },
+    { kind: "call", id: "step-4", tool: "view_file", input: '{"AbsolutePath":"/missing"}', word: false },
+    { kind: "result", id: "step-4", text: "NOT_FOUND: missing", error: true },
+    {
+      kind: "turn",
+      ok: false,
+      text: "ERROR: rate limit for <redacted>",
+      tokens: { input: 250, cache_write: 0, cache_read: 900, output: 10 },
+      total: 0,
+      ms: 750,
+      calls: 1,
+    },
+  ])
+})
+
+test("an Antigravity session's home reaches the person's login by a link or GEMINI_API_KEY; release takes it back and keeps transcripts", () => {
+  const own = temp()
+  const home = temp()
+  const adc = process.env.AGY_ADC_AUTH
+  const key = process.env.GEMINI_API_KEY
+
+  delete process.env.AGY_ADC_AUTH
+  delete process.env.GEMINI_API_KEY
+  try {
+    mkdirSync(join(own, "Library/Keychains"), { recursive: true })
+    writeFileSync(join(own, "Library/Keychains/login.keychain-db"), "secret")
+
+    const harness = antigravityCli(own, "darwin")
+
+    expect(harness.home(home)).toBe("the person's login keychain, linked")
+    expect(lstatSync(join(home, "Library/Keychains")).isSymbolicLink()).toBe(true)
+    mkdirSync(join(home, ".gemini/antigravity-cli/brain/s1"), { recursive: true })
+    writeFileSync(join(home, ".gemini/antigravity-cli/brain/s1/transcript.jsonl"), "kept")
+    writeFileSync(join(home, ".gemini/antigravity-cli/settings.json"), "{}")
+    harness.release(home)
+    expect(existsSync(join(home, "Library/Keychains"))).toBe(false)
+    expect(existsSync(join(home, ".gemini/antigravity-cli/settings.json"))).toBe(false)
+    expect(existsSync(join(home, ".gemini/antigravity-cli/brain/s1/transcript.jsonl"))).toBe(true)
+    expect(existsSync(join(own, "Library/Keychains/login.keychain-db"))).toBe(true)
+
+    const apiHome = temp()
+
+    process.env.GEMINI_API_KEY = "test-key"
+    expect(antigravityCli(temp(), "linux").home(apiHome)).toBe("GEMINI_API_KEY, from the environment")
+    expect(JSON.parse(readFileSync(join(apiHome, ".gemini/antigravity-cli/settings.json"), "utf8"))).toEqual({ modelProvider: "gemini" })
+    rmSync(apiHome, { recursive: true, force: true })
+  } finally {
+    if (adc !== undefined) process.env.AGY_ADC_AUTH = adc
+    if (key !== undefined) process.env.GEMINI_API_KEY = key
+    rmSync(own, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true })
+  }
 })

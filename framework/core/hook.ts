@@ -119,7 +119,8 @@ export async function hookContext(input: HookEvent, baba: string, harness?: stri
       return undefined
     }
     save(boundaryFile(session), { source: input.source ?? null })
-    const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
+    const cwd = input.cwd && existsSync(input.cwd) ? input.cwd : existsSync(dirname(baba)) ? dirname(baba) : process.cwd()
+    const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { cwd, stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
     lines.push(readFileSync(WORDS, "utf8").trim())

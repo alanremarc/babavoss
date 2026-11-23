@@ -9,21 +9,26 @@ import { client, setup, cleanup } from "../support/word.ts"
 
 afterEach(cleanup)
 
-for (const variable of ["CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] as const)
+for (const variable of ["CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "ANTIGRAVITY_CONVERSATION_ID"] as const)
   it(`uses ${variable}`, () => {
     const s = setup()
 
     s.env.CLAUDE_CODE_SESSION_ID = ""
     s.env.CODEX_THREAD_ID = ""
+    s.env.ANTIGRAVITY_CONVERSATION_ID = ""
     s.env[variable] = "S"
     expect(s.run().status).toBe(0)
   })
-it("rejects both session variables", () => {
+it("rejects conflicting session variables", () => {
   const s = setup()
 
   s.env.CODEX_THREAD_ID = "C"
   expect(s.run()).toMatchObject({ status: 2 })
   expect(s.run().err).toContain("CLAUDE_CODE_SESSION_ID and CODEX_THREAD_ID")
+  s.env.CODEX_THREAD_ID = ""
+  s.env.ANTIGRAVITY_CONVERSATION_ID = "A"
+  expect(s.run()).toMatchObject({ status: 2 })
+  expect(s.run().err).toContain("CLAUDE_CODE_SESSION_ID and ANTIGRAVITY_CONVERSATION_ID")
 })
 it("rejects neither session variable", () => {
   const s = setup()
@@ -150,6 +155,7 @@ it("finds the hooks quiet only where the session's own agent went unheard: a run
   // A run is the agent's own where its harness's session is the one it runs in, as the environment says.
   expect(ownRun("S", { CLAUDE_CODE_SESSION_ID: "S" })).toBe(true)
   expect(ownRun("S", { CODEX_THREAD_ID: "S" })).toBe(true)
+  expect(ownRun("S", { ANTIGRAVITY_CONVERSATION_ID: "S" })).toBe(true)
   expect(ownRun("S", { CLAUDE_CODE_SESSION_ID: "another" })).toBe(false)
   expect(ownRun("S", {})).toBe(false)
   // The agent's run, its hook heard after it; then a lane's worker posts in the session's name from its own session, and a

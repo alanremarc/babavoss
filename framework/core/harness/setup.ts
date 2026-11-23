@@ -6,12 +6,12 @@
 // the person's by the command they run, and proves it before writing: what is left with baba's taken out is what was there.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
-import type { SetUp } from "./harness.ts"
+import type { Keep, SetUp } from "./harness.ts"
 
 /** The package's authoring skill. */
 const SKILL = new URL("../../../skill/SKILL.md", import.meta.url)
 /** The package's command, from a project's directory. */
-const BIN = "/.baba/node_modules/babavoss/bin/baba.ts"
+export const BIN = "/.baba/node_modules/babavoss/bin/baba.ts"
 /** How baba's hooks are told from the person's: by the command they run. */
 export const HOOK = `${BIN}" hook`
 /** Where the person's files are copied before baba changes them, in the project; each file's newest few are kept. */
@@ -128,8 +128,8 @@ type Handler = { type?: string; command?: string } & Record<string, unknown>
 export type Group = { matcher?: string; hooks?: Handler[] } & Record<string, unknown>
 export type Hooks = Record<string, Group[]>
 
-const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
-const isOurs = (handler: unknown): boolean => isObject(handler) && typeof handler.command === "string" && handler.command.includes(HOOK)
+export const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
+export const isOurs = (handler: unknown): boolean => isObject(handler) && typeof handler.command === "string" && handler.command.includes(HOOK)
 
 /**
  * `hooks` without baba's handlers; a group that held nothing but baba's goes with them, and an event with no group left.
@@ -165,10 +165,10 @@ const withHooks = (value: Record<string, unknown>, hooks: Hooks): Record<string,
 const compact = (text: string): string => text.replace(/"(?:\\.|[^"\\])*"|\s+/g, (token) => (token.startsWith('"') ? token : ""))
 
 /** The JSON object a hooks file holds, and how it is written: its indent, its line ends, a byte-order mark, a last newline. */
-type Read = { value: Record<string, unknown>; indent: string; eol: string; bom: string; end: string }
+export type ReadJson = { value: Record<string, unknown>; indent: string; eol: string; bom: string; end: string }
 
-/** Reads a hooks file's text; throws `Unsafe` where it is not a JSON object whose `hooks`, if any, are groups by event. */
-function read(file: string, text: string): Read {
+/** Reads a JSON object file's text; throws `Unsafe` where it is not a JSON object or cannot be written back as it is. */
+export function readJson(file: string, text: string): ReadJson {
   const bom = text.startsWith("﻿") ? "﻿" : ""
   const body = text.slice(bom.length)
   const wrong = (what: string): never => {
@@ -186,11 +186,6 @@ function read(file: string, text: string): Read {
   // character would come back otherwise than it was, so such a file is not written at all.
   if (body.trim() && compact(body) !== JSON.stringify(value))
     wrong("holds what cannot be written back exactly as it is, a number as 1.0 or a very large one, a key given twice, or an escaped character")
-  if (value.hooks !== undefined) {
-    if (!isObject(value.hooks)) wrong('has "hooks" that is not an object')
-    for (const [event, groups] of Object.entries(value.hooks as Record<string, unknown>))
-      if (!Array.isArray(groups)) wrong(`has "hooks.${event}" that is not a list`)
-  }
 
   return {
     value,
@@ -201,8 +196,26 @@ function read(file: string, text: string): Read {
   }
 }
 
-const write = ({ indent, eol, bom, end }: Omit<Read, "value">, value: unknown): string => bom + JSON.stringify(value, null, indent).replaceAll("\n", eol) + (end && eol)
-const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+/** Reads a hooks file's text; throws `Unsafe` where it is not a JSON object whose `hooks`, if any, are groups by event. */
+function read(file: string, text: string): ReadJson {
+  const parsed = readJson(file, text)
+  const { value } = parsed
+  const wrong = (what: string): never => {
+    throw new Unsafe(`${file} ${what}: correct it and provision again; nothing was changed`)
+  }
+
+  if (value.hooks !== undefined) {
+    if (!isObject(value.hooks)) wrong('has "hooks" that is not an object')
+    for (const [event, groups] of Object.entries(value.hooks as Record<string, unknown>))
+      if (!Array.isArray(groups)) wrong(`has "hooks.${event}" that is not a list`)
+  }
+
+  return parsed
+}
+
+export const writeJson = ({ indent, eol, bom, end }: Omit<ReadJson, "value">, value: unknown): string =>
+  bom + JSON.stringify(value, null, indent).replaceAll("\n", eol) + (end && eol)
+export const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
 /** A hooks file's object with baba's taken out: what is the person's. */
 const theirs = (value: Record<string, unknown>): Record<string, unknown> => {
   return withHooks(value, without((value.hooks ?? {}) as Hooks))
@@ -240,7 +253,7 @@ export function editHooks(project: string, file: string, ours: Record<string, Gr
     if (!same(read(file, landed).value, next)) throw new Error(`${file}: what was written does not read back as it was meant`)
   }
 
-  return replace(project, file, !ours && !Object.keys(next).length ? undefined : write(form, next), check, now)
+  return replace(project, file, !ours && !Object.keys(next).length ? undefined : writeJson(form, next), check, now)
 }
 
 /** How a harness is set up in a project: its skill's folder, and the file its hooks are in, each from the project. */
@@ -276,7 +289,7 @@ function skillIsOurs(dir: string, legacy?: RegExp): boolean {
 }
 
 /** Removes what an older release left at the skill's folder: the link, or its files beside the skill; answers whether it did. */
-function cleared(dir: string, method: Method): boolean {
+function cleared(dir: string, method: Pick<Method, "stale">): boolean {
   const stat = lstatSync(dir, { throwIfNoEntry: false })
 
   if (stat?.isSymbolicLink()) {
@@ -288,7 +301,7 @@ function cleared(dir: string, method: Method): boolean {
   return (method.stale ?? []).filter((entry) => stat && removed(join(dir, entry), dirname(dir))).length > 0
 }
 
-const backedUp = (file: string, done: Replaced): string[] => (done.backup ? [`${file} as it was is kept at ${done.backup}`] : [])
+export const backedUp = (file: string, done: Replaced): string[] => (done.backup ? [`${file} as it was is kept at ${done.backup}`] : [])
 
 /** Removes the previous manual where its contents are now the body of the skill. */
 function removeManual(dir: string, project: string, words: string): boolean {
@@ -299,8 +312,8 @@ function removeManual(dir: string, project: string, words: string): boolean {
     && removed(file, project)
 }
 
-/** Sets a harness up in `project` by `method`: baba's skill written whole where it differs, and baba's hooks set in the person's file. */
-export function install(project: string, method: Method): SetUp {
+/** Installs baba's skill in `project` by `method`, where it differs; returns the skill path if anything changed. */
+export function installSkill(project: string, method: Pick<Method, "skill" | "legacy" | "stale">): string[] {
   const dir = join(project, method.skill)
   const paths: string[] = []
   const push = (path: string) => paths.includes(path) || paths.push(path)
@@ -312,6 +325,30 @@ export function install(project: string, method: Method): SetUp {
   if (written(join(dir, "SKILL.md"), words)) push(method.skill)
   if (removeManual(dir, project, words)) push(method.skill)
 
+  return paths
+}
+
+/** Removes baba's skill from `project` by `method`, where it is baba's and not kept for another enabled harness. */
+export function uninstallSkill(project: string, method: Pick<Method, "skill" | "legacy" | "stale">, keep?: Keep): string[] {
+  if (keep?.skill) return []
+
+  const dir = join(project, method.skill)
+
+  if (lstatSync(dir, { throwIfNoEntry: false }) && skillIsOurs(dir, method.legacy)) {
+    const stale = cleared(dir, method)
+    // The skill's own files, and its folder where that leaves it empty: what else the person keeps there is theirs.
+    const manual = removeManual(dir, project, readFileSync(SKILL, "utf8"))
+    const gone = removed(join(dir, "SKILL.md"), project)
+
+    if (gone || manual || stale) return [method.skill]
+  }
+
+  return []
+}
+
+/** Sets a harness up in `project` by `method`: baba's skill written whole where it differs, and baba's hooks set in the person's file. */
+export function install(project: string, method: Method): SetUp {
+  const paths = installSkill(project, method)
   const command = hookCommand(method.name)
   const ours = Object.fromEntries(
     method.events.map((event) => [event, { hooks: [{ type: "command", command, ...(method.timeouts?.[event] && { timeout: method.timeouts[event] }) }] }])
@@ -326,19 +363,8 @@ export function install(project: string, method: Method): SetUp {
 }
 
 /** Takes out of `project` what `install` put there by `method`, and nothing else: the skill's files where it is baba's, and baba's hooks. */
-export function uninstall(project: string, method: Method): SetUp {
-  const dir = join(project, method.skill)
-  const paths: string[] = []
-
-  if (lstatSync(dir, { throwIfNoEntry: false }) && skillIsOurs(dir, method.legacy)) {
-    const stale = cleared(dir, method)
-    // The skill's own files, and its folder where that leaves it empty: what else the person keeps there is theirs.
-    const manual = removeManual(dir, project, readFileSync(SKILL, "utf8"))
-    const gone = removed(join(dir, "SKILL.md"), project)
-
-    if (gone || manual || stale) paths.push(method.skill)
-  }
-
+export function uninstall(project: string, method: Method, keep?: Keep): SetUp {
+  const paths = uninstallSkill(project, method, keep)
   const done = editHooks(project, join(project, method.hooks), undefined)
 
   if (done.changed) paths.push(method.hooks)

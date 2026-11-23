@@ -50,7 +50,7 @@ export function Desktop({ title, notice, surfaces, tabs, foot }: HomeProps) {
 const about = (key: string): string | undefined => (typeof document === "undefined" ? undefined : document.querySelector<HTMLMetaElement>(`meta[name="babavoss:${key}"]`)?.content || undefined)
 
 /** A harness as the person knows it, by its adapter's name; one not known here is said by that name. */
-const HARNESSES: Record<string, string> = { claude: "Claude Code", codex: "Codex" }
+const HARNESSES: Record<string, string> = { claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" }
 
 /** The facts home's foot says, read once from the page's head. */
 export const factsOf = () => ({ root: about("root"), version: about("version"), session: about("session"), update: about("update") })

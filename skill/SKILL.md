@@ -218,11 +218,11 @@ import { config } from "babavoss/core/config.ts"
 export default config({
   title: "Reading desk",
   dev: true,
-  harnesses: { claude: { enable: true }, codex: { enable: false } },
+  harnesses: { claude: { enable: true }, codex: { enable: false }, antigravity: { enable: false } },
 })
 ```
 
-`title` names the root on the page and at `/`; the project's directory by default. `dev: true` restarts the shell at once whenever its code changes; absent or false, it runs the code it started with until restarted; `BABAVOSS_DEV=1` or `0` overrides it. Each harness has a section: `enable: false` takes back what was written for it at the next `bun run baba provision`; `events` lists the hook's events that tell anything, all by default; Codex's `network: true` opens its sandbox's network so the command reaches the shell. Each harness is set up the same way: baba's skill, in `.claude/skills/baba` or `.agents/skills/baba`, and its hooks among yours in the harness's own project file, `.claude/settings.json` or `.codex/hooks.json`; that file as it was is copied to `.baba/.state/backups/` before a change, and Codex asks the person to trust the hooks once in `/hooks`. Installing provisions; `bun run baba provision` does it again.
+`title` names the root on the page and at `/`; the project's directory by default. `dev: true` restarts the shell at once whenever its code changes; absent or false, it runs the code it started with until restarted; `BABAVOSS_DEV=1` or `0` overrides it. Each harness has a section: `enable: false` takes back what was written for it at the next `bun run baba provision`; `events` lists the hook's events that tell anything, all by default; Codex's `network: true` opens its sandbox's network so the command reaches the shell. Each harness is set up the same way: baba's skill, in `.claude/skills/baba` or `.agents/skills/baba`, and its hooks among yours in the harness's own project file, `.claude/settings.json`, `.codex/hooks.json` or `.agents/hooks.json`; that file as it was is copied to `.baba/.state/backups/` before a change, and Codex asks the person to trust the hooks once in `/hooks`. Installing provisions; `bun run baba provision` does it again.
 
 ## Updating
 

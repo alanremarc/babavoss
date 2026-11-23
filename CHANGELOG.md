@@ -11,6 +11,12 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.83.0
+
+**Antigravity is supported alongside Claude Code and Codex.** `baba init antigravity` (or `harnesses.antigravity` in `.baba/baba.config.ts`) sets up baba's skill in `.agents/skills/baba/` (shared with Codex, kept while either is enabled) and baba's hooks under `"babavoss"` in `.agents/hooks.json` (`SessionStart`, `PreInvocation`, `Stop`), among any hooks already there. Because Antigravity's `PostToolUse` returns `{}` and injects no context, `PreInvocation` carries both turn-start changes (`invocationNum === 0`) and mid-turn notices (`invocationNum > 0`) via `injectSteps.systemMessage`. The standalone client reads `ANTIGRAVITY_CONVERSATION_ID` (client `VERSION` is 22 and replaces itself), and `antigravityCli()` drives headless `agy --input-format stream-json --output-format stream-json` sessions.
+
+Nothing in a project's surfaces needs to change. A `.baba/` whose configuration leaves out `harnesses.antigravity` enables it at the next `bun install` or `bun run baba provision`; set `antigravity: { enable: false }` in `.baba/baba.config.ts` to keep it out.
+
 ## 0.82.0
 
 **Every surface gives an icon.** The skill says a surface's page exports `icon`, its mark on the rail, its tabs and home, a `lucide-react` icon chosen for what the surface is, where it named the export as optional; the template a new surface starts from exports one, a placeholder to change. A surface without one is still drawn with a dot.

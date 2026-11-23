@@ -40,12 +40,17 @@ const report = ({ written, withdrawn, said }: Provisioned) =>
   console.log([...written.map((path) => `provisioned ${path}`), ...withdrawn.map((path) => `withdrew ${path}`), ...said].join("\n"))
 
 /** What `init` says where no harness is named, or one that is none: it sets up only what it is told to. */
-const harnessesNeeded = (wrong: string[]) =>
-  `${wrong.length ? `there is no harness ${wrong.join(" or ")}. ` : ""}baba init needs each harness to set up, by its name, and nothing was made:\n` +
-  [...ADAPTERS.map((adapter) => [`baba init ${adapter.name}`, adapter.title] as const), [`baba init ${NAMES.join(" ")}`, "all of them"] as const]
-    .map(([command, what]) => `  ${command.padEnd(24)}${what}`)
-    .join("\n") +
-  `\nAn agent names the harness it runs in. More can be set up later, in .baba/${CONFIG_FILE}.`
+const harnessesNeeded = (wrong: string[]) => {
+  const rows = [...ADAPTERS.map((adapter) => [`baba init ${adapter.name}`, adapter.title] as const), [`baba init ${NAMES.join(" ")}`, "all of them"] as const]
+  const width = Math.max(24, ...rows.map(([command]) => command.length + 2))
+
+  return (
+    `${wrong.length ? `there is no harness ${wrong.join(" or ")}. ` : ""}baba init needs each harness to set up, by its name, and nothing was made:\n` +
+    rows.map(([command, what]) => `  ${command.padEnd(width)}${what}`).join("\n") +
+    `\nAn agent names the harness it runs in. More can be set up later, in .baba/${CONFIG_FILE}.`
+  )
+}
+const listed = (items: string[]) => (items.length <= 2 ? items.join(" and ") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`)
 
 /** The configuration `init` writes: each harness named enabled, each other not, so installing a clone sets up the same. */
 const configOf = (names: string[]) =>
@@ -85,7 +90,7 @@ function init(args: string[]) {
 
   if (install.exitCode !== 0) throw new Refusal(`cannot install the framework; allow bun to reach github.com and the package registry, then run: cd '${baba}' && bun install`)
   console.log(
-    `${baba} is made, with no surfaces yet, and set up for ${titles.join(" and ")}. A new session there starts its shell; outside one, \`bun run baba start\` in .baba/ does. ` +
+    `${baba} is made, with no surfaces yet, and set up for ${listed(titles)}. A new session there starts its shell; outside one, \`bun run baba start\` in .baba/ does. ` +
       "How a surface is made: the skill baba.",
   )
 }
@@ -120,11 +125,16 @@ async function hook(args: string[]) {
     const baba = found()
     const section = sectionOf(await loadConfig(baba), adapter)
 
-    if (!section.enable || !section.events.includes(event.event)) return
+    if (!section.enable || !section.events.includes(event.event)) {
+      if (adapter.hookEmpty) console.log(adapter.hookEmpty)
+
+      return
+    }
 
     const context = await hookContext(event, baba, adapter.name)
 
     if (context) console.log(adapter.hookOutput(event, context))
+    else if (adapter.hookEmpty) console.log(adapter.hookEmpty)
   } catch {}
 }
 
@@ -141,7 +151,7 @@ async function blockedLines(): Promise<string[]> {
 }
 
 /** The session a root's door is to work in: the harness's where there is one, else the one started by hand. */
-const session = () => (process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID ? [] : ["--session", BY_HAND])
+const session = () => (process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.ANTIGRAVITY_CONVERSATION_ID ? [] : ["--session", BY_HAND])
 
 try {
   const [command, ...args] = process.argv.slice(2)

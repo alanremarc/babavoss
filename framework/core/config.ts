@@ -6,12 +6,17 @@
 // root reads the title as it starts, and `dev`, its mode: true, and changed code restarts it at once (runtime.ts).
 import { existsSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
+import type { AntigravityOptions } from "./harness/antigravity.ts"
 import type { ClaudeOptions } from "./harness/claude.ts"
 import type { CodexOptions } from "./harness/codex.ts"
 import type { Adapter } from "./harness/harness.ts"
 
 export type Section<O> = { enable: boolean } & Partial<O>
-export type Config = { title?: string; dev?: boolean; harnesses?: { claude?: Section<ClaudeOptions>; codex?: Section<CodexOptions> } }
+export type Config = {
+  title?: string
+  dev?: boolean
+  harnesses?: { claude?: Section<ClaudeOptions>; codex?: Section<CodexOptions>; antigravity?: Section<AntigravityOptions> }
+}
 
 /** Types a configuration, which is what it answers: `export default config({ … })`. */
 export const config = (value: Config): Config => value
