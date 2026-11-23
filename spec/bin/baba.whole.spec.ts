@@ -26,12 +26,12 @@ const skill = (folder: string, name: string) => join(project, folder, name, "SKI
 beforeAll(() => {
   // Without a harness named, or with one that is none, it says which there are and makes nothing.
   for (const args of [["init"], ["init", "--from", `file:${checkout}`], ["init", "cursor"]]) {
-    expect(run(args, project)).toMatchObject({ status: 2, err: expect.stringContaining("baba init claude codex") })
+    expect(run(args, project)).toMatchObject({ status: 2, err: expect.stringContaining("baba init claude codex antigravity") })
     expect(existsSync(baba)).toBe(false)
   }
   expect(run(["init", "cursor"], project).err).toContain("there is no harness cursor")
 
-  const made = run(["init", "claude", "codex", "--from", `file:${checkout}`], project)
+  const made = run(["init", "claude", "codex", "antigravity", "--from", `file:${checkout}`], project)
 
   expect(made.status, made.err).toBe(0)
 }, 120_000)
@@ -51,14 +51,20 @@ test("init makes .baba/ as a package that names the framework and provisions whe
 
     for (const groups of Object.values(hooks)) expect(groups.map((group) => group.hooks[0]!.command)).toEqual([hookCommand(name!)])
   }
+  const agy = (JSON.parse(readFileSync(join(project, ".agents/hooks.json"), "utf8")) as { babavoss: Record<string, { command: string }[]> }).babavoss
+
+  expect(Object.keys(agy)).toEqual(["SessionStart", "PreInvocation", "Stop"])
+  for (const handlers of Object.values(agy)) expect(handlers.map((h) => h.command)).toEqual([hookCommand("antigravity")])
   // Nothing of the person's was there to keep a copy of.
   expect(existsSync(join(project, ".baba/.state/backups"))).toBe(false)
   // The harnesses named are the configuration's, so installing a clone sets up the same.
-  expect(readFileSync(join(baba, "baba.config.ts"), "utf8")).toContain("claude: { enable: true },\n    codex: { enable: true },")
+  expect(readFileSync(join(baba, "baba.config.ts"), "utf8")).toContain(
+    "claude: { enable: true },\n    codex: { enable: true },\n    antigravity: { enable: true },"
+  )
   expect(run(["init", "claude"], project)).toMatchObject({ status: 2, err: expect.stringContaining("is there already") })
 })
 
-test("init sets up only the harness named: the other is not enabled in the configuration, and nothing of it is written", () => {
+test("init sets up only the harness named: the others are not enabled, and a shared skill stays while either harness uses it", () => {
   const one = realpathSync(mkdtempSync(join(tmpdir(), "baba-one-")))
 
   try {
@@ -66,14 +72,23 @@ test("init sets up only the harness named: the other is not enabled in the confi
 
     expect(made.status, made.err).toBe(0)
     expect(made.out).toContain("set up for Codex.")
-    expect(readFileSync(join(one, ".baba/baba.config.ts"), "utf8")).toContain("claude: { enable: false },\n    codex: { enable: true },")
+    expect(readFileSync(join(one, ".baba/baba.config.ts"), "utf8")).toContain(
+      "claude: { enable: false },\n    codex: { enable: true },\n    antigravity: { enable: false },"
+    )
     expect(existsSync(join(one, ".codex/hooks.json"))).toBe(true)
     expect(existsSync(join(one, ".agents/skills/baba/SKILL.md"))).toBe(true)
+    expect(existsSync(join(one, ".agents/hooks.json"))).toBe(false)
     expect(existsSync(join(one, ".claude"))).toBe(false)
-    // The other way round, by the configuration it wrote, with nothing installed again: Codex's files go, Claude Code's come.
+    // Enabling antigravity and disabling codex keeps the shared .agents/skills/baba while swapping .codex/hooks.json for .agents/hooks.json.
     const file = join(one, ".baba/baba.config.ts")
 
-    writeFileSync(file, readFileSync(file, "utf8").replace("claude: { enable: false }", "claude: { enable: true }").replace("codex: { enable: true }", "codex: { enable: false }"))
+    writeFileSync(file, readFileSync(file, "utf8").replace("codex: { enable: true }", "codex: { enable: false }").replace("antigravity: { enable: false }", "antigravity: { enable: true }"))
+    expect(run(["provision"], join(one, ".baba")).status).toBe(0)
+    expect(existsSync(join(one, ".codex"))).toBe(false)
+    expect(existsSync(join(one, ".agents/skills/baba/SKILL.md"))).toBe(true)
+    expect(existsSync(join(one, ".agents/hooks.json"))).toBe(true)
+    // Switching to Claude Code withdraws Antigravity's hooks and the shared skill.
+    writeFileSync(file, readFileSync(file, "utf8").replace("claude: { enable: false }", "claude: { enable: true }").replace("antigravity: { enable: true }", "antigravity: { enable: false }"))
     expect(run(["provision"], join(one, ".baba")).status).toBe(0)
     expect(existsSync(join(one, ".claude/settings.json"))).toBe(true)
     expect(existsSync(join(one, ".codex"))).toBe(false)
@@ -331,11 +346,13 @@ test("a harness the configuration does not enable is withdrawn, exactly what bab
   expect(run(["provision"])).toMatchObject({ status: 1, err: expect.stringContaining(".baba/baba.config.ts does not load") })
   expect(before()).toEqual(was)
 
-  config("{ harnesses: { claude: { enable: false }, codex: { enable: false } } }")
+  config("{ harnesses: { claude: { enable: false }, codex: { enable: false }, antigravity: { enable: false } } }")
 
   const withdrawn = run(["provision"])
 
-  expect(withdrawn.out).toContain("withdrew .claude/skills/baba\nwithdrew .claude/settings.json\nwithdrew .agents/skills/baba\nwithdrew .codex/hooks.json\n")
+  expect(withdrawn.out).toContain(
+    "withdrew .claude/skills/baba\nwithdrew .claude/settings.json\nwithdrew .agents/skills/baba\nwithdrew .codex/hooks.json\nwithdrew .agents/hooks.json\n"
+  )
   expect(existsSync(join(project, ".claude/skills"))).toBe(false)
   expect(existsSync(join(project, ".agents"))).toBe(false)
   // What is left is the person's alone, laid out as they had it.
@@ -345,11 +362,13 @@ test("a harness the configuration does not enable is withdrawn, exactly what bab
   rmSync(join(baba, "baba.config.ts"))
   rmSync(settings)
   rmSync(hooks)
-  expect(run(["provision"]).out).toContain("provisioned .claude/skills/baba\nprovisioned .claude/settings.json\nprovisioned .agents/skills/baba\nprovisioned .codex/hooks.json\n")
+  expect(run(["provision"]).out).toContain(
+    "provisioned .claude/skills/baba\nprovisioned .claude/settings.json\nprovisioned .agents/skills/baba\nprovisioned .codex/hooks.json\nprovisioned .agents/hooks.json\n"
+  )
 })
 
 test("the hook reads the configuration as it runs: an event not listed tells nothing, nor a harness not enabled, nor a configuration that does not load, which the shell's answer says", () => {
-  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "configured", CODEX_THREAD_ID: "" }
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "configured", CODEX_THREAD_ID: "", ANTIGRAVITY_CONVERSATION_ID: "" }
   const hook = (harness: string[], input: Record<string, unknown>) =>
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook", ...harness], { cwd: project, encoding: "utf8", env, input: JSON.stringify(input) })
   const start = { session_id: "configured", hook_event_name: "SessionStart", source: "startup" }
@@ -374,7 +393,7 @@ test("the hook reads the configuration as it runs: an event not listed tells not
 
 test("provision and start say in one line where an organisation's managed settings keep Claude Code from running baba's hook; a harness not enabled is not read for", () => {
   const managed = mkdtempSync(join(tmpdir(), "managed-"))
-  const env = { ...process.env, BABAVOSS_MANAGED: managed, CLAUDE_CODE_SESSION_ID: "managed", CODEX_THREAD_ID: "" }
+  const env = { ...process.env, BABAVOSS_MANAGED: managed, CLAUDE_CODE_SESSION_ID: "managed", CODEX_THREAD_ID: "", ANTIGRAVITY_CONVERSATION_ID: "" }
   const baba_ = (args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: baba, encoding: "utf8", env })
   const line = `baba: Claude Code's managed settings (${join(managed, "managed-settings.json")}) disable every hook (disableAllHooks), baba's among them;`
 
@@ -401,7 +420,7 @@ test("provision and start say in one line where an organisation's managed settin
 test("a session's start gives operating guidance and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)
 
-  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "" }
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "hooked", CODEX_THREAD_ID: "", ANTIGRAVITY_CONVERSATION_ID: "" }
   const command = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], { cwd: project, encoding: "utf8", env })
   const hook = (event: string, more: Record<string, unknown> = {}) =>
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook"], {
@@ -568,7 +587,7 @@ test("a session's start gives operating guidance and starts the root; a surface 
 }, 60_000)
 
 test("in dev mode the root starts with the surfaces that load, lists one that does not as broken, and keeps its tabs until its code loads again", async () => {
-  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "", BABAVOSS_DEV: "1" }
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "broken", CODEX_THREAD_ID: "", ANTIGRAVITY_CONVERSATION_ID: "", BABAVOSS_DEV: "1" }
   const word = join(project, ".baba/.state/bin/baba")
   const call = (...args: string[]) => spawnSync(word, args, { cwd: project, encoding: "utf8", env })
   const code = join(baba, "surfaces/by-hand/src/surface.ts")
@@ -603,6 +622,58 @@ test("in dev mode the root starts with the surfaces that load, lists one that do
   } finally {
     rmSync(missing, { force: true })
     writeFileSync(code, mended)
+    spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
+  }
+}, 60_000)
+
+test("Antigravity's hooks run from .agents/, start the shell in the project's cwd, and inject via injectSteps.systemMessage across SessionStart, PreInvocation and Stop", async () => {
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: "", CODEX_THREAD_ID: "", ANTIGRAVITY_CONVERSATION_ID: "agy-session" }
+  const agents = join(project, ".agents")
+  const hook = (payload: Record<string, unknown>) =>
+    spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook", "antigravity"], {
+      cwd: agents,
+      encoding: "utf8",
+      env,
+      input: JSON.stringify({ conversationId: "agy-session", cwd: project, workspacePaths: [project], ...payload }),
+    })
+
+  try {
+    const started = hook({ hookEventName: "SessionStart" })
+
+    expect(started.status).toBe(0)
+
+    const startOut = JSON.parse(started.stdout) as { injectSteps: { systemMessage: { systemMessage: string } }[] }
+
+    expect(startOut.injectSteps[0]!.systemMessage.systemMessage).toContain("The shell of .baba/ was started for this session, and answered:")
+    // The session's registered directory is the project root, not .agents/ where the hook ran.
+    const open = JSON.parse(readFileSync(join(project, ".baba/.state/sessions/agy-session/open.json"), "utf8")) as { baba: { directory: string } }
+
+    expect(open.baba.directory).toBe(project)
+    // Nothing changed yet: PreInvocation and Stop return valid empty JSON {}.
+    expect(JSON.parse(hook({ hookEventName: "PreInvocation", invocationNum: 0 }).stdout)).toEqual({})
+    expect(JSON.parse(hook({ hookEventName: "Stop", executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true }).stdout)).toEqual({})
+
+    // The person opens a tab on the page: PreInvocation (invocationNum 0) injects the diff, and a mid-turn notice arrives on invocationNum 1.
+    const endpoint = JSON.parse(readFileSync(join(project, ".baba/.state/sessions/agy-session/baba/service.json"), "utf8")) as { port: number; token: string }
+    const person = (path: string, handle: string, args: Record<string, string>) =>
+      fetch(`http://127.0.0.1:${endpoint.port}${path}`, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json", "babavoss-service": endpoint.token, "babavoss-actor": "person" },
+        body: JSON.stringify({ handle, args }),
+      })
+
+    expect((await person("/", "open", { surface: "desk" })).status).toBe(200)
+
+    const turnStart = JSON.parse(hook({ hookEventName: "PreInvocation", invocationNum: 0 }).stdout) as { injectSteps: { systemMessage: { systemMessage: string } }[] }
+
+    expect(turnStart.injectSteps[0]!.systemMessage.systemMessage).toContain('the person opened /desk')
+    expect((await person("/desk", "propose", { text: "from antigravity" })).status).toBe(200)
+
+    const midTurn = JSON.parse(hook({ hookEventName: "PreInvocation", invocationNum: 1 }).stdout) as { injectSteps: { systemMessage: { systemMessage: string } }[] }
+
+    expect(midTurn.injectSteps[0]!.systemMessage.systemMessage).toContain('Heard in the shell of .baba/ while you worked:')
+    expect(midTurn.injectSteps[0]!.systemMessage.systemMessage).toContain('from antigravity')
+  } finally {
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
   }
 }, 60_000)

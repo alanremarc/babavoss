@@ -25,7 +25,7 @@ A framework for surfaces. A surface is a tool an agent works with for a person: 
 ```text
 person     Asks and decides.
 agent      Does the work.
-harness    Hosts the agent: Claude Code, Codex.
+harness    Hosts the agent: Claude Code, Codex, Antigravity.
 session    One conversation of the harness.
 runtime    Holds the surfaces of a session: one state, changed by either side.
 page       Shows the same surfaces to the person, at one address per session, opened as it is by a browser of this
@@ -135,7 +135,7 @@ notices      none yet                yes         yes                    yes     
 ```text
 baba       The command the agent reads and acts with, one call at a time or as one program of many, answered by one
            summary; and the words that teach it to.
-hook       Where the harness lets context in: at a session's start, with each message, after each tool call. It adds, and never blocks.
+hook       Where the harness lets context in: at a session's start, with each message, and after tool calls or before the next model call. It adds, and never blocks.
 skill      The same words where a harness has no hooks, and the way back in.
 adapter    The one place that knows a harness: how to set it up, start a session in it, and read its stream. A hook
            names its adapter, so a runtime knows which harness its agent runs in.
@@ -157,8 +157,8 @@ wake       Every request wakes the runtime with a strength: a session's start we
    │   ├─ baba.config.ts          which harnesses are set up, named when it is made, and how; the project's title
    │   └─ .state/                 what sessions keep, ignored by git: each tab's state and log, closed tabs read only, cleared by a
    │                              rolling window; the command; a copy of each of the person's files baba changed
-   └─ .claude/ · .codex/ …        the harnesses named when .baba/ was made, each set up from it the same way: baba's words as a
-                                  skill, and its hooks among the person's in the harness's own project file, copied before any change
+   └─ .claude/ · .codex/ · .agents/ …  the harnesses named when .baba/ was made, each set up from it the same way: baba's words as a
+                                       skill, and its hooks among the person's in the harness's own project file, copied before any change
 
 ```
 

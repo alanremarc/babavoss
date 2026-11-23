@@ -378,8 +378,8 @@ export const codex: Adapter<CodexOptions> = {
 
     return { paths, ...(said.length && { said: said.join("\n") }) }
   },
-  withdraw(project): SetUp {
-    const set = uninstall(project, METHOD)
+  withdraw(project, keep): SetUp {
+    const set = uninstall(project, METHOD, keep)
     const done = closeNetwork(project)
     const said = [...(set.said ? [set.said] : []), ...done.said]
 

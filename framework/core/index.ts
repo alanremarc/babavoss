@@ -9,13 +9,17 @@ export { sessionDir } from "./state/session-dir.ts"
 export { defineRoot, type RootDefinition } from "./root.ts"
 export { diff, tell, whole } from "./present/present.ts"
 export * from "./runtime/index.ts"
-// A harness, for a surface that drives an agent of its own: Claude Code's adapter, a fake one for stories, and their events.
+// A harness, for a surface that drives an agent of its own: the adapters' run faces, a fake one for stories, and their events.
 export {
+  antigravityCli,
   claudeCode,
+  codexCli,
   fakeHarness,
   sessionEnv,
   NONE,
+  type AntigravityOptions,
   type ClaudeOptions,
+  type CodexOptions,
   type FakeHarness,
   type Harness,
   type HarnessEvent,

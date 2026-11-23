@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { ADAPTERS, claude, codex } from "../../framework/core/harness/index.ts"
+import { ADAPTERS, antigravity, claude, codex, editAntigravityHooks, type Adapter } from "../../framework/core/harness/index.ts"
 import { BACKUPS, backup, editHooks, hookCommand, replace, Unsafe, without, type Group, type Hooks } from "../../framework/core/harness/setup.ts"
 
 let project: string
@@ -310,10 +310,14 @@ describe("a write lands whole, in the file's own place", () => {
 })
 
 describe("the adapters set a harness up the same way", () => {
-  const FILES = { claude: { skill: ".claude/skills/baba", hooks: ".claude/settings.json" }, codex: { skill: ".agents/skills/baba", hooks: ".codex/hooks.json" } }
+  const FILES = {
+    claude: { skill: ".claude/skills/baba", hooks: ".claude/settings.json" },
+    codex: { skill: ".agents/skills/baba", hooks: ".codex/hooks.json" },
+    antigravity: { skill: ".agents/skills/baba", hooks: ".agents/hooks.json" },
+  }
   const words = readFileSync(new URL("../../skill/SKILL.md", import.meta.url), "utf8")
 
-  for (const adapter of ADAPTERS) {
+  for (const adapter of [claude, codex] as readonly Adapter[]) {
     const at = FILES[adapter.name as keyof typeof FILES]
 
     test(`${adapter.name}: the skill and a hook for each event, once; withdrawn, only what the person had is left`, () => {
@@ -351,6 +355,47 @@ describe("the adapters set a harness up the same way", () => {
       expect(readdirSync(join(project, at.skill)).sort()).toEqual(["making-surfaces.md", "notes.md"])
       expect(adapter.withdraw(project).paths).toEqual([])
     })
+  }
+
+  test("antigravity: the skill and flat handlers under babavoss in .agents/hooks.json, once; withdrawn, only the person's hooks remain", () => {
+    const hooks = join(project, ".agents/hooks.json")
+    const linter = { PostToolUse: [{ matcher: "run_command", hooks: [{ type: "command", command: "./lint.sh" }] }] }
+
+    mkdirSync(dirname(hooks), { recursive: true })
+    writeFileSync(hooks, `${JSON.stringify({ "my-linter": linter }, null, 4)}\n`)
+
+    const before = readFileSync(hooks, "utf8")
+    const set = antigravity.provision(project, antigravity.defaults)
+
+    expect(set.paths).toEqual([".agents/skills/baba", ".agents/hooks.json"])
+    expect(set.said).toContain(`.agents/hooks.json as it was is kept at ${BACKUPS}/`)
+    expect(readFileSync(join(project, ".agents/skills/baba/SKILL.md"), "utf8")).toBe(words)
+
+    const parsed = JSON.parse(readFileSync(hooks, "utf8")) as Record<string, Record<string, { type: string; command: string }[]>>
+
+    expect(parsed["my-linter"]).toEqual(linter as unknown as Record<string, { type: string; command: string }[]>)
+    expect(Object.keys(parsed.babavoss!)).toEqual(["SessionStart", "PreInvocation", "Stop"])
+    for (const event of antigravity.events) expect(parsed.babavoss![event]).toEqual([{ type: "command", command: hookCommand("antigravity") }])
+    expect(antigravity.provision(project, antigravity.defaults).paths).toEqual([])
+    // Withdrawing with keep.skill leaves the shared .agents/skills/baba intact and removes only .agents/hooks.json's babavoss entry.
+    expect(antigravity.withdraw(project, { skill: true }).paths).toEqual([".agents/hooks.json"])
+    expect(existsSync(join(project, ".agents/skills/baba/SKILL.md"))).toBe(true)
+    expect(readFileSync(hooks, "utf8")).toBe(before)
+    // Withdrawing fully removes the skill too; if .agents/hooks.json held only babavoss, the file itself goes.
+    rmSync(hooks)
+    antigravity.provision(project, antigravity.defaults)
+    expect(antigravity.withdraw(project).paths).toEqual([".agents/skills/baba", ".agents/hooks.json"])
+    expect(existsSync(hooks)).toBe(false)
+    expect(existsSync(join(project, ".agents"))).toBe(false)
+    // Invalid JSON in .agents/hooks.json is left untouched.
+    mkdirSync(dirname(hooks), { recursive: true })
+    writeFileSync(hooks, "{ not json")
+    expect(() => editAntigravityHooks(project, hooks, { Stop: [{ type: "command", command: hookCommand("antigravity") }] })).toThrow(Unsafe)
+    expect(readFileSync(hooks, "utf8")).toBe("{ not json")
+  })
+
+  for (const adapter of ADAPTERS) {
+    const at = FILES[adapter.name as keyof typeof FILES]
 
     test(`${adapter.name}: a skill folder that is not baba's stops it before the person's hooks file is touched`, () => {
       mkdirSync(join(project, at.skill), { recursive: true })

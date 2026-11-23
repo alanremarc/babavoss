@@ -149,7 +149,7 @@ export function makePlace(variant: Variant, session: string, files: Record<strin
     )
     writeFileSync(
       join(baba, "baba.config.ts"),
-      `import { config } from "babavoss/core/config.ts"\n\nexport default config({ title: "Eval", harnesses: { claude: { enable: true }, codex: { enable: false } } })\n`,
+      `import { config } from "babavoss/core/config.ts"\n\nexport default config({ title: "Eval", harnesses: { claude: { enable: true }, codex: { enable: false }, antigravity: { enable: false } } })\n`,
     )
     for (const name of readdirSync(FIXTURES)) cpSync(join(FIXTURES, name), join(baba, "surfaces", name), { recursive: true })
     if (variant.words) cpSync(join(WORDS, `${variant.words}.ts`), join(baba, "surfaces", SURFACE, "src/words.ts"))

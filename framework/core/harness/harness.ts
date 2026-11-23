@@ -69,14 +69,16 @@ export type Moment = "SessionStart" | "UserPromptSubmit" | "PostToolUse" | "Stop
 /** How a session started, where its harness says: new, resumed, cleared, after a compaction, or forked from another. */
 export type Source = "startup" | "resume" | "clear" | "compact" | "fork"
 export const SOURCES: readonly Source[] = ["startup", "resume", "clear", "compact", "fork"]
-/** One hook's input, read: the session's id, the harness's own name for its event, the framework's moment, and at a start its source where said. */
-export type HookEvent = { session?: string; event: string; moment: Moment; source?: Source }
+/** One hook's input, read: the session's id, the harness's own name for its event, the framework's moment, at a start its source where said, and the session's cwd where it differs from the hook's. */
+export type HookEvent = { session?: string; event: string; moment: Moment; source?: Source; cwd?: string }
 /** A start's source in a hook's input; undefined where it is none the framework knows. */
 export const sourceOf = (event: string, source: unknown): { source: Source } | {} =>
   event === "SessionStart" && (SOURCES as readonly unknown[]).includes(source) ? { source: source as Source } : {}
 
 /** What a set-up face did: the paths it wrote or removed, relative to the project, and a line to say to the person. */
 export type SetUp = { paths: string[]; said?: string }
+/** What another enabled adapter shares and keeps when this one is withdrawn: its skill folder. */
+export type Keep = { skill?: boolean }
 
 export interface Adapter<O extends { events: string[] } = { events: string[] }> {
   /** The harness's name: its section of .baba/baba.config.ts, and what `baba init` is given to set it up. */
@@ -96,12 +98,14 @@ export interface Adapter<O extends { events: string[] } = { events: string[] }> 
    * for the person with what they can do; undefined where nothing that can be read does. It reads, and changes nothing.
    */
   blocked?(): string | undefined
-  /** Removes from `project` what `provision` wrote there, and nothing else. */
-  withdraw(project: string): SetUp
+  /** Removes from `project` what `provision` wrote there, and nothing else, leaving what `keep` says another enabled harness still uses. */
+  withdraw(project: string, keep?: Keep): SetUp
   /** The framework's moment in what the harness gave its hook on standard input; undefined where it is none of them. */
   hookEvent(input: unknown): HookEvent | undefined
   /** What the hook prints for the harness to add `context`. */
   hookOutput(event: HookEvent, context: string): string
+  /** What the hook prints when it ran and has nothing to add; undefined prints nothing. */
+  hookEmpty?: string
   /** The harness, run; left out where the adapter cannot run it. */
   run?: () => Harness
 }

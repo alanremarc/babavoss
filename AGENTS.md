@@ -49,7 +49,7 @@ site/                       babavoss.org as it is served, no build: index.html, 
 .baba/surfaces/lab/eval/    the eval: a campaign of tasks run by headless agents on variants, checkouts, of a fixture surface; tokens and
                             what the agent did, tabled; eval.ts is its command, --dry plays scripts through the fake harness for free
 .claude/  .agents/  .codex/ provisioned from .baba/, each harness the same way: baba's skill in .claude/skills/baba and .agents/skills/baba,
-                            and the framework's hook among this repository's own in .claude/settings.json and .codex/hooks.json
+                            and the framework's hook among this repository's own in .claude/settings.json, .codex/hooks.json and .agents/hooks.json
 .codex/config.toml          the shell sandbox with loopback open, so a command reaches its runtime
 .baba/.state/               what sessions here write; ignored by git
 ```
@@ -65,7 +65,8 @@ A project that uses it:
                             person's files below as it was before baba changed it
 .claude/skills/baba/        generated: the skill baba, SKILL.md, for Claude Code
 .claude/settings.json       the person's, with the framework's hook for each of Claude Code's events among theirs
-.agents/skills/baba/        generated: the same skill, for Codex and the rest
+.agents/skills/baba/        generated: the same skill, for Codex, Antigravity and the rest
+.agents/hooks.json          the person's, with the framework's hook under "babavoss" for Antigravity's events among theirs
 .codex/hooks.json           the person's, with the framework's hook for each of Codex's events among theirs; Codex asks the person to review it
 ```
 

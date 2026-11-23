@@ -61,7 +61,7 @@ export const REDACTED = "<redacted>"
 /** Text with no address and no account's id in it. */
 export const redact = (text: string): string => text.replace(EMAIL, REDACTED).replace(NAMED, `$1$2$4${REDACTED}`)
 /** A line of the stream with no field that names the account, and no address or account's id in any text. */
-const scrub = (value: Json): Json => {
+export const scrub = (value: Json): Json => {
   if (typeof value === "string") return redact(value)
   if (Array.isArray(value)) return value.map(scrub)
   if (!value || typeof value !== "object") return value
@@ -151,9 +151,9 @@ export function claudeEvents(line: Json): HarnessEvent[] {
 }
 
 /** The environment of a session: none of the caller's own harness identity, or the child takes it for its own. */
-const OWN = /^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID|CLAUDE_AGENT_SDK|CLAUDE_EFFORT|CLAUDE_CONFIG_DIR|AI_AGENT|BABAVOSS_|CODEX_)/
-/** What of it stays: a token the person set up for headless use. */
-const KEPT = ["CLAUDE_CODE_OAUTH_TOKEN"]
+const OWN = /^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID|CLAUDE_AGENT_SDK|CLAUDE_EFFORT|CLAUDE_CONFIG_DIR|AI_AGENT|BABAVOSS_|CODEX_|ANTIGRAVITY_|AGY_)/
+/** What of it stays: a token or auth mode the person set up for headless use. */
+const KEPT = ["CLAUDE_CODE_OAUTH_TOKEN", "AGY_ADC_AUTH"]
 const kept = (entry: [string, string | undefined]): entry is [string, string] => entry[1] !== undefined && (KEPT.includes(entry[0]) || !OWN.test(entry[0]))
 export const cleanEnv = (env: NodeJS.ProcessEnv = process.env): Record<string, string> => Object.fromEntries(Object.entries(env).filter(kept))
 /** The environment of a session in `home`. */
@@ -206,7 +206,7 @@ export function claudeCode(own: string = homedir(), platform: NodeJS.Platform = 
 }
 
 /** JSON lines from a byte stream; a line that is not JSON is passed over. */
-async function* jsonLines(stream: ReadableStream<Uint8Array>): AsyncIterable<Json> {
+export async function* jsonLines(stream: ReadableStream<Uint8Array>): AsyncIterable<Json> {
   const decoder = new TextDecoder()
   let buffer = ""
 
@@ -423,7 +423,7 @@ export const claude: Adapter<ClaudeOptions> = {
     return { paths: set.paths, ...(said && { said }) }
   },
   blocked: () => blocked(),
-  withdraw: (project): SetUp => uninstall(project, METHOD),
+  withdraw: (project, keep): SetUp => uninstall(project, METHOD, keep),
   hookEvent(input): HookEvent | undefined {
     const i = obj(input as Json)
     const event = str(i.hook_event_name)

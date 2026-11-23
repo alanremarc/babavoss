@@ -254,9 +254,11 @@ export async function provision(baba: string): Promise<Provisioned> {
   // Before an adapter keeps a copy of a file there: the folder is where it should be, and git leaves it alone.
   stateMade(baba)
   done.written.push(...scaffold(baba).map((path) => relative(root, path)))
-  for (const adapter of ADAPTERS) {
-    const { enable, ...options } = sectionOf(config, adapter)
-    const set = enable ? adapter.provision(root, options) : adapter.withdraw(root)
+  const sections = ADAPTERS.map((adapter) => ({ adapter, section: sectionOf(config, adapter) }))
+  const keptSkills = new Set(sections.filter(({ section }) => section.enable).map(({ adapter }) => adapter.skill))
+
+  for (const { adapter, section: { enable, ...options } } of sections) {
+    const set = enable ? adapter.provision(root, options) : adapter.withdraw(root, { skill: keptSkills.has(adapter.skill) })
 
     done[enable ? "written" : "withdrawn"].push(...set.paths)
     if (set.said) done.said.push(set.said)

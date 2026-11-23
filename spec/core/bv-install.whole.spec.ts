@@ -77,7 +77,7 @@ function installation(location = "project", configured = false) {
   for (const path of [home, project, bin]) mkdirSync(path, { recursive: true })
   notesRoot(directory)
 
-  const env: Record<string, string | undefined> = { ...process.env, HOME: home, CLAUDE_CODE_SESSION_ID: "S", CODEX_THREAD_ID: "" }
+  const env: Record<string, string | undefined> = { ...process.env, HOME: home, CLAUDE_CODE_SESSION_ID: "S", CODEX_THREAD_ID: "", ANTIGRAVITY_CONVERSATION_ID: "" }
 
   delete env.CLAUDE_CONFIG_DIR
   delete env.CODEX_HOME
