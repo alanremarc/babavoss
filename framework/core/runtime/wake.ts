@@ -53,16 +53,16 @@ export function strengthsOf(env: NodeJS.ProcessEnv = process.env): Record<Exclud
 }
 
 /**
- * Whether the session's end puts the runtime to sleep: yes, unless the person's settings file, ~/.baba/settings.json or the
- * one BABAVOSS_SETTINGS names, says `runtime.sleepAtEnd` false. Read as the end is heard, so a change needs no restart.
+ * Whether the session's end puts the runtime to sleep, opted in through `runtime.sleepAtEnd` in the person's settings.
+ * Read as the end is heard, so a change needs no restart.
  */
 export function sleepsAtEnd(env: NodeJS.ProcessEnv = process.env): boolean {
   try {
     const kept = JSON.parse(readFileSync(env.BABAVOSS_SETTINGS || settingsAt(), "utf8")) as { runtime?: { sleepAtEnd?: unknown } } | null
 
-    return kept?.runtime?.sleepAtEnd !== false
+    return kept?.runtime?.sleepAtEnd === true
   } catch {
-    return true
+    return false
   }
 }
 
@@ -92,7 +92,7 @@ export function signalOf(r: Request): Signal {
  * The deadline a runtime keeps: the furthest one its signals gave, or what the session's end left of it. `endSleeps` says,
  * as the end is heard, whether it cuts; where it does not, the end is no signal and the deadline stays as it was.
  */
-export function wakeful(strengths: Record<Exclude<Strength, "none">, number>, from: number, endSleeps: () => boolean = () => true) {
+export function wakeful(strengths: Record<Exclude<Strength, "none">, number>, from: number, endSleeps: () => boolean = () => false) {
   let until = from + strengths.weak
   let visibleUntil = 0
   let last: { signal: Exclude<Signal, "watching" | "visible"> | "startup"; at: number } = { signal: "startup", at: from }

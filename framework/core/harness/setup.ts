@@ -131,6 +131,22 @@ export type Hooks = Record<string, Group[]>
 export const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
 export const isOurs = (handler: unknown): boolean => isObject(handler) && typeof handler.command === "string" && handler.command.includes(HOOK)
 
+/** Reads the project's provisioned commands, flat or under a matcher group. */
+export function installedHooks(file: string, name: string, events: readonly string[], key = "hooks"): boolean {
+  if (!existsSync(file)) return false
+
+  const { value } = readJson(file, readFileSync(file, "utf8"))
+  const hooks = value[key]
+  const command = hookCommand(name)
+  const ours = (handler: unknown) => isObject(handler) && handler.command === command
+
+  return isObject(hooks) && hooks.enabled !== false && events.every((event) => {
+    const entries = hooks[event]
+
+    return Array.isArray(entries) && entries.some((entry) => ours(entry) || (isObject(entry) && Array.isArray(entry.hooks) && entry.hooks.some(ours)))
+  })
+}
+
 /**
  * `hooks` without baba's handlers; a group that held nothing but baba's goes with them, and an event with no group left.
  * What the person wrote is as it was, but for an event with no groups, which says nothing to a harness and cannot be

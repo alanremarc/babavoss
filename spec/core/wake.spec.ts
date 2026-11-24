@@ -21,7 +21,7 @@ it("classifies each request where it enters: the agent's word and the hooks by w
 })
 
 it("keeps the furthest deadline, which watching never moves, and the session's end cuts to what is left of it", () => {
-  const wake = wakeful(STRENGTHS, 0)
+  const wake = wakeful(STRENGTHS, 0, () => true)
 
   expect(wake.until).toBe(STRENGTHS.weak)
   wake.signal("started", 1000)
@@ -40,7 +40,7 @@ it("keeps the furthest deadline, which watching never moves, and the session's e
 
 it("keeps a page lease alongside activity, carries it across restart, and stops renewing it when the session ends", () => {
   const wake = wakeful(STRENGTHS, 0)
-  const resumed = wakeful(STRENGTHS, STRENGTHS.weak)
+  const resumed = wakeful(STRENGTHS, STRENGTHS.weak, () => true)
 
   wake.signal("visible", 1000)
   expect(wake.until).toBe(STRENGTHS.weak)
@@ -67,12 +67,16 @@ it("leaves the deadline and the page's lease as they were at the session's end w
   expect(wake.until).toBe(1000 + STRENGTHS.strong + 1 + STRENGTHS.end)
 })
 
-it("sleeps at the session's end unless the person's settings file says runtime.sleepAtEnd false", () => {
+it("sleeps at the session's end only when the person opts in", () => {
   const file = join(mkdtempSync(join(tmpdir(), "wake-settings-")), "settings.json")
   const env = { BABAVOSS_SETTINGS: file }
 
-  expect(sleepsAtEnd(env)).toBe(true)
-  for (const [kept, sleeps] of [["{", true], ["null", true], ['{"runtime":{"sleepAtEnd":true}}', true], ['{"runtime":{"sleepAtEnd":false}}', false]] as const) {
+  expect(sleepsAtEnd(env)).toBe(false)
+  const wake = wakeful(STRENGTHS, 0)
+
+  wake.signal("gone", 1000)
+  expect(wake.until).toBe(STRENGTHS.weak)
+  for (const [kept, sleeps] of [["{", false], ["null", false], ['{"runtime":{"sleepAtEnd":true}}', true], ['{"runtime":{"sleepAtEnd":false}}', false]] as const) {
     writeFileSync(file, kept)
     expect([kept, sleepsAtEnd(env)]).toEqual([kept, sleeps])
   }

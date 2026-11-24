@@ -14,7 +14,7 @@ import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
 import type { Json } from "../surface/view.ts"
 import { sourceOf, type Adapter, type Harness, type HarnessEvent, type HookEvent, type Loaded, type Moment, type Request, type Session, type SetUp, type Start, type Tokens } from "./harness.ts"
-import { install, uninstall, type Method } from "./setup.ts"
+import { install, installedHooks, uninstall, type Method } from "./setup.ts"
 
 /** A Bash command that is the root's word: the command a project's root names for itself, or `bun run baba`. */
 export const WORD = /(^|[\s;&|(/])(\.baba\/\.state\/bin\/(baba|bv)|bv)(\s|$)|\bbun run baba\b/
@@ -423,6 +423,7 @@ export const claude: Adapter<ClaudeOptions> = {
     return { paths: set.paths, ...(said && { said }) }
   },
   blocked: () => blocked(),
+  installed: (project, events) => installedHooks(join(project, METHOD.hooks), METHOD.name, events),
   withdraw: (project, keep): SetUp => uninstall(project, METHOD, keep),
   hookEvent(input): HookEvent | undefined {
     const i = obj(input as Json)

@@ -29,7 +29,7 @@ describe("the settings", () => {
       ],
     })
     expect(agent.offered()).toEqual([])
-    expect(agent.sees("/general")).toMatchObject({ title: "General", runtime: { sleepAtEnd: true } })
+    expect(agent.sees("/general")).toMatchObject({ title: "General", runtime: { sleepAtEnd: false } })
     expect(agent.offered("/general")).toEqual(["sleepAtEnd"])
     expect(agent.sees("/appearance")).toMatchObject({
       appearance: { mode: "system", same: true, theme: "neutral", rail: { side: "left", from: "bottom", drawer: "left" } },
@@ -65,9 +65,9 @@ describe("the settings", () => {
     expect(await agent.call("/appearance", "mode", { mode: "dark" })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/appearance", "theme", { mode: "both", theme: "clay" })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/appearance", "animate", { on: false })).toMatchObject({ outcome: "written" })
-    expect(await agent.call("/general", "sleepAtEnd", { on: false })).toMatchObject({ outcome: "written" })
+    expect(await agent.call("/general", "sleepAtEnd", { on: true })).toMatchObject({ outcome: "written" })
     expect(agent.sees("/appearance")).toMatchObject({ appearance: { mode: "dark", same: true, theme: "clay" }, logo: { animate: false } })
-    expect(agent.sees("/general")).toMatchObject({ runtime: { sleepAtEnd: false } })
+    expect(agent.sees("/general")).toMatchObject({ runtime: { sleepAtEnd: true } })
     expect(world.commands().filter(writing).at(-1)).toEqual({
       kind: "write",
       settings: {
@@ -75,7 +75,7 @@ describe("the settings", () => {
         preferences: DEFAULTS.preferences,
         keys: {},
         logo: { animate: false },
-        runtime: { sleepAtEnd: false },
+        runtime: { sleepAtEnd: true },
         archive: DEFAULTS.archive,
       },
     })

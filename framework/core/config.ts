@@ -10,6 +10,7 @@ import type { AntigravityOptions } from "./harness/antigravity.ts"
 import type { ClaudeOptions } from "./harness/claude.ts"
 import type { CodexOptions } from "./harness/codex.ts"
 import type { Adapter } from "./harness/harness.ts"
+import { readJsonFile } from "./state/json-file.ts"
 
 export type Section<O> = { enable: boolean } & Partial<O>
 export type Config = {
@@ -22,12 +23,44 @@ export type Config = {
 export const config = (value: Config): Config => value
 
 export const CONFIG_FILE = "baba.config.ts"
+export const HARNESS_CHOICES = "harnesses.json"
+export const HARNESS_NAMES = ["claude", "codex", "antigravity"] as const
+export type HarnessName = typeof HARNESS_NAMES[number]
+export type HarnessChoices = Partial<Record<HarnessName, boolean>>
+
+/** The project's enable switches set in Settings, separate from its TypeScript configuration. */
+export function harnessChoices(baba: string): HarnessChoices {
+  try {
+    const kept = readJsonFile<unknown>(join(baba, HARNESS_CHOICES))
+
+    if (kept === undefined) return {}
+    if (!kept || typeof kept !== "object" || Array.isArray(kept) || Object.entries(kept).some(
+      ([name, on]) => !(HARNESS_NAMES as readonly string[]).includes(name) || typeof on !== "boolean",
+    )) throw new Error("expected a boolean for each named harness")
+
+    return kept as HarnessChoices
+  } catch (error) {
+    throw new Error(`.baba/${HARNESS_CHOICES}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+export function withHarnessChoices(config: Config, choices: HarnessChoices): Config {
+  if (!Object.keys(choices).length) return config
+
+  const switches = Object.fromEntries(HARNESS_NAMES.flatMap((name) => {
+    const enable = choices[name]
+
+    return enable === undefined ? [] : [[name, { ...config.harnesses?.[name], enable }]]
+  }))
+
+  return { ...config, harnesses: { ...config.harnesses, ...switches } }
+}
 
 /** The configuration of `baba`: none where there is no file; one that does not load, or does not default-export an object, throws. */
 export async function loadConfig(baba: string): Promise<Config> {
   const file = join(baba, CONFIG_FILE)
 
-  if (!existsSync(file)) return {}
+  if (!existsSync(file)) return withHarnessChoices({}, harnessChoices(baba))
 
   let value: unknown
 
@@ -38,7 +71,7 @@ export async function loadConfig(baba: string): Promise<Config> {
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`.baba/${CONFIG_FILE} does not default-export config({ … })`)
 
-  return value as Config
+  return withHarnessChoices(value as Config, harnessChoices(baba))
 }
 
 /**

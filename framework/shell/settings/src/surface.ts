@@ -8,6 +8,7 @@
 // person's in every project as the rest is; and two clears, which act on the project of the session the tab is open in,
 // each saying what it frees before it is taken, as measured by a command as the tab starts and after each clear, or when
 // asked. A clear is no bookkeeping: it is kept as activity, and says what it freed.
+import { join } from "node:path"
 import { action, surface, view, type Update } from "../../../core/index.ts"
 import { clashing, COMMANDS, parse, type CommandId } from "./keys.ts"
 import { bounded } from "../../../kit/theme.ts"
@@ -34,7 +35,12 @@ import {
 } from "./settings.ts"
 import { readSettings, settingsFile, watchSettings, writeSettings } from "./store.ts"
 import { sessionDir } from "../../../core/state/session-dir.ts"
+import { sessionCwd } from "../../../core/state/state.ts"
+import { findBaba, setHarness } from "../../../core/provision.ts"
+import { HARNESS_NAMES, type HarnessName } from "../../../core/config.ts"
+import { isPerson } from "../../../core/session.ts"
 import { clear, measure, projectHome, projectOf, sized, type Freed, type Measure } from "../../src/archive.ts"
+import { harnessConnection, type HarnessConnection } from "../../src/harness-connection.ts"
 
 /** Which closed tabs a clear takes: this session's, or the whole project's. */
 export type Scope = "session" | "project"
@@ -42,17 +48,35 @@ export type Scope = "session" | "project"
  * `writing`: this tab's writes not yet done; `unsaved`: why the last one failed. `measured`: what each clear would free, as
  * last measured; `clearing`: the clear under way.
  */
-export type Model = { settings: Settings; writing: number; unsaved?: string; measured?: Measure; clearing?: Scope }
+export type Model = {
+  settings: Settings
+  writing: number
+  unsaved?: string
+  measured?: Measure
+  clearing?: Scope
+  connection?: HarnessConnection | null
+  changingHarness?: HarnessName
+  harnessError?: string
+}
 export type Event =
   | { kind: "read"; settings: Settings }
   | { kind: "wrote" }
   | { kind: "failed"; why: string; writing: boolean; clear?: true }
   | { kind: "measured"; measure: Measure }
+  | { kind: "connection"; connection: HarnessConnection | null }
+  | { kind: "harnessChanged"; connection: HarnessConnection | null }
+  | { kind: "harnessFailed"; why: string }
   | { kind: "cleared"; scope: Scope; freed: Freed }
-export type Command = { kind: "watch" } | { kind: "write"; settings: Settings } | { kind: "measure" } | { kind: "clear"; scope: Scope; window: Keep }
+export type Command =
+  | { kind: "watch" }
+  | { kind: "write"; settings: Settings }
+  | { kind: "measure" }
+  | { kind: "connection" }
+  | { kind: "harness"; name: HarnessName; on: boolean }
+  | { kind: "clear"; scope: Scope; window: Keep }
 
 const changed = (m: Model, settings: Settings): Update<Model, Command> => ({
-  model: { settings, writing: m.writing + 1 },
+  model: { ...m, settings, writing: m.writing + 1, unsaved: undefined, measured: undefined, clearing: undefined },
   commands: [{ kind: "write", settings }],
 })
 /** Which mode a theme is of: both while the modes are the same. */
@@ -138,7 +162,7 @@ const animate = action({
 const sleepAtEnd = action({
   name: "sleepAtEnd",
   quiet: true,
-  description: "whether the session's end puts the runtime to sleep a minute later; off, for a harness that ends sessions it means to resume, it sleeps only once idle or its page is hidden",
+  description: "whether a session-end hook shortens the runtime's wake deadline to a minute; off keeps the inactivity timer",
   subject: {},
   inputs: { on: "boolean" },
   update: (m: Model, { on }): Update<Model, Command> => changed(m, { ...m.settings, runtime: { sleepAtEnd: on } }),
@@ -283,14 +307,46 @@ const archived = (m: Model, place: string | undefined) => {
   }
 }
 
+const checkConnection = action({
+  name: "checkConnection",
+  quiet: true,
+  description: "refresh what the project has configured and what this session has heard",
+  subject: {},
+  inputs: {},
+  update: (m: Model): Update<Model, Command> => ({ model: m, commands: [{ kind: "connection" }] }),
+})
+
+const changeHarness = action({
+  name: "changeHarness",
+  description: "enable and provision a project harness, or remove Baba’s integration for it",
+  subject: {},
+  inputs: { harness: { type: "string", choices: HARNESS_NAMES }, on: "boolean" },
+  update(m: Model, { harness, on }, call): Update<Model, Command> {
+    if (!isPerson(call.actor)) return { refused: "Change harness connections from Baba Settings." }
+    if (m.changingHarness) return { refused: "Wait for the current harness change to finish." }
+
+    return { model: { ...m, changingHarness: harness, harnessError: undefined }, commands: [{ kind: "harness", name: harness, on }] }
+  },
+})
+
 /** The settings' pages, of the session whose folder `place` names. */
-const pagesOf = (place: () => string | undefined) => view([mode, theme, dynamic, same, rail, ...preferred, animate, sleepAtEnd, bind, reset, keep, measuring, clearing], {
+const pagesOf = (place: () => string | undefined) => view(
+  [mode, theme, dynamic, same, rail, ...preferred, animate, sleepAtEnd, checkConnection, changeHarness, bind, reset, keep, measuring, clearing], {
   "/": (m) => ({
     title: "Settings",
     pages: SETTINGS_PAGES.map((page) => ({ ...page })),
     ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
   }),
-  "/general": (m) => ({ title: "General", runtime: m.settings.runtime, sleepAtEnd: sleepAtEnd.bind({}) }),
+  "/general": (m) => ({
+    title: "General", runtime: m.settings.runtime, sleepAtEnd: sleepAtEnd.bind({}),
+    ...(place() && {
+      checkConnection: checkConnection.bind({}),
+      ...(m.connection !== undefined && { connection: m.connection }),
+      ...(m.connection && { changeHarness: changeHarness.bind({}) }),
+      ...(m.changingHarness && { changingHarness: m.changingHarness }),
+      ...(m.harnessError && { harnessError: m.harnessError }),
+    }),
+  }),
   "/appearance": (m) => ({
     title: "Appearance",
     appearance: appearanceView(m.settings.appearance),
@@ -331,13 +387,16 @@ export function settings(file: () => string = () => settingsFile(), place: () =>
     init: () => ({ settings: settingsOf(undefined), writing: 0 }),
     // What a tab kept is only a first look: the file is read again as it starts.
     restore: (saved) => ({ settings: settingsOf((saved as { settings?: unknown } | undefined)?.settings), writing: 0 }),
-    start: () => [{ kind: "watch" }, ...(place() ? [{ kind: "measure" as const }] : [])],
+    start: () => place() ? [{ kind: "watch" }, { kind: "measure" }, { kind: "connection" }] : [{ kind: "watch" }],
     session: (c) => c.kind === "watch",
     update(m, message): Update<Model, Command> {
       if (message.kind === "call") return pages.update(m, message)
       if (message.kind === "read") return { model: m.writing > 0 ? m : { ...m, settings: message.settings, writing: 0, unsaved: undefined }, quiet: true }
       if (message.kind === "wrote") return { model: { ...m, writing: Math.max(0, m.writing - 1), unsaved: undefined }, quiet: true }
       if (message.kind === "measured") return { model: { ...m, measured: message.measure }, quiet: true }
+      if (message.kind === "connection") return { model: m.changingHarness ? m : { ...m, connection: message.connection }, quiet: true }
+      if (message.kind === "harnessChanged") return { model: { ...m, connection: message.connection, changingHarness: undefined }, quiet: true }
+      if (message.kind === "harnessFailed") return { model: { ...m, changingHarness: undefined, harnessError: message.why }, quiet: true }
       if (message.kind === "cleared")
         return {
           model: { ...m, clearing: undefined },
@@ -355,6 +414,20 @@ export function settings(file: () => string = () => settingsFile(), place: () =>
       const at = file()
       const own = place()
 
+      if (command.kind === "connection" || command.kind === "harness") {
+        const cwd = own && sessionCwd(join(own, "baba"))
+        const baba = cwd && findBaba(cwd)
+
+        if (command.kind === "harness") {
+          if (!baba) throw new Error("This session has no Baba project.")
+          await setHarness(baba, command.name, command.on)
+        }
+        const connection = own && baba ? await harnessConnection(baba, own).catch(() => null) : null
+
+        send({ kind: command.kind === "harness" ? "harnessChanged" : "connection", connection })
+
+        return
+      }
       if (command.kind === "measure") {
         if (own) send({ kind: "measured", measure: measure(own, readSettings(at).archive) })
 
@@ -387,7 +460,11 @@ export function settings(file: () => string = () => settingsFile(), place: () =>
       stop()
     },
     failed: (c, error): Event =>
-      c.kind === "write"
+      c.kind === "harness"
+        ? { kind: "harnessFailed", why: error }
+        : c.kind === "connection"
+        ? { kind: "connection", connection: null }
+        : c.kind === "write"
         ? { kind: "failed", why: error, writing: true }
         : c.kind === "clear"
           ? { kind: "failed", why: `the closed tabs were not cleared: ${error}`, writing: false, clear: true }

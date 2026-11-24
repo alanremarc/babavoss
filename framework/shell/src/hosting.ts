@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { UiHosting } from "../../core/index.ts"
+import { loadConfig } from "../../core/config.ts"
 import { codexHookReview } from "../../core/harness/codex-hooks.ts"
 import { ACTOR_HEADER, SERVICE_HEADER } from "../../core/runtime/service.ts"
 import { appearanceOf, choiceIn, nameOf, numbersOf, type Appearance, type Mode } from "../settings/src/settings.ts"
@@ -154,15 +155,19 @@ function codexAsset(req: IncomingMessage, res: ServerResponse, project?: string)
   else if (req.method !== "GET" && req.method !== "POST") reply(405, {})
   else if (!page || (req.method === "POST" && (!gesture || req.headers.origin !== `http://${req.headers.host}` || !approval || !/^[a-f0-9]{64}$/.test(approval)))) {
     reply(403, { status: "unavailable", reason: "Open Baba Settings in the browser to review hooks." })
-  } else if (req.method === "GET") {
-    void codexHookReview(project).then((result) => reply(200, result))
-  } else if (approval) {
-    void codexHookReview(project, approval).then((result) => {
+  } else {
+    void loadConfig(join(project, ".baba")).then(async (config) => {
+      if (config.harnesses?.codex?.enable === false) return reply(404, {})
+
+      const result = await codexHookReview(project, req.method === "POST" ? approval ?? undefined : undefined)
+
+      if (req.method === "GET") return reply(200, result)
+
       const reason = result.status === "unavailable" ? `?${new URLSearchParams({ codexHookError: result.reason })}` : ""
 
       res.writeHead(303, { location: `/settings/general${reason}#codex-hooks`, "cache-control": "no-store" })
       res.end()
-    })
+    }).catch(() => reply(404, {}))
   }
 
   return true

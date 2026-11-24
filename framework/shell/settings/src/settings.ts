@@ -67,7 +67,7 @@ export const DEFAULTS: Settings = {
   preferences: Object.fromEntries(PREFERENCE_NAMES.map((name) => [name, PREFERENCES[name].default])) as Preferences,
   keys: {},
   logo: { animate: true },
-  runtime: { sleepAtEnd: true },
+  runtime: { sleepAtEnd: false },
   archive: { days: 30, megabytes: 200 },
 }
 
@@ -175,7 +175,7 @@ export function settingsOf(value: unknown): Settings {
     preferences: preferencesOf(kept.preferences),
     keys,
     logo: { animate: logo.animate !== false },
-    runtime: { sleepAtEnd: record(kept.runtime).sleepAtEnd !== false },
+    runtime: { sleepAtEnd: record(kept.runtime).sleepAtEnd === true },
     archive: keepOf(kept.archive),
   }
 }

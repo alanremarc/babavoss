@@ -10,7 +10,7 @@ describe("the settings a file keeps", () => {
       preferences: { motion: "system", scale: 1, side: "right" },
       keys: {},
       logo: { animate: true },
-      runtime: { sleepAtEnd: true },
+      runtime: { sleepAtEnd: false },
       archive: { days: 30, megabytes: 200 },
     })
   })

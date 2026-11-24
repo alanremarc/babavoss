@@ -4,12 +4,15 @@
 // generated from the surfaces. What .baba/ is made with, its tsconfig.json and shadcn's components.json, is written where
 // it is missing, so a .baba/ made by an older release gains it too. A surface has no skill and no instructions beside it:
 // what it is for is its own description, and how it is worked is what its views say.
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, writeFileSync } from "node:fs"
+import { closeSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs"
+import { randomUUID } from "node:crypto"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
-import { CONFIG_FILE, checkConfig, loadConfig, sectionOf } from "./config.ts"
-import { ADAPTERS } from "./harness/index.ts"
+import { CONFIG_FILE, checkConfig, HARNESS_CHOICES, harnessChoices, loadConfig, sectionOf, withHarnessChoices, type Config, type HarnessName } from "./config.ts"
+import { ADAPTERS, type Adapter } from "./harness/index.ts"
 import { written } from "./harness/setup.ts"
+import { holdLock } from "./runtime/service.ts"
+import { writeJsonFile } from "./state/json-file.ts"
 
 export const SURFACES_DIR = "surfaces"
 export const NAME = /^[a-z][a-z0-9-]*$/
@@ -240,31 +243,72 @@ export function findBaba(from: string): string | undefined {
 /** What provisioning did: each path written, and each withdrawn, relative to the directory .baba/ is in, and what the adapters say to the person. */
 export type Provisioned = { written: string[]; withdrawn: string[]; said: string[] }
 
+async function provisionWith<T>(baba: string, run: (config: Config) => T): Promise<T> {
+  checkConfig(await loadConfig(baba), ADAPTERS)
+
+  const lock = holdLock(join(stateMade(baba), "provision.lock"))
+
+  if (lock === undefined) throw new Error("Baba is already provisioning this project. Try again when it finishes.")
+  try {
+    const config = await loadConfig(baba)
+
+    checkConfig(config, ADAPTERS)
+
+    return run(config)
+  } finally {
+    closeSync(lock)
+  }
+}
+
+function provisionHarness(project: string, config: Config, adapter: Adapter) {
+  const { enable, ...options } = sectionOf(config, adapter)
+  const keep = { skill: ADAPTERS.some((other) => other !== adapter && other.skill === adapter.skill && sectionOf(config, other).enable) }
+  const set = enable ? adapter.provision(project, options) : adapter.withdraw(project, keep)
+
+  return { enable, ...set }
+}
+
+/** Applies a Settings switch to one harness, keeping the project's other choices and TypeScript options. */
+export async function setHarness(baba: string, name: HarnessName, on: boolean): Promise<void> {
+  const adapter = ADAPTERS.find((adapter) => adapter.name === name)
+
+  if (!adapter) throw new Error(`Unknown harness ${name}`)
+  await provisionWith(baba, (config) => {
+    const choices = { ...harnessChoices(baba), [name]: on }
+    const file = join(baba, HARNESS_CHOICES)
+    const stage = join(baba, `.${HARNESS_CHOICES}.${randomUUID()}.tmp`)
+
+    // Prove the choice can be written before editing hooks, then publish it only when the adapter succeeds.
+    try {
+      writeJsonFile(stage, choices)
+      provisionHarness(dirname(baba), withHarnessChoices(config, { [name]: on }), adapter)
+      renameSync(stage, file)
+    } finally {
+      rmSync(stage, { force: true })
+    }
+  })
+}
+
 /**
  * Provisions `baba`, a .baba/ directory: each harness its configuration enables is made aware of the surfaces by its
  * adapter, each it does not has that withdrawn, and the root is generated from the surfaces. A configuration that does not
  * load, or says what no adapter has, stops it before anything is written.
  */
 export async function provision(baba: string): Promise<Provisioned> {
-  const root = dirname(baba)
-  const config = await loadConfig(baba)
-  const done: Provisioned = { written: [], withdrawn: [], said: [] }
+  return provisionWith(baba, (config) => {
+    const root = dirname(baba)
+    const done: Provisioned = { written: [], withdrawn: [], said: [] }
 
-  checkConfig(config, ADAPTERS)
-  // Before an adapter keeps a copy of a file there: the folder is where it should be, and git leaves it alone.
-  stateMade(baba)
-  done.written.push(...scaffold(baba).map((path) => relative(root, path)))
-  const sections = ADAPTERS.map((adapter) => ({ adapter, section: sectionOf(config, adapter) }))
-  const keptSkills = new Set(sections.filter(({ section }) => section.enable).map(({ adapter }) => adapter.skill))
+    done.written.push(...scaffold(baba).map((path) => relative(root, path)))
+    for (const adapter of ADAPTERS) {
+      const { enable, paths, said } = provisionHarness(root, config, adapter)
 
-  for (const { adapter, section: { enable, ...options } } of sections) {
-    const set = enable ? adapter.provision(root, options) : adapter.withdraw(root, { skill: keptSkills.has(adapter.skill) })
+      done[enable ? "written" : "withdrawn"].push(...paths)
+      if (said) done.said.push(said)
+    }
+    generateRoot(baba)
+    done.written.push(relative(root, join(baba, ROOT_DIR)))
 
-    done[enable ? "written" : "withdrawn"].push(...set.paths)
-    if (set.said) done.said.push(set.said)
-  }
-  generateRoot(baba)
-  done.written.push(relative(root, join(baba, ROOT_DIR)))
-
-  return done
+    return done
+  })
 }

@@ -644,11 +644,16 @@ test("a session's start gives operating guidance and starts the root; a surface 
     }
 
     writeFileSync(code, readFileSync(code, "utf8").replace("The greeting in use, and one proposed in its place.", "Keep the house greeting."))
-    await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
+    const devHint = "For live reload while editing surfaces, enable dev mode and restart Baba once. See the Baba skill."
+
+    await poll(() => hook("PostToolUse").stdout, { timeout: 20_000 }).toContain(devHint)
+    expect(hook("PostToolUse").stdout).not.toContain(devHint)
+    expect(call("/").stdout).toContain(devHint)
     expect(call("/").stdout).not.toContain("Keep the house greeting.")
     restarted()
     expect(call("/").stdout).toContain("Keep the house greeting.")
     expect(call("/").stdout).not.toContain("code: changed on disk")
+    expect(call("/").stdout).not.toContain(devHint)
     cpSync(join(baba, "surfaces/desk"), join(baba, "surfaces/by-hand"), { recursive: true })
     await poll(() => call("/").stdout, { timeout: 20_000 }).toContain("code: changed on disk since instance ")
     restarted()
@@ -757,5 +762,138 @@ test("Antigravity's hooks run from .agents/, start the shell in the project's cw
     expect(midTurn.injectSteps[0]!.systemMessage.systemMessage).toContain('from antigravity')
   } finally {
     spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
+  }
+}, 60_000)
+
+test("each harness recovers a missed startup once and reports hook and command evidence separately", async () => {
+  for (const harness of ["claude", "codex", "antigravity"] as const) {
+    const session = `missed-${harness}`
+    const agy = harness === "antigravity"
+    const env = {
+      ...process.env,
+      CLAUDE_CODE_SESSION_ID: harness === "claude" ? session : "",
+      CODEX_THREAD_ID: harness === "codex" ? session : "",
+      ANTIGRAVITY_CONVERSATION_ID: agy ? session : "",
+    }
+    const hook = (startup = false) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "hook", harness], {
+      cwd: project,
+      encoding: "utf8",
+      env,
+      input: JSON.stringify(agy
+        ? { hookEventName: startup ? "SessionStart" : "PreInvocation", invocationNum: 0, conversationId: session }
+        : { hook_event_name: startup ? "SessionStart" : "UserPromptSubmit", session_id: session }),
+    })
+
+    try {
+      const started = hook()
+      const context = agy ? JSON.parse(started.stdout).injectSteps[0].systemMessage.systemMessage as string : started.stdout
+
+      expect(started.status, started.stderr).toBe(0)
+      expect(context).toContain("The shell of .baba/ was started for this session")
+      expect(context).toContain("read `/` before acting")
+
+      const base = /page: (http:\/\/127\.0\.0\.1:\d+)/.exec(context)![1]!
+      const person = (path: string, handle: string, args: Record<string, unknown> = {}) => fetch(base + path, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({ handle, args }),
+      })
+      const general = "/settings/general"
+      const health = async () => {
+        const result = await fetch(base + general, { headers: { accept: "application/json" } })
+
+        expect(result.status).toBe(200)
+
+        return (await result.json() as { connection?: unknown }).connection
+      }
+
+      expect((await person("/", "open", { surface: "settings" })).status).toBe(200)
+      await poll(health).toEqual({
+        startupHeard: false,
+        recovered: true,
+        commandReached: false,
+        hooks: [
+          { name: "claude", title: "Claude Code", status: "configured" },
+          { name: "codex", title: "Codex", status: "configured" },
+          { name: "antigravity", title: "Antigravity", status: "configured" },
+        ],
+      })
+      await (await fetch(base + "/", { headers: { accept: "application/json", "babavoss-actor": `agent:${session}`, "babavoss-call": "browser" } })).json()
+      expect((await person(general, "checkConnection")).status).toBe(200)
+      await poll(health).toMatchObject({ commandReached: false })
+      expect(hook(true).status).toBe(0)
+      expect((await person(general, "checkConnection")).status).toBe(200)
+      await poll(health).toMatchObject({ startupHeard: true, recovered: false, commandReached: false })
+      expect(spawnSync(join(baba, ".state/bin/baba"), ["/"], { cwd: project, env, encoding: "utf8" }).status).toBe(0)
+      expect((await person(general, "checkConnection")).status).toBe(200)
+      await poll(health).toMatchObject({ commandReached: true })
+      expect(hook().stdout.trim()).toBe(agy ? "{}" : "")
+    } finally {
+      spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "close"], { cwd: project, encoding: "utf8", env })
+    }
+  }
+}, 60_000)
+
+test("Settings adds and removes one harness while keeping TypeScript options, other hooks and the shared skill", async () => {
+  const project = realpathSync(mkdtempSync(join(tmpdir(), "baba-settings-harness-")))
+  const baba = join(project, ".baba")
+  const settings = join(baba, "baba.config.ts")
+  const options = join(baba, "harnesses.json")
+  const codex = join(project, ".codex/hooks.json")
+  const other = { hooks: { Stop: [{ hooks: [{ type: "command", command: "echo mine" }] }] } }
+  const run = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), ...args], {
+    cwd: project, encoding: "utf8", env: { ...process.env, BABAVOSS_HOME: join(baba, ".state") },
+  })
+  const source = "export default { title: 'Fixture', harnesses: { claude: { enable: false }, codex: { enable: false, network: true } } }\n"
+
+  try {
+    const init = run("init", "antigravity", "--from", `file:${checkout}`)
+
+    expect(init.status, init.stderr).toBe(0)
+    writeFileSync(settings, source)
+    mkdirSync(join(project, ".codex"), { recursive: true })
+    writeFileSync(codex, "{")
+
+    const started = run("start", "--session", "settings-harness", "--setup")
+    const page = new URL(/Settings: (\S+)/.exec(started.stdout)![1]!)
+    const general = page.pathname
+    const post = (harness: string, on: boolean) => fetch(page, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify({ handle: "changeHarness", args: { harness, on } }),
+    })
+    const read = async () => (await fetch(new URL(general, page), { headers: { accept: "application/json" } })).json()
+    const state = async () => (await read()).connection?.hooks.find((hook: { name: string }) => hook.name === "codex")?.status
+    const agyHooks = readFileSync(join(project, ".agents/hooks.json"), "utf8")
+
+    await poll(state).toBe("disabled")
+    const agent = spawnSync(join(baba, ".state/bin/baba"), ["--session", "settings-harness", general, "changeHarness", "harness=codex", "on=true"], {
+      cwd: project, encoding: "utf8",
+    })
+
+    expect(agent.stdout).toContain("Change harness connections from Baba Settings.")
+    expect(existsSync(options)).toBe(false)
+    expect((await post("codex", true)).status).toBe(200)
+    await poll(async () => (await read()).harnessError).toContain("hooks.json")
+    expect(existsSync(options)).toBe(false)
+    writeFileSync(codex, JSON.stringify(other))
+    expect((await post("codex", true)).status).toBe(200)
+    await poll(state).toBe("configured")
+    expect(JSON.parse(readFileSync(options, "utf8"))).toEqual({ codex: true })
+    expect(readFileSync(join(project, ".codex/config.toml"), "utf8")).toContain("network_access = true")
+    expect(run("provision").status).toBe(0)
+    expect(readFileSync(codex, "utf8")).toContain("SessionStart")
+
+    expect((await post("codex", false)).status).toBe(200)
+    await poll(state).toBe("disabled")
+    expect(JSON.parse(readFileSync(options, "utf8"))).toEqual({ codex: false })
+    expect(JSON.parse(readFileSync(codex, "utf8"))).toEqual(other)
+    expect(existsSync(join(project, ".codex/config.toml"))).toBe(false)
+    expect(readFileSync(join(project, ".agents/hooks.json"), "utf8")).toBe(agyHooks)
+    expect(existsSync(join(project, ".agents/skills/baba/SKILL.md"))).toBe(true)
+    expect(readFileSync(settings, "utf8")).toBe(source)
+  } finally {
+    if (existsSync(baba)) run("start", "--session", "settings-harness", "close")
+    rmSync(project, { recursive: true, force: true })
   }
 }, 60_000)
