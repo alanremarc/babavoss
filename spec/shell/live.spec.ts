@@ -20,7 +20,8 @@ describe("the page's boot", () => {
   it("names the shell, its highlights, and a tab's views at its / and its route, for the page's path", () => {
     expect(bootPaths("/")).toEqual(["/", "/activity/highlights"])
     expect(bootPaths("/activity")).toEqual(["/", "/activity/highlights"])
-    expect(bootPaths("/settings")).toEqual(["/", "/activity/highlights", "/settings"])
+    expect(bootPaths("/settings")).toEqual(["/", "/activity/highlights", "/settings", "/settings/general"])
+    expect(bootPaths("/settings/about")).toEqual(["/", "/activity/highlights", "/settings", "/settings/about"])
     expect(bootPaths("/queue/issues/40")).toEqual(["/", "/activity/highlights", "/queue", "/queue/issues/40"])
     expect(bootPaths("/tabs/3")).toEqual(["/", "/activity/highlights", "/tabs/3"])
     expect(bootPaths("/tabs/3/issues/40")).toEqual(["/", "/activity/highlights", "/tabs/3", "/tabs/3/issues/40"])

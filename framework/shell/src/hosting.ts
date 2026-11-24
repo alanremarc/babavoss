@@ -10,6 +10,8 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import { dirname, extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { UiHosting } from "../../core/index.ts"
+import { codexHookReview } from "../../core/harness/codex-hooks.ts"
+import { ACTOR_HEADER, SERVICE_HEADER } from "../../core/runtime/service.ts"
 import { appearanceOf, choiceIn, nameOf, numbersOf, type Appearance, type Mode } from "../settings/src/settings.ts"
 import { conventionsOf } from "./conventions.ts"
 import { machineMode } from "../settings/src/system/index.ts"
@@ -133,11 +135,44 @@ const settingsAsset = (req: IncomingMessage, res: ServerResponse): boolean => {
   return true
 }
 
+/** This is a browser control of the shell, outside the surface's action door. */
+function codexAsset(req: IncomingMessage, res: ServerResponse, project?: string): boolean {
+  const url = new URL(req.url ?? "/", "http://127.0.0.1")
+
+  if (url.pathname !== "/_/codex-hooks") return false
+
+  const reply = (status: number, value: object) => {
+    res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" })
+    res.end(JSON.stringify(value))
+  }
+  const approval = url.searchParams.get("review")
+  const page = req.headers[SERVICE_HEADER] === undefined && req.headers[ACTOR_HEADER] === undefined && req.headers["sec-fetch-site"] === "same-origin"
+  // A form submitted by the person is a top-level navigation with browser user activation; fetch won't send this header.
+  const gesture = req.headers["sec-fetch-user"] === "?1" && req.headers["sec-fetch-mode"] === "navigate" && req.headers["sec-fetch-dest"] === "document"
+
+  if (!project) reply(404, {})
+  else if (req.method !== "GET" && req.method !== "POST") reply(405, {})
+  else if (!page || (req.method === "POST" && (!gesture || req.headers.origin !== `http://${req.headers.host}` || !approval || !/^[a-f0-9]{64}$/.test(approval)))) {
+    reply(403, { status: "unavailable", reason: "Open Baba Settings in the browser to review hooks." })
+  } else if (req.method === "GET") {
+    void codexHookReview(project).then((result) => reply(200, result))
+  } else if (approval) {
+    void codexHookReview(project, approval).then((result) => {
+      const reason = result.status === "unavailable" ? `?${new URLSearchParams({ codexHookError: result.reason })}` : ""
+
+      res.writeHead(303, { location: `/settings/general${reason}#codex-hooks`, "cache-control": "no-store" })
+      res.end()
+    })
+  }
+
+  return true
+}
+
 /**
  * Serve a built release, or build source: again on the next request after an edit where it `follow`s the source, else once;
  * each page with the person's settings.
  */
-export function shellUi(dir: string | URL, { follow = true }: { follow?: boolean } = {}): UiHosting {
+export function shellUi(dir: string | URL, { follow = true, codexProject }: { follow?: boolean; codexProject?: string } = {}): UiHosting {
   const hosting = pageUi(dir, follow)
 
   return async (server) => {
@@ -149,7 +184,7 @@ export function shellUi(dir: string | URL, { follow = true }: { follow?: boolean
 
         return html === undefined ? html : withSettings(html)
       },
-      assets: (req, res, next) => void (settingsAsset(req, res) || hosted.assets(req, res, next)),
+      assets: (req, res, next) => void (settingsAsset(req, res) || codexAsset(req, res, codexProject) || hosted.assets(req, res, next)),
       close: () => hosted.close(),
     }
   }

@@ -96,7 +96,10 @@ const state = shellState()
 await main(
   defineRoot({
     name: "baba",
-    ui: shellUi(generated ?? new URL("../ui/", import.meta.url), { follow: dev }),
+    ui: shellUi(generated ?? new URL("../ui/", import.meta.url), {
+      follow: dev,
+      codexProject: baba && config.harnesses?.codex?.enable !== false ? dirname(baba) : undefined,
+    }),
     surface: shell(surfaces, baba, broken, undefined, title, state.archive),
     boot: bootPaths,
     keep: state.keep,

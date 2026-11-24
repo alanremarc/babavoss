@@ -8,6 +8,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { hookCommand } from "../../framework/core/harness/setup.ts"
+import type { CodexHookReview } from "../../framework/core/harness/codex-hooks.ts"
 import { VERSION } from "../../framework/core/update.ts"
 import { poll } from "../support/poll.ts"
 
@@ -416,6 +417,87 @@ test("provision and start say in one line where an organisation's managed settin
     rmSync(managed, { recursive: true, force: true })
   }
 }, 60_000)
+
+test("setup gives a Settings link before the first hook, and approval rejects agent calls and stale reviews", async () => {
+  const fixture = mkdtempSync(join(tmpdir(), "baba-codex-review-"))
+  const state = join(fixture, "approved.json")
+  const hookFile = join(project, ".codex/hooks.json")
+  const command = hookCommand("codex")
+  const hash = `sha256:${"1".repeat(64)}`
+  const key = `${hookFile}:session_start:0:0`
+  const hook = { key, sourcePath: hookFile, source: "project", enabled: true, handlerType: "command", eventName: "sessionStart", command, currentHash: hash }
+  const executable = join(fixture, "codex")
+
+  writeFileSync(executable, `#!${process.execPath}
+    import { existsSync, writeFileSync } from "node:fs"
+    const hook = ${JSON.stringify(hook)}
+    const state = ${JSON.stringify(state)}
+    for await (const line of console) {
+      const { id, method, params } = JSON.parse(line)
+      if (method === "initialized") continue
+      let result = {}
+      if (method === "initialize") result = { userAgent: "T3 Code/0.172.0 (test)" }
+      if (method === "hooks/list") {
+        const trustStatus = existsSync(state) ? "trusted" : "untrusted"
+        const other = { ...hook, key: hook.key + "-other", command: hook.command + " extra", trustStatus: "untrusted" }
+        result = { data: [{ hooks: [{ ...hook, trustStatus }, other] }] }
+      }
+      if (method === "config/batchWrite") writeFileSync(state, JSON.stringify(params.edits))
+      console.log(JSON.stringify({ id, result }))
+    }
+  `, { mode: 0o755 })
+  const env = { ...process.env, PATH: `${fixture}:${process.env.PATH}`, BABAVOSS_HOME: join(fixture, "state") }
+  const run = (...args: string[]) => spawnSync(process.execPath, [join(checkout, "bin/baba.ts"), "start", "--session", "review", ...args], {
+    cwd: project, encoding: "utf8", env,
+  })
+
+  try {
+    const started = run("--setup")
+
+    expect(started.status, started.stderr).toBe(0)
+    expect(started.stdout).toMatch(/Settings: http:\/\/127\.0\.0\.1:\d+\/settings\/general#codex-hooks/)
+
+    const page = new URL(/Settings: (\S+)/.exec(started.stdout)![1]!)
+    const html = await fetch(page, { headers: { accept: "text/html" } })
+
+    expect(html.status, await html.text()).toBe(200)
+    expect(run("--setup").stdout).toContain(`Settings: ${page.href}`)
+
+    const endpoint = new URL("/_/codex-hooks", page)
+    const site = { "sec-fetch-site": "same-origin" }
+    const listed = await fetch(endpoint, { headers: site })
+    const review = await listed.json() as CodexHookReview
+
+    expect(review).toMatchObject({ status: "review", hooks: [{ eventName: "sessionStart", command, sourcePath: hookFile }] })
+    if (review.status !== "review" || !review.review) throw new Error("expected a review that can be approved")
+    expect(review.hooks).toHaveLength(1)
+
+    const headers = { ...site, origin: page.origin, "sec-fetch-user": "?1", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" }
+    const post = (headers: Record<string, string>, fingerprint = review.review) =>
+      fetch(`${endpoint}?review=${fingerprint}`, { method: "POST", headers, redirect: "manual" })
+
+    for (const refused of [await post(site), await post({ ...headers, "sec-fetch-user": "?0" }), await post({ ...headers, "babavoss-service": "agent" })]) {
+      expect(refused.status).toBe(403)
+      await refused.body?.cancel()
+    }
+
+    const stale = await post(headers, "0".repeat(64))
+
+    expect(stale.status).toBe(303)
+    expect(stale.headers.get("location")).toStartWith("/settings/general?codexHookError=")
+    expect(existsSync(state)).toBe(false)
+
+    const approved = await post(headers)
+
+    expect(approved.status).toBe(303)
+    expect(approved.headers.get("location")).toBe("/settings/general#codex-hooks")
+    expect(await fetch(endpoint, { headers: site }).then((answer) => answer.json())).toEqual({ status: "approved" })
+    expect(JSON.parse(readFileSync(state, "utf8"))).toEqual([{ keyPath: "hooks.state", mergeStrategy: "upsert", value: { [key]: { trusted_hash: hash } } }])
+  } finally {
+    run("close")
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
 
 test("a session's start gives operating guidance and starts the root; a surface teaches by itself alone; the hook tells what changed there", async () => {
   expect(run(["new", "desk"]).status).toBe(0)

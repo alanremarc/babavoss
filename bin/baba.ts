@@ -14,7 +14,8 @@ const NAMES = ADAPTERS.map((adapter) => adapter.name)
 const USAGE = `baba init HARNESS… [--from SPEC]
                           make .baba/ in this directory, install the framework and set up each harness named, ${NAMES.join(" or ")}; SPEC names the framework, a release by default
 baba new NAME             make the surface NAME from the template in .baba/surfaces/NAME, and provision
-baba start [--session ID] start the shell of .baba/ for this session, or the session by-hand outside a harness: its version, its page's address, the surfaces and the open tabs
+baba start [--session ID] [--setup]
+                          start the shell of .baba/ for this session, or the session by-hand outside a harness; --setup opens Settings and prints its address
 baba provision            make each harness .baba/baba.config.ts enables aware of the surfaces, withdraw from the others, and generate the root from the surfaces
 baba hook [HARNESS]       what a harness's hook runs, claude by default: reads the hook's input, prints the context to add`
 const TEMPLATE = fileURLToPath(new URL("../template", import.meta.url))
@@ -153,6 +154,17 @@ async function blockedLines(): Promise<string[]> {
 /** The session a root's door is to work in: the harness's where there is one, else the one started by hand. */
 const session = () => (process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.ANTIGRAVITY_CONVERSATION_ID ? [] : ["--session", BY_HAND])
 
+/** The first Settings link can be had before any harness hook has run. */
+const setup = `
+  let settings = (await root.read("/")).tabs.find((tab) => tab.surface === "settings")
+  if (!settings) {
+    const opened = await root.call("/", "open", { surface: "settings" })
+    if (opened.outcome !== "written") throw new Error(opened.reason)
+    settings = opened.view.tabs.find((tab) => tab.surface === "settings")
+  }
+  print("Settings: " + root.page + settings.at + "/general#codex-hooks")
+`
+
 try {
   const [command, ...args] = process.argv.slice(2)
 
@@ -160,7 +172,13 @@ try {
   else if (command === "new") await create(args)
   else if (command === "start") {
     for (const line of await blockedLines()) console.error(line)
-    process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...(args.includes("--session") ? [] : session()), ...args], { stdio: ["inherit", "inherit", "inherit"] }).exitCode ?? 1
+    const at = args.indexOf("--setup")
+
+    if (at !== -1) args.splice(at, 1)
+    if (at !== -1 && args.length !== 0 && (args.length !== 2 || args[0] !== "--session")) throw new Refusal(USAGE)
+    process.exitCode = Bun.spawnSync([process.execPath, ROOT, ...(args.includes("--session") ? [] : session()), ...args, ...(at === -1 ? [] : ["-e", setup])], {
+      stdio: ["inherit", "inherit", "inherit"],
+    }).exitCode ?? 1
   }
   else if (command === "provision" && !args.length) report(await provision(found()))
   else if (command === "hook" && args.length <= 1) await hook(args)

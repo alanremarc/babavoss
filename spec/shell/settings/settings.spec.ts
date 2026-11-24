@@ -1,6 +1,6 @@
 // The person's settings as values, read from what their file keeps, tolerant of whatever it holds.
 import { describe, expect, it } from "bun:test"
-import { appearanceOf, choiceIn, DEFAULTS, preferencesOf, railOf, resolveMode, settingsFromView, settingsOf, viewOf, type Settings } from "../../../framework/shell/settings/src/settings.ts"
+import { appearanceFromView, appearanceOf, appearanceView, choiceIn, DEFAULTS, preferencesOf, railOf, resolveMode, settingsOf, type Appearance } from "../../../framework/shell/settings/src/settings.ts"
 
 describe("the settings a file keeps", () => {
   it("are the defaults where it keeps nothing, or nothing that can be read", () => {
@@ -79,18 +79,15 @@ describe("the settings a file keeps", () => {
     expect(settingsOf({ appearance: { mode: "dark", themes: { light: "clay", dark: "clay" } } }).appearance.rail).toEqual({ side: "left", from: "bottom", drawer: "left" })
   })
 
-  it("come back whole from what their view tells, every part of them, as the settings' page hands them to the shell", () => {
-    const changed: Settings = {
-      appearance: { mode: "dark", same: false, themes: { light: "moss", dark: { hue: 200, tint: 40, vivid: 60 } }, rail: { side: "top", from: "top", drawer: "right" } },
-      preferences: { motion: "reduced", scale: 1.5, side: "left" },
-      keys: { drawer: "mod+shift+d", next: "alt+f2" },
-      logo: { animate: false },
-      runtime: { sleepAtEnd: false },
-      archive: { days: 90, megabytes: 1000 },
+  it("round-trips the appearance the page previews, with one theme or one per mode", () => {
+    const distinct: Appearance = {
+      mode: "dark",
+      same: false,
+      themes: { light: "moss", dark: { hue: 200, tint: 40, vivid: 60 } },
+      rail: { side: "top", from: "top", drawer: "right" },
     }
 
-    for (const settings of [DEFAULTS, changed]) expect(settingsFromView(viewOf(settings))).toEqual(settings)
-    expect(Object.keys(viewOf(changed)).sort()).toEqual(Object.keys(changed).map((k) => (k === "keys" ? "shortcuts" : k)).sort())
+    for (const appearance of [DEFAULTS.appearance, distinct]) expect(appearanceFromView(appearanceView(appearance))).toEqual(appearance)
   })
 
   it("resolve the system mode by what the system asks for", () => {

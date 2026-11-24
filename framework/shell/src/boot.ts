@@ -3,11 +3,13 @@
 // is a tab's, that tab's view at its / and at its route. The other tabs are read once they are shown.
 import { HIGHLIGHTS } from "./activity.ts"
 import { addressed } from "./surface.ts"
+import { SETTINGS_PAGES } from "../settings/src/pages.ts"
 
 /** The paths whose views the page at `path` needs in its first frame: a tab's by the address the path names it by. */
 export function bootPaths(path: string): string[] {
   const tab = addressed(path)
   const address = tab && ("n" in tab ? `/tabs/${tab.n}` : `/${tab.name}`)
+  const route = tab?.path === "/" && address === "/settings" ? SETTINGS_PAGES[0].at : tab?.path
 
-  return ["/", HIGHLIGHTS, ...(address ? [address, ...(tab.path === "/" ? [] : [address + tab.path])] : [])]
+  return ["/", HIGHLIGHTS, ...(address ? [address, ...(route && route !== "/" ? [address + route] : [])] : [])]
 }
