@@ -112,7 +112,7 @@ const isSpec = (file: string) => file.split(sep).includes("spec") || /\.spec\.ts
 
 /** What a runtime that restarted tells the one in its place: a line for the pages, and for the agent too where it cut work. */
 const handoffFile = (dir: string) => join(dir, "restarted")
-type Handoff = { line: string; cut: boolean; until?: number }
+type Handoff = { line: string; cut: boolean; wake?: ReturnType<typeof wakeful>["state"]; until?: number }
 const handoff = (dir: string): Handoff | undefined => {
   try {
     return JSON.parse(readFileSync(handoffFile(dir), "utf8")) as Handoff
@@ -210,10 +210,12 @@ export async function startRuntime(
   // A runtime that restarts lets go of the session and wakes its successor, so the open pages find one at their address.
   let leaving: string | undefined
   let ending: Promise<void> | undefined
-  const end = () =>
+  const end = (reason: string) =>
     void (ending ??= (async () => {
       if (!leaving && !closing) {
-        log(`${root.name}: instance ${instance} sleeps, its state kept; any call wakes it`)
+        const { signal, at } = wake.state.last
+
+        log(`${root.name}: instance ${instance} sleeps (${reason}); last activity: ${signal} at ${new Date(at).toISOString()}; state kept`)
         entrance.asleep()
       }
       await close()
@@ -236,14 +238,14 @@ export async function startRuntime(
     leaving = `${root.name}: ${why}${cut && `; the restart cut ${cut}`}`
     log(leaving)
     try {
-      writeFileSync(handoffFile(dir), JSON.stringify({ line: leaving, cut: !!cut, until: wake.until } satisfies Handoff), { mode: 0o600 })
+      writeFileSync(handoffFile(dir), JSON.stringify({ line: leaving, cut: !!cut, wake: wake.state } satisfies Handoff), { mode: 0o600 })
     } catch {}
 
     return leaving
   }
   const restart = (why: string) => {
     leave(why)
-    end()
+    end("restart")
   }
   // Normal mode: changed code is said once, and stands as a fact of / until the runtime restarts.
   let stale: string | undefined
@@ -261,11 +263,9 @@ export async function startRuntime(
   const look = () => {
     if (closing) return
     if (!existsSync(dir)) {
-      log(`${root.name}: its state directory ${dir} is gone; it ends`)
-
-      return end()
+      return end(`state directory ${dir} removed`)
     }
-    if (now() >= wake.until && running.active() === 0) return end()
+    if (now() >= wake.until && running.active() === 0) return end(wake.state.last.signal === "gone" ? "session ended" : "idle timeout")
     if (stale) return
     loaded(entry, code)
 
@@ -419,9 +419,10 @@ export async function startRuntime(
   const told = handoff(dir)
 
   rmSync(handoffFile(dir), { force: true })
-  if (typeof told?.until === "number") wake.carry(told.until)
+  if (told?.wake) wake.carry(told.wake)
+  else if (typeof told?.until === "number") wake.carry({ until: told.until })
   if (told?.line) entrance.note(told.line, told.cut)
-  for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, end)
+  for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => end(signal))
 
   return { port, instance, close }
 }

@@ -4,7 +4,7 @@ This project has surfaces. A surface is a tool you work with for the person: wha
 
 `.baba/` has a shell, its root surface: one runtime for this session, with one page that lists the surfaces and holds each one opened as a tab. The shell's answer follows these words. If no answer follows, start it from `.baba/` with `bun run baba start`.
 
-Its answer names the page's address, the command to use, the surfaces and the open tabs. Give the person the address, and again whenever an answer names a new one. The shell sleeps when it has not been used for a while, and any command wakes it where it was. When your work with the surfaces is over, put it to sleep with the command's `sleep`. It runs the code it started with: when that changes, `/` says so with the command that restarts it.
+Its answer names the page's address, the command to use, the surfaces and the open tabs. Give the person the address, and again whenever an answer names a new one. The shell sleeps after inactivity unless its page is connected and visible. A command wakes it where it was. It runs the code it started with: when that changes, `/` says so with the command that restarts it.
 
 ## You hold the state
 

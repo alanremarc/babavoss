@@ -1,6 +1,6 @@
 // How long a runtime stays up for what woke it: each request's signal, its strength, and the deadline they keep.
 import { expect, it } from "bun:test"
-import { signalOf, strengthsOf, wakeful, STRENGTHS, type Request } from "../../framework/core/runtime/wake.ts"
+import { signalOf, strengthsOf, wakeful, STRENGTHS, VISIBLE_MS, type Request } from "../../framework/core/runtime/wake.ts"
 
 const asked = (r: Partial<Request>): Request => ({ method: "GET", path: "/", open: false, plain: false, stream: false, html: false, probe: false, agent: false, ...r })
 
@@ -24,12 +24,29 @@ it("keeps the furthest deadline, which watching never moves, and the session's e
   wake.signal("started", 1000)
   expect(wake.until).toBe(1000 + STRENGTHS.strong)
   wake.signal("opened", 2000)
+  wake.signal("ended", 2500)
   wake.signal("watching", 3000)
   expect(wake.until).toBe(1000 + STRENGTHS.strong)
   wake.signal("gone", 4000)
   expect(wake.until).toBe(4000 + STRENGTHS.end)
   wake.signal("ended", 5000)
-  expect(wake.until).toBe(5000 + STRENGTHS.weak)
+  expect(wake.until).toBe(4000 + STRENGTHS.end)
+  wake.signal("opened", 6000)
+  expect(wake.until).toBe(6000 + STRENGTHS.weak)
+})
+
+it("keeps a page lease alongside activity, carries it across restart, and stops renewing it when the session ends", () => {
+  const wake = wakeful(STRENGTHS, 0)
+  const resumed = wakeful(STRENGTHS, STRENGTHS.weak)
+
+  wake.signal("visible", 1000)
+  expect(wake.until).toBe(STRENGTHS.weak)
+  wake.signal("visible", STRENGTHS.weak)
+  resumed.carry(wake.state)
+  expect(resumed.until).toBe(STRENGTHS.weak + VISIBLE_MS)
+  resumed.signal("gone", STRENGTHS.weak)
+  resumed.signal("visible", STRENGTHS.weak + 30_000)
+  expect(resumed.until).toBe(STRENGTHS.weak + STRENGTHS.end)
 })
 
 it("takes shorter strengths from BABAVOSS_WAKE_MS, for specs, and ignores what it says wrong", () => {
