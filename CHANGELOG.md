@@ -11,6 +11,12 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.83.1
+
+**A visible page keeps its runtime awake.** While connected, the page renews a 90-second lease every 30 seconds. Once the lease expires, the activity deadline applies again. The session's end still caps the remaining time at one minute, and `baba sleep` starts shutdown immediately. The agent leaves routine shutdown to the runtime, which logs why it slept and the last activity it heard.
+
+Nothing in a project's surfaces needs to change.
+
 ## 0.83.0
 
 **Antigravity is supported alongside Claude Code and Codex.** `baba init antigravity` (or `harnesses.antigravity` in `.baba/baba.config.ts`) sets up baba's skill in `.agents/skills/baba/` (shared with Codex, kept while either is enabled) and baba's hooks under `"babavoss"` in `.agents/hooks.json` (`SessionStart`, `PreInvocation`, `Stop`), among any hooks already there. Because Antigravity's `PostToolUse` returns `{}` and injects no context, `PreInvocation` carries both turn-start changes (`invocationNum === 0`) and mid-turn notices (`invocationNum > 0`) via `injectSteps.systemMessage`. The standalone client reads `ANTIGRAVITY_CONVERSATION_ID` (client `VERSION` is 22 and replaces itself), and `antigravityCli()` drives headless `agy --input-format stream-json --output-format stream-json` sessions.

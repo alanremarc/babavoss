@@ -707,9 +707,9 @@ describe("waking and sleeping", () => {
 
     return { now: () => at, pass: (ms: number) => (at += ms) }
   }
-  const asleep = async (dir: string, time = clock()) => {
+  const asleep = async (dir: string, time = clock(), log: (line: string) => void = () => {}) => {
     let slept = false
-    const up = await started(dir, { strengths: { weak: 5 * MIN, strong: 30 * MIN, end: MIN }, now: time.now, exit: () => (slept = true) })
+    const up = await started(dir, { strengths: { weak: 5 * MIN, strong: 30 * MIN, end: MIN }, now: time.now, exit: () => (slept = true), log })
 
     return { ...up, ...time, slept: () => slept }
   }
@@ -734,8 +734,8 @@ describe("waking and sleeping", () => {
     }
     // The page read all along, and its stream is open: the open alone kept it, five minutes.
     pass(MIN + 1)
-    await poll(() => slept(), { timeout: 2000 })
-    await poll(() => page.heard.includes("asleep"), { timeout: 2000 })
+    await poll(slept).toBe(true)
+    await poll(() => page.heard).toContain("asleep")
     page.stop()
   })
   it("stays up for the person's message, the agent's command and the person's action, and the session's end cuts it short", async () => {
@@ -753,16 +753,41 @@ describe("waking and sleeping", () => {
         expect(await stays(slept)).toBe(true)
         pass(MIN + 1)
       } else pass(MIN + 1)
-      await poll(() => slept(), { timeout: 2000 })
+      await poll(slept).toBe(true)
     }
+  })
+  it("stays awake for a visible page with a stream and sleeps after its last lease expires", async () => {
+    const lines: string[] = []
+    const { base, endpoint, slept, pass } = await asleep(scratch(), clock(), (line) => lines.push(line))
+    const page = await listen(base, endpoint.token)
+    const visible = (headers?: HeadersInit) => fetch(base + "/_/visible", { method: "POST", headers })
+
+    pass(4.5 * MIN)
+    expect((await visible({ "sec-fetch-site": "cross-site" })).status).toBe(403)
+    expect((await visible()).status).toBe(204)
+    pass(MIN)
+    expect(await stays(slept)).toBe(true)
+    expect((await visible()).status).toBe(204)
+    pass(MIN)
+    expect(await stays(slept)).toBe(true)
+    pass(MIN / 2 + 1)
+    await poll(slept).toBe(true)
+    await poll(() => page.heard).toContain("asleep")
+    expect(lines.join("\n")).toContain("sleeps (idle timeout); last activity: startup")
+    page.stop()
   })
   it("sleeps when asked, at once, and the next runtime has the state", async () => {
     const dir = scratch()
-    const { base, endpoint, post, slept } = await asleep(dir)
+    const lines: string[] = []
+    const { base, endpoint, post, slept } = await asleep(dir, clock(), (line) => lines.push(line))
+    const page = await listen(base, endpoint.token)
 
+    expect((await fetch(base + "/_/visible", { method: "POST" })).status).toBe(204)
     await post("/", { handle: "bump", args: { by: 2 } })
     expect(await plain(base, endpoint.token, "/_/close", { method: "POST" })).toBe("p asleep; any call wakes it, its state kept")
-    await poll(() => slept(), { timeout: 2000 })
+    await poll(slept).toBe(true)
+    expect(lines.join("\n")).toContain("sleeps (explicit sleep); last activity: person")
+    page.stop()
 
     const woken = await started(dir, { exit: () => {} })
 
@@ -783,6 +808,6 @@ describe("waking and sleeping", () => {
     pass(29 * MIN)
     expect(await stays(slept)).toBe(true)
     pass(MIN + 1)
-    await poll(() => slept(), { timeout: 2000 })
+    await poll(slept).toBe(true)
   })
 })

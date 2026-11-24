@@ -11,6 +11,7 @@
 //   POST /_/turn  text/plain        a hook's word on the turn: started, working, ended, gone; where the agent's word runs
 //                                   again with no hook heard since its last run, its answer says once that the hooks are quiet
 //   POST /_/turn  application/json  { message }: the person ends their move, where the harness can be driven
+//   POST /_/visible                 a visible page with an open stream renews its short keep-awake lease
 //   POST /p with CALL_ID_HEADER     a call its caller names, which the call carries, so the caller finds what came of it;
 //                                   in text too, where a program names each of its calls by its one name (bv.ts)
 //   POST /_/restart text/plain      the runtime restarts, at once or once its work ended (runtime.ts): 200 at once, 202 draining
@@ -60,7 +61,7 @@ export type DoorOptions = {
   ui: Ui
   /** Each request the service token admits, as the signal it is, so the runtime knows how long to stay up for it. */
   woken?: (signal: Signal) => void
-  end?: () => void
+  end?: (reason: "explicit sleep" | "stale code") => void
   /** Whether the surface's code is the code on disk, before anything is answered: undefined if so, else why the runtime ends instead. */
   current?: () => Promise<string | undefined>
   /** The lines that open the agent's read of / when it opens the root: its name and version, and what stands of its code. */
@@ -336,7 +337,15 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       if (program || !r.plain) options.woken?.(signalOf(r))
     }
 
-    if (!(request.plain && request.method === "POST" && path === "/_/turn")) wake(request)
+    if (path === "/_/visible" && request.method === "POST" && !request.plain && !request.probe) {
+      if (streams.size) options.woken?.("visible")
+      res.writeHead(204)
+
+      return res.end()
+    }
+    const sleep = request.plain && request.method === "POST" && path === "/_/close"
+
+    if (!sleep && !(request.plain && request.method === "POST" && path === "/_/turn")) wake(request)
     // A client's probe asks only whether this service is up: the token it was answered with above says so, and no view is built.
     if (program && request.probe && request.method === "GET" && path === "/") {
       res.writeHead(204)
@@ -347,7 +356,7 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
     if (why !== undefined) {
       res.writeHead(503, { "content-type": "text/plain", [STALE_HEADER]: "1" })
-      res.once("finish", () => options.end?.())
+      res.once("finish", () => options.end?.("stale code"))
 
       return res.end(why)
     }
@@ -389,8 +398,8 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
         pushTurn()
       })
       try {
-        if (req.method === "POST" && path === "/_/close") {
-          res.once("finish", () => options.end?.())
+        if (sleep) {
+          res.once("finish", () => options.end?.("explicit sleep"))
 
           return reply(200, `${options.about?.root} asleep; any call wakes it, its state kept`)
         }

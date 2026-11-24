@@ -44,6 +44,8 @@ export type Unheard = { ever: boolean; since: number }
  */
 export type Turn = { agent: "working" | "idle" | "unknown"; since: number; waiting: number; drivable: boolean; harness?: string; unheard?: Unheard }
 
+const VISIBLE_PING_MS = 30_000
+
 /**
  * Told on every change of the surface, of each notice, of the turn, and whether the stream is up, and if not, whether the
  * runtime went to sleep, which the page never wakes; the browser reconnects by itself. Returns stop.
@@ -58,6 +60,14 @@ export function changes(
 
   let asleep = false
 
+  const keepAwake = () => {
+    if (source.readyState !== EventSource.OPEN || document.visibilityState !== "visible") return
+    void fetch("/_/visible", { method: "POST" }).catch(() => {})
+  }
+  const ping = setInterval(keepAwake, VISIBLE_PING_MS)
+
+  source.addEventListener("open", keepAwake)
+  document.addEventListener("visibilitychange", keepAwake)
   source.addEventListener("change", (event) => {
     asleep = false
     onChange(JSON.parse((event as MessageEvent<string>).data) as Change)
@@ -78,7 +88,11 @@ export function changes(
     if (source.readyState === EventSource.CLOSED) renew()
   }
 
-  return () => source.close()
+  return () => {
+    clearInterval(ping)
+    document.removeEventListener("visibilitychange", keepAwake)
+    source.close()
+  }
 }
 
 const RENEWED = "babavoss-renewed"
