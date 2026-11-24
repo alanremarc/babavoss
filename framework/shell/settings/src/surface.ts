@@ -1,8 +1,5 @@
-// The settings: a surface that comes with the shell, beside the project's, which holds the person's settings of the
-// shell's page, the appearance with where the rail of tabs stands, the preferences a page follows, the shortcuts, the mark and
-// whether the session's end puts the runtime to sleep, each a fact
-// with the action that changes it. They are the
-// person's, not a tab's nor a session's: its state is their file (store.ts), which every settings tab, in any session,
+// The shell's Settings surface lists its pages at / and offers each setting at its own page. Settings belong to the
+// person, across projects and sessions: its state is their file (store.ts), which every settings tab, in any session,
 // watches and follows; the model is what the file said last, with what this tab changed and is writing. A change is
 // written by a command, and a read while one is being written waits for it, so the tab never shows an older value back.
 // The shell's page applies what they say. Nothing is said but a write that failed, a highlight, and every change is quiet: the page's
@@ -14,6 +11,8 @@
 import { action, surface, view, type Update } from "../../../core/index.ts"
 import { clashing, COMMANDS, parse, type CommandId } from "./keys.ts"
 import { bounded } from "../../../kit/theme.ts"
+import { REPOSITORY, VERSION } from "../../../core/update.ts"
+import { SETTINGS_PAGES } from "./pages.ts"
 import {
   DRAWERS,
   KEEP_BOUNDS,
@@ -26,7 +25,7 @@ import {
   settingsOf,
   SIDES,
   THEMES,
-  viewOf,
+  appearanceView,
   type Choice,
   type Keep,
   type Mode,
@@ -259,7 +258,7 @@ const archived = (m: Model, place: string | undefined) => {
       : {}
 
   return {
-    title: "Closed tabs",
+    title: "Data & Storage",
     how:
       "A closed tab is kept read only, its state and log, in the archive of its session, read at the shell's /activity/closed. The archive " +
       "clears itself by the window, the person's in every project. A clear acts on this project alone.",
@@ -286,29 +285,25 @@ const archived = (m: Model, place: string | undefined) => {
 
 /** The settings' pages, of the session whose folder `place` names. */
 const pagesOf = (place: () => string | undefined) => view([mode, theme, dynamic, same, rail, ...preferred, animate, sleepAtEnd, bind, reset, keep, measuring, clearing], {
-  "/": (m) => {
-    const told = viewOf(m.settings)
-
-    return {
-      title: "Settings",
-      how: "The person's own settings of the shell's page, the same in every session and project.",
-      appearance: told.appearance,
-      preferences: told.preferences,
-      shortcuts: { at: "/shortcuts", ...told.shortcuts },
-      logo: told.logo,
-      runtime: told.runtime,
-      archive: { at: "/archive", ...told.archive },
-      ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
-      mode: mode.bind({}),
-      theme: theme.bind({}),
-      dynamic: dynamic.bind({}),
-      same: same.bind({}),
-      rail: rail.bind({}),
-      ...Object.fromEntries(preferred.map((a) => [a.name, a.bind({})])),
-      animate: animate.bind({}),
-      sleepAtEnd: sleepAtEnd.bind({}),
-    }
-  },
+  "/": (m) => ({
+    title: "Settings",
+    pages: SETTINGS_PAGES.map((page) => ({ ...page })),
+    ...(m.unsaved !== undefined && { unsaved: m.unsaved }),
+  }),
+  "/general": (m) => ({ title: "General", runtime: m.settings.runtime, sleepAtEnd: sleepAtEnd.bind({}) }),
+  "/appearance": (m) => ({
+    title: "Appearance",
+    appearance: appearanceView(m.settings.appearance),
+    preferences: m.settings.preferences,
+    logo: m.settings.logo,
+    mode: mode.bind({}),
+    theme: theme.bind({}),
+    dynamic: dynamic.bind({}),
+    same: same.bind({}),
+    rail: rail.bind({}),
+    ...Object.fromEntries(preferred.map((a) => [a.name, a.bind({})])),
+    animate: animate.bind({}),
+  }),
   "/shortcuts": (m) => ({
     title: "Shortcuts",
     commands: (Object.keys(COMMANDS) as CommandId[]).map((command) => ({
@@ -321,6 +316,7 @@ const pagesOf = (place: () => string | undefined) => view([mode, theme, dynamic,
     reset: reset.bind({}),
   }),
   "/archive": (m) => archived(m, place()),
+  "/about": () => ({ title: "About", version: VERSION, website: "https://babavoss.org", source: `https://github.com/${REPOSITORY}` }),
 })
 
 /**
@@ -331,7 +327,7 @@ export function settings(file: () => string = () => settingsFile(), place: () =>
   const pages = pagesOf(place)
 
   return surface<Model, Event, Command>({
-    description: "The person's settings of the shell's page: appearance, where the tabs stand, motion, text size, the side of a page's sidebar, shortcuts, whether the mark moves while the agent works, whether the session's end puts the runtime to sleep, and how long closed tabs are kept, with clearing them. Use when one of them is to be read or changed.",
+    description: "The person's shell settings and the running version. Use when changing appearance, shortcuts, session behavior or archive retention, or when checking the version.",
     init: () => ({ settings: settingsOf(undefined), writing: 0 }),
     // What a tab kept is only a first look: the file is read again as it starts.
     restore: (saved) => ({ settings: settingsOf((saved as { settings?: unknown } | undefined)?.settings), writing: 0 }),

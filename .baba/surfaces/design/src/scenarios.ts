@@ -196,7 +196,7 @@ function NOISE(): Scenario[] {
         { kind: "call", path: "/", handle: "highlight", args: { at: "/tabs/1/tasks/1", why: "the notes are next", front: "true" } },
         { kind: "go" },
         { kind: "act", path: "/", handle: "open", args: { surface: "settings" } },
-        { kind: "act", path: "/tabs/3", handle: "theme", args: { mode: "dark", theme: "claude" } },
+        { kind: "act", path: "/tabs/3/appearance", handle: "theme", args: { mode: "both", theme: "claude" } },
         { kind: "tool", what: "run the specs" },
         { kind: "stop" },
         { kind: "say", text: "Go on." },

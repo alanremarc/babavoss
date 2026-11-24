@@ -361,7 +361,9 @@ export const codex: Adapter<CodexOptions> = {
     const paths = [...set.paths]
     const said = set.said ? [set.said] : []
 
-    if (paths.includes(METHOD.hooks)) said.push("Codex asks you to review these hooks once: run /hooks in Codex and trust baba's")
+    if (paths.includes(METHOD.hooks)) said.push(
+      "Codex asks you to review these hooks once: run `bun run baba start --setup` in .baba/ for the Settings link, or open /hooks in Codex.",
+    )
     if (options.network) {
       const file = join(project, CONFIG)
       const now = opened(existsSync(file) ? readFileSync(file, "utf8") : "")

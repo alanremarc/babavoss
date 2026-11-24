@@ -11,6 +11,14 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.85.0
+
+**Settings has pages.** The Settings tab opens to General, with Appearance, Shortcuts, Data & Storage and About in its navigation. For agents, `/settings` lists the pages. Appearance actions now live at `/settings/appearance`, and `sleepAtEnd` lives at `/settings/general`. Shortcuts and archive actions keep their paths. About shows the running version. Saved settings carry over unchanged.
+
+**Review Codex hooks in Settings.** In `.baba/`, `bun run baba start --setup` gives a Settings link before any harness hook has run. Settings shows the commands Codex is waiting to run. On Codex 0.172.0, the person can approve those commands there. Other versions use Codex's `/hooks` review. Start or resume the Codex session after approval so it takes the approved startup hook.
+
+The kit's empty-state components resolve their React types from their own package, so a project's separate React types can coexist.
+
 ## 0.84.0
 
 **The session's end can leave the runtime awake.** A new setting, `runtime.sleepAtEnd` in `~/.baba/settings.json`, is on by default and keeps today's behavior: the session's end leaves the runtime one minute. Turned off, through the settings surface's `sleepAtEnd on=false` or its page, the session's end cuts nothing. The runtime keeps the deadline it had, and a visible page keeps renewing its lease, so it sleeps only once idle or its page is hidden. This is for a harness that ends a session it means to resume, as T3 Code does when it hibernates one. The runtime reads the setting when the end is heard, so a change needs no restart.

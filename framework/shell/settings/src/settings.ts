@@ -201,48 +201,16 @@ export const resolveMode = (appearance: Appearance, systemDark: boolean): Mode =
 export type Told = string | ({ theme: "dynamic" } & Theme)
 /** The appearance as the view tells it: the mode, one theme for both or one each, and the rail. */
 export type ToldAppearance = ({ same: true; theme: Told } | { same: false; light: Told; dark: Told }) & { mode: Appearance["mode"]; rail: Rail }
-/** The settings as their view at / tells them, beside its actions: what the page takes the whole settings from. */
-export type SettingsView = {
-  appearance: ToldAppearance
-  preferences: Preferences
-  shortcuts: Record<CommandId, string>
-  logo: Settings["logo"]
-  runtime: Settings["runtime"]
-  archive: Keep
-}
-
 const told = (choice: Choice): Told => (typeof choice === "string" ? choice : { theme: "dynamic", ...choice })
 
-/** The settings as their view tells them: each binding whole, the default where the person set none. */
-export function viewOf(settings: Settings): SettingsView {
-  const { mode, same, themes, rail } = settings.appearance
-  const keys = Object.fromEntries((Object.keys(COMMANDS) as CommandId[]).map((id) => [id, settings.keys[id] ?? COMMANDS[id].keys])) as Record<CommandId, string>
-
-  return {
-    appearance: same ? { mode, same: true, theme: told(themes.light), rail } : { mode, same: false, light: told(themes.light), dark: told(themes.dark), rail },
-    preferences: { ...settings.preferences },
-    shortcuts: keys,
-    logo: { animate: settings.logo.animate },
-    runtime: { sleepAtEnd: settings.runtime.sleepAtEnd },
-    archive: { ...settings.archive },
-  }
+/** The appearance as its page tells it. */
+export function appearanceView({ mode, same, themes, rail }: Appearance): ToldAppearance {
+  return same ? { mode, same: true, theme: told(themes.light), rail } : { mode, same: false, light: told(themes.light), dark: told(themes.dark), rail }
 }
 
-/**
- * The whole settings a view tells, as the settings' page hands them to the shell: every part of them, never a chosen few,
- * so a part added later reaches the page too.
- */
-export function settingsFromView(view: SettingsView): Settings {
-  const { appearance: a } = view
+/** The appearance the page paints from its view. */
+export function appearanceFromView(a: ToldAppearance): Appearance {
   const themes = a.same ? { light: a.theme, dark: a.theme } : { light: a.light, dark: a.dark }
-  const bound = Object.entries(view.shortcuts).filter(([id, keys]) => isCommand(id) && keys !== COMMANDS[id].keys)
 
-  return {
-    appearance: appearanceOf({ mode: a.mode, same: a.same, themes, rail: a.rail }),
-    preferences: preferencesOf(view.preferences),
-    keys: settingsOf({ keys: Object.fromEntries(bound) }).keys,
-    logo: { animate: view.logo.animate !== false },
-    runtime: { sleepAtEnd: view.runtime?.sleepAtEnd !== false },
-    archive: keepOf(view.archive),
-  }
+  return appearanceOf({ mode: a.mode, same: a.same, themes, rail: a.rail })
 }

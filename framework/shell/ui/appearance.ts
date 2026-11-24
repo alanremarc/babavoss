@@ -22,8 +22,9 @@ export const given = (): Settings => {
   }
 }
 
-/** Tells the page the settings, as a settings tab reads them. */
-export const announce = (settings: Settings) => window.dispatchEvent(new CustomEvent<Settings>(CHANGED, { detail: settings }))
+/** Applies the appearance immediately as its Settings page changes it. The shell also follows the saved settings. */
+type AppearanceChange = Pick<Settings, "appearance" | "preferences" | "logo">
+export const announce = (change: AppearanceChange) => window.dispatchEvent(new CustomEvent<AppearanceChange>(CHANGED, { detail: change }))
 
 /** Paints a theme's numbers on the page's root, the tokens following at once: what a picker does as it is dragged. */
 export function paintTheme(theme: Theme, root: HTMLElement = document.documentElement): void {
@@ -122,7 +123,7 @@ export function useSettings(): { settings: Settings; mode: Mode; conventions: Co
   })
 
   useEffect(() => {
-    const told = (event: Event) => setSettings((event as CustomEvent<Settings>).detail)
+    const told = (event: Event) => setSettings((settings) => ({ ...settings, ...(event as CustomEvent<AppearanceChange>).detail }))
 
     window.addEventListener(CHANGED, told)
     window.addEventListener("focus", again)
