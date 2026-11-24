@@ -1,6 +1,6 @@
 {
   "name": "babavoss",
-  "version": "0.83.1",
+  "version": "0.84.0",
   "description": "A TypeScript framework for surfaces an agent works on: what is true now and what can be done now, read and acted on through a command, and a page where the person watches and acts on the same thing. Carries baba, the skill for authoring and maintaining surfaces.",
   "license": "Apache-2.0",
   "repository": {

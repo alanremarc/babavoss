@@ -1,7 +1,10 @@
 // How long a runtime stays up for what woke it. Each request is a signal, classified once where it enters the door, and
 // each signal has a strength: how long it keeps the runtime up from now. A weak one keeps it a short time, a strong one
-// long; a visible page renews its own short lease; the session's end cuts what is left. The runtime sleeps, ends with its
-// state kept, once the furthest deadline it was given has passed and nothing runs; any call wakes it again (runtime.ts).
+// long; a visible page renews its own short lease; the session's end cuts what is left, unless the person's settings say it
+// does not, for a harness that ends a session it means to resume. The runtime sleeps, ends with its state kept, once the
+// furthest deadline it was given has passed and nothing runs; any call wakes it again (runtime.ts).
+import { readFileSync } from "node:fs"
+import { settingsAt } from "../provision.ts"
 import type { TurnEvent } from "./turn.ts"
 
 /** How long a signal keeps the runtime up from now; `end` is no longer than that, whatever was given before. */
@@ -49,6 +52,20 @@ export function strengthsOf(env: NodeJS.ProcessEnv = process.env): Record<Exclud
   return set
 }
 
+/**
+ * Whether the session's end puts the runtime to sleep: yes, unless the person's settings file, ~/.baba/settings.json or the
+ * one BABAVOSS_SETTINGS names, says `runtime.sleepAtEnd` false. Read as the end is heard, so a change needs no restart.
+ */
+export function sleepsAtEnd(env: NodeJS.ProcessEnv = process.env): boolean {
+  try {
+    const kept = JSON.parse(readFileSync(env.BABAVOSS_SETTINGS || settingsAt(), "utf8")) as { runtime?: { sleepAtEnd?: unknown } } | null
+
+    return kept?.runtime?.sleepAtEnd !== false
+  } catch {
+    return true
+  }
+}
+
 /** What the door reads of a request to classify it. */
 export type Request = { method: string; path: string; open: boolean; plain: boolean; stream: boolean; html: boolean; probe: boolean; agent: boolean; turn?: TurnEvent }
 
@@ -71,8 +88,11 @@ export function signalOf(r: Request): Signal {
   return r.method === "POST" ? "person" : "watching"
 }
 
-/** The deadline a runtime keeps: the furthest one its signals gave, or what the session's end left of it. */
-export function wakeful(strengths: Record<Exclude<Strength, "none">, number>, from: number) {
+/**
+ * The deadline a runtime keeps: the furthest one its signals gave, or what the session's end left of it. `endSleeps` says,
+ * as the end is heard, whether it cuts; where it does not, the end is no signal and the deadline stays as it was.
+ */
+export function wakeful(strengths: Record<Exclude<Strength, "none">, number>, from: number, endSleeps: () => boolean = () => true) {
   let until = from + strengths.weak
   let visibleUntil = 0
   let last: { signal: Exclude<Signal, "watching" | "visible"> | "startup"; at: number } = { signal: "startup", at: from }
@@ -93,6 +113,7 @@ export function wakeful(strengths: Record<Exclude<Strength, "none">, number>, fr
         return
       }
       if (last.signal === "gone" && signal === "ended") return
+      if (signal === "gone" && !endSleeps()) return
       last = { signal, at: now }
       if (signal === "gone") {
         until = Math.min(Math.max(until, visibleUntil), now + strengths.end)

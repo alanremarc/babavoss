@@ -15,7 +15,7 @@ const watching = (c: Command) => c.kind === "watch"
 const writing = (c: Command) => c.kind === "write"
 
 describe("the settings", () => {
-  it("say at / the appearance with where the rail stands, the preferences, the shortcuts and the mark, small, with the place that holds the shortcuts", () => {
+  it("say at / the appearance with where the rail stands, the preferences, the shortcuts, the mark and whether the session's end sleeps the runtime, small, with the place that holds the shortcuts", () => {
     const { agent } = story(settings(() => "unused"))
 
     expect(agent.sees()).toEqual({
@@ -25,6 +25,7 @@ describe("the settings", () => {
       preferences: { motion: "system", scale: 1, side: "right" },
       shortcuts: { at: "/shortcuts", drawer: "mod+p", next: "mod+k", previous: "mod+j" },
       logo: { animate: true },
+      runtime: { sleepAtEnd: true },
       archive: { at: "/archive", days: 30, megabytes: 200 },
       mode: expect.anything(),
       theme: expect.anything(),
@@ -35,8 +36,9 @@ describe("the settings", () => {
       scale: expect.anything(),
       side: expect.anything(),
       animate: expect.anything(),
+      sleepAtEnd: expect.anything(),
     })
-    expect(agent.offered()).toEqual(["mode", "theme", "dynamic", "same", "rail", "motion", "scale", "side", "animate"])
+    expect(agent.offered()).toEqual(["mode", "theme", "dynamic", "same", "rail", "motion", "scale", "side", "animate", "sleepAtEnd"])
     expect(agent.offered("/shortcuts")).toEqual(["bind", "reset"])
     expect(agent.sees("/shortcuts")).toMatchObject({ commands: [{ command: "drawer", keys: "mod+p", does: expect.any(String) }, {}, {}] })
   })
@@ -58,13 +60,14 @@ describe("the settings", () => {
     }
   })
 
-  it("change the mode, the theme of both modes and the mark's animation, each written to the file", async () => {
+  it("change the mode, the theme of both modes, the mark's animation and whether the session's end sleeps the runtime, each written to the file", async () => {
     const { agent, world } = story(settings(() => "unused"))
 
     expect(await agent.call("/", "mode", { mode: "dark" })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/", "theme", { mode: "both", theme: "clay" })).toMatchObject({ outcome: "written" })
     expect(await agent.call("/", "animate", { on: false })).toMatchObject({ outcome: "written" })
-    expect(agent.sees()).toMatchObject({ appearance: { mode: "dark", same: true, theme: "clay" }, logo: { animate: false } })
+    expect(await agent.call("/", "sleepAtEnd", { on: false })).toMatchObject({ outcome: "written" })
+    expect(agent.sees()).toMatchObject({ appearance: { mode: "dark", same: true, theme: "clay" }, logo: { animate: false }, runtime: { sleepAtEnd: false } })
     expect(world.commands().filter(writing).at(-1)).toEqual({
       kind: "write",
       settings: {
@@ -72,6 +75,7 @@ describe("the settings", () => {
         preferences: DEFAULTS.preferences,
         keys: {},
         logo: { animate: false },
+        runtime: { sleepAtEnd: false },
         archive: DEFAULTS.archive,
       },
     })
