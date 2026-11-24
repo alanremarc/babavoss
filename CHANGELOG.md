@@ -11,6 +11,12 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.84.0
+
+**The session's end can leave the runtime awake.** A new setting, `runtime.sleepAtEnd` in `~/.baba/settings.json`, is on by default and keeps today's behavior: the session's end leaves the runtime one minute. Turned off, through the settings surface's `sleepAtEnd on=false` or its page, the session's end cuts nothing. The runtime keeps the deadline it had, and a visible page keeps renewing its lease, so it sleeps only once idle or its page is hidden. This is for a harness that ends a session it means to resume, as T3 Code does when it hibernates one. The runtime reads the setting when the end is heard, so a change needs no restart.
+
+Nothing in a project's surfaces needs to change.
+
 ## 0.83.1
 
 **A visible page keeps its runtime awake.** While connected, the page renews a 90-second lease every 30 seconds. Once the lease expires, the activity deadline applies again. The session's end still caps the remaining time at one minute, and `baba sleep` starts shutdown immediately. The agent leaves routine shutdown to the runtime, which logs why it slept and the last activity it heard.

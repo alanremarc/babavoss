@@ -1,6 +1,9 @@
 // How long a runtime stays up for what woke it: each request's signal, its strength, and the deadline they keep.
 import { expect, it } from "bun:test"
-import { signalOf, strengthsOf, wakeful, STRENGTHS, VISIBLE_MS, type Request } from "../../framework/core/runtime/wake.ts"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { signalOf, sleepsAtEnd, strengthsOf, wakeful, STRENGTHS, VISIBLE_MS, type Request } from "../../framework/core/runtime/wake.ts"
 
 const asked = (r: Partial<Request>): Request => ({ method: "GET", path: "/", open: false, plain: false, stream: false, html: false, probe: false, agent: false, ...r })
 
@@ -47,6 +50,32 @@ it("keeps a page lease alongside activity, carries it across restart, and stops 
   resumed.signal("gone", STRENGTHS.weak)
   resumed.signal("visible", STRENGTHS.weak + 30_000)
   expect(resumed.until).toBe(STRENGTHS.weak + STRENGTHS.end)
+})
+
+it("leaves the deadline and the page's lease as they were at the session's end where the settings say it does not sleep, asked as it is heard", () => {
+  let sleeps = false
+  const wake = wakeful(STRENGTHS, 0, () => sleeps)
+
+  wake.signal("started", 1000)
+  wake.signal("visible", 2000)
+  wake.signal("gone", 3000)
+  expect(wake.until).toBe(1000 + STRENGTHS.strong)
+  wake.signal("visible", 1000 + STRENGTHS.strong)
+  expect(wake.until).toBe(1000 + STRENGTHS.strong + VISIBLE_MS)
+  sleeps = true
+  wake.signal("gone", 1000 + STRENGTHS.strong + 1)
+  expect(wake.until).toBe(1000 + STRENGTHS.strong + 1 + STRENGTHS.end)
+})
+
+it("sleeps at the session's end unless the person's settings file says runtime.sleepAtEnd false", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "wake-settings-")), "settings.json")
+  const env = { BABAVOSS_SETTINGS: file }
+
+  expect(sleepsAtEnd(env)).toBe(true)
+  for (const [kept, sleeps] of [["{", true], ["null", true], ['{"runtime":{"sleepAtEnd":true}}', true], ['{"runtime":{"sleepAtEnd":false}}', false]] as const) {
+    writeFileSync(file, kept)
+    expect([kept, sleepsAtEnd(env)]).toEqual([kept, sleeps])
+  }
 })
 
 it("takes shorter strengths from BABAVOSS_WAKE_MS, for specs, and ignores what it says wrong", () => {

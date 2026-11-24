@@ -22,7 +22,7 @@ import type { RootDefinition } from "../root.ts"
 import { later } from "../update.ts"
 import { door } from "./door.ts"
 import { DENIED_EXIT, Denied, lastPort, ownService } from "./service.ts"
-import { strengthsOf, wakeful, type Strength } from "./wake.ts"
+import { sleepsAtEnd, strengthsOf, wakeful, type Strength } from "./wake.ts"
 
 export type RuntimeOptions = {
   command?: string
@@ -36,6 +36,8 @@ export type RuntimeOptions = {
   watch?: string[]
   /** Directories of code the runtime runs although it did not load it, as a surface whose code did not load: a change there is changed code. */
   code?: string[]
+  /** Whether the session's end puts it to sleep; default: as the person's settings say (wake.ts). */
+  endSleeps?: () => boolean
   /** Dev mode: changed code restarts the runtime at once, cutting what runs. Default: normal mode, unless BABAVOSS_DEV says. */
   dev?: boolean
   /** The time, where not the machine's; for specs, which move it on in place of waiting. */
@@ -184,7 +186,7 @@ export async function startRuntime(
   const now = options.now ?? Date.now
   const lookMs = options.lookMs ?? LOOK_MS
   const reloadMs = options.reloadMs ?? RELOAD_MS
-  const wake = wakeful({ ...strengthsOf(options.env), ...options.strengths }, now())
+  const wake = wakeful({ ...strengthsOf(options.env), ...options.strengths }, now(), options.endSleeps ?? (() => sleepsAtEnd(options.env)))
   let looking: ReturnType<typeof setInterval> | undefined
   let closing: Promise<void> | undefined
   // The lock is let go within CLOSE_MS of the decision, whatever refuses to close: it must not outlive the service. The

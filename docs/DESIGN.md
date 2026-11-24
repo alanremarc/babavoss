@@ -108,7 +108,8 @@ activity        a log of actions, for auditing and not replay: who, the person, 
 frame           title, menus and a surface's actions, in the same place for every surface: a tab's drawer
 theme           tokens every page uses, derived from a hue: a preset or the person's own, per mode if they wish
 settings        the person's own, the same in every session and project: appearance, where the tabs stand, the preferences pages
-                follow by convention, shortcuts, the mark's motion, how long closed tabs are kept; and clearing them
+                follow by convention, shortcuts, the mark's motion, whether the session's end puts the runtime to sleep, how
+                long closed tabs are kept; and clearing them
 health          what is broken, and why; a page whose runtime sleeps or is lost says so and finds it again
 ```
 
@@ -142,7 +143,8 @@ adapter    The one place that knows a harness: how to set it up, start a session
 wake       Every request wakes the runtime with a strength: a session's start weakly, a few minutes; the person's message,
            the agent's command and the person's action strongly, half an hour; a page that only watches, not at all. It
            sleeps, its state kept, once the furthest is spent and nothing runs, or at once when the agent says `sleep`
-           at the end of its work; the session's end leaves a minute. Any command wakes it; the page never does.
+           at the end of its work; the session's end leaves a minute, unless the person's settings keep it as it was,
+           for a harness that ends a session it means to resume. Any command wakes it; the page never does.
 ```
 
 ### A project

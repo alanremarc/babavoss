@@ -5,8 +5,8 @@
 // modes there is one choice, else one for each. A shortcut is rebound by clicking its keys and pressing new ones; Escape
 // gives up, and a clash or keys that cannot be a binding is said on its row. Where the tabs stand asks next what the side
 // chosen needs: the end the mark is at for a rail at a side, where a drawer opens for one along the top or bottom. Beside
-// the mark's switch, the mark as it is while the agent works. As the surface says them, the settings are told to the page
-// whole, which applies them at once. Last, the closed tabs: how long the archive keeps them and how large it may grow,
+// the mark's switch, the mark as it is while the agent works; after it, whether the session's end puts the runtime to
+// sleep. As the surface says them, the settings are told to the page whole, which applies them at once. Last, the closed tabs: how long the archive keeps them and how large it may grow,
 // the person's in every project as the rest is; then, set apart and named by the project's path, the two clears that act on
 // this project alone, each saying what it frees, and asking once more before it is taken.
 import { useEffect, useState, type ReactNode } from "react"
@@ -45,6 +45,7 @@ type Root = SettingsView & { [P in Preference]?: Handle } & {
   same?: Handle
   rail?: Handle
   animate?: Handle
+  sleepAtEnd?: Handle
 }
 type Row = { command: CommandId; does: string; keys: string; default?: string }
 type Shortcuts = { commands: Row[]; bind?: Handle; reset?: Handle }
@@ -202,6 +203,23 @@ export default function Settings() {
                 <ToggleGroupItem value="off">Off</ToggleGroupItem>
               </ToggleGroup>
             </span>
+          </Line>
+          <Line
+            label="Sleep when the session ends"
+            note={root.runtime.sleepAtEnd ? "a minute after it ends" : "only once idle or its page is hidden, for a harness that ends sessions it resumes"}
+          >
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={root.runtime.sleepAtEnd ? "on" : "off"}
+              aria-label="Sleep when the session ends"
+              onValueChange={(value) => value && void run("sleepAtEnd", root.sleepAtEnd, { on: value === "on" })}
+            >
+              <ToggleGroupItem value="on">On</ToggleGroupItem>
+              <ToggleGroupItem value="off">Off</ToggleGroupItem>
+            </ToggleGroup>
           </Line>
           {refused && (["mode", "rail", ...PREFERENCE_NAMES].includes(refused.at) || refused.at.startsWith("theme")) && <p className="text-destructive">{refused.reason}</p>}
         </Section>
