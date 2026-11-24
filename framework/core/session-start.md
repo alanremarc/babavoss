@@ -6,11 +6,13 @@ This project has surfaces. A surface is a tool you work with for the person: wha
 
 Its answer names the page's address, the command to use, the surfaces and the open tabs. Give the person the address, and again whenever an answer names a new one. The shell sleeps after inactivity unless its page is connected and visible. A command wakes it where it was. It runs the code it started with: when that changes, `/` says so with the command that restarts it.
 
+When you edit `.baba/` in normal mode and the person is reviewing the UI, suggest dev mode (see the Baba skill). UI edits reload the page in dev mode. Changes to runtime code can restart the runtime and interrupt work.
+
 ## You hold the state
 
 - The present, `/`, is given you whole at the session's start, and again only after a compaction, a resume or a fork. It has every open tab's facts and every action's command: at the tab's path, and once for all its rows as a pattern, as `/queue/issues/N ACTION n=N`, where you put the row's value for `N`. Hold it: it is what is true until you are told otherwise.
 - From then on every change reaches you as a change: your own call's answer says what it changed; after a tool call you hear what the person or a surface did, under `notices`; with the person's message, what changed at `/` since, and by who. So do not read again to check, to be safe, or before acting on what you were shown: act from what you hold.
-- Read a path only for what you were never shown: what an answer says is elsewhere, as `+10 more in issues; read /queue` or a long text cut, or a row's own detail. Where you are told the hooks are not heard, changes reach you only when you read: then read before you act.
+- Read a path only for what you were never shown: what an answer says is elsewhere, as `+10 more in issues; read /queue` or a long text cut, or a row's own detail. If you resume or lose context without a fresh present, read `/` before acting. Where hooks are not heard, read before acting.
 
 ## Acting
 

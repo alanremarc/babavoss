@@ -2,9 +2,9 @@
 // entry "babavoss" in .agents/hooks.json, among the person's own named hooks, through setup.ts's backup and atomic write
 // checks. Hooks: Antigravity's camelCase JSON input and JSON output (`injectSteps` with `systemMessage`, or `{}` when
 // nothing is added). Because Antigravity's PostToolUse returns `{}` and cannot inject context, PreInvocation carries both
-// turn-start updates (invocationNum === 0) and mid-turn notices (invocationNum > 0). Run: one long-lived headless `agy`
-// process per session (`--input-format stream-json --output-format stream-json`), in a home of its own, its login reached
-// from the person's by a link (macOS keychain, Linux keyring, ADC) or GEMINI_API_KEY, and nothing of the account's handed on.
+// turn-start updates (invocationNum === 0) and mid-turn notices (invocationNum > 0). Run: a long-lived headless `agy`
+// process, replaced on the next message after an interrupt to resume the conversation. The session has its own home and reaches
+// the person's login by a link (macOS keychain, Linux keyring, ADC) or GEMINI_API_KEY. It hands on nothing of the account's.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
@@ -16,6 +16,7 @@ import {
   BIN,
   hookCommand,
   installSkill,
+  installedHooks,
   isObject,
   isOurs,
   readJson,
@@ -363,27 +364,77 @@ function spawnAntigravity(options: Start): Session {
   } catch {}
 
   const env = { ...sessionEnv(options.home), GEMINI_HOME: join(options.home, ".gemini") }
-  const child = Bun.spawn(antigravityArgs({ project, model: options.model }, extra), {
-    cwd: options.project,
-    env,
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const stderr = new Response(child.stderr).text()
-  const state = streamState(options.model)
   const queue: (HarnessEvent | undefined)[] = []
+  const waiting: string[] = []
   let wake: (() => void) | undefined
+  let child: Bun.Subprocess<"pipe", "pipe", "pipe"> | undefined
+  let conversation: string | undefined
+  let running = false
+  let interrupted = false
+  let ending = false
   const push = (event: HarnessEvent | undefined) => {
     queue.push(event)
     wake?.()
   }
-
-  void (async () => {
-    for await (const line of jsonLines(child.stdout)) for (const event of antigravityEvents(line, state)) push(event)
-    push({ kind: "ended", code: await child.exited, stderr: redact((await stderr).trim()) })
+  const finish = (code: number | null, stderr: string) => {
+    ending = true
+    waiting.length = 0
+    push({ kind: "ended", code, stderr: redact(stderr.trim()) })
     push(undefined)
-  })()
+  }
+
+  function launch() {
+    const args = antigravityArgs({ project, model: options.model }, extra)
+    const current = Bun.spawn(conversation ? [...args, "--conversation", conversation] : args, {
+      cwd: options.project, env, stdin: "pipe", stdout: "pipe", stderr: "pipe",
+    })
+    const stderr = new Response(current.stderr).text()
+    const state = streamState(options.model)
+
+    child = current
+    void (async () => {
+      for await (const line of jsonLines(current.stdout)) {
+        for (const event of antigravityEvents(line, state)) {
+          if (event.kind === "started" && event.session) conversation ??= event.session
+          if (event.kind === "turn") running = false
+          push(event)
+          if (event.kind === "turn") sendNext()
+        }
+      }
+
+      const code = await current.exited
+      const error = await stderr
+
+      child = undefined
+      if (interrupted && conversation && !ending) {
+        if (running) push({ kind: "turn", ok: false, text: "interrupted", tokens: NONE, total: 0, ms: 0, calls: state.turnCalls })
+        running = false
+        interrupted = false
+        sendNext()
+      } else finish(code, error)
+    })()
+
+    return current
+  }
+
+  function sendNext() {
+    if (ending || running || interrupted || !waiting.length) return
+
+    try {
+      const current = child ?? launch()
+      const text = waiting.shift()!
+
+      running = true
+      current.stdin.write(`${JSON.stringify({ event: "user", message: { content: text } })}\n`)
+      current.stdin.flush()
+      push({ kind: "message", text })
+    } catch (error) {
+      if (child) child.kill()
+      else finish(null, String(error))
+    }
+  }
+
+  launch()
 
   return {
     events: (async function* () {
@@ -397,17 +448,28 @@ function spawnAntigravity(options: Start): Session {
       }
     })(),
     say(text) {
-      push({ kind: "message", text })
-      child.stdin.write(`${JSON.stringify({ event: "user", message: { content: text } })}\n`)
-      child.stdin.flush()
+      if (ending) return
+      waiting.push(text)
+      sendNext()
     },
-    stop: () => void child.kill("SIGINT"),
+    stop() {
+      if (!running || interrupted || ending) return
+      interrupted = true
+      child?.kill("SIGINT")
+    },
     async end() {
-      try {
-        child.stdin.end()
-      } catch {}
-      child.kill()
-      await child.exited
+      const current = child
+
+      if (!current) {
+        if (!ending) finish(null, "")
+
+        return
+      }
+      if (!ending) {
+        ending = true
+        current.kill()
+      }
+      await current.exited
     },
   }
 }
@@ -431,6 +493,7 @@ export const antigravity: Adapter<AntigravityOptions> = {
   skill: SKILL,
   defaults: { events: [...ANTIGRAVITY_EVENTS] },
   events: ANTIGRAVITY_EVENTS,
+  installed: (project, events) => installedHooks(join(project, HOOKS_FILE), "antigravity", events, HOOK_NAME),
   provision(project): SetUp {
     const paths = installSkill(project, SKILL_METHOD)
     const command = hookCommand("antigravity")

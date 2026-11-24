@@ -1,5 +1,5 @@
 // What the framework tells the agent unasked, through the harness's hooks: at a session's start, baba's
-// operating guidance and the shell's answer, with the present whole; the same again where the session
+// operating guidance and the shell's answer, with the present whole; the first prompt recovers a missed start. The same again where the session
 // had them before and lost them, after a compaction, a resume or a fork (returning), once a boundary: a start that follows
 // another with nothing heard between, as a compaction at once after a resume, is given nothing again; after each tool call, what was heard in an open root since
 // the agent was last told, one line each: notices, and where the person acted; with each message of the person, that and
@@ -17,7 +17,8 @@ import { stateOf } from "./provision.ts"
 import { ACTOR_HEADER, ENDPOINT_FILE, load, registryFile, save, SERVICE_HEADER, type OpenRoot } from "./bv/bv.ts"
 import type { HookEvent, Source } from "./harness/harness.ts"
 import { HARNESS_HEADER, type TurnEvent } from "./runtime/turn.ts"
-import { ENDED } from "./state/session-dir.ts"
+import { writeJsonFile } from "./state/json-file.ts"
+import { ENDED, PRESENT_READY, STARTUP_HEARD } from "./state/session-dir.ts"
 
 type Endpoint = { port: number; token: string; dir: string }
 
@@ -96,15 +97,21 @@ async function changed(root: OpenRoot, session: string, ask: string): Promise<st
 export async function hookContext(input: HookEvent, baba: string, harness?: string): Promise<string | undefined> {
   const session = input.session
 
-  if (!session || !/^[A-Za-z0-9._-]+$/.test(session)) return undefined
+  if (!session || !/^[A-Za-z0-9._-]+$/.test(session) || session === "." || session === "..") return undefined
   process.env.BABAVOSS_HOME ??= homeOf(baba)
 
-  const roots = () => Object.entries(load<Record<string, OpenRoot>>(registryFile(session)) ?? {})
+  const registry = registryFile(session)
+  const directory = dirname(registry)
+  const roots = () => Object.entries(load<Record<string, OpenRoot>>(registry) ?? {})
+  const ready = join(directory, PRESENT_READY)
+  const startup = input.moment === "SessionStart"
+  const recover = input.moment === "UserPromptSubmit" && !existsSync(ready)
   const lines: string[] = []
   const turn = turnOf(input)
   // The session's end is left in its directory, so the archive's sweep knows it is over; anything heard after takes it back.
-  const ended = join(dirname(registryFile(session)), ENDED)
+  const ended = join(directory, ENDED)
 
+  if (startup) writeJsonFile(join(directory, STARTUP_HEARD), { harness }, { own: true })
   if (turn !== "gone") rmSync(ended, { force: true })
   else if (existsSync(dirname(ended))) writeFileSync(ended, "", { mode: 0o600 })
   // Whose move it is, told before what changed is read, so the page counts nothing as waiting once the turn has it.
@@ -112,19 +119,22 @@ export async function hookContext(input: HookEvent, baba: string, harness?: stri
     if (turn) await Promise.all(roots().map(([, root]) => tellTurn(root, session, turn, harness).catch(() => {})))
   }
 
-  if (input.moment === "SessionStart") {
-    if (returning(input.source) && existsSync(boundaryFile(session))) {
+  if (startup || recover) {
+    if (startup && returning(input.source) && existsSync(ready) && existsSync(boundaryFile(session))) {
       await tell()
 
       return undefined
     }
-    save(boundaryFile(session), { source: input.source ?? null })
     const cwd = input.cwd && existsSync(input.cwd) ? input.cwd : existsSync(dirname(baba)) ? dirname(baba) : process.cwd()
     const root = Bun.spawnSync([process.execPath, ROOT, "--session", session], { cwd, stdout: "pipe", stderr: "ignore", env: process.env, timeout: 20_000 })
     const answer = root.stdout.toString().trim()
 
     lines.push(readFileSync(WORDS, "utf8").trim())
-    if (root.exitCode === 0 && answer) lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
+    if (root.exitCode === 0 && answer) {
+      writeJsonFile(ready, { harness, recovered: recover }, { own: true })
+      if (startup) save(boundaryFile(session), { source: input.source ?? null })
+      lines.push(`The shell of .baba/ was started for this session, and answered:\n${answer}`)
+    }
     await tell()
   } else if (turn === "gone") await tell()
   else if (turn === "ended") {

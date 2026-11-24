@@ -11,6 +11,20 @@ Read every section from the version the surfaces ran on up, then write to the ne
 
 Then run `bun check` and the specs in `.baba/`, and restart the shell.
 
+## 0.86.0
+
+**This repository uses Canvas for project work.** Its first open imports the worktree’s Queue tickets. Lab keeps its Queue fixture for existing evaluations. Orchestration mode is available on request.
+
+**Add and remove harness connections in General settings.** Baba provisions or withdraws its integration for the selected harness. The project's `.baba/harnesses.json` overrides only the enable switches in `baba.config.ts`; existing event and network options still apply. Codex hook approval remains a separate step.
+
+**Baba shows the harness connection in General settings.** It lists configured hooks by harness, whether the session's startup hook was heard, and whether an agent command reached this runtime. The first prompt hook can give the agent its full present if startup was missed. After context loss, an agent that received no fresh present can read the root.
+
+**Sleep on session exit is opt-in.** The runtime follows its inactivity timer by default, and a visible page can keep it awake. An existing saved choice is respected.
+
+**Antigravity resumes after interruption.** The next message in a headless session starts a new `agy` process in the same conversation. Messages waiting behind the interrupted turn keep their order.
+
+**Surface edits point to dev mode.** In normal mode, the code-change notice for `.baba/` points to live reload and the Baba skill. Session guidance tells the agent when to suggest it during UI review and explains that runtime restarts can interrupt work.
+
 ## 0.85.0
 
 **Settings has pages.** The Settings tab opens to General, with Appearance, Shortcuts, Data & Storage and About in its navigation. For agents, `/settings` lists the pages. Appearance actions now live at `/settings/appearance`, and `sleepAtEnd` lives at `/settings/general`. Shortcuts and archive actions keep their paths. About shows the running version. Saved settings carry over unchanged.

@@ -42,6 +42,7 @@ import { isPerson } from "../session.ts"
 import { ACTOR_HEADER, CALL_HEADER, CALL_ID_HEADER, PROBE_HEADER, SERVICE_HEADER, STALE_HEADER, type Identity } from "./service.ts"
 import { island } from "./boot.ts"
 import { signalOf, type Request, type Signal } from "./wake.ts"
+import { AGENT_COMMAND } from "../state/session-dir.ts"
 import { answered, driverOf, HARNESS_HEADER, harnessOf, hooksHeard, hushed, reading, startTurn, STALE_MS, TURN_EVENTS, turned, unheardHooks, unheardOf, unknownTurn, type Hooks, type TurnEvent } from "./turn.ts"
 
 /** A page served by code: the html for a path, the assets under /_/, and a close. Given the http server, for live reload. */
@@ -361,6 +362,17 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
       return res.end(why)
     }
 
+    // A hook's shell launcher also carries the session ID. Its opening read does not prove the agent's command reached us.
+    const call = request.agent && !request.open ? req.headers[CALL_HEADER] : undefined
+
+    if (!request.probe && typeof call === "string") {
+      const proof = join(options.identity.dir, AGENT_COMMAND)
+
+      try {
+        if (!existsSync(proof)) writeFileSync(proof, "", { mode: 0o600 })
+      } catch {}
+    }
+
     if (wants(req, "text/plain")) {
       let hush: string | undefined
       const reply = (status: number, value: string) => {
@@ -382,8 +394,6 @@ export function door<M>(running: Running<M>, options: DoorOptions): Door {
 
         return reply(200, "")
       }
-
-      const call = req.headers[CALL_HEADER]
 
       if (typeof call === "string") {
         const now = hushed(hooks, call, Date.now())

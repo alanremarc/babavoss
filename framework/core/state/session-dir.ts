@@ -6,6 +6,9 @@ import { baseDir, type Env } from "./state.ts"
 
 /** The file a session's directory holds once its harness said the session ended; anything heard after takes it back (hook.ts). */
 export const ENDED = "ended"
+export const STARTUP_HEARD = "startup-heard"
+export const PRESENT_READY = "present-ready"
+export const AGENT_COMMAND = "agent-command"
 
 /** The session's directory, a project's .baba/.state/sessions/ID; undefined where no runtime is served. */
 export function sessionDir(argv: readonly string[] = process.argv, env: Env = process.env): string | undefined {

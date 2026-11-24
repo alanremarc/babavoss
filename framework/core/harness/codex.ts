@@ -12,7 +12,7 @@ import { join } from "node:path"
 import type { Json } from "../surface/view.ts"
 import { cleanEnv, postToolUse, redact, WORD } from "./claude.ts"
 import { NONE, sourceOf, type Adapter, type Harness, type HarnessEvent, type HookEvent, type Moment, type Session, type SetUp, type Start } from "./harness.ts"
-import { install, replace, uninstall, type Method } from "./setup.ts"
+import { install, installedHooks, replace, uninstall, type Method } from "./setup.ts"
 
 /** Codex's hook events the framework is told at: an interrupted turn ends as a stop does. */
 export const CODEX_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "Interrupt", "SessionEnd"] as const
@@ -356,6 +356,7 @@ export const codex: Adapter<CodexOptions> = {
   skill: METHOD.skill,
   defaults: { events: [...CODEX_EVENTS], network: false },
   events: CODEX_EVENTS,
+  installed: (project, events) => installedHooks(join(project, METHOD.hooks), METHOD.name, events),
   provision(project, options): SetUp {
     const set = install(project, METHOD)
     const paths = [...set.paths]

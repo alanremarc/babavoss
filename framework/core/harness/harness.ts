@@ -93,6 +93,8 @@ export interface Adapter<O extends { events: string[] } = { events: string[] }> 
   events: readonly string[]
   /** Writes into `project` what makes the harness aware of its surfaces, and only what differs. */
   provision(project: string, options: O): SetUp
+  /** Whether the project has Baba's commands for the requested events. Hook approval is tracked by the harness. */
+  installed(project: string, events: readonly string[]): boolean
   /**
    * What keeps the harness on this machine from running what `provision` wrote, as an organisation's policy can, in one line
    * for the person with what they can do; undefined where nothing that can be read does. It reads, and changes nothing.

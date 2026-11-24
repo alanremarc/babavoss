@@ -251,12 +251,15 @@ export async function startRuntime(
   }
   // Normal mode: changed code is said once, and stands as a fact of / until the runtime restarts.
   let stale: string | undefined
-  const staleLine = () => `code: changed on disk since instance ${instance} started; it runs once restarted: ${command} restart`
+  const devHint = (file: string) => file.split(sep).includes(".baba")
+    ? ". For live reload while editing surfaces, enable dev mode and restart Baba once. See the Baba skill."
+    : ""
+  const staleLine = (file: string) => `code: changed on disk since instance ${instance} started; it runs once restarted: ${command} restart${devHint(file)}`
   const changed = (file: string) => {
     if (stale || leaving) return
     stale = file
     log(`${root.name}: ${file} changed since instance ${instance} started; it runs once restarted`)
-    entrance.note(`${root.name}: its code changed on disk; it runs once restarted: ${command} restart`)
+    entrance.note(`${root.name}: its code changed on disk; it runs once restarted: ${command} restart${devHint(file)}`)
   }
   // Dev mode: changed code restarts it once it stood RELOAD_MS, and only while its entry is there to start again, as a
   // checkout that removes it for a moment leaves it. A change in code it did not load is heard by a watch, and waits here.
@@ -339,7 +342,7 @@ export async function startRuntime(
     about,
     command,
     current,
-    opened: () => [`${root.name} ${version}${dev ? ", in dev mode: changed code restarts it at once" : ""}`, ...(stale ? [staleLine()] : [])],
+    opened: () => [`${root.name} ${version}${dev ? ", in dev mode: changed code restarts it at once" : ""}`, ...(stale ? [staleLine(stale)] : [])],
     restart: restartAsked,
     refusing: () => draining,
   })

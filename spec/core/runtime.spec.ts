@@ -707,9 +707,9 @@ describe("waking and sleeping", () => {
 
     return { now: () => at, pass: (ms: number) => (at += ms) }
   }
-  const asleep = async (dir: string, time = clock(), log: (line: string) => void = () => {}) => {
+  const asleep = async (dir: string, time = clock(), log: (line: string) => void = () => {}, endSleeps?: () => boolean) => {
     let slept = false
-    const up = await started(dir, { strengths: { weak: 5 * MIN, strong: 30 * MIN, end: MIN }, now: time.now, exit: () => (slept = true), log })
+    const up = await started(dir, { strengths: { weak: 5 * MIN, strong: 30 * MIN, end: MIN }, now: time.now, exit: () => (slept = true), log, endSleeps })
 
     return { ...up, ...time, slept: () => slept }
   }
@@ -740,7 +740,7 @@ describe("waking and sleeping", () => {
   })
   it("stays up for the person's message, the agent's command and the person's action, and the session's end cuts it short", async () => {
     for (const strong of ["message", "command", "action"] as const) {
-      const { base, endpoint, post, slept, pass } = await asleep(scratch())
+      const { base, endpoint, post, slept, pass } = await asleep(scratch(), undefined, undefined, () => true)
 
       if (strong === "message") await plain(base, endpoint.token, "/_/turn", { method: "POST", body: "started" })
       if (strong === "command") await plain(base, endpoint.token, "/")
